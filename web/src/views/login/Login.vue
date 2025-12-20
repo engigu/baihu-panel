@@ -15,13 +15,28 @@ const loading = ref(false)
 
 const siteTitle = ref('白虎面板')
 const siteSubtitle = ref('轻量级定时任务管理系统')
+const siteIcon = ref('')
 
 async function loadSiteSettings() {
   try {
     const res = await api.settings.getPublicSite()
     siteTitle.value = res.title || '白虎面板'
     siteSubtitle.value = res.subtitle || '轻量级定时任务管理系统'
+    siteIcon.value = res.icon || ''
     document.title = siteTitle.value
+    // 设置 favicon
+    if (siteIcon.value && siteIcon.value.trim().startsWith('<svg')) {
+      const blob = new Blob([siteIcon.value], { type: 'image/svg+xml' })
+      const url = URL.createObjectURL(blob)
+      let link = document.querySelector("link[rel*='icon']") as HTMLLinkElement
+      if (!link) {
+        link = document.createElement('link')
+        link.rel = 'icon'
+        document.head.appendChild(link)
+      }
+      link.type = 'image/svg+xml'
+      link.href = url
+    }
   } catch {
     // 使用默认值
   }
@@ -76,7 +91,8 @@ onMounted(loadSiteSettings)
         </div>
         <!-- 右侧 Logo 展示（大屏显示） -->
         <div class="hidden lg:flex w-64 bg-muted/50 dark:bg-muted/30 items-center justify-center">
-          <img src="/logo.svg" alt="Logo" class="w-44 h-44" />
+          <div v-if="siteIcon" class="w-44 h-44 [&>svg]:w-full [&>svg]:h-full" v-html="siteIcon" />
+          <img v-else src="/logo.svg" alt="Logo" class="w-44 h-44" />
         </div>
       </div>
     </div>

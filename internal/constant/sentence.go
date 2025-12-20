@@ -2,35 +2,35 @@ package constant
 
 import (
 	"bufio"
+	"bytes"
+	_ "embed"
 	"encoding/json"
 	"math/rand"
-	"os"
 	"sync"
 )
+
+//go:embed sentence1-10000.json
+var sentenceData []byte
 
 type Sentence struct {
 	Name string `json:"name"`
 	From string `json:"from"`
 }
 
-const sentenceFile = "internal/constant/sentence1-10000.json"
-
 var (
 	lineCount     int
-	lineCountOnce sync.Once
+	lineOffsets   []int64
+	sentenceOnce  sync.Once
 )
 
-// countLines 统计文件行数（只执行一次）
-func countLines() {
-	lineCountOnce.Do(func() {
-		file, err := os.Open(sentenceFile)
-		if err != nil {
-			return
-		}
-		defer file.Close()
-
-		scanner := bufio.NewScanner(file)
+// initSentences 初始化：统计行数和记录每行偏移
+func initSentences() {
+	sentenceOnce.Do(func() {
+		scanner := bufio.NewScanner(bytes.NewReader(sentenceData))
+		var offset int64 = 0
 		for scanner.Scan() {
+			lineOffsets = append(lineOffsets, offset)
+			offset += int64(len(scanner.Bytes())) + 1 // +1 for newline
 			lineCount++
 		}
 	})
@@ -38,20 +38,14 @@ func countLines() {
 
 // GetRandomSentence 随机获取一条古诗词
 func GetRandomSentence() string {
-	countLines()
+	initSentences()
 	if lineCount == 0 {
 		return "欢迎使用白虎面板"
 	}
 
 	targetLine := rand.Intn(lineCount)
-
-	file, err := os.Open(sentenceFile)
-	if err != nil {
-		return "欢迎使用白虎面板"
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
+	
+	scanner := bufio.NewScanner(bytes.NewReader(sentenceData))
 	currentLine := 0
 	for scanner.Scan() {
 		if currentLine == targetLine {
