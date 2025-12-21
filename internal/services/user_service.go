@@ -9,18 +9,14 @@ import (
 	"baihu/internal/models"
 )
 
-type UserService struct {
-	settingsService *SettingsService
-}
+type UserService struct{}
 
-func NewUserService(settingsService *SettingsService) *UserService {
-	return &UserService{settingsService: settingsService}
+func NewUserService() *UserService {
+	return &UserService{}
 }
 
 func (us *UserService) hashPassword(password string) string {
-	// 使用 JWT Secret 作为密码 salt
-	salt := us.settingsService.Get(constant.SectionSystem, constant.KeyJWTSecret)
-	hash := sha256.Sum256([]byte(password + salt))
+	hash := sha256.Sum256([]byte(password + constant.Secret))
 	return hex.EncodeToString(hash[:])
 }
 

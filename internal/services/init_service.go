@@ -1,10 +1,6 @@
 package services
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-
-	"baihu/internal/constant"
 	"baihu/internal/logger"
 )
 
@@ -27,11 +23,9 @@ func (s *InitService) Initialize() *UserService {
 		logger.Warnf("初始化设置失败: %v", err)
 	}
 
-	// 初始化 JWT Secret（也用作密码 salt，必须在创建 UserService 之前）
-	s.initJWTSecret()
+	// 创建 UserService
+	userService := NewUserService()
 
-	// 创建 UserService（依赖 settingsService 获取 salt）
-	userService := NewUserService(s.settingsService)
 	// 创建管理员账号
 	s.initializeAdmin(userService)
 
@@ -48,31 +42,4 @@ func (s *InitService) initializeAdmin(userService *UserService) {
 
 	userService.CreateUser("admin", "123456", "admin@local", "admin")
 	logger.Info("管理员账号创建成功: admin / 123456")
-}
-
-// IsInitialized 检查是否已初始化
-func (s *InitService) IsInitialized() bool {
-	return s.settingsService.Get(constant.SectionSystem, constant.KeyInitialized) == "true"
-}
-
-// initJWTSecret 初始化 JWT Secret，如果不存在则生成随机值
-func (s *InitService) initJWTSecret() {
-	existing := s.settingsService.Get(constant.SectionSystem, constant.KeyJWTSecret)
-	if existing != "" {
-		return
-	}
-
-	// 生成 32 字节随机密钥
-	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
-		logger.Warnf("生成 JWT Secret 失败: %v", err)
-		return
-	}
-
-	secret := hex.EncodeToString(bytes)
-	if err := s.settingsService.Set(constant.SectionSystem, constant.KeyJWTSecret, secret); err != nil {
-		logger.Warnf("保存 JWT Secret 失败: %v", err)
-		return
-	}
-	logger.Info("JWT Secret 已生成")
 }

@@ -3,6 +3,7 @@ package utils
 import (
 	"strconv"
 
+	"baihu/internal/cache"
 	"baihu/internal/constant"
 
 	"github.com/gin-gonic/gin"
@@ -14,16 +15,27 @@ type Pagination struct {
 	PageSize int
 }
 
+// getDefaultPageSize 从缓存获取默认分页大小
+func getDefaultPageSize() int {
+	pageSizeStr := cache.GetSiteCache(constant.KeyPageSize)
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize < 1 {
+		return 10
+	}
+	return pageSize
+}
+
 // ParsePagination 从请求中解析分页参数
 func ParsePagination(c *gin.Context) Pagination {
+	defaultPageSize := getDefaultPageSize()
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", strconv.Itoa(constant.DefaultPageSize)))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", strconv.Itoa(defaultPageSize)))
 
 	if page < 1 {
 		page = 1
 	}
 	if pageSize < 1 || pageSize > 100 {
-		pageSize = constant.DefaultPageSize
+		pageSize = defaultPageSize
 	}
 
 	return Pagination{Page: page, PageSize: pageSize}

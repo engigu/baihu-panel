@@ -2,61 +2,65 @@ package services
 
 import (
 	"baihu/internal/constant"
-	"encoding/json"
-	"os"
+
+	"gopkg.in/ini.v1"
 )
 
 type ServerConfig struct {
-	Port     int    `json:"port"`
-	Host     string `json:"host"`
-	SiteName string `json:"site_name"`
+	Port int    `ini:"port"`
+	Host string `ini:"host"`
 }
 
 type DatabaseConfig struct {
-	Type        string `json:"type"`
-	Host        string `json:"host"`
-	Port        int    `json:"port"`
-	User        string `json:"user"`
-	Password    string `json:"password"`
-	DBName      string `json:"dbname"`
-	Path        string `json:"path"`
-	TablePrefix string `json:"table_prefix"`
+	Type        string `ini:"type"`
+	Host        string `ini:"host"`
+	Port        int    `ini:"port"`
+	User        string `ini:"user"`
+	Password    string `ini:"password"`
+	DBName      string `ini:"dbname"`
+	Path        string `ini:"path"`
+	TablePrefix string `ini:"table_prefix"`
 }
 
 type SecurityConfig struct {
-	JWTSecret    string `json:"jwt_secret"`
-	PasswordSalt string `json:"password_salt"`
+	Secret string `ini:"secret"`
 }
 
 type TaskConfig struct {
-	DefaultTimeout   int `json:"default_timeout"`
-	LogRetentionDays int `json:"log_retention_days"`
+	DefaultTimeout   int `ini:"default_timeout"`
+	LogRetentionDays int `ini:"log_retention_days"`
 }
 
 type AppConfig struct {
-	Server   ServerConfig   `json:"server"`
-	Database DatabaseConfig `json:"database"`
-	Security SecurityConfig `json:"security"`
-	Task     TaskConfig     `json:"task"`
+	Server   ServerConfig   `ini:"server"`
+	Database DatabaseConfig `ini:"database"`
+	Security SecurityConfig `ini:"security"`
+	Task     TaskConfig     `ini:"task"`
 }
 
 var Config *AppConfig
 
 func LoadConfig(path string) (*AppConfig, error) {
-	data, err := os.ReadFile(path)
+	cfg, err := ini.Load(path)
 	if err != nil {
 		return nil, err
 	}
 
 	Config = &AppConfig{}
-	if err := json.Unmarshal(data, Config); err != nil {
+	if err := cfg.MapTo(Config); err != nil {
 		return nil, err
 	}
 
-	// 设置表前缀到 constant 包
-	if Config.Database.TablePrefix != "" {
-		constant.TablePrefix = Config.Database.TablePrefix
+	// 设置默认数据库路径
+	if Config.Database.Path == "" {
+		Config.Database.Path = constant.DefaultDBPath
 	}
+
+	// 设置表前缀到 constant 包
+	constant.TablePrefix = Config.Database.TablePrefix
+
+	// 设置 Secret 到 constant 包
+	constant.Secret = Config.Security.Secret
 
 	return Config, nil
 }

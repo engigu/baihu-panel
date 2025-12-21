@@ -8,9 +8,10 @@ import (
 
 var cronService *services.CronService
 
-func RegisterControllers() (*Controllers, *services.SettingsService) {
+func RegisterControllers() *Controllers {
 	// Initialize services
 	settingsService := services.NewSettingsService()
+	loginLogService := services.NewLoginLogService()
 
 	// 执行系统初始化（返回 userService）
 	initService := services.NewInitService(settingsService)
@@ -28,7 +29,7 @@ func RegisterControllers() (*Controllers, *services.SettingsService) {
 	// Initialize and return controllers
 	return &Controllers{
 		Task:      controllers.NewTaskController(taskService, cronService),
-		Auth:      controllers.NewAuthController(userService, settingsService),
+		Auth:      controllers.NewAuthController(userService, settingsService, loginLogService),
 		Env:       controllers.NewEnvController(envService),
 		Script:    controllers.NewScriptController(scriptService),
 		Executor:  controllers.NewExecutorController(executorService),
@@ -36,8 +37,8 @@ func RegisterControllers() (*Controllers, *services.SettingsService) {
 		Dashboard: controllers.NewDashboardController(cronService, executorService),
 		Log:       controllers.NewLogController(),
 		Terminal:  controllers.NewTerminalController(),
-		Settings:  controllers.NewSettingsController(userService),
-	}, settingsService
+		Settings:  controllers.NewSettingsController(userService, loginLogService),
+	}
 }
 
 // StopCron stops the cron service gracefully

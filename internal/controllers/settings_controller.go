@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"strconv"
+
 	"baihu/internal/constant"
 	"baihu/internal/database"
 	"baihu/internal/models"
@@ -17,12 +19,14 @@ import (
 type SettingsController struct {
 	userService     *services.UserService
 	settingsService *services.SettingsService
+	loginLogService *services.LoginLogService
 }
 
-func NewSettingsController(userService *services.UserService) *SettingsController {
+func NewSettingsController(userService *services.UserService, loginLogService *services.LoginLogService) *SettingsController {
 	return &SettingsController{
 		userService:     userService,
 		settingsService: services.NewSettingsService(),
+		loginLogService: loginLogService,
 	}
 }
 
@@ -185,4 +189,32 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%d分钟%d秒", minutes, seconds)
 	}
 	return fmt.Sprintf("%d秒", seconds)
+}
+
+
+// GetLoginLogs 获取登录日志
+func (sc *SettingsController) GetLoginLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	username := c.Query("username")
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 10
+	}
+
+	logs, total, err := sc.loginLogService.List(page, pageSize, username)
+	if err != nil {
+		utils.ServerError(c, "获取登录日志失败")
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"data":      logs,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
 }

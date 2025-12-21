@@ -62,17 +62,11 @@ func (a *App) initDatabase() {
 	if err := database.Migrate(); err != nil {
 		logger.Fatalf("Failed to migrate database: %v", err)
 	}
-
-	// 初始化默认设置
-	settingsService := services.NewSettingsService()
-	if err := settingsService.InitSettings(); err != nil {
-		logger.Warnf("Failed to init settings: %v", err)
-	}
 }
 
 func (a *App) initRouter() {
-	ctrls, settingsService := router.RegisterControllers()
-	a.Router = router.Setup(ctrls, settingsService)
+	ctrls := router.RegisterControllers()
+	a.Router = router.Setup(ctrls)
 }
 
 func (a *App) Run() {

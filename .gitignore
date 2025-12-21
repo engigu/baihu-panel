@@ -12,6 +12,7 @@ baihu
 data/
 # logs/
 # scripts/
+configs/config.ini
 
 # IDE
 .idea/

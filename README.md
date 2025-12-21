@@ -162,31 +162,32 @@ make build-all
 │   ├── ql.db             # SQLite 数据库
 │   └── scripts/          # 脚本文件存储
 └── configs/
-    └── config.json       # 配置文件（自动创建）
+    └── config.ini        # 配置文件（自动创建）
 ```
 
 ---
 
 ## ⚙️ 配置说明
 
-配置文件路径：`configs/config.json`
+配置文件路径：`configs/config.ini`
 
-```json
-{
-  "server": {
-    "port": 8052,
-    "host": "0.0.0.0"
-  },
-  "database": {
-    "type": "sqlite",
-    "path": "./data/ql.db",
-    "table_prefix": "baihu_"
-  },
-  "task": {
-    "default_timeout": 3600,
-    "log_retention_days": 30
-  }
-}
+```ini
+[server]
+port = 8052
+host = 0.0.0.0
+
+[database]
+type = sqlite
+host = localhost
+port = 3306
+user = root
+password = 
+dbname = ql_panel
+table_prefix = baihu_
+
+[task]
+default_timeout = 3600
+log_retention_days = 30
 ```
 
 ### 配置项说明
@@ -196,7 +197,6 @@ make build-all
 | `server.port` | 服务端口 | 8052 |
 | `server.host` | 监听地址 | 0.0.0.0 |
 | `database.type` | 数据库类型 | sqlite |
-| `database.path` | 数据库路径 | ./data/ql.db |
 | `database.table_prefix` | 表前缀 | baihu_ |
 | `task.default_timeout` | 任务默认超时（秒） | 3600 |
 | `task.log_retention_days` | 日志保留天数 | 30 |

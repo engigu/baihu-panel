@@ -113,7 +113,14 @@ export const api = {
     getPublicSite: () => request<{ title: string; subtitle: string; icon: string }>('/settings/public'),
     updateSite: (data: SiteSettings) =>
       request('/settings/site', { method: 'PUT', body: JSON.stringify(data) }),
-    getAbout: () => request<AboutInfo>('/settings/about')
+    getAbout: () => request<AboutInfo>('/settings/about'),
+    getLoginLogs: (params?: { page?: number; page_size?: number; username?: string }) => {
+      const query = new URLSearchParams()
+      if (params?.page) query.set('page', String(params.page))
+      if (params?.page_size) query.set('page_size', String(params.page_size))
+      if (params?.username) query.set('username', params.username)
+      return request<LoginLogListResponse>(`/settings/login-logs?${query}`)
+    }
   },
   files: {
     tree: () => request<FileNode[]>('/files/tree'),
@@ -263,4 +270,22 @@ export interface SiteSettings {
   icon: string
   page_size: string
   cookie_days: string
+}
+
+
+export interface LoginLog {
+  id: number
+  username: string
+  ip: string
+  user_agent: string
+  status: string
+  message: string
+  created_at: string
+}
+
+export interface LoginLogListResponse {
+  data: LoginLog[]
+  total: number
+  page: number
+  page_size: number
 }

@@ -20,6 +20,7 @@ const router = createRouter({
         { path: 'editor/:path(.*)?', name: 'editor', component: () => import('@/views/editor/Editor.vue') },
         { path: 'environments', name: 'environments', component: () => import('@/views/environments/Environments.vue') },
         { path: 'history', name: 'history', component: () => import('@/views/history/History.vue') },
+        { path: 'login-logs', name: 'login-logs', component: () => import('@/views/login-logs/LoginLogs.vue') },
         { path: 'terminal', name: 'terminal', component: () => import('@/views/terminal/Terminal.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/views/settings/Settings.vue') }
       ]

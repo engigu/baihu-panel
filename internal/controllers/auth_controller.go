@@ -14,10 +14,15 @@ import (
 type AuthController struct {
 	userService     *services.UserService
 	settingsService *services.SettingsService
+	loginLogService *services.LoginLogService
 }
 
-func NewAuthController(userService *services.UserService, settingsService *services.SettingsService) *AuthController {
-	return &AuthController{userService: userService, settingsService: settingsService}
+func NewAuthController(userService *services.UserService, settingsService *services.SettingsService, loginLogService *services.LoginLogService) *AuthController {
+	return &AuthController{
+		userService:     userService,
+		settingsService: settingsService,
+		loginLogService: loginLogService,
+	}
 }
 
 func (ac *AuthController) Login(c *gin.Context) {
@@ -26,6 +31,9 @@ func (ac *AuthController) Login(c *gin.Context) {
 		Password string `json:"password" binding:"required"`
 	}
 
+	ip := c.ClientIP()
+	userAgent := c.GetHeader("User-Agent")
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
@@ -33,6 +41,8 @@ func (ac *AuthController) Login(c *gin.Context) {
 
 	user := ac.userService.GetUserByUsername(req.Username)
 	if user == nil || !ac.userService.ValidatePassword(user, req.Password) {
+		// 记录登录失败日志
+		ac.loginLogService.Create(req.Username, ip, userAgent, "failed", "用户名或密码错误")
 		utils.Unauthorized(c, "用户名或密码错误")
 		return
 	}
@@ -45,22 +55,19 @@ func (ac *AuthController) Login(c *gin.Context) {
 		}
 	}
 
-	// 获取 JWT Secret
-	jwtSecret := ac.settingsService.Get(constant.SectionSystem, constant.KeyJWTSecret)
-	if jwtSecret == "" {
-		utils.ServerError(c, "系统配置错误")
-		return
-	}
-
 	// 生成 token
-	token, err := utils.GenerateToken(user.ID, user.Username, expireDays, jwtSecret)
+	token, err := utils.GenerateToken(user.ID, user.Username, expireDays, constant.Secret)
 	if err != nil {
+		ac.loginLogService.Create(req.Username, ip, userAgent, "failed", "Token生成失败")
 		utils.ServerError(c, "登录失败")
 		return
 	}
 
 	// 设置 Cookie
 	middleware.SetAuthCookie(c, token, expireDays)
+
+	// 记录登录成功日志
+	ac.loginLogService.Create(req.Username, ip, userAgent, "success", "登录成功")
 
 	utils.Success(c, gin.H{
 		"user": user.Username,

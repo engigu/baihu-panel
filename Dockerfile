@@ -50,7 +50,7 @@ RUN sed -i 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.li
     && echo "${TZ}" > /etc/timezone \
     && ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime \
     && apt update \
-    && apt install -y tzdata git gcc curl wget vim ca-certificates procps htop \
+    && apt install -y tzdata git gcc curl wget vim ca-certificates procps htop e2fsprogs \
     && rm -rf /var/lib/apt/lists/* \
     && curl -sSL https://gh-proxy.com/https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh -o /tmp/miniforge.sh \
     && bash /tmp/miniforge.sh -b -p ${CONDA_DIR} \
@@ -68,11 +68,12 @@ COPY --from=backend-builder /app/baihu .
 # Copy config files
 COPY --from=backend-builder /app/configs ./configs
 
-# Create directories
-RUN mkdir -p ./data ./logs ./scripts
+# Copy entrypoint script
+COPY docker-entrypoint.sh .
+RUN chmod +x docker-entrypoint.sh
 
 # Expose port
 EXPOSE 8052
 
-# Run
-CMD ["./baihu"]
+# Run with entrypoint
+CMD ["./docker-entrypoint.sh"]

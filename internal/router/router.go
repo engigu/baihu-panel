@@ -6,7 +6,6 @@ import (
 
 	"baihu/internal/controllers"
 	"baihu/internal/middleware"
-	"baihu/internal/services"
 	"baihu/internal/static"
 
 	"github.com/gin-gonic/gin"
@@ -41,7 +40,7 @@ func cacheControl(value string) gin.HandlerFunc {
 	}
 }
 
-func Setup(c *Controllers, settingsService *services.SettingsService) *gin.Engine {
+func Setup(c *Controllers) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(middleware.GinLogger(), middleware.GinRecovery())
@@ -95,7 +94,7 @@ func Setup(c *Controllers, settingsService *services.SettingsService) *gin.Engin
 
 		// 需要认证的路由
 		authorized := api.Group("")
-		authorized.Use(middleware.AuthRequired(settingsService))
+		authorized.Use(middleware.AuthRequired())
 		{
 			// 获取当前用户
 			authorized.GET("/auth/me", c.Auth.GetCurrentUser)
@@ -174,6 +173,7 @@ func Setup(c *Controllers, settingsService *services.SettingsService) *gin.Engin
 				settings.GET("/site", c.Settings.GetSiteSettings)
 				settings.PUT("/site", c.Settings.UpdateSiteSettings)
 				settings.GET("/about", c.Settings.GetAbout)
+				settings.GET("/login-logs", c.Settings.GetLoginLogs)
 			}
 		}
 	}
