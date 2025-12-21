@@ -24,20 +24,91 @@ type ExecutionResult struct {
 	End     time.Time
 }
 
+// ExecutionCallback 任务执行完成后的回调函数类型
+type ExecutionCallback func(taskID uint, command string, result *ExecutionResult)
+
 // ExecutorService handles task execution
 type ExecutorService struct {
 	taskService  *TaskService
 	results      []ExecutionResult
-	runningTasks map[int]bool // 正在运行的任务
+	runningTasks map[int]bool
+	callbacks    []ExecutionCallback
 	mu           sync.RWMutex
 }
 
 // NewExecutorService creates a new executor service
 func NewExecutorService(taskService *TaskService) *ExecutorService {
-	return &ExecutorService{
+	es := &ExecutorService{
 		taskService:  taskService,
 		results:      make([]ExecutionResult, 0),
 		runningTasks: make(map[int]bool),
+		callbacks:    make([]ExecutionCallback, 0),
+	}
+	// 注册默认回调
+	es.RegisterCallback(es.saveTaskLogCallback)
+	es.RegisterCallback(es.updateStatsCallback)
+	return es
+}
+
+// RegisterCallback 注册执行完成回调
+func (es *ExecutorService) RegisterCallback(cb ExecutionCallback) {
+	es.mu.Lock()
+	es.callbacks = append(es.callbacks, cb)
+	es.mu.Unlock()
+}
+
+// executeCallbacks 执行所有回调
+func (es *ExecutorService) executeCallbacks(taskID uint, command string, result *ExecutionResult) {
+	es.mu.RLock()
+	callbacks := make([]ExecutionCallback, len(es.callbacks))
+	copy(callbacks, es.callbacks)
+	es.mu.RUnlock()
+
+	for _, cb := range callbacks {
+		cb(taskID, command, result)
+	}
+}
+
+// saveTaskLogCallback 保存任务日志的回调
+func (es *ExecutorService) saveTaskLogCallback(taskID uint, command string, result *ExecutionResult) {
+	output := result.Output
+	if result.Error != "" {
+		output += "\n[ERROR]\n" + result.Error
+	}
+
+	compressed, err := utils.CompressToBase64(output)
+	if err != nil {
+		logger.Errorf("Failed to compress log: %v", err)
+		compressed = ""
+	}
+
+	status := "success"
+	if !result.Success {
+		status = "failed"
+	}
+
+	taskLog := &models.TaskLog{
+		TaskID:   taskID,
+		Command:  command,
+		Output:   compressed,
+		Status:   status,
+		Duration: result.End.Sub(result.Start).Milliseconds(),
+	}
+
+	if err := database.DB.Create(taskLog).Error; err != nil {
+		logger.Errorf("Failed to save task log: %v", err)
+	}
+}
+
+// updateStatsCallback 更新统计数据的回调
+func (es *ExecutorService) updateStatsCallback(taskID uint, _ string, result *ExecutionResult) {
+	status := "success"
+	if !result.Success {
+		status = "failed"
+	}
+	sendStatsService := NewSendStatsService()
+	if err := sendStatsService.IncrementStats(taskID, status); err != nil {
+		logger.Errorf("Failed to update stats: %v", err)
 	}
 }
 
@@ -72,8 +143,8 @@ func (es *ExecutorService) ExecuteTask(taskID int) *ExecutionResult {
 	delete(es.runningTasks, taskID)
 	es.mu.Unlock()
 
-	// Save log to database
-	es.saveTaskLog(uint(taskID), task.Command, result)
+	// 执行回调
+	es.executeCallbacks(uint(taskID), task.Command, result)
 
 	return result
 }
@@ -97,11 +168,9 @@ func (es *ExecutorService) ExecuteCommandWithTimeout(command string, timeout tim
 		Start:   time.Now(),
 	}
 
-	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// Execute the command
 	shell, args := utils.GetShellCommand(command)
 	cmd := exec.CommandContext(ctx, shell, args...)
 	var stdout, stderr bytes.Buffer
@@ -111,7 +180,6 @@ func (es *ExecutorService) ExecuteCommandWithTimeout(command string, timeout tim
 	err := cmd.Run()
 	result.End = time.Now()
 
-	// Process results
 	result.Output = stdout.String()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
@@ -123,10 +191,8 @@ func (es *ExecutorService) ExecuteCommandWithTimeout(command string, timeout tim
 		result.Success = true
 	}
 
-	// Store result
 	es.mu.Lock()
 	es.results = append(es.results, *result)
-	// Keep only the last 100 results to prevent memory issues
 	if len(es.results) > 100 {
 		es.results = es.results[1:]
 	}
@@ -148,36 +214,4 @@ func (es *ExecutorService) GetLastResults(count int) []ExecutionResult {
 	results := make([]ExecutionResult, len(es.results[start:]))
 	copy(results, es.results[start:])
 	return results
-}
-
-// saveTaskLog saves execution log to database with gzip+base64 compression
-func (es *ExecutorService) saveTaskLog(taskID uint, command string, result *ExecutionResult) {
-	output := result.Output
-	if result.Error != "" {
-		output += "\n[ERROR]\n" + result.Error
-	}
-
-	// Compress output
-	compressed, err := utils.CompressToBase64(output)
-	if err != nil {
-		logger.Errorf("Failed to compress log: %v", err)
-		compressed = ""
-	}
-
-	status := "success"
-	if !result.Success {
-		status = "failed"
-	}
-
-	taskLog := &models.TaskLog{
-		TaskID:   taskID,
-		Command:  command,
-		Output:   compressed,
-		Status:   status,
-		Duration: result.End.Sub(result.Start).Milliseconds(),
-	}
-
-	if err := database.DB.Create(taskLog).Error; err != nil {
-		logger.Errorf("Failed to save task log: %v", err)
-	}
 }

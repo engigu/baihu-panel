@@ -139,7 +139,7 @@ onMounted(loadTasks)
         <span class="w-12 shrink-0">ID</span>
         <span class="w-40 shrink-0">名称</span>
         <span class="flex-1">命令</span>
-        <span class="w-28 shrink-0">定时规则</span>
+        <span class="w-32 shrink-0">定时规则</span>
         <span class="w-40 shrink-0">上次执行</span>
         <span class="w-40 shrink-0">下次执行</span>
         <span class="w-12 shrink-0 text-center">状态</span>
@@ -158,7 +158,7 @@ onMounted(loadTasks)
           <span class="w-12 shrink-0 text-muted-foreground text-sm">#{{ task.id }}</span>
           <span class="w-40 font-medium truncate shrink-0 text-sm">{{ task.name }}</span>
           <code class="flex-1 text-muted-foreground truncate text-xs bg-muted px-2 py-1 rounded">{{ task.command }}</code>
-          <code class="w-28 shrink-0 text-muted-foreground text-xs bg-muted px-2 py-1 rounded">{{ task.schedule }}</code>
+          <code class="w-36 shrink-0 text-muted-foreground text-xs bg-muted px-2 py-1 rounded">{{ task.schedule }}</code>
           <span class="w-40 shrink-0 text-muted-foreground text-xs">{{ task.last_run || '-' }}</span>
           <span class="w-40 shrink-0 text-muted-foreground text-xs">{{ task.next_run || '-' }}</span>
           <span class="w-12 flex justify-center shrink-0 cursor-pointer" @click="toggleTask(task, !task.enabled)" :title="task.enabled ? '点击禁用' : '点击启用'">

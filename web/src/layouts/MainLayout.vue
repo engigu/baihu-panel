@@ -18,7 +18,7 @@ const navItems = [
   { to: '/history', icon: ScrollText, label: '执行历史', exact: true },
   { to: '/environments', icon: Variable, label: '环境变量', exact: true },
   { to: '/terminal', icon: Terminal, label: '终端命令', exact: true },
-  { to: '/login-logs', icon: KeyRound, label: '登录日志', exact: true },
+  { to: '/loginlogs', icon: KeyRound, label: '登录日志', exact: true },
   { to: '/settings', icon: Settings, label: '系统设置', exact: true },
 ]
 

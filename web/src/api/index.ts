@@ -108,7 +108,7 @@ export const api = {
     changePassword: (data: { old_password: string; new_password: string }) =>
       request('/settings/password', { method: 'POST', body: JSON.stringify(data) }),
     cleanLogs: (days: number) =>
-      request<{ deleted: number }>('/settings/clean-logs', { method: 'POST', body: JSON.stringify({ days }) }),
+      request<{ deleted: number }>('/settings/cleanlogs', { method: 'POST', body: JSON.stringify({ days }) }),
     getSite: () => request<SiteSettings>('/settings/site'),
     getPublicSite: () => request<{ title: string; subtitle: string; icon: string }>('/settings/public'),
     updateSite: (data: SiteSettings) =>
@@ -119,7 +119,7 @@ export const api = {
       if (params?.page) query.set('page', String(params.page))
       if (params?.page_size) query.set('page_size', String(params.page_size))
       if (params?.username) query.set('username', params.username)
-      return request<LoginLogListResponse>(`/settings/login-logs?${query}`)
+      return request<LoginLogListResponse>(`/settings/loginlogs?${query}`)
     }
   },
   files: {
@@ -157,7 +157,7 @@ export const api = {
       }
       if (targetPath) formData.append('path', targetPath)
       
-      const res = await fetch(`${BASE_URL}/files/upload-files`, {
+      const res = await fetch(`${BASE_URL}/files/uploadfiles`, {
         method: 'POST',
         credentials: 'include',
         body: formData

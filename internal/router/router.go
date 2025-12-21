@@ -151,7 +151,7 @@ func Setup(c *Controllers) *gin.Engine {
 				files.POST("/delete", c.File.DeleteFile)
 				files.POST("/rename", c.File.RenameFile)
 				files.POST("/upload", c.File.UploadArchive)
-				files.POST("/upload-files", c.File.UploadFiles)
+				files.POST("/uploadfiles", c.File.UploadFiles)
 			}
 
 			// Log routes
@@ -169,11 +169,11 @@ func Setup(c *Controllers) *gin.Engine {
 			settings := authorized.Group("/settings")
 			{
 				settings.POST("/password", c.Settings.ChangePassword)
-				settings.POST("/clean-logs", c.Settings.CleanLogs)
+				settings.POST("/cleanlogs", c.Settings.CleanLogs)
 				settings.GET("/site", c.Settings.GetSiteSettings)
 				settings.PUT("/site", c.Settings.UpdateSiteSettings)
 				settings.GET("/about", c.Settings.GetAbout)
-				settings.GET("/login-logs", c.Settings.GetLoginLogs)
+				settings.GET("/loginlogs", c.Settings.GetLoginLogs)
 			}
 		}
 	}

@@ -58,15 +58,6 @@ function handlePageChange(page: number) {
   loadLogs()
 }
 
-function getBrowserInfo(userAgent: string): string {
-  if (!userAgent) return '未知'
-  if (userAgent.includes('Chrome')) return 'Chrome'
-  if (userAgent.includes('Firefox')) return 'Firefox'
-  if (userAgent.includes('Safari')) return 'Safari'
-  if (userAgent.includes('Edge')) return 'Edge'
-  return '其他'
-}
-
 onMounted(loadLogs)
 </script>
 
@@ -98,9 +89,8 @@ onMounted(loadLogs)
       <div class="flex items-center gap-4 px-4 py-2 border-b bg-muted/50 text-sm text-muted-foreground font-medium">
         <span class="w-24 shrink-0">用户名</span>
         <span class="w-32 shrink-0">IP 地址</span>
-        <span class="w-20 shrink-0">浏览器</span>
         <span class="w-16 shrink-0 text-center">状态</span>
-        <span class="flex-1">消息</span>
+        <span class="flex-1">User Agent</span>
         <span class="w-40 shrink-0 text-right">时间</span>
       </div>
       <!-- 列表 -->
@@ -115,13 +105,12 @@ onMounted(loadLogs)
         >
           <span class="w-24 shrink-0 font-medium text-sm truncate">{{ log.username }}</span>
           <code class="w-32 shrink-0 text-xs text-muted-foreground bg-muted px-2 py-1 rounded">{{ log.ip }}</code>
-          <span class="w-20 shrink-0 text-xs text-muted-foreground">{{ getBrowserInfo(log.user_agent) }}</span>
           <span class="w-16 shrink-0 flex justify-center">
             <Badge :variant="log.status === 'success' ? 'default' : 'destructive'" class="text-xs">
               {{ log.status === 'success' ? '成功' : '失败' }}
             </Badge>
           </span>
-          <span class="flex-1 text-sm text-muted-foreground truncate">{{ log.message }}</span>
+          <span class="flex-1 text-xs text-muted-foreground truncate" :title="log.user_agent">{{ log.user_agent || '-' }}</span>
           <span class="w-40 shrink-0 text-right text-xs text-muted-foreground">{{ log.created_at }}</span>
         </div>
       </div>

@@ -117,12 +117,12 @@ onMounted(loadLogs)
 
     <div class="flex gap-4">
       <!-- 日志列表 -->
-      <div class="flex-1 rounded-lg border bg-card">
+      <div class="flex-1 min-w-0 rounded-lg border bg-card">
         <!-- 表头 -->
         <div class="flex items-center gap-4 px-4 py-2 border-b bg-muted/50 text-sm text-muted-foreground font-medium">
           <span class="w-12 shrink-0">ID</span>
           <span class="w-32 shrink-0">任务名称</span>
-          <span class="flex-1">命令</span>
+          <span :class="selectedLog ? 'w-40 shrink-0' : 'flex-1'">命令</span>
           <span class="w-12 shrink-0 text-center">状态</span>
           <span class="w-20 text-right shrink-0">耗时</span>
           <span class="w-40 text-right shrink-0">执行时间</span>
@@ -143,7 +143,7 @@ onMounted(loadLogs)
           >
             <span class="w-12 shrink-0 text-muted-foreground text-sm">#{{ log.id }}</span>
             <span class="w-32 font-medium truncate shrink-0 text-sm">{{ log.task_name }}</span>
-            <code class="flex-1 text-muted-foreground truncate text-xs bg-muted px-2 py-1 rounded">{{ log.command }}</code>
+            <code :class="['text-muted-foreground truncate text-xs bg-muted px-2 py-1 rounded', selectedLog ? 'w-40 shrink-0' : 'flex-1']">{{ log.command }}</code>
             <span class="w-12 flex justify-center shrink-0">
               <span :class="['w-2 h-2 rounded-full', log.status === 'success' ? 'bg-green-500' : log.status === 'failed' ? 'bg-red-500' : 'bg-yellow-500']" />
             </span>

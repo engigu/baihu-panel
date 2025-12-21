@@ -13,5 +13,6 @@ func Migrate() error {
 		&models.EnvironmentVariable{},
 		&models.Setting{},
 		&models.LoginLog{},
+		&models.SendStats{},
 	)
 }
