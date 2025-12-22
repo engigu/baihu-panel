@@ -114,6 +114,9 @@ export const api = {
     getPublicSite: () => request<{ title: string; subtitle: string; icon: string }>('/settings/public'),
     updateSite: (data: SiteSettings) =>
       request('/settings/site', { method: 'PUT', body: JSON.stringify(data) }),
+    getScheduler: () => request<SchedulerSettings>('/settings/scheduler'),
+    updateScheduler: (data: SchedulerSettings) =>
+      request('/settings/scheduler', { method: 'PUT', body: JSON.stringify(data) }),
     getAbout: () => request<AboutInfo>('/settings/about'),
     getLoginLogs: (params?: { page?: number; page_size?: number; username?: string }) => {
       const query = new URLSearchParams()
@@ -305,6 +308,12 @@ export interface SiteSettings {
   icon: string
   page_size: string
   cookie_days: string
+}
+
+export interface SchedulerSettings {
+  worker_count: string
+  queue_size: string
+  rate_interval: string
 }
 
 

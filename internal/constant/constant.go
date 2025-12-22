@@ -30,8 +30,9 @@ const (
 	DefaultTaskTimeout = 30
 
 	// Settings Section 常量
-	SectionSite   = "site"
-	SectionSystem = "system"
+	SectionSite      = "site"
+	SectionSystem    = "system"
+	SectionScheduler = "scheduler"
 
 	// Site Settings Key 常量
 	KeyTitle      = "title"
@@ -42,6 +43,11 @@ const (
 
 	// System Settings Key 常量
 	KeyInitialized = "initialized"
+
+	// Scheduler Settings Key 常量
+	KeyWorkerCount  = "worker_count"
+	KeyQueueSize    = "queue_size"
+	KeyRateInterval = "rate_interval"
 )
 
 // TablePrefix 表前缀，从配置文件读取
@@ -61,5 +67,10 @@ var DefaultSettings = map[string]map[string]string{
 		KeyIcon:       DefaultIcon,
 		KeyPageSize:   "10",
 		KeyCookieDays: "7",
+	},
+	SectionScheduler: {
+		KeyWorkerCount:  "4",
+		KeyQueueSize:    "100",
+		KeyRateInterval: "200",
 	},
 }

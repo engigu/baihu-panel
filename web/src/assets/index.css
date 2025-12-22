@@ -143,3 +143,24 @@
     line-height: 1.5;
   }
 }
+
+/* Number input spinner buttons - dark mode */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 0.6;
+}
+
+input[type="number"]:hover::-webkit-inner-spin-button,
+input[type="number"]:hover::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
+.dark input[type="number"]::-webkit-inner-spin-button,
+.dark input[type="number"]::-webkit-outer-spin-button {
+  filter: invert(0.7);
+}
+
+.dark input[type="number"]:hover::-webkit-inner-spin-button,
+.dark input[type="number"]:hover::-webkit-outer-spin-button {
+  filter: invert(0.85);
+}

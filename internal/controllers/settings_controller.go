@@ -22,14 +22,16 @@ type SettingsController struct {
 	settingsService *services.SettingsService
 	loginLogService *services.LoginLogService
 	backupService   *services.BackupService
+	executorService *services.ExecutorService
 }
 
-func NewSettingsController(userService *services.UserService, loginLogService *services.LoginLogService) *SettingsController {
+func NewSettingsController(userService *services.UserService, loginLogService *services.LoginLogService, executorService *services.ExecutorService) *SettingsController {
 	return &SettingsController{
 		userService:     userService,
 		settingsService: services.NewSettingsService(),
 		loginLogService: loginLogService,
 		backupService:   services.NewBackupService(),
+		executorService: executorService,
 	}
 }
 
@@ -110,6 +112,44 @@ func (sc *SettingsController) UpdateSiteSettings(c *gin.Context) {
 	if err := sc.settingsService.SetSection(constant.SectionSite, values); err != nil {
 		utils.ServerError(c, "保存失败")
 		return
+	}
+
+	utils.SuccessMsg(c, "保存成功")
+}
+
+// GetSchedulerSettings 获取调度设置
+func (sc *SettingsController) GetSchedulerSettings(c *gin.Context) {
+	settings := sc.settingsService.GetSection(constant.SectionScheduler)
+	utils.Success(c, settings)
+}
+
+// UpdateSchedulerSettings 更新调度设置
+func (sc *SettingsController) UpdateSchedulerSettings(c *gin.Context) {
+	var req struct {
+		WorkerCount  string `json:"worker_count"`
+		QueueSize    string `json:"queue_size"`
+		RateInterval string `json:"rate_interval"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+
+	values := map[string]string{
+		constant.KeyWorkerCount:  req.WorkerCount,
+		constant.KeyQueueSize:    req.QueueSize,
+		constant.KeyRateInterval: req.RateInterval,
+	}
+
+	if err := sc.settingsService.SetSection(constant.SectionScheduler, values); err != nil {
+		utils.ServerError(c, "保存失败")
+		return
+	}
+
+	// 重新加载 executor service
+	if sc.executorService != nil {
+		sc.executorService.Reload()
 	}
 
 	utils.SuccessMsg(c, "保存成功")

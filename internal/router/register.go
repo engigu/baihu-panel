@@ -37,7 +37,7 @@ func RegisterControllers() *Controllers {
 		Dashboard: controllers.NewDashboardController(cronService, executorService),
 		Log:       controllers.NewLogController(),
 		Terminal:  controllers.NewTerminalController(),
-		Settings:  controllers.NewSettingsController(userService, loginLogService),
+		Settings:  controllers.NewSettingsController(userService, loginLogService, executorService),
 		Runtime:   controllers.NewRuntimeController(),
 	}
 }

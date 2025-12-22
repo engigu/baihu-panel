@@ -21,7 +21,6 @@ const backupLoading = ref(false)
 const restoreLoading = ref(false)
 const fileInput = ref<HTMLInputElement>()
 const showConfirm = ref(false)
-const pendingFile = ref<File | null>(null)
 
 async function checkBackupStatus() {
   try {
@@ -49,11 +48,20 @@ function downloadBackup() {
   setTimeout(checkBackupStatus, 6000)
 }
 
-function triggerFileSelect() {
+function showRestoreConfirm() {
+  showConfirm.value = true
+}
+
+function confirmRestore() {
+  showConfirm.value = false
   fileInput.value?.click()
 }
 
-function handleFileSelect(e: Event) {
+function cancelRestore() {
+  showConfirm.value = false
+}
+
+async function handleFileSelect(e: Event) {
   const target = e.target as HTMLInputElement
   const file = target.files?.[0]
   if (!file) return
@@ -64,31 +72,17 @@ function handleFileSelect(e: Event) {
     return
   }
 
-  pendingFile.value = file
-  showConfirm.value = true
-  target.value = ''
-}
-
-async function confirmRestore() {
-  if (!pendingFile.value) return
-  
-  showConfirm.value = false
   restoreLoading.value = true
   try {
-    await api.settings.restoreBackup(pendingFile.value)
+    await api.settings.restoreBackup(file)
     toast.success('恢复成功，页面即将刷新')
     setTimeout(() => window.location.reload(), 1500)
   } catch (e: any) {
     toast.error(e.message || '恢复失败')
   } finally {
     restoreLoading.value = false
-    pendingFile.value = null
+    target.value = ''
   }
-}
-
-function cancelRestore() {
-  showConfirm.value = false
-  pendingFile.value = null
 }
 
 onMounted(checkBackupStatus)
@@ -112,7 +106,7 @@ onMounted(checkBackupStatus)
     </div>
     <div class="border-t pt-4 mt-4">
       <div class="flex items-center gap-4">
-        <Button @click="triggerFileSelect" :disabled="restoreLoading" variant="outline">
+        <Button @click="showRestoreConfirm" :disabled="restoreLoading" variant="outline">
           <Upload class="w-4 h-4 mr-2" />
           {{ restoreLoading ? '恢复中...' : '恢复备份' }}
         </Button>

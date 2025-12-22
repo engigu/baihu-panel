@@ -110,8 +110,8 @@ func (cs *CronService) runTask(taskID uint) {
 	now := time.Now()
 	database.DB.Model(&models.Task{}).Where("id = ?", taskID).Update("last_run", now)
 
-	// 执行任务
-	cs.executorService.ExecuteTask(int(taskID))
+	// 将任务加入队列执行（通过 worker pool 控制并发）
+	cs.executorService.EnqueueTask(int(taskID))
 
 	// 更新 next_run
 	cs.updateNextRun(taskID)

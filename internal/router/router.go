@@ -175,6 +175,8 @@ func Setup(c *Controllers) *gin.Engine {
 				settings.POST("/password", c.Settings.ChangePassword)
 				settings.GET("/site", c.Settings.GetSiteSettings)
 				settings.PUT("/site", c.Settings.UpdateSiteSettings)
+				settings.GET("/scheduler", c.Settings.GetSchedulerSettings)
+				settings.PUT("/scheduler", c.Settings.UpdateSchedulerSettings)
 				settings.GET("/about", c.Settings.GetAbout)
 				settings.GET("/loginlogs", c.Settings.GetLoginLogs)
 				settings.POST("/backup", c.Settings.CreateBackup)
