@@ -9,8 +9,8 @@ export function decompressFromBase64(compressed: string): string {
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i)
     }
-    // Decompress gzip
-    const decompressed = pako.ungzip(bytes, { to: 'string' })
+    // Decompress zlib
+    const decompressed = pako.inflate(bytes, { to: 'string' })
     return decompressed
   } catch (e) {
     console.error('Decompress error:', e)
