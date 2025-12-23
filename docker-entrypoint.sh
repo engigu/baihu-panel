@@ -13,8 +13,8 @@ mkdir -p /app/data /app/data/scripts /app/configs /app/envs
 if [ ! -d "$PYTHON_VENV_DIR" ]; then
     echo "Creating Python virtual environment..."
     python3 -m venv "$PYTHON_VENV_DIR"
-    "$PYTHON_VENV_DIR/bin/pip" install --upgrade pip
     "$PYTHON_VENV_DIR/bin/pip" config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+    "$PYTHON_VENV_DIR/bin/pip" install --upgrade pip
     echo "Python virtual environment created at $PYTHON_VENV_DIR"
 else
     echo "Python virtual environment already exists at $PYTHON_VENV_DIR"
