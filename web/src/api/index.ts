@@ -352,6 +352,7 @@ export interface Dependency {
   version: string
   type: string
   remark: string
+  log: string
   created_at: string
   updated_at: string
 }

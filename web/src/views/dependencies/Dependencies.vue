@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Trash2, Package, Search, RefreshCw, Loader2, Download } from 'lucide-vue-next'
+import { Trash2, Package, Search, RefreshCw, Loader2, Download, FileText } from 'lucide-vue-next'
 import { api, type Dependency } from '@/api'
 import { toast } from 'vue-sonner'
 
@@ -24,6 +24,11 @@ const newPkgVersion = ref('')
 // 删除确认
 const showDeleteDialog = ref(false)
 const depToDelete = ref<Dependency | null>(null)
+
+// 日志对话框
+const showLogDialog = ref(false)
+const logContent = ref('')
+const logPkgName = ref('')
 
 // 搜索
 const searchQuery = ref('')
@@ -91,6 +96,12 @@ async function uninstallPackage() {
     showDeleteDialog.value = false
     depToDelete.value = null
   }
+}
+
+function showLog(dep: Dependency) {
+  logPkgName.value = dep.name
+  logContent.value = dep.log || '暂无日志'
+  showLogDialog.value = true
 }
 
 function getTypeLabel(type: string) {
@@ -163,7 +174,10 @@ onMounted(loadDeps)
               <span class="flex-1 font-mono text-sm">{{ dep.name }}</span>
               <span class="w-32 text-sm text-muted-foreground">{{ dep.version || '-' }}</span>
               <span class="w-48 text-sm text-muted-foreground truncate" :title="dep.remark">{{ dep.remark || '-' }}</span>
-              <span class="w-20 flex justify-center">
+              <span class="w-20 flex justify-center gap-1">
+                <Button v-if="dep.log" variant="ghost" size="icon" class="h-7 w-7" @click="showLog(dep)">
+                  <FileText class="h-4 w-4" />
+                </Button>
                 <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive" @click="confirmDelete(dep)">
                   <Trash2 class="h-4 w-4" />
                 </Button>
@@ -217,5 +231,20 @@ onMounted(loadDeps)
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <!-- 日志对话框 -->
+    <Dialog v-model:open="showLogDialog">
+      <DialogContent class="sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle>安装日志 - {{ logPkgName }}</DialogTitle>
+        </DialogHeader>
+        <div class="max-h-[400px] overflow-y-auto">
+          <pre class="text-xs bg-muted p-3 rounded-lg whitespace-pre-wrap break-all font-mono">{{ logContent }}</pre>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="showLogDialog = false">关闭</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
