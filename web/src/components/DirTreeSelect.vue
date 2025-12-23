@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { api, type FileNode } from '@/api'
 
 const props = defineProps<{
-  modelValue: string
+  modelValue?: string
   placeholder?: string
 }>()
 
@@ -19,17 +19,33 @@ const loading = ref(false)
 const fileTree = ref<FileNode[]>([])
 const expandedDirs = ref<Set<string>>(new Set())
 
-// 只保留目录节点
-function filterDirs(nodes: FileNode[]): FileNode[] {
-  return nodes
-    .filter(n => n.isDir)
-    .map(n => ({
-      ...n,
-      children: n.children ? filterDirs(n.children) : undefined
-    }))
+interface FlatDir {
+  path: string
+  name: string
+  depth: number
+  hasChildren: boolean
 }
 
-const dirTree = computed(() => filterDirs(fileTree.value))
+// 将树形结构扁平化，只保留目录
+function flattenDirs(nodes: FileNode[], depth = 0): FlatDir[] {
+  const result: FlatDir[] = []
+  for (const node of nodes) {
+    if (!node.isDir) continue
+    const children = node.children?.filter(c => c.isDir) || []
+    result.push({
+      path: node.path,
+      name: node.name,
+      depth,
+      hasChildren: children.length > 0
+    })
+    if (expandedDirs.value.has(node.path) && node.children) {
+      result.push(...flattenDirs(node.children, depth + 1))
+    }
+  }
+  return result
+}
+
+const flatDirs = computed(() => flattenDirs(fileTree.value))
 
 async function loadTree() {
   if (fileTree.value.length > 0) return
@@ -43,7 +59,8 @@ async function loadTree() {
   }
 }
 
-function toggleDir(path: string) {
+function toggleDir(path: string, e: Event) {
+  e.stopPropagation()
   if (expandedDirs.value.has(path)) {
     expandedDirs.value.delete(path)
   } else {
@@ -94,84 +111,37 @@ const displayValue = computed(() => {
           <span>scripts (默认)</span>
         </div>
         
-        <!-- 目录树 -->
-        <DirTreeNode
-          v-for="node in dirTree"
-          :key="node.path"
-          :node="node"
-          :expanded-dirs="expandedDirs"
-          :selected-path="modelValue"
-          @toggle="toggleDir"
-          @select="selectDir"
-        />
+        <!-- 扁平化的目录列表 -->
+        <div
+          v-for="dir in flatDirs"
+          :key="dir.path"
+          :class="[
+            'flex items-center gap-1 py-1 px-2 rounded cursor-pointer text-sm',
+            modelValue === dir.path ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+          ]"
+          :style="{ paddingLeft: (dir.depth * 12 + 8) + 'px' }"
+          @click="selectDir(dir.path)"
+        >
+          <span
+            v-if="dir.hasChildren"
+            class="shrink-0 cursor-pointer"
+            @click="toggleDir(dir.path, $event)"
+          >
+            <ChevronDown v-if="expandedDirs.has(dir.path)" class="h-3 w-3" />
+            <ChevronRight v-else class="h-3 w-3" />
+          </span>
+          <span v-else class="w-3 shrink-0" />
+          <Folder class="h-4 w-4 text-yellow-500 shrink-0" />
+          <span class="truncate">{{ dir.name }}</span>
+        </div>
         
         <div v-if="loading" class="text-xs text-muted-foreground text-center py-4">
           加载中...
         </div>
-        <div v-else-if="dirTree.length === 0" class="text-xs text-muted-foreground text-center py-2">
+        <div v-else-if="flatDirs.length === 0" class="text-xs text-muted-foreground text-center py-2">
           暂无子目录
         </div>
       </div>
     </PopoverContent>
   </Popover>
 </template>
-
-<script lang="ts">
-import { defineComponent, h } from 'vue'
-
-// 内联递归组件
-const DirTreeNode = defineComponent({
-  name: 'DirTreeNode',
-  props: {
-    node: { type: Object as () => FileNode, required: true },
-    expandedDirs: { type: Object as () => Set<string>, required: true },
-    selectedPath: { type: String, default: '' },
-    depth: { type: Number, default: 0 }
-  },
-  emits: ['toggle', 'select'],
-  setup(props, { emit }) {
-    const isExpanded = computed(() => props.expandedDirs.has(props.node.path))
-    const isSelected = computed(() => props.selectedPath === props.node.path)
-    
-    return () => h('div', [
-      h('div', {
-        class: [
-          'flex items-center gap-1 py-1 px-2 rounded cursor-pointer text-sm',
-          isSelected.value ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
-        ],
-        style: { paddingLeft: (props.depth * 12 + 8) + 'px' },
-        onClick: () => emit('select', props.node.path)
-      }, [
-        h('span', {
-          class: 'shrink-0 cursor-pointer',
-          onClick: (e: Event) => {
-            e.stopPropagation()
-            emit('toggle', props.node.path)
-          }
-        }, [
-          isExpanded.value
-            ? h(ChevronDown, { class: 'h-3 w-3' })
-            : h(ChevronRight, { class: 'h-3 w-3' })
-        ]),
-        h(Folder, { class: 'h-4 w-4 text-yellow-500 shrink-0' }),
-        h('span', { class: 'truncate' }, props.node.name)
-      ]),
-      isExpanded.value && props.node.children?.length
-        ? props.node.children.map(child =>
-            h(DirTreeNode, {
-              key: child.path,
-              node: child,
-              expandedDirs: props.expandedDirs,
-              selectedPath: props.selectedPath,
-              depth: props.depth + 1,
-              onToggle: (path: string) => emit('toggle', path),
-              onSelect: (path: string) => emit('select', path)
-            })
-          )
-        : null
-    ])
-  }
-})
-
-export { DirTreeNode }
-</script>

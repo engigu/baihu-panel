@@ -295,7 +295,7 @@ onMounted(() => {
           <div class="grid grid-cols-4 items-center gap-4">
             <Label class="text-right">工作目录</Label>
             <div class="col-span-3">
-              <DirTreeSelect v-model="editingTask.work_dir" />
+              <DirTreeSelect :model-value="editingTask.work_dir || ''" @update:model-value="v => editingTask.work_dir = v" />
             </div>
           </div>
           <div class="grid grid-cols-4 items-center gap-4">
