@@ -10,6 +10,7 @@ baihu
 
 # Data & Logs
 data/
+envs/
 # logs/
 # scripts/
 configs/config.ini

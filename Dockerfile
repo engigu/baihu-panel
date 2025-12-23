@@ -50,7 +50,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 FROM debian:bookworm-slim
 
 ENV TZ=Asia/Shanghai
-ENV PATH="/opt/venv/bin:$PATH"
+ENV PATH="/app/envs/python/bin:$PATH"
 
 # 安装必要系统工具 + Node + Python
 RUN sed -i 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list.d/debian.sources \
@@ -60,9 +60,6 @@ RUN sed -i 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.li
     && apt-get update \
     && apt-get install -y --no-install-recommends \
          tzdata git gcc curl wget vim nodejs npm python3 python3-venv python3-pip \
-    && python3 -m venv /opt/venv \
-    && /opt/venv/bin/pip install --upgrade pip \
-    && /opt/venv/bin/pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

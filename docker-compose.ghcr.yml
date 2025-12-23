@@ -9,6 +9,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./configs:/app/configs
+      - ./envs:/app/envs
     environment:
       - TZ=Asia/Shanghai
     restart: unless-stopped

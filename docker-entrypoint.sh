@@ -1,31 +1,29 @@
 #!/bin/sh
 
-# ============================
-# 激活 Python 虚拟环境
-# ============================
-if [ -d /opt/venv ]; then
-    export PATH="/opt/venv/bin:$PATH"
-fi
+PYTHON_VENV_DIR="/app/envs/python"
 
 # ============================
 # 创建必要目录
 # ============================
-mkdir -p /app/data /app/data/scripts /app/configs
+mkdir -p /app/data /app/data/scripts /app/configs /app/envs
 
 # ============================
-# 设置不可变属性
+# 创建 Python 虚拟环境（如果不存在）
 # ============================
-if [ -f /app/data/ql.db ]; then
-    chattr +i /app/data/ql.db 2>/dev/null || true
+if [ ! -d "$PYTHON_VENV_DIR" ]; then
+    echo "Creating Python virtual environment..."
+    python3 -m venv "$PYTHON_VENV_DIR"
+    "$PYTHON_VENV_DIR/bin/pip" install --upgrade pip
+    "$PYTHON_VENV_DIR/bin/pip" config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+    echo "Python virtual environment created at $PYTHON_VENV_DIR"
+else
+    echo "Python virtual environment already exists at $PYTHON_VENV_DIR"
 fi
 
-if [ -d /app/configs ]; then
-    chattr +i /app/configs 2>/dev/null || true
-fi
-
-if [ -d /app/data/scripts ]; then
-    chattr +i /app/data/scripts 2>/dev/null || true
-fi
+# ============================
+# 激活 Python 虚拟环境
+# ============================
+export PATH="$PYTHON_VENV_DIR/bin:$PATH"
 
 # ============================
 # 启动应用
