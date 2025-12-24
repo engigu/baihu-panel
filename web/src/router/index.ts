@@ -1,6 +1,25 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { checkAuth } from '@/api'
 
+// 缓存认证状态，避免每次路由跳转都请求
+let authChecked = false
+let isAuth = false
+
+async function getAuthStatus(force = false): Promise<boolean> {
+  if (!force && authChecked) {
+    return isAuth
+  }
+  isAuth = await checkAuth()
+  authChecked = true
+  return isAuth
+}
+
+// 重置认证状态（登录/登出时调用）
+export function resetAuthCache() {
+  authChecked = false
+  isAuth = false
+}
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -31,7 +50,9 @@ const router = createRouter({
 
 // 路由守卫
 router.beforeEach(async (to, _from, next) => {
-  const isAuthenticated = await checkAuth()
+  // 首次访问或访问登录页时强制检查
+  const forceCheck = !authChecked || to.path === '/login'
+  const isAuthenticated = await getAuthStatus(forceCheck)
   
   // 检查是否需要认证
   if (to.matched.some(record => record.meta.requiresAuth)) {

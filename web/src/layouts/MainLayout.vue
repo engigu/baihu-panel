@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { resetAuthCache } from '@/router'
 import { LayoutDashboard, ListTodo, FileCode, Settings, LogOut, ScrollText, Terminal, Variable, KeyRound, Package, Menu, X } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import ThemeToggle from '@/components/ThemeToggle.vue'
@@ -42,6 +43,7 @@ async function logout() {
   } catch {
     // 忽略错误
   }
+  resetAuthCache()
   window.location.href = '/login'
 }
 

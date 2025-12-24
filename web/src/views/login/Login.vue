@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import { api } from '@/api'
 import { toast } from 'vue-sonner'
+import { resetAuthCache } from '@/router'
 
 const router = useRouter()
 const username = ref('')
@@ -46,6 +47,7 @@ async function handleLogin() {
   loading.value = true
   try {
     await api.auth.login({ username: username.value, password: password.value })
+    resetAuthCache() // 重置认证缓存
     toast.success('登录成功')
     router.push('/')
   } catch {
