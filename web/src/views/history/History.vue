@@ -10,6 +10,7 @@ import { api, type TaskLog, type LogDetail } from '@/api'
 import { toast } from 'vue-sonner'
 import pako from 'pako'
 import { useSiteSettings } from '@/composables/useSiteSettings'
+import TextOverflow from '@/components/TextOverflow.vue'
 
 const route = useRoute()
 const { pageSize } = useSiteSettings()
@@ -162,8 +163,12 @@ watch(() => route.query.task_id, (newTaskId) => {
             @click="selectLog(log)"
           >
             <span class="w-12 shrink-0 text-muted-foreground text-sm">#{{ log.id }}</span>
-            <span class="w-32 font-medium truncate shrink-0 text-sm">{{ log.task_name }}</span>
-            <code :class="['text-muted-foreground truncate text-xs bg-muted px-2 py-1 rounded', selectedLog ? 'w-40 shrink-0 hidden sm:block' : 'flex-1']">{{ log.command }}</code>
+            <span class="w-32 font-medium truncate shrink-0 text-sm">
+              <TextOverflow :text="log.task_name" title="任务名称" />
+            </span>
+            <code :class="['text-muted-foreground truncate text-xs bg-muted px-2 py-1 rounded', selectedLog ? 'w-40 shrink-0 hidden sm:block' : 'flex-1']">
+              <TextOverflow :text="log.command" title="执行命令" />
+            </code>
             <span class="w-12 flex justify-center shrink-0">
               <span :class="['w-2 h-2 rounded-full', log.status === 'success' ? 'bg-green-500' : log.status === 'failed' ? 'bg-red-500' : 'bg-yellow-500']" />
             </span>

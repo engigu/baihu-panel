@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ListTodo, FileCode, Variable, Clock, Play, ScrollText } from 'lucide-vue-next'
+import { ListTodo, Variable, Clock, Play, ScrollText } from 'lucide-vue-next'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { api, type Stats, type DailyStats, type TaskStatsItem } from '@/api'
 import ApexCharts from 'apexcharts'
 
 const router = useRouter()
-const stats = ref<Stats>({ tasks: 0, scripts: 0, envs: 0, logs: 0, scheduled: 0, running: 0 })
+const stats = ref<Stats>({ tasks: 0, today_execs: 0, envs: 0, logs: 0, scheduled: 0, running: 0 })
 const sendStats = ref<DailyStats[]>([])
 const taskStats = ref<TaskStatsItem[]>([])
 const chartsLoaded = ref(false)
 const statItems = [
+  { key: 'today_execs', label: '今日执行', icon: Play, route: '/history' },
   { key: 'tasks', label: '任务总数', icon: ListTodo, route: '/tasks' },
-  { key: 'scripts', label: '脚本数量', icon: FileCode, route: '/editor' },
   { key: 'envs', label: '环境变量', icon: Variable, route: '/environments' },
   { key: 'logs', label: '日志总数', icon: ScrollText, route: '/history' },
   { key: 'scheduled', label: '调度注册', icon: Clock, route: '/tasks' },

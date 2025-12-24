@@ -15,6 +15,7 @@ import { api, type Task, type EnvVar } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
 import { useRouter } from 'vue-router'
+import TextOverflow from '@/components/TextOverflow.vue'
 
 const router = useRouter()
 const { pageSize } = useSiteSettings()
@@ -250,8 +251,12 @@ onMounted(() => {
           class="flex items-center gap-4 px-4 py-2 hover:bg-muted/50 transition-colors"
         >
           <span class="w-12 shrink-0 text-muted-foreground text-sm">#{{ task.id }}</span>
-          <span class="w-40 font-medium truncate shrink-0 text-sm">{{ task.name }}</span>
-          <code class="flex-1 text-muted-foreground truncate text-xs bg-muted px-2 py-1 rounded">{{ task.command }}</code>
+          <span class="w-40 font-medium truncate shrink-0 text-sm">
+            <TextOverflow :text="task.name" title="任务名称" />
+          </span>
+          <code class="flex-1 text-muted-foreground truncate text-xs bg-muted px-2 py-1 rounded">
+            <TextOverflow :text="task.command" title="执行命令" />
+          </code>
           <code class="w-36 shrink-0 text-muted-foreground text-xs bg-muted px-2 py-1 rounded hidden md:block">{{ task.schedule }}</code>
           <span class="w-40 shrink-0 text-muted-foreground text-xs hidden lg:block">{{ task.last_run || '-' }}</span>
           <span class="w-40 shrink-0 text-muted-foreground text-xs hidden lg:block">{{ task.next_run || '-' }}</span>

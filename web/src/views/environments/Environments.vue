@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import Pagination from '@/components/Pagination.vue'
 import { Plus, Pencil, Trash2, Eye, EyeOff, Search } from 'lucide-vue-next'
+import TextOverflow from '@/components/TextOverflow.vue'
 import { api, type EnvVar } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
@@ -139,9 +140,11 @@ onMounted(loadEnvVars)
         >
           <code class="w-48 font-medium truncate shrink-0 text-xs bg-muted px-2 py-1 rounded">{{ env.name }}</code>
           <span class="flex-1 font-mono text-muted-foreground truncate text-xs">
-            {{ showValues[env.id] ? env.value : maskValue(env.value) }}
+            <TextOverflow :text="showValues[env.id] ? env.value : maskValue(env.value)" title="变量值" />
           </span>
-          <span class="w-48 shrink-0 text-muted-foreground truncate text-sm hidden md:block">{{ env.remark || '-' }}</span>
+          <span class="w-48 shrink-0 text-muted-foreground truncate text-sm hidden md:block">
+            <TextOverflow :text="env.remark || '-'" title="备注" />
+          </span>
           <span class="w-24 shrink-0 flex justify-center gap-1">
             <Button variant="ghost" size="icon" class="h-7 w-7" @click="toggleShow(env.id)" :title="showValues[env.id] ? '隐藏' : '显示'">
               <Eye v-if="!showValues[env.id]" class="h-3.5 w-3.5" />

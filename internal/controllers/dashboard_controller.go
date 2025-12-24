@@ -26,29 +26,32 @@ func NewDashboardController(cronService *services.CronService, executorService *
 }
 
 type StatsResponse struct {
-	Tasks     int64 `json:"tasks"`
-	Scripts   int64 `json:"scripts"`
-	Envs      int64 `json:"envs"`
-	Logs      int64 `json:"logs"`
-	Scheduled int   `json:"scheduled"`
-	Running   int   `json:"running"`
+	Tasks      int64 `json:"tasks"`
+	TodayExecs int64 `json:"today_execs"`
+	Envs       int64 `json:"envs"`
+	Logs       int64 `json:"logs"`
+	Scheduled  int   `json:"scheduled"`
+	Running    int   `json:"running"`
 }
 
 func (dc *DashboardController) GetStats(c *gin.Context) {
-	var taskCount, scriptCount, envCount, logCount int64
+	var taskCount, envCount, logCount, todayExecs int64
 
 	database.DB.Model(&models.Task{}).Count(&taskCount)
-	database.DB.Model(&models.Script{}).Count(&scriptCount)
 	database.DB.Model(&models.EnvironmentVariable{}).Count(&envCount)
 	database.DB.Model(&models.TaskLog{}).Count(&logCount)
 
+	// 今日执行总数
+	today := time.Now().Format("2006-01-02")
+	database.DB.Model(&models.SendStats{}).Where("day = ?", today).Select("COALESCE(SUM(num), 0)").Scan(&todayExecs)
+
 	stats := StatsResponse{
-		Tasks:     taskCount,
-		Scripts:   scriptCount,
-		Envs:      envCount,
-		Logs:      logCount,
-		Scheduled: dc.cronService.GetScheduledCount(),
-		Running:   dc.executorService.GetRunningCount(),
+		Tasks:      taskCount,
+		TodayExecs: todayExecs,
+		Envs:       envCount,
+		Logs:       logCount,
+		Scheduled:  dc.cronService.GetScheduledCount(),
+		Running:    dc.executorService.GetRunningCount(),
 	}
 
 	utils.Success(c, stats)

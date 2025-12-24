@@ -9,6 +9,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Trash2, Package, Search, RefreshCw, Loader2, Download, FileText, RotateCw } from 'lucide-vue-next'
 import { api, type Dependency } from '@/api'
+import TextOverflow from '@/components/TextOverflow.vue'
 import { toast } from 'vue-sonner'
 
 const activeTab = ref('py')
@@ -205,9 +206,13 @@ onMounted(loadDeps)
               :key="dep.id"
               class="flex items-center gap-4 px-4 py-2 hover:bg-muted/50 transition-colors"
             >
-              <span class="flex-1 font-mono text-sm">{{ dep.name }}</span>
+              <span class="flex-1 font-mono text-sm truncate">
+                <TextOverflow :text="dep.name" title="包名" />
+              </span>
               <span class="w-32 text-sm text-muted-foreground">{{ dep.version || '-' }}</span>
-              <span class="w-48 text-sm text-muted-foreground truncate hidden md:block" :title="dep.remark">{{ dep.remark || '-' }}</span>
+              <span class="w-48 text-sm text-muted-foreground truncate hidden md:block">
+                <TextOverflow :text="dep.remark || '-'" title="备注" />
+              </span>
               <span class="w-24 flex justify-center gap-1">
                 <Button v-if="dep.log" variant="ghost" size="icon" class="h-7 w-7" @click="showLog(dep)">
                   <FileText class="h-4 w-4" />

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
 import { RefreshCw, Search } from 'lucide-vue-next'
+import TextOverflow from '@/components/TextOverflow.vue'
 import { api } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
@@ -107,7 +108,9 @@ onMounted(loadLogs)
           <span class="w-16 shrink-0 flex justify-center">
             <span :class="['h-2 w-2 rounded-full', log.status === 'success' ? 'bg-green-500' : 'bg-red-500']"></span>
           </span>
-          <span class="flex-1 text-xs text-muted-foreground truncate hidden md:block" :title="log.user_agent">{{ log.user_agent || '-' }}</span>
+          <span class="flex-1 text-xs text-muted-foreground truncate hidden md:block">
+            <TextOverflow :text="log.user_agent || '-'" title="User Agent" />
+          </span>
           <span class="w-40 shrink-0 text-right text-xs text-muted-foreground">{{ log.created_at }}</span>
         </div>
       </div>

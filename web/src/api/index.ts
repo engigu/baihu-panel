@@ -259,7 +259,7 @@ export interface EnvListResponse {
 
 export interface Stats {
   tasks: number
-  scripts: number
+  today_execs: number
   envs: number
   logs: number
   scheduled: number
