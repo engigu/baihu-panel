@@ -69,7 +69,9 @@ const renderLineChart = () => {
     yaxis: {
       labels: {
         style: { colors: '#64748b', fontSize: '12px', fontFamily: 'Inter, sans-serif' },
-        formatter: (val: number) => val + ' 次'
+        formatter: (val: number) => String(val),
+        offsetX: -15,
+        minWidth: 20
       }
     },
     colors: ['#3b82f6', '#10b981', '#ef4444'],
@@ -91,7 +93,7 @@ const renderLineChart = () => {
       strokeDashArray: 3,
       xaxis: { lines: { show: false } },
       yaxis: { lines: { show: true } },
-      padding: { top: 0, right: 0, bottom: 0, left: 0 }
+      padding: { top: 0, right: 5, bottom: 0, left: 0 }
     },
     legend: {
       position: 'top',
