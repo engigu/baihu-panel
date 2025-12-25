@@ -4,7 +4,6 @@ import (
 	"sync"
 	"time"
 
-	"baihu/internal/constant"
 	"baihu/internal/database"
 	"baihu/internal/logger"
 	"baihu/internal/models"
