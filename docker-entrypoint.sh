@@ -51,6 +51,7 @@ export NODE_OPTIONS="--max-old-space-size=256"
 # ============================
 export PATH="$PYTHON_VENV_DIR/bin:$NODE_ENV_DIR/bin:$PATH"
 export NODE_PATH="$NODE_ENV_DIR/lib/node_modules"
+export PYTHONPATH=/app/data/scripts:$PYTHONPATH
 
 # ============================
 # 打印确认

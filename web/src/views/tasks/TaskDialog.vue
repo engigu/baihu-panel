@@ -124,7 +124,7 @@ async function save() {
 
 <template>
   <Dialog :open="open" @update:open="emit('update:open', $event)">
-    <DialogContent class="sm:max-w-[480px]">
+    <DialogContent class="sm:max-w-[480px]" @open-auto-focus.prevent>
       <DialogHeader>
         <DialogTitle>{{ isEdit ? '编辑任务' : '新建任务' }}</DialogTitle>
       </DialogHeader>

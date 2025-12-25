@@ -111,7 +111,7 @@ async function save() {
 
 <template>
   <Dialog :open="open" @update:open="emit('update:open', $event)">
-    <DialogContent class="sm:max-w-[480px] max-h-[85vh] flex flex-col !gap-0 !p-0">
+    <DialogContent class="sm:max-w-[480px] max-h-[85vh] flex flex-col !gap-0 !p-0" :trap-focus="false" @open-auto-focus.prevent>
       <DialogHeader class="shrink-0 p-6 pb-0">
         <DialogTitle>{{ isEdit ? '编辑仓库同步' : '新建仓库同步' }}</DialogTitle>
       </DialogHeader>
