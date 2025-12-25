@@ -15,5 +15,7 @@ func Migrate() error {
 		&models.LoginLog{},
 		&models.SendStats{},
 		&models.Dependency{},
+		&models.SyncTask{},
+		&models.SyncTaskLog{},
 	)
 }

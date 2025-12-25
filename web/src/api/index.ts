@@ -206,6 +206,30 @@ export const api = {
     reinstall: (id: number) => request(`/deps/reinstall/${id}`, { method: 'POST' }),
     reinstallAll: (type: string) => request(`/deps/reinstall-all?type=${type}`, { method: 'POST' }),
     getInstalled: (type: string) => request<Dependency[]>(`/deps/installed?type=${type}`)
+  },
+  syncTasks: {
+    list: (params?: { page?: number; page_size?: number; name?: string }) => {
+      const query = new URLSearchParams()
+      if (params?.page) query.set('page', String(params.page))
+      if (params?.page_size) query.set('page_size', String(params.page_size))
+      if (params?.name) query.set('name', params.name)
+      return request<SyncTaskListResponse>(`/sync-tasks?${query}`)
+    },
+    create: (data: Partial<SyncTask>) => request<SyncTask>('/sync-tasks', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<SyncTask>) => request<SyncTask>(`/sync-tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number) => request(`/sync-tasks/${id}`, { method: 'DELETE' }),
+    execute: (id: number) => request(`/sync-tasks/${id}/execute`, { method: 'POST' })
+  },
+  syncLogs: {
+    list: (params?: { page?: number; page_size?: number; sync_task_id?: number; task_name?: string }) => {
+      const query = new URLSearchParams()
+      if (params?.page) query.set('page', String(params.page))
+      if (params?.page_size) query.set('page_size', String(params.page_size))
+      if (params?.sync_task_id) query.set('sync_task_id', String(params.sync_task_id))
+      if (params?.task_name) query.set('task_name', params.task_name)
+      return request<SyncLogListResponse>(`/sync-logs?${query}`)
+    },
+    detail: (id: number) => request<SyncLogDetail>(`/sync-logs/${id}`)
   }
 }
 
@@ -358,4 +382,59 @@ export interface Dependency {
   log: string
   created_at: string
   updated_at: string
+}
+
+export interface SyncTask {
+  id: number
+  name: string
+  source_type: string
+  source_url: string
+  branch: string
+  target_path: string
+  schedule: string
+  proxy: string
+  proxy_url: string
+  auth_token: string
+  clean_config: string
+  enabled: boolean
+  last_sync: string
+  next_sync: string
+  last_status: string
+}
+
+export interface SyncTaskListResponse {
+  data: SyncTask[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface SyncLog {
+  id: number
+  sync_task_id: number
+  sync_task_name: string
+  source_url: string
+  target_path: string
+  status: string
+  duration: number
+  created_at: string
+}
+
+export interface SyncLogListResponse {
+  data: SyncLog[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface SyncLogDetail {
+  id: number
+  sync_task_id: number
+  sync_task_name: string
+  source_url: string
+  target_path: string
+  output: string
+  status: string
+  duration: number
+  created_at: string
 }

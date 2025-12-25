@@ -24,6 +24,15 @@ func RegisterControllers() *Controllers {
 
 	// Initialize cron service
 	cronService = services.NewCronService(taskService, executorService)
+
+	// Initialize sync services
+	syncTaskService := services.NewSyncTaskService()
+	syncExecutorService := services.NewSyncExecutorService(syncTaskService)
+
+	// Set sync services to cron service
+	cronService.SetSyncServices(syncTaskService, syncExecutorService)
+
+	// Start cron service
 	cronService.Start()
 
 	// Initialize and return controllers
@@ -39,6 +48,8 @@ func RegisterControllers() *Controllers {
 		Terminal:   controllers.NewTerminalController(),
 		Settings:   controllers.NewSettingsController(userService, loginLogService, executorService),
 		Dependency: controllers.NewDependencyController(),
+		SyncTask:   controllers.NewSyncTaskController(syncTaskService, syncExecutorService, cronService),
+		SyncLog:    controllers.NewSyncLogController(),
 	}
 }
 

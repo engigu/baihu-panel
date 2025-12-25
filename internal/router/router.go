@@ -23,6 +23,8 @@ type Controllers struct {
 	Terminal   *controllers.TerminalController
 	Settings   *controllers.SettingsController
 	Dependency *controllers.DependencyController
+	SyncTask   *controllers.SyncTaskController
+	SyncLog    *controllers.SyncLogController
 }
 
 func mustSubFS(fsys fs.FS, dir string) fs.FS {
@@ -196,6 +198,24 @@ func Setup(c *Controllers) *gin.Engine {
 				deps.POST("/reinstall/:id", c.Dependency.Reinstall)
 				deps.POST("/reinstall-all", c.Dependency.ReinstallAll)
 				deps.GET("/installed", c.Dependency.GetInstalled)
+			}
+
+			// Sync task routes (定时同步)
+			syncTasks := authorized.Group("/sync-tasks")
+			{
+				syncTasks.POST("", c.SyncTask.CreateSyncTask)
+				syncTasks.GET("", c.SyncTask.GetSyncTasks)
+				syncTasks.GET("/:id", c.SyncTask.GetSyncTask)
+				syncTasks.PUT("/:id", c.SyncTask.UpdateSyncTask)
+				syncTasks.DELETE("/:id", c.SyncTask.DeleteSyncTask)
+				syncTasks.POST("/:id/execute", c.SyncTask.ExecuteSyncTask)
+			}
+
+			// Sync log routes (同步日志)
+			syncLogs := authorized.Group("/sync-logs")
+			{
+				syncLogs.GET("", c.SyncLog.GetSyncLogs)
+				syncLogs.GET("/:id", c.SyncLog.GetSyncLogDetail)
 			}
 		}
 	}
