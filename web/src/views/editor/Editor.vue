@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,9 +8,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import FileTreeNode from '@/components/FileTreeNode.vue'
-import { Plus, Save, Play, RefreshCw, Upload, FolderUp, Pencil, Eye } from 'lucide-vue-next'
+import XTerminal from '@/components/XTerminal.vue'
+import { Plus, Save, Play, RefreshCw, Upload, FolderUp, Pencil, Eye, X } from 'lucide-vue-next'
 import { api, type FileNode } from '@/api'
 import { toast } from 'vue-sonner'
+import { PATHS, FILE_RUNNERS } from '@/constants'
 
 const route = useRoute()
 const router = useRouter()
@@ -37,6 +39,19 @@ const uploadTargetDir = ref('')
 
 const isEditMode = ref(false)
 const hasChanges = computed(() => fileContent.value !== originalContent.value)
+
+// 终端弹窗相关
+const showTerminalDialog = ref(false)
+const terminalRef = ref<InstanceType<typeof XTerminal> | null>(null)
+const runCommand = ref('')
+
+// 响应式字体大小
+const isSmallScreen = ref(window.innerWidth < 1024)
+const editorFontSize = computed(() => isSmallScreen.value ? 12 : 13)
+
+function handleResize() {
+  isSmallScreen.value = window.innerWidth < 1024
+}
 
 async function loadTree() {
   try {
@@ -148,12 +163,35 @@ async function deleteItem() {
 
 async function runScript() {
   if (!selectedFile.value) return
-  try {
-    await api.execute.command(`bash ${selectedFile.value}`)
-    toast.success('脚本已执行')
-  } catch {
-    toast.error('执行失败')
+  
+  // 获取文件所在目录和文件名
+  const parts = selectedFile.value.split('/')
+  const fileName = parts.pop() || selectedFile.value
+  const dirPath = parts.length > 0 ? parts.join('/') : ''
+  
+  // 根据文件扩展名确定运行命令
+  const ext = fileName.split('.').pop()?.toLowerCase() || ''
+  const runner = FILE_RUNNERS[ext]
+  const cmd = runner ? `${runner} ${fileName}` : `./${fileName}`
+  
+  // 构建完整命令
+  if (dirPath) {
+    runCommand.value = `cd ${PATHS.SCRIPTS_DIR}/${dirPath} && ${cmd}`
+  } else {
+    runCommand.value = `cd ${PATHS.SCRIPTS_DIR} && ${cmd}`
   }
+  
+  showTerminalDialog.value = true
+  // 等待 DOM 更新后初始化终端
+  await nextTick()
+  setTimeout(() => {
+    terminalRef.value?.initTerminal(true)
+  }, 100)
+}
+
+function closeTerminal() {
+  showTerminalDialog.value = false
+  terminalRef.value?.dispose()
 }
 
 async function handleMove(oldPath: string, newPath: string) {
@@ -277,6 +315,14 @@ async function initFromUrl() {
 }
 
 onMounted(initFromUrl)
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+})
 </script>
 
 <template>
@@ -352,7 +398,7 @@ onMounted(initFromUrl)
           theme="vs-dark"
           :options="{
             minimap: { enabled: false },
-            fontSize: 13,
+            fontSize: editorFontSize,
             lineNumbers: 'on',
             scrollBeyondLastLine: false,
             quickSuggestions: isEditMode,
@@ -368,7 +414,8 @@ onMounted(initFromUrl)
           }"
         />
         <div v-else class="h-full flex items-center justify-center text-muted-foreground text-sm">
-          从左侧选择文件开始编辑
+          <span class="lg:hidden">从上方选择文件开始编辑</span>
+          <span class="hidden lg:inline">从左侧选择文件开始编辑</span>
         </div>
       </div>
     </div>
@@ -420,5 +467,30 @@ onMounted(initFromUrl)
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <!-- 终端弹窗 -->
+    <Dialog v-model:open="showTerminalDialog">
+      <DialogContent class="w-[calc(100%-2rem)] sm:max-w-3xl h-[60vh] sm:h-[70vh] flex flex-col p-0 overflow-hidden" :show-close-button="false">
+        <div class="flex items-center justify-between px-3 sm:px-4 py-2 border-b bg-[#252526] rounded-t-lg">
+          <span class="text-xs sm:text-sm font-medium text-gray-300">运行脚本</span>
+          <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white" @click="closeTerminal">
+            <X class="h-4 w-4" />
+          </Button>
+        </div>
+        <div class="flex-1 overflow-hidden p-1 rounded-b-lg">
+          <XTerminal
+            v-if="showTerminalDialog"
+            ref="terminalRef"
+            :font-size="isSmallScreen ? 12 : 13"
+            :initial-command="runCommand"
+            :auto-connect="false"
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
+
+
+<style scoped>
+</style>
