@@ -71,7 +71,7 @@
 
 ## 效果图 📺
 
-![baihu-display.gif](https://f.pz.al/pzal/2025/12/26/a0961f5990612.gif)
+![baihu-display.gif](https://raw.githubusercontent.com/engigu/resources/refs/heads/images/baihu-display.gif)
 <!-- TODO: 添加效果图 -->
 
 ## 快速开始 🚀
