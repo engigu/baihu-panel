@@ -39,6 +39,7 @@ func RegisterControllers() *Controllers {
 		Terminal:   controllers.NewTerminalController(),
 		Settings:   controllers.NewSettingsController(userService, loginLogService, executorService),
 		Dependency: controllers.NewDependencyController(),
+		Agent:      controllers.NewAgentController(),
 	}
 }
 

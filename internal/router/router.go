@@ -23,6 +23,7 @@ type Controllers struct {
 	Terminal   *controllers.TerminalController
 	Settings   *controllers.SettingsController
 	Dependency *controllers.DependencyController
+	Agent      *controllers.AgentController
 }
 
 func mustSubFS(fsys fs.FS, dir string) fs.FS {
@@ -197,6 +198,31 @@ func Setup(c *Controllers) *gin.Engine {
 				deps.POST("/reinstall-all", c.Dependency.ReinstallAll)
 				deps.GET("/installed", c.Dependency.GetInstalled)
 			}
+
+			// Agent routes (Agent 管理)
+			agents := authorized.Group("/agents")
+			{
+				agents.GET("", c.Agent.List)
+				agents.GET("/pending", c.Agent.ListPending)
+				agents.GET("/version", c.Agent.GetVersion)
+				agents.POST("/:id/approve", c.Agent.Approve)
+				agents.POST("/:id/reject", c.Agent.Reject)
+				agents.PUT("/:id", c.Agent.Update)
+				agents.DELETE("/:id", c.Agent.Delete)
+				agents.POST("/:id/token", c.Agent.RegenerateToken)
+				agents.POST("/:id/update", c.Agent.ForceUpdate)
+			}
+		}
+
+		// Agent API（供远程 Agent 调用）
+		agentAPI := api.Group("/agent")
+		{
+			agentAPI.POST("/register", c.Agent.Register)
+			agentAPI.POST("/status", c.Agent.CheckStatus)
+			agentAPI.POST("/heartbeat", c.Agent.Heartbeat)
+			agentAPI.GET("/tasks", c.Agent.GetTasks)
+			agentAPI.POST("/report", c.Agent.ReportResult)
+			agentAPI.GET("/download", c.Agent.Download)
 		}
 	}
 

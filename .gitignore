@@ -10,6 +10,9 @@ baihu
 
 # Data & Logs
 data/
+!data/agent/
+data/agent/*
+!data/agent/version.txt
 envs/
 .kiro/
 # logs/

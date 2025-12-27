@@ -24,6 +24,18 @@ build:
 # Build all (frontend + backend)
 build-all: build-web build
 
+# Build agent for all platforms (local development)
+build-agent:
+	@mkdir -p data/agent
+	@echo "$(VERSION)" > data/agent/version.txt
+	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o ../data/agent/baihu-agent-linux-amd64 .
+	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o ../data/agent/baihu-agent-linux-arm64 .
+	cd agent && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o ../data/agent/baihu-agent-windows-amd64.exe .
+	cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o ../data/agent/baihu-agent-darwin-amd64 .
+	cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o ../data/agent/baihu-agent-darwin-arm64 .
+	@echo "Agent binaries built in data/agent/ (for local dev)"
+	@echo "In Docker, agents are built to /opt/agent/"
+
 # Clean built files
 clean:
 	$(GOCLEAN)
@@ -67,6 +79,7 @@ help:
 	@echo "Available targets:"
 	@echo "  all          - Build the application (default)"
 	@echo "  build        - Build the application"
+	@echo "  build-agent  - Build agent for all platforms"
 	@echo "  clean        - Clean built files"
 	@echo "  run          - Run the application"
 	@echo "  deps         - Install dependencies"

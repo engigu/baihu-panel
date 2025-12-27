@@ -45,7 +45,34 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     -o baihu .
 
 # ================================
-# Stage 3: Final image
+# Stage 3: Build Agent (all platforms)
+# ================================
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS agent-builder
+
+ARG VERSION=dev
+ARG BUILD_TIME
+
+WORKDIR /app
+
+# Copy agent source
+COPY agent/ ./agent/
+
+# Download dependencies
+WORKDIR /app/agent
+RUN go env -w GOPROXY=https://goproxy.cn,direct && go mod download
+
+# Build agent for all platforms (parallel)
+RUN mkdir -p /opt/agent && \
+    echo "${VERSION}" > /opt/agent/version.txt && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o /opt/agent/baihu-agent-linux-amd64 . & \
+    # CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o /opt/agent/baihu-agent-linux-arm64 . & \
+    # CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o /opt/agent/baihu-agent-windows-amd64.exe . & \
+    # CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o /opt/agent/baihu-agent-darwin-amd64 . & \
+    # CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o /opt/agent/baihu-agent-darwin-arm64 . & \
+    wait
+
+# ================================
+# Stage 4: Final image
 # ================================
 FROM debian:bookworm-slim
 
@@ -77,6 +104,10 @@ COPY docker-entrypoint.sh .
 
 # Copy sync.py to /opt
 COPY custom/sync.py /opt/sync.py
+
+# Copy agent binaries to /opt/agent
+COPY --from=agent-builder /opt/agent /opt/agent
+
 RUN chmod +x /opt/sync.py \
     && chmod +x docker-entrypoint.sh \
     && touch "dont-not-delete-anythings" \

@@ -11,6 +11,9 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+// 东八区时区
+var cstZone = time.FixedZone("CST", 8*3600)
+
 // CronService manages scheduled tasks using robfig/cron
 type CronService struct {
 	cron            *cron.Cron
@@ -22,8 +25,8 @@ type CronService struct {
 
 // NewCronService creates a new cron service
 func NewCronService(taskService *TaskService, executorService *ExecutorService) *CronService {
-	// 使用秒级精度的 cron parser，支持 6 位表达式（秒 分 时 日 月 周）
-	c := cron.New(cron.WithSeconds())
+	// 使用秒级精度的 cron parser，支持 6 位表达式（秒 分 时 日 月 周），使用东八区时区
+	c := cron.New(cron.WithSeconds(), cron.WithLocation(cstZone))
 
 	return &CronService{
 		cron:            c,
@@ -52,7 +55,8 @@ func (cs *CronService) loadTasks() {
 	tasks := cs.taskService.GetTasks()
 	count := 0
 	for _, task := range tasks {
-		if task.Enabled {
+		// 只调度本地任务（agent_id 为空）
+		if task.Enabled && task.AgentID == nil {
 			err := cs.addTask(&task, false)
 			if err != nil {
 				return

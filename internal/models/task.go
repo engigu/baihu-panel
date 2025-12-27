@@ -37,6 +37,7 @@ type Task struct {
 	WorkDir     string         `json:"work_dir" gorm:"size:255;default:''"`     // 工作目录，为空则使用 scripts 目录
 	CleanConfig string         `json:"clean_config" gorm:"size:255;default:''"` // 清理配置 JSON
 	Envs        string         `json:"envs" gorm:"size:255;default:''"`         // 环境变量ID列表，逗号分隔
+	AgentID     *uint          `json:"agent_id" gorm:"index"`                   // Agent ID，为空表示本地执行
 	Enabled     bool           `json:"enabled" gorm:"default:true"`
 	LastRun     *LocalTime     `json:"last_run"`
 	NextRun     *LocalTime     `json:"next_run"`
@@ -53,6 +54,7 @@ func (Task) TableName() string {
 type TaskLog struct {
 	ID        uint      `json:"id" gorm:"primaryKey"`
 	TaskID    uint      `json:"task_id" gorm:"index"`
+	AgentID   *uint     `json:"agent_id" gorm:"index"` // Agent ID，为空表示本地执行
 	Command   string    `json:"command" gorm:"type:text"`
 	Output    string    `json:"-" gorm:"type:longtext"` // gzip+base64 compressed
 	Status    string    `json:"status" gorm:"size:20"`  // success, failed
