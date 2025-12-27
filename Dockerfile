@@ -79,7 +79,7 @@ RUN mkdir -p /opt/agent && \
     # # Darwin arm64
     # CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o baihu-agent . && \
     # tar -czvf /opt/agent/baihu-agent-darwin-arm64.tar.gz baihu-agent config.example.ini && rm baihu-agent
-
+    echo 666
 # ================================
 # Stage 4: Final image
 # ================================
