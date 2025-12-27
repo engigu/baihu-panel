@@ -76,7 +76,7 @@ COPY --from=backend-builder /app/configs ./configs
 COPY docker-entrypoint.sh .
 
 # Copy sync.py to /opt
-COPY sync.py /opt/sync.py
+COPY custom/sync.py /opt/sync.py
 RUN chmod +x /opt/sync.py \
     && chmod +x docker-entrypoint.sh \
     && touch "dont-not-delete-anythings" \
