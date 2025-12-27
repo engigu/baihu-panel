@@ -206,6 +206,19 @@ export const api = {
     reinstall: (id: number) => request(`/deps/reinstall/${id}`, { method: 'POST' }),
     reinstallAll: (type: string) => request(`/deps/reinstall-all?type=${type}`, { method: 'POST' }),
     getInstalled: (type: string) => request<Dependency[]>(`/deps/installed?type=${type}`)
+  },
+  agents: {
+    list: () => request<Agent[]>('/agents'),
+    listPending: () => request<Agent[]>('/agents/pending'),
+    getVersion: () => request<{ version: string; platforms: { os: string; arch: string; filename: string }[] }>('/agents/version'),
+    approve: (id: number) => request<Agent>('/agents/' + id + '/approve', { method: 'POST' }),
+    reject: (id: number) => request('/agents/' + id + '/reject', { method: 'POST' }),
+    update: (id: number, data: { name: string; description?: string; enabled: boolean }) =>
+      request('/agents/' + id, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number) => request('/agents/' + id, { method: 'DELETE' }),
+    regenerateToken: (id: number) => request<{ token: string }>('/agents/' + id + '/token', { method: 'POST' }),
+    forceUpdate: (id: number) => request('/agents/' + id + '/update', { method: 'POST' }),
+    downloadUrl: (os: string, arch: string) => `${BASE_URL}/agent/download?os=${os}&arch=${arch}`
   }
 }
 
@@ -227,6 +240,7 @@ export interface Task {
   work_dir: string
   clean_config: string
   envs: string
+  agent_id: number | null
   enabled: boolean
   last_run: string
   next_run: string
@@ -372,6 +386,22 @@ export interface Dependency {
   type: string
   remark: string
   log: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Agent {
+  id: number
+  name: string
+  token: string
+  description: string
+  status: string
+  last_seen: string
+  ip: string
+  version: string
+  build_time: string
+  hostname: string
+  enabled: boolean
   created_at: string
   updated_at: string
 }
