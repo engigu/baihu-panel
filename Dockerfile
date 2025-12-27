@@ -54,22 +54,31 @@ ARG BUILD_TIME
 
 WORKDIR /app
 
-# Copy agent source
+# Copy agent source and config example
 COPY agent/ ./agent/
 
 # Download dependencies
 WORKDIR /app/agent
 RUN go env -w GOPROXY=https://goproxy.cn,direct && go mod download
 
-# Build agent for all platforms (parallel)
+# Build agent for all platforms and package as tar.gz (sequential to avoid file conflicts)
 RUN mkdir -p /opt/agent && \
     echo "${VERSION}" > /opt/agent/version.txt && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o /opt/agent/baihu-agent-linux-amd64 . & \
-    # CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o /opt/agent/baihu-agent-linux-arm64 . & \
-    # CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o /opt/agent/baihu-agent-windows-amd64.exe . & \
-    # CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o /opt/agent/baihu-agent-darwin-amd64 . & \
-    # CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o /opt/agent/baihu-agent-darwin-arm64 . & \
-    wait
+    # Linux amd64
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o baihu-agent . && \
+    tar -czvf /opt/agent/baihu-agent-linux-amd64.tar.gz baihu-agent config.example.ini && rm baihu-agent && \
+    # Linux arm64
+    # CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o baihu-agent . && \
+    # tar -czvf /opt/agent/baihu-agent-linux-arm64.tar.gz baihu-agent config.example.ini && rm baihu-agent && \
+    # # Windows amd64
+    # CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o baihu-agent.exe . && \
+    # tar -czvf /opt/agent/baihu-agent-windows-amd64.tar.gz baihu-agent.exe config.example.ini && rm baihu-agent.exe && \
+    # # Darwin amd64
+    # CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o baihu-agent . && \
+    # tar -czvf /opt/agent/baihu-agent-darwin-amd64.tar.gz baihu-agent config.example.ini && rm baihu-agent && \
+    # # Darwin arm64
+    # CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o baihu-agent . && \
+    # tar -czvf /opt/agent/baihu-agent-darwin-arm64.tar.gz baihu-agent config.example.ini && rm baihu-agent
 
 # ================================
 # Stage 4: Final image

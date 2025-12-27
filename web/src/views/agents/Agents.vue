@@ -364,8 +364,8 @@ onUnmounted(() => {
           <div class="border-t pt-4">
             <p class="text-sm font-medium mb-2">使用说明</p>
             <div class="text-xs text-muted-foreground space-y-1.5">
-              <p>1. 下载对应平台的 Agent 程序</p>
-              <p>2. 创建 config.ini 配置文件，设置 server_url</p>
+              <p>1. 下载对应平台的 Agent 压缩包并解压</p>
+              <p>2. 修改 config.example.ini 为 config.ini，设置 server_url</p>
               <p>3. 运行 <code class="bg-muted px-1 rounded">./baihu-agent start</code> 启动</p>
               <p>4. 在本页面"未注册"标签中审核通过</p>
               <p>5. 可选: <code class="bg-muted px-1 rounded">./baihu-agent install</code> 设置开机自启</p>

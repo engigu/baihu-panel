@@ -320,9 +320,11 @@ func (s *AgentService) GetAvailablePlatforms() []map[string]string {
 
 	for _, f := range files {
 		name := f.Name()
-		if strings.HasPrefix(name, "baihu-agent-") {
-			// baihu-agent-linux-amd64, baihu-agent-windows-amd64.exe
-			parts := strings.Split(strings.TrimSuffix(name, ".exe"), "-")
+		// baihu-agent-linux-amd64.tar.gz
+		if strings.HasPrefix(name, "baihu-agent-") && strings.HasSuffix(name, ".tar.gz") {
+			// 去掉 .tar.gz 后缀
+			baseName := strings.TrimSuffix(name, ".tar.gz")
+			parts := strings.Split(baseName, "-")
 			if len(parts) >= 4 {
 				platforms = append(platforms, map[string]string{
 					"os":       parts[2],
@@ -336,12 +338,9 @@ func (s *AgentService) GetAvailablePlatforms() []map[string]string {
 	return platforms
 }
 
-// GetAgentBinary 获取 Agent 二进制文件
+// GetAgentBinary 获取 Agent 压缩包
 func (s *AgentService) GetAgentBinary(osType, arch string) ([]byte, string, error) {
-	filename := fmt.Sprintf("baihu-agent-%s-%s", osType, arch)
-	if osType == "windows" {
-		filename += ".exe"
-	}
+	filename := fmt.Sprintf("baihu-agent-%s-%s.tar.gz", osType, arch)
 
 	// 优先从 /opt/agent 读取（容器内）
 	filePath := filepath.Join("/opt/agent", filename)
