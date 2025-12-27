@@ -1,7 +1,9 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -899,8 +901,10 @@ func (a *Agent) selfUpdate() {
 		log.Errorf("获取可执行文件路径失败: %v", err)
 		return
 	}
+	exePath, _ = filepath.Abs(exePath)
+	exeDir := filepath.Dir(exePath)
 
-	// 下载新版本
+	// 下载新版本 tar.gz
 	downloadURL := fmt.Sprintf("%s/api/agent/download?os=%s&arch=%s", a.config.ServerURL, runtime.GOOS, runtime.GOARCH)
 	req, err := http.NewRequest("GET", downloadURL, nil)
 	if err != nil {
@@ -922,19 +926,52 @@ func (a *Agent) selfUpdate() {
 		return
 	}
 
-	// 保存到临时文件
-	tmpFile := exePath + ".new"
-	f, err := os.OpenFile(tmpFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	// 读取 tar.gz 内容
+	gzReader, err := gzip.NewReader(resp.Body)
 	if err != nil {
-		log.Errorf("创建临时文件失败: %v", err)
+		log.Errorf("解压 gzip 失败: %v", err)
+		return
+	}
+	defer gzReader.Close()
+
+	tarReader := tar.NewReader(gzReader)
+
+	// 解压并找到二进制文件
+	var newBinary []byte
+	binaryName := "baihu-agent"
+	if runtime.GOOS == "windows" {
+		binaryName = "baihu-agent.exe"
+	}
+
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Errorf("读取 tar 失败: %v", err)
+			return
+		}
+
+		if header.Typeflag == tar.TypeReg && header.Name == binaryName {
+			newBinary, err = io.ReadAll(tarReader)
+			if err != nil {
+				log.Errorf("读取二进制文件失败: %v", err)
+				return
+			}
+			break
+		}
+	}
+
+	if newBinary == nil {
+		log.Errorf("tar.gz 中未找到 %s", binaryName)
 		return
 	}
 
-	_, err = io.Copy(f, resp.Body)
-	f.Close()
-	if err != nil {
+	// 保存到临时文件
+	tmpFile := filepath.Join(exeDir, binaryName+".new")
+	if err := os.WriteFile(tmpFile, newBinary, 0755); err != nil {
 		log.Errorf("保存新版本失败: %v", err)
-		os.Remove(tmpFile)
 		return
 	}
 
