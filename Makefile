@@ -28,13 +28,19 @@ build-all: build-web build
 build-agent:
 	@mkdir -p data/agent
 	@echo "$(VERSION)" > data/agent/version.txt
-	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o ../data/agent/baihu-agent-linux-amd64 .
-	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o ../data/agent/baihu-agent-linux-arm64 .
-	cd agent && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o ../data/agent/baihu-agent-windows-amd64.exe .
-	cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o ../data/agent/baihu-agent-darwin-amd64 .
-	cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o ../data/agent/baihu-agent-darwin-arm64 .
-	@echo "Agent binaries built in data/agent/ (for local dev)"
-	@echo "In Docker, agents are built to /opt/agent/"
+	@echo "Building and packaging agents..."
+	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o baihu-agent . && \
+		tar -czvf ../data/agent/baihu-agent-linux-amd64.tar.gz baihu-agent config.example.ini && rm baihu-agent
+	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o baihu-agent . && \
+		tar -czvf ../data/agent/baihu-agent-linux-arm64.tar.gz baihu-agent config.example.ini && rm baihu-agent
+	cd agent && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o baihu-agent.exe . && \
+		tar -czvf ../data/agent/baihu-agent-windows-amd64.tar.gz baihu-agent.exe config.example.ini && rm baihu-agent.exe
+	cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o baihu-agent . && \
+		tar -czvf ../data/agent/baihu-agent-darwin-amd64.tar.gz baihu-agent config.example.ini && rm baihu-agent
+	cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o baihu-agent . && \
+		tar -czvf ../data/agent/baihu-agent-darwin-arm64.tar.gz baihu-agent config.example.ini && rm baihu-agent
+	@echo "Agent packages built in data/agent/"
+	@ls -lh data/agent/*.tar.gz
 
 # Clean built files
 clean:
@@ -77,14 +83,14 @@ docker-down:
 # Help
 help:
 	@echo "Available targets:"
-	@echo "  all          - Build the application (default)"
-	@echo "  build        - Build the application"
-	@echo "  build-agent  - Build agent for all platforms"
-	@echo "  clean        - Clean built files"
-	@echo "  run          - Run the application"
-	@echo "  deps         - Install dependencies"
-	@echo "  docker-build - Build Docker image"
-	@echo "  docker-run   - Run Docker container"
-	@echo "  docker-up    - Start Docker Compose stack"
-	@echo "  docker-down  - Stop Docker Compose stack"
-	@echo "  help         - Show this help message"
+	@echo "  all            - Build the application (default)"
+	@echo "  build          - Build the application"
+	@echo "  build-agent    - Build agent packages (tar.gz) for all platforms"
+	@echo "  clean          - Clean built files"
+	@echo "  run            - Run the application"
+	@echo "  deps           - Install dependencies"
+	@echo "  docker-build   - Build Docker image"
+	@echo "  docker-run     - Run Docker container"
+	@echo "  docker-up      - Start Docker Compose stack"
+	@echo "  docker-down    - Stop Docker Compose stack"
+	@echo "  help           - Show this help message"

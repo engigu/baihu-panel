@@ -317,9 +317,9 @@ func (c *AgentController) Download(ctx *gin.Context) {
 	}
 
 	ctx.Header("Content-Disposition", "attachment; filename="+filename)
-	ctx.Header("Content-Type", "application/octet-stream")
+	ctx.Header("Content-Type", "application/gzip")
 	ctx.Header("Content-Length", strconv.Itoa(len(data)))
-	ctx.Data(200, "application/octet-stream", data)
+	ctx.Data(200, "application/gzip", data)
 }
 
 // GetVersion 获取 Agent 最新版本信息
