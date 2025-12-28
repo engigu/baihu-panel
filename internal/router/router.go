@@ -203,26 +203,26 @@ func Setup(c *Controllers) *gin.Engine {
 			agents := authorized.Group("/agents")
 			{
 				agents.GET("", c.Agent.List)
-				agents.GET("/pending", c.Agent.ListPending)
 				agents.GET("/version", c.Agent.GetVersion)
-				agents.POST("/:id/approve", c.Agent.Approve)
-				agents.POST("/:id/reject", c.Agent.Reject)
 				agents.PUT("/:id", c.Agent.Update)
 				agents.DELETE("/:id", c.Agent.Delete)
 				agents.POST("/:id/token", c.Agent.RegenerateToken)
 				agents.POST("/:id/update", c.Agent.ForceUpdate)
+				// 令牌管理
+				agents.GET("/regcodes", c.Agent.ListRegCodes)
+				agents.POST("/regcodes", c.Agent.CreateRegCode)
+				agents.DELETE("/regcodes/:id", c.Agent.DeleteRegCode)
 			}
 		}
 
 		// Agent API（供远程 Agent 调用）
 		agentAPI := api.Group("/agent")
 		{
-			agentAPI.POST("/register", c.Agent.Register)
-			agentAPI.POST("/status", c.Agent.CheckStatus)
 			agentAPI.POST("/heartbeat", c.Agent.Heartbeat)
 			agentAPI.GET("/tasks", c.Agent.GetTasks)
 			agentAPI.POST("/report", c.Agent.ReportResult)
 			agentAPI.GET("/download", c.Agent.Download)
+			agentAPI.GET("/ws", c.Agent.WSConnect) // WebSocket 连接
 		}
 	}
 

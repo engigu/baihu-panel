@@ -12,14 +12,16 @@ import (
 )
 
 type TaskController struct {
-	taskService *services.TaskService
-	cronService *services.CronService
+	taskService    *services.TaskService
+	cronService    *services.CronService
+	agentWSManager *services.AgentWSManager
 }
 
 func NewTaskController(taskService *services.TaskService, cronService *services.CronService) *TaskController {
 	return &TaskController{
-		taskService: taskService,
-		cronService: cronService,
+		taskService:    taskService,
+		cronService:    cronService,
+		agentWSManager: services.GetAgentWSManager(),
 	}
 }
 
@@ -57,6 +59,7 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		WorkDir     string `json:"work_dir"`
 		CleanConfig string `json:"clean_config"`
 		Envs        string `json:"envs"`
+		AgentID     *uint  `json:"agent_id"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -78,8 +81,14 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 	// 转换为绝对路径
 	workDir := resolveWorkDir(req.WorkDir)
 
-	task := tc.taskService.CreateTask(req.Name, req.Command, req.Schedule, req.Timeout, workDir, req.CleanConfig, req.Envs, req.Type, req.Config)
-	tc.cronService.AddTask(task)
+	task := tc.taskService.CreateTask(req.Name, req.Command, req.Schedule, req.Timeout, workDir, req.CleanConfig, req.Envs, req.Type, req.Config, req.AgentID)
+	
+	// 如果是 Agent 任务，通知 Agent；否则添加到本地 cron
+	if task.AgentID != nil && *task.AgentID > 0 {
+		tc.agentWSManager.BroadcastTasks(*task.AgentID)
+	} else {
+		tc.cronService.AddTask(task)
+	}
 
 	utils.Success(c, task)
 }
@@ -115,6 +124,13 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		return
 	}
 
+	// 获取旧任务信息（用于判断 agent 变更）
+	oldTask := tc.taskService.GetTaskByID(id)
+	var oldAgentID *uint
+	if oldTask != nil {
+		oldAgentID = oldTask.AgentID
+	}
+
 	var req struct {
 		Name        string `json:"name"`
 		Command     string `json:"command"`
@@ -126,6 +142,7 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		CleanConfig string `json:"clean_config"`
 		Envs        string `json:"envs"`
 		Enabled     bool   `json:"enabled"`
+		AgentID     *uint  `json:"agent_id"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -140,16 +157,32 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		}
 	}
 
-	task := tc.taskService.UpdateTask(id, req.Name, req.Command, req.Schedule, req.Timeout, resolveWorkDir(req.WorkDir), req.CleanConfig, req.Envs, req.Enabled, req.Type, req.Config)
+	task := tc.taskService.UpdateTask(id, req.Name, req.Command, req.Schedule, req.Timeout, resolveWorkDir(req.WorkDir), req.CleanConfig, req.Envs, req.Enabled, req.Type, req.Config, req.AgentID)
 	if task == nil {
 		utils.NotFound(c, "任务不存在")
 		return
 	}
 
-	if task.Enabled {
-		tc.cronService.AddTask(task)
-	} else {
+	// 处理任务调度
+	if task.AgentID != nil && *task.AgentID > 0 {
+		// Agent 任务：从本地 cron 移除，通知 Agent
 		tc.cronService.RemoveTask(task.ID)
+		tc.agentWSManager.BroadcastTasks(*task.AgentID)
+		// 如果 agent 变更了，也通知旧 agent
+		if oldAgentID != nil && *oldAgentID > 0 && *oldAgentID != *task.AgentID {
+			tc.agentWSManager.BroadcastTasks(*oldAgentID)
+		}
+	} else {
+		// 本地任务
+		if task.Enabled {
+			tc.cronService.AddTask(task)
+		} else {
+			tc.cronService.RemoveTask(task.ID)
+		}
+		// 如果之前是 agent 任务，通知旧 agent 移除
+		if oldAgentID != nil && *oldAgentID > 0 {
+			tc.agentWSManager.BroadcastTasks(*oldAgentID)
+		}
 	}
 
 	utils.Success(c, task)
@@ -162,12 +195,24 @@ func (tc *TaskController) DeleteTask(c *gin.Context) {
 		return
 	}
 
+	// 获取任务信息（用于通知 agent）
+	task := tc.taskService.GetTaskByID(id)
+	var agentID *uint
+	if task != nil {
+		agentID = task.AgentID
+	}
+
 	tc.cronService.RemoveTask(uint(id))
 
 	success := tc.taskService.DeleteTask(id)
 	if !success {
 		utils.NotFound(c, "任务不存在")
 		return
+	}
+
+	// 如果是 agent 任务，通知 agent
+	if agentID != nil && *agentID > 0 {
+		tc.agentWSManager.BroadcastTasks(*agentID)
 	}
 
 	utils.SuccessMsg(c, "删除成功")

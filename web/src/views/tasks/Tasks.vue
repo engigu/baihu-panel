@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { Button } from '@/components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
 import TaskDialog from './TaskDialog.vue'
 import RepoDialog from './RepoDialog.vue'
-import { Plus, Play, Pencil, Trash2, Search, ScrollText, GitBranch, Terminal } from 'lucide-vue-next'
-import { api, type Task } from '@/api'
+import { Plus, Play, Pencil, Trash2, Search, ScrollText, GitBranch, Terminal, Server, Monitor } from 'lucide-vue-next'
+import { api, type Task, type Agent } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
 import { useRouter } from 'vue-router'
@@ -17,6 +17,7 @@ const router = useRouter()
 const { pageSize } = useSiteSettings()
 
 const tasks = ref<Task[]>([])
+const agents = ref<Agent[]>([])
 const showTaskDialog = ref(false)
 const showRepoDialog = ref(false)
 const editingTask = ref<Partial<Task>>({})
@@ -29,12 +30,39 @@ const currentPage = ref(1)
 const total = ref(0)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
+// 创建 agent 映射表
+const agentMap = computed(() => {
+  const map: Record<number, Agent> = {}
+  agents.value.forEach(a => { map[a.id] = a })
+  return map
+})
+
+// 获取任务执行位置名称
+function getExecutorName(task: Task): string {
+  if (!task.agent_id) return '本地'
+  const agent = agentMap.value[task.agent_id]
+  return agent ? agent.name : `Agent #${task.agent_id}`
+}
+
+// 获取任务执行位置状态
+function getExecutorStatus(task: Task): 'local' | 'online' | 'offline' {
+  if (!task.agent_id) return 'local'
+  const agent = agentMap.value[task.agent_id]
+  return agent?.status === 'online' ? 'online' : 'offline'
+}
+
 async function loadTasks() {
   try {
     const res = await api.tasks.list({ page: currentPage.value, page_size: pageSize.value, name: filterName.value || undefined })
     tasks.value = res.data
     total.value = res.total
   } catch { toast.error('加载任务失败') }
+}
+
+async function loadAgents() {
+  try {
+    agents.value = await api.agents.list()
+  } catch { /* ignore */ }
 }
 
 function handleSearch() {
@@ -108,7 +136,10 @@ function getTaskTypeTitle(type: string) {
   return type === 'repo' ? '仓库同步' : '普通任务'
 }
 
-onMounted(loadTasks)
+onMounted(() => {
+  loadTasks()
+  loadAgents()
+})
 </script>
 
 <template>
@@ -134,10 +165,11 @@ onMounted(loadTasks)
 
     <div class="rounded-lg border bg-card overflow-x-auto">
       <!-- 表头 -->
-      <div class="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 border-b bg-muted/50 text-xs sm:text-sm text-muted-foreground font-medium min-w-[360px] sm:min-w-[700px]">
+      <div class="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 border-b bg-muted/50 text-xs sm:text-sm text-muted-foreground font-medium min-w-[360px] sm:min-w-[800px]">
         <span class="w-12 sm:w-14 shrink-0">ID</span>
         <span class="w-10 sm:w-12 shrink-0 text-center">类型</span>
         <span class="flex-1 min-w-0">名称</span>
+        <span class="w-20 shrink-0 hidden md:block">执行位置</span>
         <span class="w-32 sm:flex-1 shrink-0 sm:shrink hidden sm:block">命令/地址</span>
         <span class="w-32 shrink-0 hidden md:block">定时规则</span>
         <span class="w-40 shrink-0 hidden lg:block">上次执行</span>
@@ -146,7 +178,7 @@ onMounted(loadTasks)
         <span class="w-20 sm:w-36 shrink-0 text-center">操作</span>
       </div>
       <!-- 列表 -->
-      <div class="divide-y min-w-[360px] sm:min-w-[700px]">
+      <div class="divide-y min-w-[360px] sm:min-w-[800px]">
         <div v-if="tasks.length === 0" class="text-sm text-muted-foreground text-center py-8">
           暂无任务
         </div>
@@ -161,6 +193,11 @@ onMounted(loadTasks)
             <Terminal v-else class="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
           </span>
           <span class="flex-1 min-w-0 font-medium truncate text-xs sm:text-sm">{{ task.name }}</span>
+          <span class="w-20 shrink-0 hidden md:flex items-center gap-1 text-xs" :title="getExecutorName(task)">
+            <Monitor v-if="!task.agent_id" class="h-3 w-3 text-muted-foreground" />
+            <Server v-else class="h-3 w-3" :class="getExecutorStatus(task) === 'online' ? 'text-green-500' : 'text-gray-400'" />
+            <span class="truncate">{{ getExecutorName(task) }}</span>
+          </span>
           <code class="w-32 sm:flex-1 shrink-0 sm:shrink text-muted-foreground truncate text-xs bg-muted px-2 py-1 rounded hidden sm:block">
             <TextOverflow :text="task.command" :title="task.type === 'repo' ? '同步地址' : '执行命令'" />
           </code>
@@ -168,7 +205,10 @@ onMounted(loadTasks)
           <span class="w-40 shrink-0 text-muted-foreground text-xs hidden lg:block">{{ task.last_run || '-' }}</span>
           <span class="w-40 shrink-0 text-muted-foreground text-xs hidden lg:block">{{ task.next_run || '-' }}</span>
           <span class="w-8 sm:w-12 flex justify-center shrink-0 cursor-pointer" @click="toggleTask(task, !task.enabled)" :title="task.enabled ? '点击禁用' : '点击启用'">
-            <span :class="['w-2 h-2 rounded-full', task.enabled ? 'bg-green-500' : 'bg-gray-400']" />
+            <span class="relative flex h-2.5 w-2.5">
+              <span v-if="task.enabled" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span :class="task.enabled ? 'bg-green-500' : 'bg-gray-400'" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
+            </span>
           </span>
           <span class="w-20 sm:w-36 shrink-0 flex justify-center gap-0.5 sm:gap-1">
             <Button variant="ghost" size="icon" class="h-6 w-6 sm:h-7 sm:w-7" @click="runTask(task.id)" title="执行">

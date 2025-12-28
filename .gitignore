@@ -18,6 +18,9 @@ envs/
 # logs/
 # scripts/
 configs/config.ini
+agent/config.ini
+agent/agent.pid
+agent/baihu-agent
 web/dist/*
 !web/dist/.gitkeep
 

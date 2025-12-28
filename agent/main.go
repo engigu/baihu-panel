@@ -5,21 +5,27 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
@@ -158,7 +164,7 @@ func cmdStart() {
 		config.Name = hostname
 	}
 
-	log.Infof("Baihu Agent v%s", Version)
+	log.Infof("Baihu Agent Version: %s", Version)
 	if BuildTime != "" {
 		log.Infof("构建时间: %s", BuildTime)
 	}
@@ -320,7 +326,7 @@ func installWindows(exePath, exeDir string) {
 		"binPath=", fmt.Sprintf(`"%s" start`, exePath),
 		"start=", "auto",
 		"DisplayName=", ServiceDesc)
-	
+
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("创建服务失败: %v\n", err)
 		fmt.Println("请以管理员身份运行")
@@ -340,7 +346,7 @@ func installWindows(exePath, exeDir string) {
 func uninstallWindows() {
 	// 停止服务
 	exec.Command("sc", "stop", ServiceName).Run()
-	
+
 	// 删除服务
 	cmd := exec.Command("sc", "delete", ServiceName)
 	if err := cmd.Run(); err != nil {
@@ -433,7 +439,6 @@ func initLogger(logFile string) {
 	log.SetOutput(io.MultiWriter(os.Stdout, lumberjackLogger))
 }
 
-
 // ========== 配置相关 ==========
 
 type Config struct {
@@ -494,6 +499,24 @@ func saveConfigFile(path string, config *Config) error {
 
 // ========== Agent 结构 ==========
 
+// WebSocket 消息类型
+const (
+	WSTypeHeartbeat    = "heartbeat"
+	WSTypeHeartbeatAck = "heartbeat_ack"
+	WSTypeTasks        = "tasks"
+	WSTypeTaskResult   = "task_result"
+	WSTypeUpdate       = "update"
+	WSTypeConnected    = "connected"
+	WSTypeDisabled     = "disabled"    // Agent 被禁用
+	WSTypeEnabled      = "enabled"     // Agent 被启用
+	WSTypeFetchTasks   = "fetch_tasks" // Agent 请求任务列表
+)
+
+type WSMessage struct {
+	Type string          `json:"type"`
+	Data json.RawMessage `json:"data,omitempty"`
+}
+
 type AgentTask struct {
 	ID       uint   `json:"id"`
 	Name     string `json:"name"`
@@ -517,147 +540,309 @@ type TaskResult struct {
 }
 
 type Agent struct {
-	config     *Config
-	configFile string
-	cron       *cron.Cron
-	tasks      map[uint]*AgentTask
-	entryMap   map[uint]cron.EntryID
-	mu         sync.RWMutex
-	client     *http.Client
+	config        *Config
+	configFile    string
+	machineID     string
+	cron          *cron.Cron
+	tasks         map[uint]*AgentTask
+	entryMap      map[uint]cron.EntryID
+	lastTaskCount int // 上次任务数量，用于判断是否需要打印日志
+	mu            sync.RWMutex
+	client        *http.Client
+	wsConn        *websocket.Conn
+	wsMu          sync.Mutex
+	stopCh        chan struct{}
+}
+
+// generateMachineID 生成机器识别码（基于 hostname + MAC 地址）
+func generateMachineID() string {
+	var parts []string
+
+	// 1. Hostname
+	if hostname, err := os.Hostname(); err == nil {
+		parts = append(parts, hostname)
+	}
+
+	// 2. MAC 地址（取所有非回环网卡的 MAC）
+	if interfaces, err := net.Interfaces(); err == nil {
+		var macs []string
+		for _, iface := range interfaces {
+			// 跳过回环和无 MAC 的接口
+			if iface.Flags&net.FlagLoopback != 0 || len(iface.HardwareAddr) == 0 {
+				continue
+			}
+			macs = append(macs, iface.HardwareAddr.String())
+		}
+		// 排序确保顺序一致
+		sort.Strings(macs)
+		parts = append(parts, macs...)
+	}
+
+	// 3. 操作系统和架构
+	parts = append(parts, runtime.GOOS, runtime.GOARCH)
+
+	// 生成 SHA256 哈希
+	data := strings.Join(parts, "|")
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:])
 }
 
 func NewAgent(config *Config, configFile string) *Agent {
 	return &Agent{
 		config:     config,
 		configFile: configFile,
+		machineID:  generateMachineID(),
 		cron:       cron.New(cron.WithSeconds(), cron.WithLocation(cstZone)),
 		tasks:      make(map[uint]*AgentTask),
 		entryMap:   make(map[uint]cron.EntryID),
 		client:     &http.Client{Timeout: 30 * time.Second},
+		stopCh:     make(chan struct{}),
 	}
 }
 
 func (a *Agent) Start() error {
 	if a.config.Token == "" {
-		log.Info("未找到 Token，开始注册流程...")
-		if err := a.registerAndWait(); err != nil {
-			return err
-		}
+		return fmt.Errorf("缺少令牌，请在配置文件中设置 token")
 	}
 
-	if err := a.heartbeat(); err != nil {
-		log.Warnf("首次心跳失败: %v（将继续重试）", err)
-	}
-
-	if err := a.syncTasks(); err != nil {
-		log.Warnf("同步任务失败: %v（将继续重试）", err)
-	}
-
+	log.Infof("机器识别码: %s", a.machineID[:16]+"...")
 	a.cron.Start()
-	go a.heartbeatLoop()
-	go a.syncTasksLoop()
 
-	log.Info("Agent 已启动 (时区: Asia/Shanghai)")
+	// 启动 WebSocket 连接
+	go a.wsLoop()
+
+	log.Info("Agent 已启动 (时区: Asia/Shanghai, 模式: WebSocket)")
 	return nil
 }
 
 func (a *Agent) Stop() {
+	close(a.stopCh)
+	a.closeWS()
 	ctx := a.cron.Stop()
 	<-ctx.Done()
 	log.Info("Agent 已停止")
 }
 
-func (a *Agent) registerAndWait() error {
-	hostname, _ := os.Hostname()
-
-	body := map[string]string{
-		"name":     a.config.Name,
-		"hostname": hostname,
-		"version":  Version,
-	}
-
-	resp, err := a.doRequestNoAuth("POST", "/api/agent/register", body)
-	if err != nil {
-		return fmt.Errorf("注册失败: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("注册失败: %s", string(data))
-	}
-
-	var result struct {
-		Code int `json:"code"`
-		Data struct {
-			AgentID uint   `json:"agent_id"`
-			Status  string `json:"status"`
-			Message string `json:"message"`
-		} `json:"data"`
-	}
-	json.NewDecoder(resp.Body).Decode(&result)
-
-	log.Infof("注册成功 (ID: %d)，等待管理员审核...", result.Data.AgentID)
-
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
+// wsLoop WebSocket 连接循环（自动重连）
+func (a *Agent) wsLoop() {
 	for {
-		<-ticker.C
+		select {
+		case <-a.stopCh:
+			return
+		default:
+		}
 
-		statusResp, err := a.doRequestNoAuth("POST", "/api/agent/status", map[string]string{
-			"name": a.config.Name,
-		})
-		if err != nil {
-			log.Warnf("检查状态失败: %v", err)
+		if err := a.connectWS(); err != nil {
+			log.Warnf("WebSocket 连接失败: %v，5秒后重试...", err)
+			time.Sleep(5 * time.Second)
 			continue
 		}
 
-		if statusResp.StatusCode != http.StatusOK {
-			statusResp.Body.Close()
-			continue
-		}
+		// 连接成功，开始读取消息
+		a.readWS()
 
-		var statusResult struct {
-			Code int `json:"code"`
-			Data struct {
-				AgentID uint   `json:"agent_id"`
-				Status  string `json:"status"`
-				Token   string `json:"token"`
-			} `json:"data"`
-		}
-		json.NewDecoder(statusResp.Body).Decode(&statusResult)
-		statusResp.Body.Close()
-
-		if statusResult.Data.Status != "pending" && statusResult.Data.Token != "" {
-			a.config.Token = statusResult.Data.Token
-			if err := saveConfigFile(a.configFile, a.config); err != nil {
-				log.Warnf("保存配置文件失败: %v", err)
-			} else {
-				log.Infof("Token 已保存到 %s", a.configFile)
-			}
-			log.Info("审核通过，开始工作...")
-			return nil
-		}
-
-		log.Debug("等待审核中...")
+		// 连接断开，等待后重连
+		log.Warn("WebSocket 连接断开，5秒后重连...")
+		time.Sleep(5 * time.Second)
 	}
 }
 
+// connectWS 建立 WebSocket 连接
+func (a *Agent) connectWS() error {
+	// 构建 WebSocket URL
+	serverURL := a.config.ServerURL
+	wsURL := strings.Replace(serverURL, "http://", "ws://", 1)
+	wsURL = strings.Replace(wsURL, "https://", "wss://", 1)
+	wsURL = fmt.Sprintf("%s/api/agent/ws?token=%s&machine_id=%s", wsURL, url.QueryEscape(a.config.Token), url.QueryEscape(a.machineID))
+
+	dialer := websocket.Dialer{
+		HandshakeTimeout: 10 * time.Second,
+	}
+
+	conn, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		return err
+	}
+
+	a.wsMu.Lock()
+	a.wsConn = conn
+	a.wsMu.Unlock()
+
+	log.Info("WebSocket 已连接")
+
+	// 发送首次心跳
+	a.sendHeartbeat()
+
+	// 启动心跳协程
+	go a.heartbeatLoop()
+
+	return nil
+}
+
+// closeWS 关闭 WebSocket 连接
+func (a *Agent) closeWS() {
+	a.wsMu.Lock()
+	defer a.wsMu.Unlock()
+	if a.wsConn != nil {
+		a.wsConn.Close()
+		a.wsConn = nil
+	}
+}
+
+// readWS 读取 WebSocket 消息
+func (a *Agent) readWS() {
+	for {
+		a.wsMu.Lock()
+		conn := a.wsConn
+		a.wsMu.Unlock()
+
+		if conn == nil {
+			return
+		}
+
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+
+		var msg WSMessage
+		if err := json.Unmarshal(message, &msg); err != nil {
+			continue
+		}
+
+		a.handleWSMessage(&msg)
+	}
+}
+
+// handleWSMessage 处理 WebSocket 消息
+func (a *Agent) handleWSMessage(msg *WSMessage) {
+	switch msg.Type {
+	case WSTypeConnected:
+		a.handleConnected(msg.Data)
+
+	case WSTypeHeartbeatAck:
+		a.handleHeartbeatAck(msg.Data)
+
+	case WSTypeTasks:
+		a.handleTasks(msg.Data)
+
+	case WSTypeUpdate:
+		log.Info("收到更新指令，开始更新...")
+		go a.selfUpdate()
+
+	case WSTypeDisabled:
+		log.Warn("Agent 已被禁用，清空所有任务")
+		a.clearAllTasks()
+
+	case WSTypeEnabled:
+		log.Info("Agent 已被启用，主动拉取任务")
+		a.fetchTasks()
+	}
+}
+
+// fetchTasks 主动请求任务列表
+func (a *Agent) fetchTasks() {
+	if err := a.sendWSMessage(WSTypeFetchTasks, map[string]interface{}{}); err != nil {
+		log.Warnf("请求任务列表失败: %v", err)
+	}
+}
+
+// handleConnected 处理连接成功消息
+func (a *Agent) handleConnected(data json.RawMessage) {
+	var resp struct {
+		AgentID    uint   `json:"agent_id"`
+		Name       string `json:"name"`
+		IsNewAgent bool   `json:"is_new_agent"`
+		MachineID  string `json:"machine_id"`
+	}
+	json.Unmarshal(data, &resp)
+
+	if resp.IsNewAgent {
+		log.Infof("注册成功: Agent #%d, 机器码: %s", resp.AgentID, a.machineID[:16]+"...")
+	} else {
+		log.Infof("连接成功: Agent #%d (已存在), 机器码: %s", resp.AgentID, a.machineID[:16]+"...")
+	}
+
+	// 连接成功后主动拉取任务
+	a.fetchTasks()
+}
+
+// handleHeartbeatAck 处理心跳响应
+func (a *Agent) handleHeartbeatAck(data json.RawMessage) {
+	var resp struct {
+		AgentID       uint   `json:"agent_id"`
+		Name          string `json:"name"`
+		NeedUpdate    bool   `json:"need_update"`
+		ForceUpdate   bool   `json:"force_update"`
+		LatestVersion string `json:"latest_version"`
+	}
+	json.Unmarshal(data, &resp)
+
+	if resp.NeedUpdate && (a.config.AutoUpdate || resp.ForceUpdate) {
+		log.Infof("发现新版本 %s，开始更新...", resp.LatestVersion)
+		go a.selfUpdate()
+	}
+}
+
+// handleTasks 处理任务列表
+func (a *Agent) handleTasks(data json.RawMessage) {
+	var resp struct {
+		Tasks []AgentTask `json:"tasks"`
+	}
+	json.Unmarshal(data, &resp)
+
+	// 只在任务数量变化时打印日志
+	newCount := len(resp.Tasks)
+	if newCount != a.lastTaskCount {
+		log.Infof("任务列表更新: %d -> %d 个任务", a.lastTaskCount, newCount)
+		a.lastTaskCount = newCount
+	}
+
+	a.updateTasks(resp.Tasks)
+}
+
+// sendWSMessage 发送 WebSocket 消息
+func (a *Agent) sendWSMessage(msgType string, data interface{}) error {
+	a.wsMu.Lock()
+	defer a.wsMu.Unlock()
+
+	if a.wsConn == nil {
+		return fmt.Errorf("WebSocket 未连接")
+	}
+
+	dataBytes, _ := json.Marshal(data)
+	msg := WSMessage{Type: msgType, Data: dataBytes}
+	msgBytes, _ := json.Marshal(msg)
+
+	a.wsConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	return a.wsConn.WriteMessage(websocket.TextMessage, msgBytes)
+}
+
+// heartbeatLoop 心跳循环
 func (a *Agent) heartbeatLoop() {
 	ticker := time.NewTicker(time.Duration(a.config.Interval) * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		if err := a.heartbeat(); err != nil {
-			log.Warnf("心跳失败: %v", err)
+	for {
+		select {
+		case <-a.stopCh:
+			return
+		case <-ticker.C:
+			a.wsMu.Lock()
+			conn := a.wsConn
+			a.wsMu.Unlock()
+			if conn == nil {
+				return // 连接已断开，退出心跳循环
+			}
+			a.sendHeartbeat()
 		}
 	}
 }
 
-func (a *Agent) heartbeat() error {
+// sendHeartbeat 发送心跳
+func (a *Agent) sendHeartbeat() {
 	hostname, _ := os.Hostname()
-	body := map[string]interface{}{
+	data := map[string]interface{}{
 		"version":     Version,
 		"build_time":  BuildTime,
 		"hostname":    hostname,
@@ -665,76 +850,27 @@ func (a *Agent) heartbeat() error {
 		"arch":        runtime.GOARCH,
 		"auto_update": a.config.AutoUpdate,
 	}
+	if err := a.sendWSMessage(WSTypeHeartbeat, data); err != nil {
+		log.Warnf("发送心跳失败: %v", err)
+	}
+}
 
-	resp, err := a.doRequest("POST", "/api/agent/heartbeat", body)
+// sendTaskResult 发送任务结果
+func (a *Agent) sendTaskResult(result *TaskResult) {
+	if err := a.sendWSMessage(WSTypeTaskResult, result); err != nil {
+		log.Warnf("发送任务结果失败: %v，尝试 HTTP 上报", err)
+		// 降级到 HTTP
+		a.reportResultHTTP(result)
+	}
+}
+
+// reportResultHTTP HTTP 方式上报结果（降级方案）
+func (a *Agent) reportResultHTTP(result *TaskResult) error {
+	resp, err := a.doRequest("POST", "/api/agent/report", result)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("心跳失败: %s", string(data))
-	}
-
-	var result struct {
-		Code int `json:"code"`
-		Data struct {
-			AgentID       uint   `json:"agent_id"`
-			Name          string `json:"name"`
-			NeedUpdate    bool   `json:"need_update"`
-			ForceUpdate   bool   `json:"force_update"`
-			LatestVersion string `json:"latest_version"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil // 忽略解析错误
-	}
-
-	// 检查是否需要更新
-	if result.Data.NeedUpdate && (a.config.AutoUpdate || result.Data.ForceUpdate) {
-		log.Infof("发现新版本 %s，开始更新...", result.Data.LatestVersion)
-		go a.selfUpdate()
-	}
-
-	return nil
-}
-
-func (a *Agent) syncTasksLoop() {
-	ticker := time.NewTicker(time.Duration(a.config.Interval) * time.Second)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		if err := a.syncTasks(); err != nil {
-			log.Warnf("同步任务失败: %v", err)
-		}
-	}
-}
-
-func (a *Agent) syncTasks() error {
-	resp, err := a.doRequest("GET", "/api/agent/tasks", nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("获取任务失败: %s", string(data))
-	}
-
-	var result struct {
-		Code int `json:"code"`
-		Data struct {
-			AgentID uint        `json:"agent_id"`
-			Tasks   []AgentTask `json:"tasks"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
-	}
-
-	a.updateTasks(result.Data.Tasks)
 	return nil
 }
 
@@ -777,6 +913,21 @@ func (a *Agent) updateTasks(tasks []AgentTask) {
 			log.Infof("调度任务 #%d %s (%s)", id, task.Name, task.Schedule)
 		}
 	}
+}
+
+// clearAllTasks 清空所有任务（Agent 被禁用时调用）
+func (a *Agent) clearAllTasks() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	for id, entryID := range a.entryMap {
+		a.cron.Remove(entryID)
+		log.Infof("移除任务 #%d", id)
+	}
+
+	a.entryMap = make(map[uint]cron.EntryID)
+	a.tasks = make(map[uint]*AgentTask)
+	log.Info("所有任务已清空")
 }
 
 func (a *Agent) executeTask(task *AgentTask) {
@@ -831,25 +982,9 @@ func (a *Agent) executeTask(task *AgentTask) {
 		result.ExitCode = 0
 	}
 
-	if err := a.reportResult(result); err != nil {
-		log.Errorf("上报结果失败: %v", err)
-	}
-}
-
-func (a *Agent) reportResult(result *TaskResult) error {
-	resp, err := a.doRequest("POST", "/api/agent/report", result)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("上报失败: %s", string(data))
-	}
-
+	// 使用 WebSocket 上报结果
+	a.sendTaskResult(result)
 	log.Infof("任务 #%d 执行完成 (%s)", result.TaskID, result.Status)
-	return nil
 }
 
 func (a *Agent) doRequest(method, path string, body interface{}) (*http.Response, error) {
