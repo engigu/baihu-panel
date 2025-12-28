@@ -209,16 +209,17 @@ export const api = {
   },
   agents: {
     list: () => request<Agent[]>('/agents'),
-    listPending: () => request<Agent[]>('/agents/pending'),
     getVersion: () => request<{ version: string; platforms: { os: string; arch: string; filename: string }[] }>('/agents/version'),
-    approve: (id: number) => request<Agent>('/agents/' + id + '/approve', { method: 'POST' }),
-    reject: (id: number) => request('/agents/' + id + '/reject', { method: 'POST' }),
     update: (id: number, data: { name: string; description?: string; enabled: boolean }) =>
       request('/agents/' + id, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) => request('/agents/' + id, { method: 'DELETE' }),
-    regenerateToken: (id: number) => request<{ token: string }>('/agents/' + id + '/token', { method: 'POST' }),
     forceUpdate: (id: number) => request('/agents/' + id + '/update', { method: 'POST' }),
-    downloadUrl: (os: string, arch: string) => `${BASE_URL}/agent/download?os=${os}&arch=${arch}`
+    downloadUrl: (os: string, arch: string) => `${BASE_URL}/agent/download?os=${os}&arch=${arch}`,
+    // 令牌管理
+    listRegCodes: () => request<AgentRegCode[]>('/agents/regcodes'),
+    createRegCode: (data: { remark?: string; max_uses?: number; expires_at?: string }) =>
+      request<AgentRegCode>('/agents/regcodes', { method: 'POST', body: JSON.stringify(data) }),
+    deleteRegCode: (id: number) => request('/agents/regcodes/' + id, { method: 'DELETE' })
   }
 }
 
@@ -394,6 +395,7 @@ export interface Agent {
   id: number
   name: string
   token: string
+  machine_id: string
   description: string
   status: string
   last_seen: string
@@ -401,7 +403,20 @@ export interface Agent {
   version: string
   build_time: string
   hostname: string
+  os: string
+  arch: string
   enabled: boolean
   created_at: string
   updated_at: string
+}
+
+export interface AgentRegCode {
+  id: number
+  code: string
+  remark: string
+  max_uses: number
+  used_count: number
+  expires_at: string | null
+  enabled: boolean
+  created_at: string
 }

@@ -3,31 +3,29 @@ import { ref, onMounted, computed, onUnmounted } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { RefreshCw, Trash2, Edit, Copy, Key, Server, Search, Check, X, Download, RotateCw } from 'lucide-vue-next'
-import { api, type Agent } from '@/api'
+import { RefreshCw, Trash2, Edit, Copy, Server, Search, Download, RotateCw, Plus, Ticket, Power, PowerOff } from 'lucide-vue-next'
+import { api, type Agent, type AgentRegCode } from '@/api'
 import { toast } from 'vue-sonner'
 import TextOverflow from '@/components/TextOverflow.vue'
 
 const agents = ref<Agent[]>([])
-const pendingAgents = ref<Agent[]>([])
+const regCodes = ref<AgentRegCode[]>([])
 const loading = ref(false)
 const searchQuery = ref('')
-const activeTab = ref('approved')
+const activeTab = ref('agents')
 const agentVersion = ref('')
 const platforms = ref<{ os: string; arch: string; filename: string }[]>([])
 const showEditDialog = ref(false)
 const showDeleteDialog = ref(false)
-const showTokenDialog = ref(false)
 const showDownloadDialog = ref(false)
+const showRegCodeDialog = ref(false)
 const formData = ref({ name: '', description: '' })
+const regCodeForm = ref({ remark: '', max_uses: 0, expires_at: '' })
 const editingAgent = ref<Agent | null>(null)
 const deletingAgent = ref<Agent | null>(null)
-const currentToken = ref('')
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const filteredAgents = computed(() => {
@@ -40,44 +38,31 @@ const filteredAgents = computed(() => {
   )
 })
 
+// 判断 Agent 是否在线（last_seen 在 2 分钟内）
+function isOnline(agent: Agent): boolean {
+  if (!agent.last_seen) return false
+  const lastSeen = new Date(agent.last_seen)
+  const now = new Date()
+  const diffMs = now.getTime() - lastSeen.getTime()
+  return diffMs < 2 * 60 * 1000 // 2 分钟
+}
+
 async function loadAgents() {
   loading.value = true
   try {
-    const [agentList, pendingList, versionInfo] = await Promise.all([
+    const [agentList, versionInfo, codeList] = await Promise.all([
       api.agents.list(),
-      api.agents.listPending(),
-      api.agents.getVersion()
+      api.agents.getVersion(),
+      api.agents.listRegCodes()
     ])
     agents.value = agentList
-    pendingAgents.value = pendingList
     agentVersion.value = versionInfo.version || ''
     platforms.value = versionInfo.platforms || []
+    regCodes.value = codeList
   } catch {
     toast.error('加载失败')
   } finally {
     loading.value = false
-  }
-}
-
-async function approveAgent(agent: Agent) {
-  try {
-    const approved = await api.agents.approve(agent.id)
-    currentToken.value = approved.token
-    showTokenDialog.value = true
-    await loadAgents()
-    toast.success('已通过审核')
-  } catch (e: unknown) {
-    toast.error((e as Error).message || '操作失败')
-  }
-}
-
-async function rejectAgent(agent: Agent) {
-  try {
-    await api.agents.reject(agent.id)
-    await loadAgents()
-    toast.success('已拒绝')
-  } catch (e: unknown) {
-    toast.error((e as Error).message || '操作失败')
   }
 }
 
@@ -101,8 +86,10 @@ async function updateAgent() {
 
 async function toggleEnabled(agent: Agent) {
   try {
-    await api.agents.update(agent.id, { name: agent.name, description: agent.description, enabled: !agent.enabled })
+    const newEnabled = !agent.enabled
+    await api.agents.update(agent.id, { name: agent.name, description: agent.description, enabled: newEnabled })
     await loadAgents()
+    toast.success(`${agent.name} 已${newEnabled ? '启用' : '禁用'}`)
   } catch (e: unknown) {
     toast.error((e as Error).message || '操作失败')
   }
@@ -125,17 +112,6 @@ async function deleteAgent() {
   }
 }
 
-async function regenerateToken(agent: Agent) {
-  try {
-    const res = await api.agents.regenerateToken(agent.id)
-    currentToken.value = res.token
-    showTokenDialog.value = true
-    toast.success('Token 已重新生成')
-  } catch (e: unknown) {
-    toast.error((e as Error).message || '操作失败')
-  }
-}
-
 async function forceUpdate(agent: Agent) {
   try {
     await api.agents.forceUpdate(agent.id)
@@ -145,9 +121,44 @@ async function forceUpdate(agent: Agent) {
   }
 }
 
-function copyToken() {
-  navigator.clipboard.writeText(currentToken.value)
+function copyRegCode(code: string) {
+  navigator.clipboard.writeText(code)
   toast.success('已复制')
+}
+
+async function createRegCode() {
+  try {
+    await api.agents.createRegCode({
+      remark: regCodeForm.value.remark,
+      max_uses: regCodeForm.value.max_uses,
+      expires_at: regCodeForm.value.expires_at || undefined
+    })
+    showRegCodeDialog.value = false
+    regCodeForm.value = { remark: '', max_uses: 0, expires_at: '' }
+    await loadAgents()
+    toast.success('创建成功')
+  } catch (e: unknown) {
+    toast.error((e as Error).message || '创建失败')
+  }
+}
+
+async function deleteRegCode(id: number) {
+  try {
+    await api.agents.deleteRegCode(id)
+    await loadAgents()
+    toast.success('删除成功')
+  } catch (e: unknown) {
+    toast.error((e as Error).message || '删除失败')
+  }
+}
+
+function isRegCodeExpired(code: AgentRegCode) {
+  if (!code.expires_at) return false
+  return new Date(code.expires_at) < new Date()
+}
+
+function isRegCodeExhausted(code: AgentRegCode) {
+  return code.max_uses > 0 && code.used_count >= code.max_uses
 }
 
 function downloadAgent(os: string, arch: string) {
@@ -194,57 +205,61 @@ onUnmounted(() => {
 
     <Tabs v-model="activeTab">
       <TabsList>
-        <TabsTrigger value="approved">已注册</TabsTrigger>
-        <TabsTrigger value="pending" class="relative">
-          未注册
-          <Badge v-if="pendingAgents.length > 0" variant="destructive" class="ml-1.5 h-5 min-w-5 px-1">{{ pendingAgents.length }}</Badge>
+        <TabsTrigger value="agents">Agent 列表</TabsTrigger>
+        <TabsTrigger value="regcodes">
+          <Ticket class="h-4 w-4 mr-1" />令牌
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="approved" class="mt-4">
+      <TabsContent value="agents" class="mt-4">
         <div class="rounded-lg border bg-card overflow-x-auto">
-          <div class="flex items-center gap-4 px-4 py-2 border-b bg-muted/50 text-sm text-muted-foreground font-medium min-w-[800px]">
+          <div class="flex items-center gap-4 px-4 py-2 border-b bg-muted/50 text-sm text-muted-foreground font-medium min-w-[900px]">
+            <span class="w-6"></span>
             <span class="w-28">名称</span>
-            <span class="w-16 text-center">状态</span>
             <span class="w-24">IP</span>
             <span class="w-24">主机名</span>
             <span class="w-16">版本</span>
             <span class="w-28">构建时间</span>
+            <span class="w-36">心跳时间</span>
             <span class="flex-1">描述</span>
-            <span class="w-14 text-center">启用</span>
             <span class="w-28 text-center">操作</span>
           </div>
-          <div class="divide-y min-w-[800px]">
+          <div class="divide-y min-w-[900px]">
             <div v-if="filteredAgents.length === 0" class="text-center py-8 text-muted-foreground">
               <Server class="h-8 w-8 mx-auto mb-2 opacity-50" />
               {{ searchQuery ? '无匹配结果' : '暂无 Agent' }}
             </div>
             <div v-for="agent in filteredAgents" :key="agent.id" class="flex items-center gap-4 px-4 py-2 hover:bg-muted/50 transition-colors">
-              <span class="w-28 font-medium text-sm truncate">{{ agent.name }}</span>
-              <span class="w-16 flex justify-center">
-                <Badge :variant="agent.status === 'online' ? 'default' : 'secondary'" class="text-xs">{{ agent.status === 'online' ? '在线' : '离线' }}</Badge>
+            <span class="w-6 flex justify-center">
+              <span 
+                class="relative flex h-2.5 w-2.5" 
+                :title="isOnline(agent) ? '在线' : '离线'"
+              >
+                <span v-if="isOnline(agent)" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span :class="isOnline(agent) ? 'bg-green-500' : 'bg-gray-400'" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
               </span>
+            </span>
+              <span class="w-28 font-medium text-sm truncate" :title="agent.machine_id ? '机器ID: ' + agent.machine_id.slice(0, 16) + '...' : ''">{{ agent.name }}</span>
               <span class="w-24 text-sm text-muted-foreground truncate">{{ agent.ip || '-' }}</span>
               <span class="w-24 text-sm text-muted-foreground truncate">{{ agent.hostname || '-' }}</span>
               <span class="w-16 text-sm text-muted-foreground">{{ agent.version || '-' }}</span>
               <span class="w-28 text-sm text-muted-foreground truncate">{{ agent.build_time || '-' }}</span>
+              <span class="w-36 text-sm text-muted-foreground">{{ agent.last_seen || '-' }}</span>
               <span class="flex-1 text-sm text-muted-foreground truncate">
                 <TextOverflow :text="agent.description || '-'" title="描述" />
               </span>
-              <span class="w-14 flex justify-center">
-                <Switch :checked="agent.enabled" @update:checked="toggleEnabled(agent)" />
-              </span>
               <span class="w-28 flex justify-center gap-1">
+                <Button variant="ghost" size="icon" class="h-7 w-7" @click="toggleEnabled(agent)" :title="agent.enabled ? '禁用' : '启用'">
+                  <Power v-if="agent.enabled" class="h-3.5 w-3.5 text-green-600" />
+                  <PowerOff v-else class="h-3.5 w-3.5 text-gray-400" />
+                </Button>
                 <Button variant="ghost" size="icon" class="h-7 w-7" @click="forceUpdate(agent)" title="强制更新">
                   <RotateCw class="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" class="h-7 w-7" @click="regenerateToken(agent)" title="重新生成 Token">
-                  <Key class="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="ghost" size="icon" class="h-7 w-7" @click="openEditDialog(agent)">
+                <Button variant="ghost" size="icon" class="h-7 w-7" @click="openEditDialog(agent)" title="编辑">
                   <Edit class="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive" @click="confirmDelete(agent)">
+                <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive" @click="confirmDelete(agent)" title="删除">
                   <Trash2 class="h-3.5 w-3.5" />
                 </Button>
               </span>
@@ -253,32 +268,45 @@ onUnmounted(() => {
         </div>
       </TabsContent>
 
-      <TabsContent value="pending" class="mt-4">
+      <TabsContent value="regcodes" class="mt-4">
         <div class="rounded-lg border bg-card overflow-x-auto">
-          <div class="flex items-center gap-4 px-4 py-2 border-b bg-muted/50 text-sm text-muted-foreground font-medium min-w-[500px]">
-            <span class="w-32">名称</span>
-            <span class="w-28">IP</span>
-            <span class="w-28">主机名</span>
-            <span class="w-20">版本</span>
-            <span class="flex-1">注册时间</span>
-            <span class="w-24 text-center">操作</span>
+          <div class="flex items-center gap-4 px-4 py-2 border-b bg-muted/50 text-sm text-muted-foreground font-medium min-w-[800px]">
+            <span class="w-6"></span>
+            <span class="w-[420px]">令牌</span>
+            <span class="w-32">备注</span>
+            <span class="w-20 text-center">使用次数</span>
+            <span class="flex-1">过期时间</span>
+            <span class="w-20 flex justify-center">
+              <Button size="sm" class="h-7" @click="showRegCodeDialog = true">
+                <Plus class="h-3.5 w-3.5 mr-1" />生成
+              </Button>
+            </span>
           </div>
-          <div class="divide-y min-w-[500px]">
-            <div v-if="pendingAgents.length === 0" class="text-center py-8 text-muted-foreground">
-              <Server class="h-8 w-8 mx-auto mb-2 opacity-50" />暂无未注册的 Agent
+          <div class="divide-y min-w-[800px]">
+            <div v-if="regCodes.length === 0" class="text-center py-8 text-muted-foreground">
+              <Ticket class="h-8 w-8 mx-auto mb-2 opacity-50" />暂无令牌
             </div>
-            <div v-for="agent in pendingAgents" :key="agent.id" class="flex items-center gap-4 px-4 py-2 hover:bg-muted/50 transition-colors">
-              <span class="w-32 font-medium text-sm truncate">{{ agent.name }}</span>
-              <span class="w-28 text-sm text-muted-foreground truncate">{{ agent.ip || '-' }}</span>
-              <span class="w-28 text-sm text-muted-foreground truncate">{{ agent.hostname || '-' }}</span>
-              <span class="w-20 text-sm text-muted-foreground">{{ agent.version || '-' }}</span>
-              <span class="flex-1 text-sm text-muted-foreground">{{ agent.created_at }}</span>
-              <span class="w-24 flex justify-center gap-1">
-                <Button variant="ghost" size="icon" class="h-7 w-7 text-green-600" @click="approveAgent(agent)" title="通过">
-                  <Check class="h-4 w-4" />
+            <div v-for="code in regCodes" :key="code.id" class="flex items-center gap-4 px-4 py-2 hover:bg-muted/50 transition-colors">
+              <span class="w-6 flex justify-center">
+                <span class="relative flex h-2.5 w-2.5">
+                  <span v-if="!isRegCodeExpired(code) && !isRegCodeExhausted(code)" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span :class="!isRegCodeExpired(code) && !isRegCodeExhausted(code) ? 'bg-green-500' : 'bg-gray-400'" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
+                </span>
+              </span>
+              <code class="w-[420px] font-mono text-xs bg-muted px-2 py-0.5 rounded truncate">{{ code.code }}</code>
+              <span class="w-32 text-sm text-muted-foreground truncate">{{ code.remark || '-' }}</span>
+              <span class="w-20 text-sm text-muted-foreground text-center">
+                {{ code.used_count }}/{{ code.max_uses === 0 ? '∞' : code.max_uses }}
+              </span>
+              <span class="flex-1 text-sm text-muted-foreground">
+                {{ code.expires_at || '永不过期' }}
+              </span>
+              <span class="w-20 flex justify-center gap-1">
+                <Button variant="ghost" size="icon" class="h-7 w-7" @click="copyRegCode(code.code)" title="复制">
+                  <Copy class="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive" @click="rejectAgent(agent)" title="拒绝">
-                  <X class="h-4 w-4" />
+                <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive" @click="deleteRegCode(code.id)" title="删除">
+                  <Trash2 class="h-3.5 w-3.5" />
                 </Button>
               </span>
             </div>
@@ -324,27 +352,6 @@ onUnmounted(() => {
       </AlertDialogContent>
     </AlertDialog>
 
-    <!-- Token 对话框 -->
-    <Dialog v-model:open="showTokenDialog">
-      <DialogContent class="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Agent Token</DialogTitle>
-          <DialogDescription>Token 已下发给 Agent，此处仅供查看</DialogDescription>
-        </DialogHeader>
-        <div class="py-4">
-          <div class="flex items-center gap-2">
-            <code class="flex-1 bg-muted px-3 py-2 rounded text-xs font-mono break-all">{{ currentToken }}</code>
-            <Button variant="outline" size="icon" class="shrink-0" @click="copyToken">
-              <Copy class="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button @click="showTokenDialog = false">关闭</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
     <!-- 下载对话框 -->
     <Dialog v-model:open="showDownloadDialog">
       <DialogContent class="sm:max-w-[500px]">
@@ -354,7 +361,7 @@ onUnmounted(() => {
         </DialogHeader>
         <div class="py-4 space-y-4">
           <div v-if="platforms.length === 0" class="text-center py-4 text-muted-foreground">
-            暂无可用的 Agent 程序，请先构建并上传到 data/agent 目录
+            暂无可用的 Agent 程序
           </div>
           <div v-else class="grid gap-2">
             <Button v-for="p in platforms" :key="p.filename" variant="outline" class="justify-start" @click="downloadAgent(p.os, p.arch)">
@@ -366,14 +373,42 @@ onUnmounted(() => {
             <div class="text-xs text-muted-foreground space-y-1.5">
               <p>1. 下载对应平台的 Agent 压缩包并解压</p>
               <p>2. 修改 config.example.ini 为 config.ini，设置 server_url</p>
-              <p>3. 运行 <code class="bg-muted px-1 rounded">./baihu-agent start</code> 启动</p>
-              <p>4. 在本页面"未注册"标签中审核通过</p>
+              <p>3. 在"令牌"标签页生成令牌，填入 config.ini 的 token</p>
+              <p>4. 运行 <code class="bg-muted px-1 rounded">./baihu-agent start</code> 启动</p>
               <p>5. 可选: <code class="bg-muted px-1 rounded">./baihu-agent install</code> 设置开机自启</p>
             </div>
           </div>
         </div>
         <DialogFooter>
           <Button @click="showDownloadDialog = false">关闭</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 创建令牌对话框 -->
+    <Dialog v-model:open="showRegCodeDialog">
+      <DialogContent class="sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle>生成令牌</DialogTitle>
+          <DialogDescription>Agent 使用令牌可直接注册，无需审核</DialogDescription>
+        </DialogHeader>
+        <div class="grid gap-4 py-4">
+          <div class="grid grid-cols-4 items-center gap-4">
+            <Label class="text-right">备注</Label>
+            <Input v-model="regCodeForm.remark" class="col-span-3" placeholder="可选" />
+          </div>
+          <div class="grid grid-cols-4 items-center gap-4">
+            <Label class="text-right">使用次数</Label>
+            <Input v-model.number="regCodeForm.max_uses" type="number" min="0" class="col-span-3" placeholder="0 表示无限制" />
+          </div>
+          <div class="grid grid-cols-4 items-center gap-4">
+            <Label class="text-right">过期时间</Label>
+            <Input v-model="regCodeForm.expires_at" type="datetime-local" class="col-span-3" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="showRegCodeDialog = false">取消</Button>
+          <Button @click="createRegCode">生成</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -10,9 +10,10 @@ import (
 type Agent struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
 	Name        string         `json:"name" gorm:"size:100;not null"`           // Agent 名称
-	Token       string         `json:"token" gorm:"size:64;uniqueIndex"`        // 认证 Token
+	Token       string         `json:"token" gorm:"size:64;index"`              // 认证 Token（可重复使用）
+	MachineID   string         `json:"machine_id" gorm:"size:64;uniqueIndex"`   // 机器识别码（唯一）
 	Description string         `json:"description" gorm:"size:255"`             // 描述
-	Status      string         `json:"status" gorm:"size:20;default:'pending'"` // 状态: pending(待审核), online, offline
+	Status      string         `json:"status" gorm:"size:20;default:'pending'"` // 状态: pending(待审核), online, offline, blocked(拉黑)
 	LastSeen    *LocalTime     `json:"last_seen"`                               // 最后心跳时间
 	IP          string         `json:"ip" gorm:"size:45"`                       // Agent IP 地址
 	Version     string         `json:"version" gorm:"size:20"`                  // Agent 版本
@@ -29,6 +30,24 @@ type Agent struct {
 
 func (Agent) TableName() string {
 	return constant.TablePrefix + "agents"
+}
+
+// AgentRegCode 注册码
+type AgentRegCode struct {
+	ID        uint           `json:"id" gorm:"primaryKey"`
+	Code      string         `json:"code" gorm:"size:64;uniqueIndex;not null"` // 令牌
+	Remark    string         `json:"remark" gorm:"size:255"`                   // 备注
+	MaxUses   int            `json:"max_uses" gorm:"default:0"`                // 最大使用次数，0 表示无限制
+	UsedCount int            `json:"used_count" gorm:"default:0"`              // 已使用次数
+	ExpiresAt *LocalTime     `json:"expires_at"`                               // 过期时间，null 表示永不过期
+	Enabled   bool           `json:"enabled" gorm:"default:true"`              // 是否启用
+	CreatedAt LocalTime      `json:"created_at"`
+	UpdatedAt LocalTime      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
+func (AgentRegCode) TableName() string {
+	return constant.TablePrefix + "tokens"
 }
 
 // AgentTask Agent 任务配置（用于下发给 Agent）
@@ -58,7 +77,10 @@ type AgentTaskResult struct {
 
 // AgentRegisterRequest Agent 注册请求
 type AgentRegisterRequest struct {
-	Name     string `json:"name"`
-	Hostname string `json:"hostname"`
-	Version  string `json:"version"`
+	Name      string `json:"name"`
+	Hostname  string `json:"hostname"`
+	Version   string `json:"version"`
+	BuildTime string `json:"build_time"`
+	Token     string `json:"token"`      // 注册令牌
+	MachineID string `json:"machine_id"` // 机器识别码
 }

@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Badge } from '@/components/ui/badge'
 import DirTreeSelect from '@/components/DirTreeSelect.vue'
 import { Plus, ChevronDown, X } from 'lucide-vue-next'
-import { api, type Task, type EnvVar } from '@/api'
+import { api, type Task, type EnvVar, type Agent } from '@/api'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{
@@ -39,7 +39,9 @@ const form = ref<Partial<Task>>({})
 const cleanType = ref('none')
 const cleanKeep = ref(30)
 const allEnvVars = ref<EnvVar[]>([])
+const allAgents = ref<Agent[]>([])
 const selectedEnvIds = ref<number[]>([])
+const selectedAgentId = ref<string>('local')
 const envSearchQuery = ref('')
 
 const cleanConfig = computed(() => {
@@ -59,6 +61,10 @@ const selectedEnvs = computed(() => {
   return selectedEnvIds.value
     .map(id => allEnvVars.value.find(e => e.id === id))
     .filter((e): e is EnvVar => e !== undefined)
+})
+
+const onlineAgents = computed(() => {
+  return allAgents.value.filter(a => a.enabled)
 })
 
 watch(() => props.open, async (val) => {
@@ -84,13 +90,24 @@ watch(() => props.open, async (val) => {
     } else {
       selectedEnvIds.value = []
     }
+    // 解析 Agent
+    selectedAgentId.value = props.task?.agent_id ? String(props.task.agent_id) : 'local'
     envSearchQuery.value = ''
-    // 加载环境变量
-    try {
-      allEnvVars.value = await api.env.all()
-    } catch { /* ignore */ }
+    // 加载数据
+    await loadData()
   }
 })
+
+async function loadData() {
+  try {
+    const [envs, agents] = await Promise.all([
+      api.env.all(),
+      api.agents.list()
+    ])
+    allEnvVars.value = envs
+    allAgents.value = agents
+  } catch { /* ignore */ }
+}
 
 function addEnv(id: number) {
   if (!selectedEnvIds.value.includes(id)) {
@@ -109,6 +126,7 @@ async function save() {
     form.value.clean_config = cleanConfig.value
     form.value.envs = selectedEnvIds.value.join(',')
     form.value.type = 'task'
+    form.value.agent_id = selectedAgentId.value === 'local' ? null : Number(selectedAgentId.value)
     if (props.isEdit && form.value.id) {
       await api.tasks.update(form.value.id, form.value)
       toast.success('任务已更新')
@@ -140,7 +158,24 @@ async function save() {
         <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-3">
           <Label class="sm:text-right text-sm">工作目录</Label>
           <div class="sm:col-span-3">
-            <DirTreeSelect :model-value="form.work_dir || ''" @update:model-value="v => form.work_dir = v" />
+            <DirTreeSelect v-if="selectedAgentId === 'local'" :model-value="form.work_dir || ''" @update:model-value="v => form.work_dir = v" />
+            <Input v-else v-model="form.work_dir" placeholder="Agent 上的工作目录（可选）" class="h-8 text-sm" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-3">
+          <Label class="sm:text-right text-sm">执行位置</Label>
+          <div class="sm:col-span-3">
+            <Select v-model="selectedAgentId">
+              <SelectTrigger class="h-8 text-sm">
+                <SelectValue placeholder="选择执行位置" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="local">本地执行</SelectItem>
+                <SelectItem v-for="agent in onlineAgents" :key="agent.id" :value="String(agent.id)">
+                  {{ agent.name }} ({{ agent.status === 'online' ? '在线' : '离线' }})
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-3">

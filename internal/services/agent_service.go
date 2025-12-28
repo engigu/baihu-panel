@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // AgentService Agent 服务
@@ -29,75 +31,171 @@ func generateToken() string {
 	return hex.EncodeToString(bytes)
 }
 
-// Register Agent 注册（进入待审核状态）
-func (s *AgentService) Register(req *models.AgentRegisterRequest, ip string) (*models.Agent, error) {
-	// 检查是否已存在同名待审核的 Agent
-	var existing models.Agent
-	if err := database.DB.Where("name = ? AND status = ?", req.Name, "pending").First(&existing).Error; err == nil {
-		// 更新现有记录
-		now := models.LocalTime(time.Now())
-		database.DB.Model(&existing).Updates(map[string]interface{}{
-			"hostname":  req.Hostname,
-			"version":   req.Version,
-			"ip":        ip,
-			"last_seen": now,
-		})
-		return &existing, nil
+// generateRegCode 生成令牌（64位，与认证 Token 相同）
+func generateRegCode() string {
+	bytes := make([]byte, 32)
+	rand.Read(bytes)
+	return hex.EncodeToString(bytes)
+}
+
+// ========== 注册码管理 ==========
+
+// CreateRegCode 创建令牌（同时创建 Agent 记录）
+func (s *AgentService) CreateRegCode(remark string, maxUses int, expiresAt *time.Time) (*models.AgentRegCode, error) {
+	var expires *models.LocalTime
+	if expiresAt != nil {
+		t := models.LocalTime(*expiresAt)
+		expires = &t
 	}
 
-	// 创建新的待审核 Agent
+	token := generateRegCode()
+
+	regCode := &models.AgentRegCode{
+		Code:      token,
+		Remark:    remark,
+		MaxUses:   maxUses,
+		ExpiresAt: expires,
+		Enabled:   true,
+	}
+
+	if err := database.DB.Create(regCode).Error; err != nil {
+		return nil, err
+	}
+
+	logger.Infof("[Agent] 创建令牌: %s (max_uses=%d)", token[:8]+"...", maxUses)
+	return regCode, nil
+}
+
+// ListRegCodes 获取注册码列表
+func (s *AgentService) ListRegCodes() []models.AgentRegCode {
+	var codes []models.AgentRegCode
+	database.DB.Order("id DESC").Find(&codes)
+	return codes
+}
+
+// DeleteRegCode 删除注册码
+func (s *AgentService) DeleteRegCode(id uint) error {
+	return database.DB.Delete(&models.AgentRegCode{}, id).Error
+}
+
+// ValidateRegCode 验证注册码
+func (s *AgentService) ValidateRegCode(code string) (*models.AgentRegCode, error) {
+	var regCode models.AgentRegCode
+	if err := database.DB.Where("code = ?", code).First(&regCode).Error; err != nil {
+		return nil, &ServiceError{Message: "无效的注册码"}
+	}
+
+	if !regCode.Enabled {
+		return nil, &ServiceError{Message: "注册码已禁用"}
+	}
+
+	// 检查使用次数
+	if regCode.MaxUses > 0 && regCode.UsedCount >= regCode.MaxUses {
+		return nil, &ServiceError{Message: "注册码已达到使用上限"}
+	}
+
+	// 检查过期时间
+	if regCode.ExpiresAt != nil && time.Time(*regCode.ExpiresAt).Before(time.Now()) {
+		return nil, &ServiceError{Message: "注册码已过期"}
+	}
+
+	return &regCode, nil
+}
+
+// UseRegCode 使用注册码（增加使用计数）
+func (s *AgentService) UseRegCode(id uint) {
+	database.DB.Model(&models.AgentRegCode{}).Where("id = ?", id).UpdateColumn("used_count", gorm.Expr("used_count + 1"))
+}
+
+// ========== Agent 注册 ==========
+
+// RegisterByToken 通过令牌注册 Agent（首次 WebSocket 连接时调用）
+// 返回: agent, isNewAgent, error
+func (s *AgentService) RegisterByToken(token string, machineID string, ip string) (*models.Agent, bool, error) {
+	// 验证令牌
+	regCode, err := s.ValidateRegCode(token)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// 如果提供了 machine_id，先检查是否已存在
+	if machineID != "" {
+		var existing models.Agent
+		if err := database.DB.Where("machine_id = ?", machineID).First(&existing).Error; err == nil {
+			// 已存在，更新 token 和状态，复用已有 Agent
+			now := models.LocalTime(time.Now())
+			database.DB.Model(&existing).Updates(map[string]interface{}{
+				"token":    token,
+				"ip":       ip,
+				"status":   "online",
+				"last_seen": now,
+			})
+			s.UseRegCode(regCode.ID)
+			logger.Infof("[Agent] Agent #%d 通过 machine_id 复用 (%s)", existing.ID, machineID[:8]+"...")
+			return &existing, false, nil
+		}
+	}
+
+	// 创建 Agent，使用令牌作为认证 Token
 	now := models.LocalTime(time.Now())
 	agent := &models.Agent{
-		Name:     req.Name,
-		Hostname: req.Hostname,
-		Version:  req.Version,
-		IP:       ip,
-		Status:   "pending",
-		LastSeen: &now,
-		Enabled:  true,
+		Name:      fmt.Sprintf("agent-%d", time.Now().Unix()),
+		Token:     token,
+		MachineID: machineID,
+		IP:        ip,
+		Status:    "online",
+		LastSeen:  &now,
+		Enabled:   true,
 	}
 
 	if err := database.DB.Create(agent).Error; err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	logger.Infof("[Agent] 新 Agent 注册: %s (%s)", req.Name, ip)
-	return agent, nil
+	s.UseRegCode(regCode.ID)
+	logger.Infof("[Agent] Agent 通过令牌注册: #%d (%s)", agent.ID, ip)
+	return agent, true, nil
 }
 
-// Approve 审核通过 Agent，生成 Token
-func (s *AgentService) Approve(id uint) (*models.Agent, error) {
-	agent := s.GetByID(id)
-	if agent == nil {
-		return nil, &ServiceError{Message: "Agent 不存在"}
+// Register Agent 注册（必须使用令牌）- 保留兼容旧版本
+func (s *AgentService) Register(req *models.AgentRegisterRequest, ip string) (*models.Agent, string, error) {
+	// 必须提供令牌
+	if req.Token == "" {
+		return nil, "", &ServiceError{Message: "缺少注册令牌"}
 	}
 
-	if agent.Status != "pending" {
-		return nil, &ServiceError{Message: "Agent 状态不是待审核"}
+	regCode, err := s.ValidateRegCode(req.Token)
+	if err != nil {
+		return nil, "", err
 	}
 
-	token := generateToken()
+	// 检查是否已存在同名 Agent
+	var existing models.Agent
+	if err := database.DB.Where("name = ?", req.Name).First(&existing).Error; err == nil {
+		return nil, "", &ServiceError{Message: "Agent 名称已存在"}
+	}
+
+	// 创建新 Agent，使用令牌作为认证 Token
 	now := models.LocalTime(time.Now())
-
-	if err := database.DB.Model(agent).Updates(map[string]interface{}{
-		"token":     token,
-		"status":    "online",
-		"last_seen": now,
-	}).Error; err != nil {
-		return nil, err
+	agent := &models.Agent{
+		Name:      req.Name,
+		Token:     req.Token,
+		Hostname:  req.Hostname,
+		Version:   req.Version,
+		BuildTime: req.BuildTime,
+		IP:        ip,
+		Status:    "online",
+		LastSeen:  &now,
+		Enabled:   true,
 	}
 
-	agent.Token = token
-	agent.Status = "online"
-	agent.LastSeen = &now
+	if err := database.DB.Create(agent).Error; err != nil {
+		return nil, "", err
+	}
 
-	logger.Infof("[Agent] Agent 已审核通过: %s (#%d)", agent.Name, agent.ID)
-	return agent, nil
-}
-
-// Reject 拒绝 Agent
-func (s *AgentService) Reject(id uint) error {
-	return database.DB.Delete(&models.Agent{}, id).Error
+	s.UseRegCode(regCode.ID)
+	logger.Infof("[Agent] Agent 注册成功: %s (%s)", req.Name, ip)
+	return agent, req.Token, nil
 }
 
 // Update 更新 Agent
@@ -109,7 +207,7 @@ func (s *AgentService) Update(id uint, name, description string, enabled bool) e
 	}).Error
 }
 
-// Delete 删除 Agent
+// Delete 删除 Agent（物理删除）
 func (s *AgentService) Delete(id uint) error {
 	// 检查是否有关联任务
 	var count int64
@@ -118,7 +216,7 @@ func (s *AgentService) Delete(id uint) error {
 		return &ServiceError{Message: "该 Agent 下还有关联任务，无法删除"}
 	}
 
-	return database.DB.Delete(&models.Agent{}, id).Error
+	return database.DB.Unscoped().Delete(&models.Agent{}, id).Error
 }
 
 // GetByID 根据 ID 获取 Agent
@@ -139,27 +237,16 @@ func (s *AgentService) GetByToken(token string) *models.Agent {
 	return &agent
 }
 
-// List 获取已审核的 Agent 列表
+// List 获取 Agent 列表
 func (s *AgentService) List() []models.Agent {
 	var agents []models.Agent
-	database.DB.Where("status != ?", "pending").Order("id DESC").Find(&agents)
+	database.DB.Order("id DESC").Find(&agents)
 	return agents
 }
 
-// ListPending 获取待审核的 Agent 列表
-func (s *AgentService) ListPending() []models.Agent {
-	var agents []models.Agent
-	database.DB.Where("status = ?", "pending").Order("id DESC").Find(&agents)
-	return agents
-}
-
-// RegenerateToken 重新生成 Token
+// RegenerateToken 重新生成 Token - 已废弃，保留空实现避免路由错误
 func (s *AgentService) RegenerateToken(id uint) (string, error) {
-	newToken := generateToken()
-	if err := database.DB.Model(&models.Agent{}).Where("id = ?", id).Update("token", newToken).Error; err != nil {
-		return "", err
-	}
-	return newToken, nil
+	return "", &ServiceError{Message: "此功能已禁用"}
 }
 
 // Heartbeat Agent 心跳
@@ -207,20 +294,6 @@ func (s *AgentService) Heartbeat(token, ip, version, buildTime, hostname, osType
 	agent.Arch = arch
 
 	return agent, nil
-}
-
-// CheckPendingAgent 检查待审核 Agent 的状态（用于 Agent 轮询）
-func (s *AgentService) CheckPendingAgent(name, ip string) (*models.Agent, error) {
-	var agent models.Agent
-	if err := database.DB.Where("name = ? AND ip = ?", name, ip).First(&agent).Error; err != nil {
-		return nil, &ServiceError{Message: "Agent 未注册"}
-	}
-
-	// 更新最后心跳时间
-	now := models.LocalTime(time.Now())
-	database.DB.Model(&agent).Update("last_seen", now)
-
-	return &agent, nil
 }
 
 // GetTasks 获取 Agent 的任务列表

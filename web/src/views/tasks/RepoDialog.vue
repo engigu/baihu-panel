@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import DirTreeSelect from '@/components/DirTreeSelect.vue'
-import { api, type Task, type RepoConfig } from '@/api'
+import { api, type Task, type RepoConfig, type Agent } from '@/api'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{
@@ -54,13 +54,19 @@ const repoConfig = ref<RepoConfig>({
 })
 const cleanType = ref('none')
 const cleanKeep = ref(30)
+const allAgents = ref<Agent[]>([])
+const selectedAgentId = ref<string>('local')
 
 const cleanConfig = computed(() => {
   if (!cleanType.value || cleanType.value === 'none' || cleanKeep.value <= 0) return ''
   return JSON.stringify({ type: cleanType.value, keep: cleanKeep.value })
 })
 
-watch(() => props.open, (val) => {
+const onlineAgents = computed(() => {
+  return allAgents.value.filter(a => a.enabled)
+})
+
+watch(() => props.open, async (val) => {
   if (val) {
     form.value = { ...props.task }
     // 解析清理配置
@@ -87,8 +93,18 @@ watch(() => props.open, (val) => {
     } else {
       repoConfig.value = { source_type: 'git', source_url: '', target_path: '', branch: '', sparse_path: '', single_file: false, proxy: 'none', proxy_url: '', auth_token: '' }
     }
+    // 解析 Agent
+    selectedAgentId.value = props.task?.agent_id ? String(props.task.agent_id) : 'local'
+    // 加载 Agent 列表
+    await loadAgents()
   }
 })
+
+async function loadAgents() {
+  try {
+    allAgents.value = await api.agents.list()
+  } catch { /* ignore */ }
+}
 
 async function save() {
   try {
@@ -96,6 +112,7 @@ async function save() {
     form.value.type = 'repo'
     form.value.config = JSON.stringify(repoConfig.value)
     form.value.command = `[${repoConfig.value.source_type}] ${repoConfig.value.source_url}`
+    form.value.agent_id = selectedAgentId.value === 'local' ? null : Number(selectedAgentId.value)
     if (props.isEdit && form.value.id) {
       await api.tasks.update(form.value.id, form.value)
       toast.success('同步任务已更新')
@@ -139,7 +156,24 @@ async function save() {
         <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-3">
           <Label class="sm:text-right text-sm">目标路径</Label>
           <div class="sm:col-span-3">
-            <DirTreeSelect :model-value="repoConfig.target_path || ''" @update:model-value="v => repoConfig.target_path = v" />
+            <DirTreeSelect v-if="selectedAgentId === 'local'" :model-value="repoConfig.target_path || ''" @update:model-value="v => repoConfig.target_path = v" />
+            <Input v-else v-model="repoConfig.target_path" placeholder="Agent 上的目标路径" class="h-8 text-sm" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-3">
+          <Label class="sm:text-right text-sm">执行位置</Label>
+          <div class="sm:col-span-3">
+            <Select v-model="selectedAgentId">
+              <SelectTrigger class="h-8 text-sm">
+                <SelectValue placeholder="选择执行位置" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="local">本地执行</SelectItem>
+                <SelectItem v-for="agent in onlineAgents" :key="agent.id" :value="String(agent.id)">
+                  {{ agent.name }} ({{ agent.status === 'online' ? '在线' : '离线' }})
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div v-if="repoConfig.source_type === 'git'" class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-3">
