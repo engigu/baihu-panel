@@ -18,16 +18,32 @@ COPY web/ ./
 RUN npm run build
 
 # ================================
+# Stage 0: Generate build info
+# ================================
+FROM alpine:3.19 AS build-info
+
+ARG VERSION
+ARG BUILD_TIME
+
+# 生成版本信息文件，确保主服务和 Agent 使用相同的值
+RUN VERSION_VAL="${VERSION:-dev-$(date '+%Y%m%d%H%M%S')}" && \
+    BUILD_TIME_VAL="${BUILD_TIME:-$(date '+%Y-%m-%d %H:%M:%S')}" && \
+    mkdir -p /build-info && \
+    echo "${VERSION_VAL}" > /build-info/version.txt && \
+    echo "${BUILD_TIME_VAL}" > /build-info/build_time.txt
+
+# ================================
 # Stage 2: Build backend
 # ================================
 FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend-builder
 
 ARG TARGETOS
 ARG TARGETARCH
-ARG VERSION
-ARG BUILD_TIME
 
 WORKDIR /app
+
+# Copy build info
+COPY --from=build-info /build-info /build-info
 
 # Go mod files
 COPY go.mod go.sum ./
@@ -39,9 +55,9 @@ COPY . .
 # Copy frontend dist
 COPY --from=frontend-builder /app/web/dist ./internal/static/dist
 
-# Build Go binary - 如果 VERSION/BUILD_TIME 为空则使用默认值
-RUN VERSION_VAL="${VERSION:-dev-$(date '+%Y%m%d%H%M%S')}" && \
-    BUILD_TIME_VAL="${BUILD_TIME:-$(date '+%Y-%m-%d %H:%M:%S')}" && \
+# Build Go binary
+RUN VERSION_VAL=$(cat /build-info/version.txt) && \
+    BUILD_TIME_VAL=$(cat /build-info/build_time.txt) && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w -X baihu/internal/constant.Version=${VERSION_VAL} -X 'baihu/internal/constant.BuildTime=${BUILD_TIME_VAL}'" \
     -o baihu .
@@ -51,10 +67,10 @@ RUN VERSION_VAL="${VERSION:-dev-$(date '+%Y%m%d%H%M%S')}" && \
 # ================================
 FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS agent-builder
 
-ARG VERSION
-ARG BUILD_TIME
-
 WORKDIR /app
+
+# Copy build info
+COPY --from=build-info /build-info /build-info
 
 # Copy agent source and config example
 COPY agent/ ./agent/
@@ -63,26 +79,14 @@ COPY agent/ ./agent/
 WORKDIR /app/agent
 RUN go env -w GOPROXY=https://goproxy.cn,direct && go mod download
 
-# Build agent for all platforms and package as tar.gz (sequential to avoid file conflicts)
-RUN VERSION_VAL="${VERSION:-dev-$(date '+%Y%m%d%H%M%S')}" && \
-    BUILD_TIME_VAL="${BUILD_TIME:-$(date '+%Y-%m-%d %H:%M:%S')}" && \
+# Build agent for all platforms and package as tar.gz
+RUN VERSION_VAL=$(cat /build-info/version.txt) && \
+    BUILD_TIME_VAL=$(cat /build-info/build_time.txt) && \
     mkdir -p /opt/agent && \
     echo "${VERSION_VAL}" > /opt/agent/version.txt && \
     # Linux amd64
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION_VAL}' -X 'main.BuildTime=${BUILD_TIME_VAL}'" -o baihu-agent . && \
     tar -czvf /opt/agent/baihu-agent-linux-amd64.tar.gz baihu-agent config.example.ini && rm baihu-agent && \
-    # Linux arm64
-    # CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=${VERSION_VAL}' -X 'main.BuildTime=${BUILD_TIME_VAL}'" -o baihu-agent . && \
-    # tar -czvf /opt/agent/baihu-agent-linux-arm64.tar.gz baihu-agent config.example.ini && rm baihu-agent && \
-    # # Windows amd64
-    # CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION_VAL}' -X 'main.BuildTime=${BUILD_TIME_VAL}'" -o baihu-agent.exe . && \
-    # tar -czvf /opt/agent/baihu-agent-windows-amd64.tar.gz baihu-agent.exe config.example.ini && rm baihu-agent.exe && \
-    # # Darwin amd64
-    # CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION_VAL}' -X 'main.BuildTime=${BUILD_TIME_VAL}'" -o baihu-agent . && \
-    # tar -czvf /opt/agent/baihu-agent-darwin-amd64.tar.gz baihu-agent config.example.ini && rm baihu-agent && \
-    # # Darwin arm64
-    # CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=${VERSION_VAL}' -X 'main.BuildTime=${BUILD_TIME_VAL}'" -o baihu-agent . && \
-    # tar -czvf /opt/agent/baihu-agent-darwin-arm64.tar.gz baihu-agent config.example.ini && rm baihu-agent
     echo "Agent build completed"
 # ================================
 # Stage 4: Final image
