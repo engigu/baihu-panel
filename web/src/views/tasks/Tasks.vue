@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { Button } from '@/components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
 import TaskDialog from './TaskDialog.vue'
 import RepoDialog from './RepoDialog.vue'
-import { Plus, Play, Pencil, Trash2, Search, ScrollText, GitBranch, Terminal, Server, Monitor } from 'lucide-vue-next'
+import { Plus, Play, Pencil, Trash2, Search, ScrollText, GitBranch, Terminal, Server, Monitor, X } from 'lucide-vue-next'
 import { api, type Task, type Agent } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import TextOverflow from '@/components/TextOverflow.vue'
 
 const router = useRouter()
+const route = useRoute()
 const { pageSize } = useSiteSettings()
 
 const tasks = ref<Task[]>([])
@@ -26,6 +27,7 @@ const showDeleteDialog = ref(false)
 const deleteTaskId = ref<number | null>(null)
 
 const filterName = ref('')
+const filterAgentId = ref<number | null>(null)
 const currentPage = ref(1)
 const total = ref(0)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
@@ -35,6 +37,13 @@ const agentMap = computed(() => {
   const map: Record<number, Agent> = {}
   agents.value.forEach(a => { map[a.id] = a })
   return map
+})
+
+// 当前筛选的 Agent 名称
+const filterAgentName = computed(() => {
+  if (!filterAgentId.value) return ''
+  const agent = agentMap.value[filterAgentId.value]
+  return agent ? agent.name : `Agent #${filterAgentId.value}`
 })
 
 // 获取任务执行位置名称
@@ -53,7 +62,12 @@ function getExecutorStatus(task: Task): 'local' | 'online' | 'offline' {
 
 async function loadTasks() {
   try {
-    const res = await api.tasks.list({ page: currentPage.value, page_size: pageSize.value, name: filterName.value || undefined })
+    const res = await api.tasks.list({ 
+      page: currentPage.value, 
+      page_size: pageSize.value, 
+      name: filterName.value || undefined,
+      agent_id: filterAgentId.value || undefined
+    })
     tasks.value = res.data
     total.value = res.total
   } catch { toast.error('加载任务失败') }
@@ -75,6 +89,13 @@ function handleSearch() {
 
 function handlePageChange(page: number) {
   currentPage.value = page
+  loadTasks()
+}
+
+function clearAgentFilter() {
+  filterAgentId.value = null
+  router.replace({ query: {} })
+  currentPage.value = 1
   loadTasks()
 }
 
@@ -136,9 +157,24 @@ function getTaskTypeTitle(type: string) {
   return type === 'repo' ? '仓库同步' : '普通任务'
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 先加载 agents，再处理 URL 参数
+  await loadAgents()
+  
+  // 从 URL 参数读取 agent_id
+  const agentIdParam = route.query.agent_id
+  if (agentIdParam) {
+    filterAgentId.value = Number(agentIdParam)
+  }
+  
   loadTasks()
-  loadAgents()
+})
+
+// 监听路由参数变化
+watch(() => route.query.agent_id, (newVal) => {
+  filterAgentId.value = newVal ? Number(newVal) : null
+  currentPage.value = 1
+  loadTasks()
 })
 </script>
 
@@ -153,6 +189,11 @@ onMounted(() => {
         <div class="relative flex-1 sm:flex-none">
           <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input v-model="filterName" placeholder="搜索任务..." class="h-9 pl-9 w-full sm:w-56 text-sm" @input="handleSearch" />
+        </div>
+        <div v-if="filterAgentId" class="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-sm">
+          <Server class="h-3.5 w-3.5" />
+          <span>{{ filterAgentName }}</span>
+          <X class="h-3.5 w-3.5 cursor-pointer hover:text-destructive" @click="clearAgentFilter" />
         </div>
         <Button variant="outline" @click="openCreateRepo" class="shrink-0">
           <GitBranch class="h-4 w-4 sm:mr-2" /> <span class="hidden sm:inline">仓库同步</span>

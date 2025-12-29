@@ -6,10 +6,13 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { RefreshCw, Trash2, Edit, Copy, Server, Search, Download, RotateCw, Plus, Ticket, Power, PowerOff } from 'lucide-vue-next'
+import { RefreshCw, Trash2, Edit, Copy, Server, Search, Download, RotateCw, Plus, Ticket, Power, PowerOff, ListTodo } from 'lucide-vue-next'
 import { api, type Agent, type AgentRegCode } from '@/api'
 import { toast } from 'vue-sonner'
+import { useRouter } from 'vue-router'
 import TextOverflow from '@/components/TextOverflow.vue'
+
+const router = useRouter()
 
 const agents = ref<Agent[]>([])
 const regCodes = ref<AgentRegCode[]>([])
@@ -121,6 +124,10 @@ async function forceUpdate(agent: Agent) {
   }
 }
 
+function viewTasks(agent: Agent) {
+  router.push({ path: '/tasks', query: { agent_id: String(agent.id) } })
+}
+
 function copyRegCode(code: string) {
   navigator.clipboard.writeText(code)
   toast.success('已复制')
@@ -222,7 +229,7 @@ onUnmounted(() => {
             <span class="w-28">构建时间</span>
             <span class="w-36">心跳时间</span>
             <span class="flex-1">描述</span>
-            <span class="w-28 text-center">操作</span>
+            <span class="w-32 text-center">操作</span>
           </div>
           <div class="divide-y min-w-[900px]">
             <div v-if="filteredAgents.length === 0" class="text-center py-8 text-muted-foreground">
@@ -248,10 +255,13 @@ onUnmounted(() => {
               <span class="flex-1 text-sm text-muted-foreground truncate">
                 <TextOverflow :text="agent.description || '-'" title="描述" />
               </span>
-              <span class="w-28 flex justify-center gap-1">
+              <span class="w-32 flex justify-center gap-1">
                 <Button variant="ghost" size="icon" class="h-7 w-7" @click="toggleEnabled(agent)" :title="agent.enabled ? '禁用' : '启用'">
                   <Power v-if="agent.enabled" class="h-3.5 w-3.5 text-green-600" />
                   <PowerOff v-else class="h-3.5 w-3.5 text-gray-400" />
+                </Button>
+                <Button variant="ghost" size="icon" class="h-7 w-7" @click="viewTasks(agent)" title="查看任务">
+                  <ListTodo class="h-3.5 w-3.5" />
                 </Button>
                 <Button variant="ghost" size="icon" class="h-7 w-7" @click="forceUpdate(agent)" title="强制更新">
                   <RotateCw class="h-3.5 w-3.5" />

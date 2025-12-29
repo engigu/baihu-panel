@@ -98,6 +98,13 @@ watch(() => props.open, async (val) => {
   }
 })
 
+// 切换执行位置时，如果从本地切换到 Agent，清空工作目录
+watch(selectedAgentId, (newVal, oldVal) => {
+  if (oldVal === 'local' && newVal !== 'local') {
+    form.value.work_dir = ''
+  }
+})
+
 async function loadData() {
   try {
     const [envs, agents] = await Promise.all([
@@ -159,7 +166,7 @@ async function save() {
           <Label class="sm:text-right text-sm">工作目录</Label>
           <div class="sm:col-span-3">
             <DirTreeSelect v-if="selectedAgentId === 'local'" :model-value="form.work_dir || ''" @update:model-value="v => form.work_dir = v" />
-            <Input v-else v-model="form.work_dir" placeholder="Agent 上的工作目录（可选）" class="h-8 text-sm" />
+            <Input v-else v-model="form.work_dir" placeholder="工作目录（可选）" class="h-8 text-sm" />
           </div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-3">

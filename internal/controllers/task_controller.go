@@ -96,8 +96,17 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 func (tc *TaskController) GetTasks(c *gin.Context) {
 	p := utils.ParsePagination(c)
 	name := c.DefaultQuery("name", "")
+	agentIDStr := c.DefaultQuery("agent_id", "")
+	
+	var agentID *uint
+	if agentIDStr != "" {
+		if id, err := strconv.ParseUint(agentIDStr, 10, 32); err == nil {
+			uid := uint(id)
+			agentID = &uid
+		}
+	}
 
-	tasks, total := tc.taskService.GetTasksWithPagination(p.Page, p.PageSize, name)
+	tasks, total := tc.taskService.GetTasksWithPagination(p.Page, p.PageSize, name, agentID)
 	utils.PaginatedResponse(c, tasks, total, p)
 }
 
