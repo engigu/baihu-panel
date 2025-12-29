@@ -78,8 +78,11 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		return
 	}
 
-	// 转换为绝对路径
-	workDir := resolveWorkDir(req.WorkDir)
+	// 转换为绝对路径（Agent 任务保持原样）
+	workDir := req.WorkDir
+	if req.AgentID == nil || *req.AgentID == 0 {
+		workDir = resolveWorkDir(req.WorkDir)
+	}
 
 	task := tc.taskService.CreateTask(req.Name, req.Command, req.Schedule, req.Timeout, workDir, req.CleanConfig, req.Envs, req.Type, req.Config, req.AgentID)
 	
@@ -166,7 +169,13 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		}
 	}
 
-	task := tc.taskService.UpdateTask(id, req.Name, req.Command, req.Schedule, req.Timeout, resolveWorkDir(req.WorkDir), req.CleanConfig, req.Envs, req.Enabled, req.Type, req.Config, req.AgentID)
+	// 转换为绝对路径（Agent 任务保持原样）
+	workDir := req.WorkDir
+	if req.AgentID == nil || *req.AgentID == 0 {
+		workDir = resolveWorkDir(req.WorkDir)
+	}
+
+	task := tc.taskService.UpdateTask(id, req.Name, req.Command, req.Schedule, req.Timeout, workDir, req.CleanConfig, req.Envs, req.Enabled, req.Type, req.Config, req.AgentID)
 	if task == nil {
 		utils.NotFound(c, "任务不存在")
 		return

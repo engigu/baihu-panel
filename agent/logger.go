@@ -65,5 +65,10 @@ func initLogger(logFile string) {
 		Compress:   false,
 	}
 
-	log.SetOutput(io.MultiWriter(os.Stdout, lumberjackLogger))
+	// daemon 模式下只输出到文件，避免重复日志
+	if isDaemon {
+		log.SetOutput(lumberjackLogger)
+	} else {
+		log.SetOutput(io.MultiWriter(os.Stdout, lumberjackLogger))
+	}
 }
