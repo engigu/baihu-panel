@@ -73,6 +73,8 @@ func main() {
 		cmdStatus()
 	case "tasks":
 		cmdTasks()
+	case "logs":
+		cmdLogs()
 	case "install":
 		cmdInstall()
 	case "uninstall":
@@ -102,6 +104,7 @@ func printUsage() {
   stop        停止 Agent
   status      查看运行状态
   tasks       查看已下发的任务列表
+  logs        查看日志（实时跟踪）
   install     安装为系统服务（开机自启）
   uninstall   卸载系统服务
   version     显示版本信息
@@ -114,6 +117,7 @@ func printUsage() {
 示例:
   baihu-agent start
   baihu-agent run
+  baihu-agent logs
   baihu-agent start -c /etc/baihu/config.ini
   baihu-agent install
   baihu-agent status
@@ -258,11 +262,10 @@ func startDaemon() {
 		}
 	}
 
-	// 打开日志文件用于重定向输出
-	os.MkdirAll(filepath.Dir(logFile), 0755)
-	logFd, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	// 打开 /dev/null 用于丢弃输出（日志由 logger 写入文件）
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 	if err != nil {
-		fmt.Printf("打开日志文件失败: %v\n", err)
+		fmt.Printf("打开 /dev/null 失败: %v\n", err)
 		return
 	}
 
@@ -271,8 +274,8 @@ func startDaemon() {
 		Path:   exePath,
 		Args:   append([]string{exePath}, args...),
 		Dir:    filepath.Dir(exePath),
-		Stdout: logFd,
-		Stderr: logFd,
+		Stdout: devNull,
+		Stderr: devNull,
 	}
 
 	// 设置进程组，使子进程独立运行
@@ -282,11 +285,11 @@ func startDaemon() {
 
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("启动失败: %v\n", err)
-		logFd.Close()
+		devNull.Close()
 		return
 	}
 
-	logFd.Close()
+	devNull.Close()
 	fmt.Printf("Agent 已启动 (PID: %d)\n", cmd.Process.Pid)
 	fmt.Printf("日志文件: %s\n", logFile)
 }
@@ -353,4 +356,33 @@ func cmdTasks() {
 		fmt.Printf("    启用: %v\n", task.Enabled)
 		fmt.Println()
 	}
+}
+
+func cmdLogs() {
+	// 检查日志文件是否存在
+	if _, err := os.Stat(logFile); os.IsNotExist(err) {
+		fmt.Printf("日志文件不存在: %s\n", logFile)
+		return
+	}
+
+	fmt.Printf("日志文件: %s\n", logFile)
+	fmt.Println("按 Ctrl+C 退出\n")
+
+	// 使用 tail -f 实时跟踪日志
+	cmd := exec.Command("tail", "-f", "-n", "50", logFile)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// 处理中断信号
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-quit
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
+
+	cmd.Run()
 }
