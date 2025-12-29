@@ -1110,24 +1110,36 @@ func (a *Agent) selfUpdate() {
 		return
 	}
 
-	// 备份旧版本 - 先去掉已有的 .bak 后缀，避免不断追加
+	// 计算基础路径（去掉所有 .bak 后缀）
 	basePath := exePath
 	for strings.HasSuffix(basePath, ".bak") {
 		basePath = strings.TrimSuffix(basePath, ".bak")
 	}
 	backupFile := basePath + ".bak"
-	os.Remove(backupFile)
-	if err := os.Rename(exePath, backupFile); err != nil {
-		log.Errorf("备份旧版本失败: %v", err)
-		os.Remove(tmpFile)
+
+	// 如果当前运行的就是 .bak 文件，直接删除它（更新后会用新版本）
+	// 否则需要备份当前文件
+	if exePath != backupFile {
+		os.Remove(backupFile)
+		if err := os.Rename(exePath, backupFile); err != nil {
+			log.Errorf("备份旧版本失败: %v", err)
+			os.Remove(tmpFile)
+			return
+		}
+	}
+
+	// 替换为新版本（放到 basePath，即不带 .bak 的路径）
+	if err := os.Rename(tmpFile, basePath); err != nil {
+		log.Errorf("替换新版本失败: %v", err)
+		if exePath != backupFile {
+			os.Rename(backupFile, exePath) // 恢复旧版本
+		}
 		return
 	}
 
-	// 替换为新版本
-	if err := os.Rename(tmpFile, exePath); err != nil {
-		log.Errorf("替换新版本失败: %v", err)
-		os.Rename(backupFile, exePath) // 恢复旧版本
-		return
+	// 如果之前运行的是 .bak 文件，现在可以删除它了
+	if exePath == backupFile {
+		os.Remove(exePath)
 	}
 
 	log.Info("更新完成，正在重启...")
@@ -1139,14 +1151,20 @@ func (a *Agent) selfUpdate() {
 // restart 重启服务
 func (a *Agent) restart() {
 	exePath, _ := os.Executable()
+	
+	// 计算基础路径（去掉所有 .bak 后缀），确保启动的是正确的可执行文件
+	basePath := exePath
+	for strings.HasSuffix(basePath, ".bak") {
+		basePath = strings.TrimSuffix(basePath, ".bak")
+	}
 
 	if runtime.GOOS == "windows" {
 		// Windows: 启动新进程后退出
-		cmd := exec.Command(exePath, "start")
+		cmd := exec.Command(basePath, "start")
 		cmd.Start()
 		os.Exit(0)
 	} else {
 		// Linux/macOS: 使用 exec 替换当前进程
-		syscall.Exec(exePath, []string{exePath, "start"}, os.Environ())
+		syscall.Exec(basePath, []string{basePath, "start"}, os.Environ())
 	}
 }
