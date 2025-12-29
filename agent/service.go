@@ -74,25 +74,29 @@ func cmdStatus() {
 		return
 	}
 
-	// 检查进程是否存在
-	process, err := os.FindProcess(pid)
-	if err != nil {
+	if !isProcessRunning(pid) {
 		fmt.Println("状态: 未运行")
 		removePidFile()
 		return
 	}
 
+	fmt.Printf("状态: 运行中 (PID: %d)\n", pid)
+}
+
+func isProcessRunning(pid int) bool {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+
 	// Unix 系统发送信号 0 检查进程
 	if runtime.GOOS != "windows" {
 		err = process.Signal(syscall.Signal(0))
-		if err != nil {
-			fmt.Println("状态: 未运行")
-			removePidFile()
-			return
-		}
+		return err == nil
 	}
 
-	fmt.Printf("状态: 运行中 (PID: %d)\n", pid)
+	// Windows 下 FindProcess 成功即表示进程存在
+	return true
 }
 
 func cmdInstall() {

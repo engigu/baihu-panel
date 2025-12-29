@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"syscall"
@@ -56,12 +57,16 @@ func main() {
 				logFile = os.Args[i+1]
 				i++
 			}
+		case "-d", "--daemon":
+			isDaemon = true
 		}
 	}
 
 	switch cmd {
 	case "start":
 		cmdStart()
+	case "run":
+		cmdRun()
 	case "stop":
 		cmdStop()
 	case "status":
@@ -92,7 +97,8 @@ func printUsage() {
 用法: baihu-agent <命令> [选项]
 
 命令:
-  start       启动 Agent
+  start       启动 Agent（后台运行）
+  run         前台运行 Agent
   stop        停止 Agent
   status      查看运行状态
   tasks       查看已下发的任务列表
@@ -107,6 +113,7 @@ func printUsage() {
 
 示例:
   baihu-agent start
+  baihu-agent run
   baihu-agent start -c /etc/baihu/config.ini
   baihu-agent install
   baihu-agent status
@@ -114,7 +121,24 @@ func printUsage() {
 `, Version)
 }
 
+// daemon 模式标记
+var isDaemon = false
+
 func cmdStart() {
+	// 检查是否已经在运行
+	pid := readPidFile()
+	if pid != 0 && isProcessRunning(pid) {
+		fmt.Printf("Agent 已在运行 (PID: %d)\n", pid)
+		return
+	}
+
+	// 如果不是 daemon 子进程，则启动 daemon
+	if !isDaemon {
+		startDaemon()
+		return
+	}
+
+	// 以下是 daemon 子进程的逻辑
 	initLogger(logFile)
 
 	config := &Config{Interval: 30}
@@ -163,10 +187,119 @@ func cmdStart() {
 	removePidFile()
 }
 
+// cmdRun 前台运行
+func cmdRun() {
+	// 检查是否已经在运行
+	pid := readPidFile()
+	if pid != 0 && isProcessRunning(pid) {
+		fmt.Printf("Agent 已在运行 (PID: %d)\n", pid)
+		return
+	}
+
+	initLogger(logFile)
+
+	config := &Config{Interval: 30}
+	if err := loadConfigFile(configFile, config); err != nil {
+		if !os.IsNotExist(err) {
+			log.Warnf("加载配置文件失败: %v", err)
+		}
+	}
+
+	if v := os.Getenv("AGENT_SERVER"); v != "" {
+		config.ServerURL = v
+	}
+	if v := os.Getenv("AGENT_NAME"); v != "" {
+		config.Name = v
+	}
+
+	if config.ServerURL == "" {
+		log.Fatal("请在配置文件中设置 server_url")
+	}
+	if config.Name == "" {
+		hostname, _ := os.Hostname()
+		config.Name = hostname
+	}
+
+	log.Infof("Baihu Agent Version: %s", Version)
+	if BuildTime != "" {
+		log.Infof("构建时间: %s", BuildTime)
+	}
+	log.Infof("服务器: %s", config.ServerURL)
+	log.Infof("名称: %s", config.Name)
+
+	writePidFile()
+
+	agent := NewAgent(config, configFile)
+	if err := agent.Start(); err != nil {
+		log.Fatalf("启动失败: %v", err)
+	}
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Info("正在停止...")
+	agent.Stop()
+	removePidFile()
+}
+
+func startDaemon() {
+	exePath, err := os.Executable()
+	if err != nil {
+		fmt.Printf("获取可执行文件路径失败: %v\n", err)
+		return
+	}
+
+	// 构建子进程参数，添加 --daemon 标记
+	args := []string{"start", "--daemon"}
+	for i := 2; i < len(os.Args); i++ {
+		if os.Args[i] != "--daemon" && os.Args[i] != "-d" {
+			args = append(args, os.Args[i])
+		}
+	}
+
+	// 打开日志文件用于重定向输出
+	os.MkdirAll(filepath.Dir(logFile), 0755)
+	logFd, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Printf("打开日志文件失败: %v\n", err)
+		return
+	}
+
+	// 启动子进程
+	cmd := &exec.Cmd{
+		Path:   exePath,
+		Args:   append([]string{exePath}, args...),
+		Dir:    filepath.Dir(exePath),
+		Stdout: logFd,
+		Stderr: logFd,
+	}
+
+	// 设置进程组，使子进程独立运行
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+
+	if err := cmd.Start(); err != nil {
+		fmt.Printf("启动失败: %v\n", err)
+		logFd.Close()
+		return
+	}
+
+	logFd.Close()
+	fmt.Printf("Agent 已启动 (PID: %d)\n", cmd.Process.Pid)
+	fmt.Printf("日志文件: %s\n", logFile)
+}
+
 func cmdTasks() {
 	config := &Config{Interval: 30}
 	if err := loadConfigFile(configFile, config); err != nil {
 		fmt.Printf("加载配置文件失败: %v\n", err)
+		return
+	}
+
+	if config.ServerURL == "" {
+		fmt.Println("错误: 缺少服务器地址，请在配置文件中设置 server_url")
 		return
 	}
 
@@ -188,16 +321,17 @@ func cmdTasks() {
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
+
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		fmt.Printf("获取任务列表失败: %s\n", string(body))
+		fmt.Printf("获取任务列表失败 (HTTP %d): %s\n", resp.StatusCode, string(body))
 		return
 	}
 
 	var result struct {
 		Tasks []AgentTask `json:"tasks"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		fmt.Printf("解析响应失败: %v\n", err)
 		return
 	}
