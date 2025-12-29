@@ -24,7 +24,7 @@ FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend-builder
 
 ARG TARGETOS
 ARG TARGETARCH
-ARG VERSION=dev
+ARG VERSION
 ARG BUILD_TIME
 
 WORKDIR /app
@@ -39,9 +39,11 @@ COPY . .
 # Copy frontend dist
 COPY --from=frontend-builder /app/web/dist ./internal/static/dist
 
-# Build Go binary
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -ldflags="-s -w -X baihu/internal/constant.Version=${VERSION} -X 'baihu/internal/constant.BuildTime=${BUILD_TIME}'" \
+# Build Go binary - 如果 VERSION/BUILD_TIME 为空则使用默认值
+RUN VERSION_VAL="${VERSION:-dev-$(date '+%Y%m%d%H%M%S')}" && \
+    BUILD_TIME_VAL="${BUILD_TIME:-$(date '+%Y-%m-%d %H:%M:%S')}" && \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -ldflags="-s -w -X baihu/internal/constant.Version=${VERSION_VAL} -X 'baihu/internal/constant.BuildTime=${BUILD_TIME_VAL}'" \
     -o baihu .
 
 # ================================
@@ -49,7 +51,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 # ================================
 FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS agent-builder
 
-ARG VERSION=dev
+ARG VERSION
 ARG BUILD_TIME
 
 WORKDIR /app
@@ -62,24 +64,26 @@ WORKDIR /app/agent
 RUN go env -w GOPROXY=https://goproxy.cn,direct && go mod download
 
 # Build agent for all platforms and package as tar.gz (sequential to avoid file conflicts)
-RUN mkdir -p /opt/agent && \
-    echo "${VERSION}" > /opt/agent/version.txt && \
+RUN VERSION_VAL="${VERSION:-dev-$(date '+%Y%m%d%H%M%S')}" && \
+    BUILD_TIME_VAL="${BUILD_TIME:-$(date '+%Y-%m-%d %H:%M:%S')}" && \
+    mkdir -p /opt/agent && \
+    echo "${VERSION_VAL}" > /opt/agent/version.txt && \
     # Linux amd64
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o baihu-agent . && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION_VAL}' -X 'main.BuildTime=${BUILD_TIME_VAL}'" -o baihu-agent . && \
     tar -czvf /opt/agent/baihu-agent-linux-amd64.tar.gz baihu-agent config.example.ini && rm baihu-agent && \
     # Linux arm64
-    # CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o baihu-agent . && \
+    # CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=${VERSION_VAL}' -X 'main.BuildTime=${BUILD_TIME_VAL}'" -o baihu-agent . && \
     # tar -czvf /opt/agent/baihu-agent-linux-arm64.tar.gz baihu-agent config.example.ini && rm baihu-agent && \
     # # Windows amd64
-    # CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o baihu-agent.exe . && \
+    # CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION_VAL}' -X 'main.BuildTime=${BUILD_TIME_VAL}'" -o baihu-agent.exe . && \
     # tar -czvf /opt/agent/baihu-agent-windows-amd64.tar.gz baihu-agent.exe config.example.ini && rm baihu-agent.exe && \
     # # Darwin amd64
-    # CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o baihu-agent . && \
+    # CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION_VAL}' -X 'main.BuildTime=${BUILD_TIME_VAL}'" -o baihu-agent . && \
     # tar -czvf /opt/agent/baihu-agent-darwin-amd64.tar.gz baihu-agent config.example.ini && rm baihu-agent && \
     # # Darwin arm64
-    # CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" -o baihu-agent . && \
+    # CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=${VERSION_VAL}' -X 'main.BuildTime=${BUILD_TIME_VAL}'" -o baihu-agent . && \
     # tar -czvf /opt/agent/baihu-agent-darwin-arm64.tar.gz baihu-agent config.example.ini && rm baihu-agent
-    echo 666
+    echo "Agent build completed"
 # ================================
 # Stage 4: Final image
 # ================================
