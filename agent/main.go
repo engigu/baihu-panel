@@ -1110,8 +1110,12 @@ func (a *Agent) selfUpdate() {
 		return
 	}
 
-	// 备份旧版本
-	backupFile := exePath + ".bak"
+	// 备份旧版本 - 先去掉已有的 .bak 后缀，避免不断追加
+	basePath := exePath
+	for strings.HasSuffix(basePath, ".bak") {
+		basePath = strings.TrimSuffix(basePath, ".bak")
+	}
+	backupFile := basePath + ".bak"
 	os.Remove(backupFile)
 	if err := os.Rename(exePath, backupFile); err != nil {
 		log.Errorf("备份旧版本失败: %v", err)
