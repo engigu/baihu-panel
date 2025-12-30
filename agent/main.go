@@ -339,21 +339,33 @@ func cmdTasks() {
 		return
 	}
 
-	var result struct {
-		Tasks []AgentTask `json:"tasks"`
+	// 解析服务端响应（包含 code/msg/data 包装）
+	var apiResp struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			AgentID uint        `json:"agent_id"`
+			Tasks   []AgentTask `json:"tasks"`
+		} `json:"data"`
 	}
-	if err := json.Unmarshal(body, &result); err != nil {
+	if err := json.Unmarshal(body, &apiResp); err != nil {
 		fmt.Printf("解析响应失败: %v\n", err)
 		return
 	}
 
-	if len(result.Tasks) == 0 {
+	if apiResp.Code != 200 {
+		fmt.Printf("获取任务列表失败: %s\n", apiResp.Msg)
+		return
+	}
+
+	tasks := apiResp.Data.Tasks
+	if len(tasks) == 0 {
 		fmt.Println("当前没有下发的任务")
 		return
 	}
 
-	fmt.Printf("共 %d 个任务:\n\n", len(result.Tasks))
-	for i, task := range result.Tasks {
+	fmt.Printf("共 %d 个任务:\n\n", len(tasks))
+	for i, task := range tasks {
 		fmt.Printf("[%d] ID: %d\n", i+1, task.ID)
 		fmt.Printf("    名称: %s\n", task.Name)
 		fmt.Printf("    Cron: %s\n", task.Schedule)
