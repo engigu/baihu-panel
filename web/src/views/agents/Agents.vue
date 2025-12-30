@@ -440,17 +440,38 @@ onUnmounted(() => {
 
     <!-- 下载对话框 -->
     <Dialog v-model:open="showDownloadDialog">
-      <DialogContent>
+      <DialogContent class="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>下载 Agent</DialogTitle>
           <DialogDescription>当前版本: {{ agentVersion }}</DialogDescription>
         </DialogHeader>
-        <div class="space-y-2">
-          <div v-for="platform in platforms" :key="`${platform.os}-${platform.arch}`" class="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
-            <span class="font-medium">{{ getPlatformLabel(platform.os, platform.arch) }}</span>
-            <Button size="sm" @click="downloadAgent(platform.os, platform.arch)">
-              <Download class="h-4 w-4 mr-1.5" />下载
-            </Button>
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <div v-for="platform in platforms" :key="`${platform.os}-${platform.arch}`" class="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+              <span class="font-medium">{{ getPlatformLabel(platform.os, platform.arch) }}</span>
+              <Button size="sm" @click="downloadAgent(platform.os, platform.arch)">
+                <Download class="h-4 w-4 mr-1.5" />下载
+              </Button>
+            </div>
+          </div>
+          <div class="border-t pt-4">
+            <h4 class="font-medium mb-2">使用说明</h4>
+            <ol class="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
+              <li>下载对应平台的 Agent 压缩包并解压</li>
+              <li>复制 <code class="bg-muted px-1.5 py-0.5 rounded text-foreground">config.example.ini</code> 为 <code class="bg-muted px-1.5 py-0.5 rounded text-foreground">config.ini</code></li>
+              <li>编辑 <code class="bg-muted px-1.5 py-0.5 rounded text-foreground">config.ini</code>，填写服务器地址和注册令牌</li>
+              <li>运行 <code class="bg-muted px-1.5 py-0.5 rounded text-foreground">./baihu-agent start</code> 启动（后台运行）</li>
+            </ol>
+            <div class="mt-3 text-sm text-muted-foreground">
+              <p class="font-medium text-foreground mb-1.5">常用命令：</p>
+              <div class="space-y-1">
+                <div><code class="bg-muted px-1.5 py-0.5 rounded text-foreground text-xs">baihu-agent start</code> <span class="text-xs">- 后台启动</span></div>
+                <div><code class="bg-muted px-1.5 py-0.5 rounded text-foreground text-xs">baihu-agent stop</code> <span class="text-xs">- 停止运行</span></div>
+                <div><code class="bg-muted px-1.5 py-0.5 rounded text-foreground text-xs">baihu-agent status</code> <span class="text-xs">- 查看状态</span></div>
+                <div><code class="bg-muted px-1.5 py-0.5 rounded text-foreground text-xs">baihu-agent logs</code> <span class="text-xs">- 查看日志</span></div>
+                <div><code class="bg-muted px-1.5 py-0.5 rounded text-foreground text-xs">baihu-agent run</code> <span class="text-xs">- 前台运行</span></div>
+              </div>
+            </div>
           </div>
         </div>
       </DialogContent>
