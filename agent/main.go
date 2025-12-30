@@ -59,6 +59,8 @@ func main() {
 			}
 		case "-d", "--daemon":
 			isDaemon = true
+		case "--restart":
+			isRestart = true
 		}
 	}
 
@@ -128,6 +130,9 @@ func printUsage() {
 // daemon 模式标记
 var isDaemon = false
 
+// 是否从 daemon 重启（用于自动更新后重启）
+var isRestart = false
+
 func cmdStart() {
 	// 检查是否已经在运行
 	pid := readPidFile()
@@ -143,7 +148,7 @@ func cmdStart() {
 	}
 
 	// 以下是 daemon 子进程的逻辑
-	initLogger(logFile)
+	initLogger(logFile, true)
 
 	config := &Config{Interval: 30}
 	if err := loadConfigFile(configFile, config); err != nil {
@@ -193,14 +198,17 @@ func cmdStart() {
 
 // cmdRun 前台运行
 func cmdRun() {
-	// 检查是否已经在运行
-	pid := readPidFile()
-	if pid != 0 && isProcessRunning(pid) {
-		fmt.Printf("Agent 已在运行 (PID: %d)\n", pid)
-		return
+	// 检查是否已经在运行（重启模式下跳过检查）
+	if !isRestart {
+		pid := readPidFile()
+		if pid != 0 && isProcessRunning(pid) {
+			fmt.Printf("Agent 已在运行 (PID: %d)\n", pid)
+			return
+		}
 	}
 
-	initLogger(logFile)
+	// 重启模式下只输出到文件（因为是从 daemon 进程 exec 过来的）
+	initLogger(logFile, isRestart)
 
 	config := &Config{Interval: 30}
 	if err := loadConfigFile(configFile, config); err != nil {

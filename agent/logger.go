@@ -48,7 +48,7 @@ func (f *CustomFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	return []byte(msg), nil
 }
 
-func initLogger(logFile string) {
+func initLogger(logFile string, fileOnly bool) {
 	logDir := filepath.Dir(logFile)
 	if logDir != "" && logDir != "." {
 		os.MkdirAll(logDir, 0755)
@@ -65,10 +65,11 @@ func initLogger(logFile string) {
 		Compress:   false,
 	}
 
-	// daemon 模式下只输出到文件，避免重复日志
-	if isDaemon {
+	// fileOnly 模式下只输出到文件（daemon 模式或重启模式）
+	if fileOnly {
 		log.SetOutput(lumberjackLogger)
 	} else {
+		// 前台运行时同时输出到终端和文件
 		log.SetOutput(io.MultiWriter(os.Stdout, lumberjackLogger))
 	}
 }

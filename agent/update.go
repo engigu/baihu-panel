@@ -144,13 +144,18 @@ func (a *Agent) restart() {
 		basePath = strings.TrimSuffix(basePath, ".bak")
 	}
 
+	// 删除 PID 文件，避免新进程检测到旧 PID 而拒绝启动
+	removePidFile()
+
 	if runtime.GOOS == "windows" {
 		// Windows: 启动新进程后退出
 		cmd := exec.Command(basePath, "start")
 		cmd.Start()
 		os.Exit(0)
 	} else {
-		// Linux/macOS: 使用 exec 替换当前进程
-		syscall.Exec(basePath, []string{basePath, "start"}, os.Environ())
+		// Linux/macOS: 使用 exec 替换当前进程，直接运行（不需要 daemon）
+		// 因为 syscall.Exec 会替换当前进程，当前进程本身就是 daemon
+		// --restart 标记告诉新进程这是重启，只输出到文件
+		syscall.Exec(basePath, []string{basePath, "run", "--restart"}, os.Environ())
 	}
 }
