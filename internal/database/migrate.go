@@ -22,18 +22,19 @@ func Migrate() error {
 		&models.SendStats{},
 		&models.Dependency{},
 		&models.Agent{},
-		&models.AgentRegCode{},
+		&models.AgentToken{},
 	)
 }
 
 // customMigrations 自定义迁移（处理 AutoMigrate 无法自动完成的变更）
 func customMigrations() error {
-	// 检查 ql_tokens 表是否存在，如果存在则修改 code 列大小为 64
+	// 检查 ql_tokens 表是否存在
 	if DB.Migrator().HasTable("ql_tokens") {
-		// MySQL: 修改 code 列大小
-		if err := DB.Exec("ALTER TABLE ql_tokens MODIFY COLUMN code VARCHAR(64)").Error; err != nil {
-			// 忽略错误（可能是 SQLite 或列已经是正确大小）
-			logger.Debugf("[Database] 修改 ql_tokens.code 列: %v", err)
+		// 将 code 列重命名为 token（如果 code 列存在）
+		if DB.Migrator().HasColumn(&models.AgentToken{}, "code") {
+			if err := DB.Migrator().RenameColumn(&models.AgentToken{}, "code", "token"); err != nil {
+				logger.Debugf("[Database] 重命名 ql_tokens.code 列: %v", err)
+			}
 		}
 	}
 	return nil

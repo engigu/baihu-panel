@@ -7,14 +7,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RefreshCw, Trash2, Edit, Copy, Server, Search, Download, RotateCw, Plus, Ticket, Power, PowerOff, ListTodo, Eye } from 'lucide-vue-next'
-import { api, type Agent, type AgentRegCode } from '@/api'
+import { api, type Agent, type AgentToken } from '@/api'
 import { toast } from 'vue-sonner'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
 const agents = ref<Agent[]>([])
-const regCodes = ref<AgentRegCode[]>([])
+const tokens = ref<AgentToken[]>([])
 const loading = ref(false)
 const searchQuery = ref('')
 const activeTab = ref('agents')
@@ -23,10 +23,10 @@ const platforms = ref<{ os: string; arch: string; filename: string }[]>([])
 const showEditDialog = ref(false)
 const showDeleteDialog = ref(false)
 const showDownloadDialog = ref(false)
-const showRegCodeDialog = ref(false)
+const showTokenDialog = ref(false)
 const showDetailDialog = ref(false)
 const formData = ref({ name: '', description: '' })
-const regCodeForm = ref({ remark: '', max_uses: 0, expires_at: '' })
+const tokenForm = ref({ remark: '', max_uses: 0, expires_at: '' })
 const editingAgent = ref<Agent | null>(null)
 const deletingAgent = ref<Agent | null>(null)
 const viewingAgent = ref<Agent | null>(null)
@@ -53,15 +53,15 @@ function isOnline(agent: Agent): boolean {
 async function loadAgents() {
   loading.value = true
   try {
-    const [agentList, versionInfo, codeList] = await Promise.all([
+    const [agentList, versionInfo, tokenList] = await Promise.all([
       api.agents.list(),
       api.agents.getVersion(),
-      api.agents.listRegCodes()
+      api.agents.listTokens()
     ])
     agents.value = agentList
     agentVersion.value = versionInfo.version || ''
     platforms.value = versionInfo.platforms || []
-    regCodes.value = codeList
+    tokens.value = tokenList
   } catch {
     toast.error('加载失败')
   } finally {
@@ -133,20 +133,20 @@ function viewTasks(agent: Agent) {
   router.push({ path: '/tasks', query: { agent_id: String(agent.id) } })
 }
 
-function copyRegCode(code: string) {
-  navigator.clipboard.writeText(code)
+function copyToken(token: string) {
+  navigator.clipboard.writeText(token)
   toast.success('已复制')
 }
 
-async function createRegCode() {
+async function createToken() {
   try {
-    await api.agents.createRegCode({
-      remark: regCodeForm.value.remark,
-      max_uses: regCodeForm.value.max_uses,
-      expires_at: regCodeForm.value.expires_at || undefined
+    await api.agents.createToken({
+      remark: tokenForm.value.remark,
+      max_uses: tokenForm.value.max_uses,
+      expires_at: tokenForm.value.expires_at || undefined
     })
-    showRegCodeDialog.value = false
-    regCodeForm.value = { remark: '', max_uses: 0, expires_at: '' }
+    showTokenDialog.value = false
+    tokenForm.value = { remark: '', max_uses: 0, expires_at: '' }
     await loadAgents()
     toast.success('创建成功')
   } catch (e: unknown) {
@@ -154,9 +154,9 @@ async function createRegCode() {
   }
 }
 
-async function deleteRegCode(id: number) {
+async function deleteToken(id: number) {
   try {
-    await api.agents.deleteRegCode(id)
+    await api.agents.deleteToken(id)
     await loadAgents()
     toast.success('删除成功')
   } catch (e: unknown) {
@@ -164,13 +164,13 @@ async function deleteRegCode(id: number) {
   }
 }
 
-function isRegCodeExpired(code: AgentRegCode) {
-  if (!code.expires_at) return false
-  return new Date(code.expires_at) < new Date()
+function isTokenExpired(token: AgentToken) {
+  if (!token.expires_at) return false
+  return new Date(token.expires_at) < new Date()
 }
 
-function isRegCodeExhausted(code: AgentRegCode) {
-  return code.max_uses > 0 && code.used_count >= code.max_uses
+function isTokenExhausted(token: AgentToken) {
+  return token.max_uses > 0 && token.used_count >= token.max_uses
 }
 
 function downloadAgent(os: string, arch: string) {
@@ -290,35 +290,35 @@ onUnmounted(() => {
             <span class="w-16 sm:w-20 shrink-0 text-center">使用次数</span>
             <span class="w-28 sm:w-36 shrink-0 hidden sm:block">过期时间</span>
             <span class="w-20 shrink-0 flex justify-center">
-              <Button size="sm" class="h-7" @click="showRegCodeDialog = true">
+              <Button size="sm" class="h-7" @click="showTokenDialog = true">
                 <Plus class="h-3.5 w-3.5 mr-1" />生成
               </Button>
             </span>
           </div>
           <div class="divide-y min-w-[500px]">
-            <div v-if="regCodes.length === 0" class="text-center py-8 text-muted-foreground">
+            <div v-if="tokens.length === 0" class="text-center py-8 text-muted-foreground">
               <Ticket class="h-8 w-8 mx-auto mb-2 opacity-50" />暂无令牌
             </div>
-            <div v-for="code in regCodes" :key="code.id" class="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 hover:bg-muted/50 transition-colors">
+            <div v-for="token in tokens" :key="token.id" class="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 hover:bg-muted/50 transition-colors">
               <span class="w-6 shrink-0 flex justify-center">
                 <span class="relative flex h-2.5 w-2.5">
-                  <span v-if="!isRegCodeExpired(code) && !isRegCodeExhausted(code)" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span :class="!isRegCodeExpired(code) && !isRegCodeExhausted(code) ? 'bg-green-500' : 'bg-gray-400'" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
+                  <span v-if="!isTokenExpired(token) && !isTokenExhausted(token)" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span :class="!isTokenExpired(token) && !isTokenExhausted(token) ? 'bg-green-500' : 'bg-gray-400'" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
                 </span>
               </span>
-              <code class="flex-1 min-w-[200px] font-mono text-xs bg-muted px-2 py-0.5 rounded truncate">{{ code.code }}</code>
-              <span class="w-24 sm:w-32 shrink-0 text-xs sm:text-sm text-muted-foreground truncate">{{ code.remark || '-' }}</span>
+              <code class="flex-1 min-w-[200px] font-mono text-xs bg-muted px-2 py-0.5 rounded truncate">{{ token.token }}</code>
+              <span class="w-24 sm:w-32 shrink-0 text-xs sm:text-sm text-muted-foreground truncate">{{ token.remark || '-' }}</span>
               <span class="w-16 sm:w-20 shrink-0 text-xs sm:text-sm text-muted-foreground text-center">
-                {{ code.used_count }}/{{ code.max_uses === 0 ? '∞' : code.max_uses }}
+                {{ token.used_count }}/{{ token.max_uses === 0 ? '∞' : token.max_uses }}
               </span>
               <span class="w-28 sm:w-36 shrink-0 text-xs sm:text-sm text-muted-foreground hidden sm:block truncate">
-                {{ code.expires_at || '永不过期' }}
+                {{ token.expires_at || '永不过期' }}
               </span>
               <span class="w-20 shrink-0 flex justify-center gap-1">
-                <Button variant="ghost" size="icon" class="h-7 w-7" @click="copyRegCode(code.code)" title="复制">
+                <Button variant="ghost" size="icon" class="h-7 w-7" @click="copyToken(token.token)" title="复制">
                   <Copy class="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive" @click="deleteRegCode(code.id)" title="删除">
+                <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive" @click="deleteToken(token.id)" title="删除">
                   <Trash2 class="h-3.5 w-3.5" />
                 </Button>
               </span>
@@ -478,28 +478,28 @@ onUnmounted(() => {
     </Dialog>
 
     <!-- 创建令牌对话框 -->
-    <Dialog v-model:open="showRegCodeDialog">
+    <Dialog v-model:open="showTokenDialog">
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>生成注册令牌</DialogTitle>
+          <DialogTitle>生成令牌</DialogTitle>
         </DialogHeader>
         <div class="space-y-4">
           <div>
             <Label>备注</Label>
-            <Input v-model="regCodeForm.remark" placeholder="备注信息（可选）" />
+            <Input v-model="tokenForm.remark" placeholder="备注信息（可选）" />
           </div>
           <div>
             <Label>最大使用次数</Label>
-            <Input v-model.number="regCodeForm.max_uses" type="number" placeholder="0 表示无限制" />
+            <Input v-model.number="tokenForm.max_uses" type="number" placeholder="0 表示无限制" />
           </div>
           <div>
             <Label>过期时间</Label>
-            <Input v-model="regCodeForm.expires_at" type="datetime-local" />
+            <Input v-model="tokenForm.expires_at" type="datetime-local" />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" @click="showRegCodeDialog = false">取消</Button>
-          <Button @click="createRegCode">生成</Button>
+          <Button variant="outline" @click="showTokenDialog = false">取消</Button>
+          <Button @click="createToken">生成</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

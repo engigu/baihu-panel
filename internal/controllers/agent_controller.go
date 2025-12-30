@@ -519,16 +519,16 @@ func (c *AgentController) NotifyTaskUpdate(agentID uint) {
 	c.wsManager.BroadcastTasks(agentID)
 }
 
-// ========== 注册码管理 ==========
+// ========== 令牌管理 ==========
 
-// ListRegCodes 获取注册码列表
-func (c *AgentController) ListRegCodes(ctx *gin.Context) {
-	codes := c.agentService.ListRegCodes()
-	utils.Success(ctx, codes)
+// ListTokens 获取令牌列表
+func (c *AgentController) ListTokens(ctx *gin.Context) {
+	tokens := c.agentService.ListTokens()
+	utils.Success(ctx, tokens)
 }
 
-// CreateRegCode 创建注册码
-func (c *AgentController) CreateRegCode(ctx *gin.Context) {
+// CreateToken 创建令牌
+func (c *AgentController) CreateToken(ctx *gin.Context) {
 	var req struct {
 		Remark    string `json:"remark"`
 		MaxUses   int    `json:"max_uses"`
@@ -550,24 +550,24 @@ func (c *AgentController) CreateRegCode(ctx *gin.Context) {
 		expiresAt = &t
 	}
 
-	code, err := c.agentService.CreateRegCode(req.Remark, req.MaxUses, expiresAt)
+	token, err := c.agentService.CreateToken(req.Remark, req.MaxUses, expiresAt)
 	if err != nil {
 		utils.ServerError(ctx, err.Error())
 		return
 	}
 
-	utils.Success(ctx, code)
+	utils.Success(ctx, token)
 }
 
-// DeleteRegCode 删除注册码
-func (c *AgentController) DeleteRegCode(ctx *gin.Context) {
+// DeleteToken 删除令牌
+func (c *AgentController) DeleteToken(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
 		utils.BadRequest(ctx, "无效的 ID")
 		return
 	}
 
-	if err := c.agentService.DeleteRegCode(uint(id)); err != nil {
+	if err := c.agentService.DeleteToken(uint(id)); err != nil {
 		utils.ServerError(ctx, err.Error())
 		return
 	}

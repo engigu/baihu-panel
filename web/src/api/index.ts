@@ -217,10 +217,10 @@ export const api = {
     forceUpdate: (id: number) => request('/agents/' + id + '/update', { method: 'POST' }),
     downloadUrl: (os: string, arch: string) => `${BASE_URL}/agent/download?os=${os}&arch=${arch}`,
     // 令牌管理
-    listRegCodes: () => request<AgentRegCode[]>('/agents/regcodes'),
-    createRegCode: (data: { remark?: string; max_uses?: number; expires_at?: string }) =>
-      request<AgentRegCode>('/agents/regcodes', { method: 'POST', body: JSON.stringify(data) }),
-    deleteRegCode: (id: number) => request('/agents/regcodes/' + id, { method: 'DELETE' })
+    listTokens: () => request<AgentToken[]>('/agents/tokens'),
+    createToken: (data: { remark?: string; max_uses?: number; expires_at?: string }) =>
+      request<AgentToken>('/agents/tokens', { method: 'POST', body: JSON.stringify(data) }),
+    deleteToken: (id: number) => request('/agents/tokens/' + id, { method: 'DELETE' })
   }
 }
 
@@ -411,9 +411,9 @@ export interface Agent {
   updated_at: string
 }
 
-export interface AgentRegCode {
+export interface AgentToken {
   id: number
-  code: string
+  token: string
   remark: string
   max_uses: number
   used_count: number

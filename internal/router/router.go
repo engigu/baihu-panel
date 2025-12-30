@@ -209,9 +209,9 @@ func Setup(c *Controllers) *gin.Engine {
 				agents.POST("/:id/token", c.Agent.RegenerateToken)
 				agents.POST("/:id/update", c.Agent.ForceUpdate)
 				// 令牌管理
-				agents.GET("/regcodes", c.Agent.ListRegCodes)
-				agents.POST("/regcodes", c.Agent.CreateRegCode)
-				agents.DELETE("/regcodes/:id", c.Agent.DeleteRegCode)
+				agents.GET("/tokens", c.Agent.ListTokens)
+				agents.POST("/tokens", c.Agent.CreateToken)
+				agents.DELETE("/tokens/:id", c.Agent.DeleteToken)
 			}
 		}
 

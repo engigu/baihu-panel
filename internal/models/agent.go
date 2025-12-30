@@ -32,21 +32,21 @@ func (Agent) TableName() string {
 	return constant.TablePrefix + "agents"
 }
 
-// AgentRegCode 注册码
-type AgentRegCode struct {
+// AgentToken Agent 令牌
+type AgentToken struct {
 	ID        uint           `json:"id" gorm:"primaryKey"`
-	Code      string         `json:"code" gorm:"size:64;uniqueIndex;not null"` // 令牌
-	Remark    string         `json:"remark" gorm:"size:255"`                   // 备注
-	MaxUses   int            `json:"max_uses" gorm:"default:0"`                // 最大使用次数，0 表示无限制
-	UsedCount int            `json:"used_count" gorm:"default:0"`              // 已使用次数
-	ExpiresAt *LocalTime     `json:"expires_at"`                               // 过期时间，null 表示永不过期
-	Enabled   bool           `json:"enabled" gorm:"default:true"`              // 是否启用
+	Token     string         `json:"token" gorm:"size:64;uniqueIndex;not null"` // 令牌
+	Remark    string         `json:"remark" gorm:"size:255"`                    // 备注
+	MaxUses   int            `json:"max_uses" gorm:"default:0"`                 // 最大使用次数，0 表示无限制
+	UsedCount int            `json:"used_count" gorm:"default:0"`               // 已使用次数
+	ExpiresAt *LocalTime     `json:"expires_at"`                                // 过期时间，null 表示永不过期
+	Enabled   bool           `json:"enabled" gorm:"default:true"`               // 是否启用
 	CreatedAt LocalTime      `json:"created_at"`
 	UpdatedAt LocalTime      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
-func (AgentRegCode) TableName() string {
+func (AgentToken) TableName() string {
 	return constant.TablePrefix + "tokens"
 }
 

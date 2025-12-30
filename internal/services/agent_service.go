@@ -24,87 +24,80 @@ func NewAgentService() *AgentService {
 	return &AgentService{}
 }
 
-// generateToken 生成随机 Token
+// generateToken 生成随机 Token（64位十六进制）
 func generateToken() string {
 	bytes := make([]byte, 32)
 	rand.Read(bytes)
 	return hex.EncodeToString(bytes)
 }
 
-// generateRegCode 生成令牌（64位，与认证 Token 相同）
-func generateRegCode() string {
-	bytes := make([]byte, 32)
-	rand.Read(bytes)
-	return hex.EncodeToString(bytes)
-}
+// ========== 令牌管理 ==========
 
-// ========== 注册码管理 ==========
-
-// CreateRegCode 创建令牌（同时创建 Agent 记录）
-func (s *AgentService) CreateRegCode(remark string, maxUses int, expiresAt *time.Time) (*models.AgentRegCode, error) {
+// CreateToken 创建令牌
+func (s *AgentService) CreateToken(remark string, maxUses int, expiresAt *time.Time) (*models.AgentToken, error) {
 	var expires *models.LocalTime
 	if expiresAt != nil {
 		t := models.LocalTime(*expiresAt)
 		expires = &t
 	}
 
-	token := generateRegCode()
+	token := generateToken()
 
-	regCode := &models.AgentRegCode{
-		Code:      token,
+	agentToken := &models.AgentToken{
+		Token:     token,
 		Remark:    remark,
 		MaxUses:   maxUses,
 		ExpiresAt: expires,
 		Enabled:   true,
 	}
 
-	if err := database.DB.Create(regCode).Error; err != nil {
+	if err := database.DB.Create(agentToken).Error; err != nil {
 		return nil, err
 	}
 
 	logger.Infof("[Agent] 创建令牌: %s (max_uses=%d)", token[:8]+"...", maxUses)
-	return regCode, nil
+	return agentToken, nil
 }
 
-// ListRegCodes 获取注册码列表
-func (s *AgentService) ListRegCodes() []models.AgentRegCode {
-	var codes []models.AgentRegCode
-	database.DB.Order("id DESC").Find(&codes)
-	return codes
+// ListTokens 获取令牌列表
+func (s *AgentService) ListTokens() []models.AgentToken {
+	var tokens []models.AgentToken
+	database.DB.Order("id DESC").Find(&tokens)
+	return tokens
 }
 
-// DeleteRegCode 删除注册码
-func (s *AgentService) DeleteRegCode(id uint) error {
-	return database.DB.Delete(&models.AgentRegCode{}, id).Error
+// DeleteToken 删除令牌
+func (s *AgentService) DeleteToken(id uint) error {
+	return database.DB.Delete(&models.AgentToken{}, id).Error
 }
 
-// ValidateRegCode 验证注册码
-func (s *AgentService) ValidateRegCode(code string) (*models.AgentRegCode, error) {
-	var regCode models.AgentRegCode
-	if err := database.DB.Where("code = ?", code).First(&regCode).Error; err != nil {
-		return nil, &ServiceError{Message: "无效的注册码"}
+// ValidateToken 验证令牌
+func (s *AgentService) ValidateToken(token string) (*models.AgentToken, error) {
+	var agentToken models.AgentToken
+	if err := database.DB.Where("token = ?", token).First(&agentToken).Error; err != nil {
+		return nil, &ServiceError{Message: "无效的令牌"}
 	}
 
-	if !regCode.Enabled {
-		return nil, &ServiceError{Message: "注册码已禁用"}
+	if !agentToken.Enabled {
+		return nil, &ServiceError{Message: "令牌已禁用"}
 	}
 
 	// 检查使用次数
-	if regCode.MaxUses > 0 && regCode.UsedCount >= regCode.MaxUses {
-		return nil, &ServiceError{Message: "注册码已达到使用上限"}
+	if agentToken.MaxUses > 0 && agentToken.UsedCount >= agentToken.MaxUses {
+		return nil, &ServiceError{Message: "令牌已达到使用上限"}
 	}
 
 	// 检查过期时间
-	if regCode.ExpiresAt != nil && time.Time(*regCode.ExpiresAt).Before(time.Now()) {
-		return nil, &ServiceError{Message: "注册码已过期"}
+	if agentToken.ExpiresAt != nil && time.Time(*agentToken.ExpiresAt).Before(time.Now()) {
+		return nil, &ServiceError{Message: "令牌已过期"}
 	}
 
-	return &regCode, nil
+	return &agentToken, nil
 }
 
-// UseRegCode 使用注册码（增加使用计数）
-func (s *AgentService) UseRegCode(id uint) {
-	database.DB.Model(&models.AgentRegCode{}).Where("id = ?", id).UpdateColumn("used_count", gorm.Expr("used_count + 1"))
+// UseToken 使用令牌（增加使用计数）
+func (s *AgentService) UseToken(id uint) {
+	database.DB.Model(&models.AgentToken{}).Where("id = ?", id).UpdateColumn("used_count", gorm.Expr("used_count + 1"))
 }
 
 // ========== Agent 注册 ==========
@@ -113,7 +106,7 @@ func (s *AgentService) UseRegCode(id uint) {
 // 返回: agent, isNewAgent, error
 func (s *AgentService) RegisterByToken(token string, machineID string, ip string) (*models.Agent, bool, error) {
 	// 验证令牌
-	regCode, err := s.ValidateRegCode(token)
+	agentToken, err := s.ValidateToken(token)
 	if err != nil {
 		return nil, false, err
 	}
@@ -125,12 +118,12 @@ func (s *AgentService) RegisterByToken(token string, machineID string, ip string
 			// 已存在，更新 token 和状态，复用已有 Agent
 			now := models.LocalTime(time.Now())
 			database.DB.Model(&existing).Updates(map[string]interface{}{
-				"token":    token,
-				"ip":       ip,
-				"status":   "online",
+				"token":     token,
+				"ip":        ip,
+				"status":    "online",
 				"last_seen": now,
 			})
-			s.UseRegCode(regCode.ID)
+			s.UseToken(agentToken.ID)
 			logger.Infof("[Agent] Agent #%d 通过 machine_id 复用 (%s)", existing.ID, machineID[:8]+"...")
 			return &existing, false, nil
 		}
@@ -152,7 +145,7 @@ func (s *AgentService) RegisterByToken(token string, machineID string, ip string
 		return nil, false, err
 	}
 
-	s.UseRegCode(regCode.ID)
+	s.UseToken(agentToken.ID)
 	logger.Infof("[Agent] Agent 通过令牌注册: #%d (%s)", agent.ID, ip)
 	return agent, true, nil
 }
@@ -161,10 +154,10 @@ func (s *AgentService) RegisterByToken(token string, machineID string, ip string
 func (s *AgentService) Register(req *models.AgentRegisterRequest, ip string) (*models.Agent, string, error) {
 	// 必须提供令牌
 	if req.Token == "" {
-		return nil, "", &ServiceError{Message: "缺少注册令牌"}
+		return nil, "", &ServiceError{Message: "缺少令牌"}
 	}
 
-	regCode, err := s.ValidateRegCode(req.Token)
+	agentToken, err := s.ValidateToken(req.Token)
 	if err != nil {
 		return nil, "", err
 	}
@@ -193,7 +186,7 @@ func (s *AgentService) Register(req *models.AgentRegisterRequest, ip string) (*m
 		return nil, "", err
 	}
 
-	s.UseRegCode(regCode.ID)
+	s.UseToken(agentToken.ID)
 	logger.Infof("[Agent] Agent 注册成功: %s (%s)", req.Name, ip)
 	return agent, req.Token, nil
 }
