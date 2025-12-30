@@ -207,7 +207,21 @@ func (c *AgentController) GetTasks(ctx *gin.Context) {
 		return
 	}
 
+	// 先尝试通过 token 查找 Agent
 	agent := c.agentService.GetByToken(token)
+	
+	// 如果找不到，尝试验证令牌并通过 machine_id 查找
+	if agent == nil {
+		machineID := ctx.GetHeader("X-Machine-ID")
+		if machineID != "" {
+			// 验证令牌是否有效
+			if _, err := c.agentService.ValidateToken(token); err == nil {
+				// 令牌有效，尝试通过 machine_id 查找 Agent
+				agent = c.agentService.GetByMachineID(machineID)
+			}
+		}
+	}
+
 	if agent == nil {
 		utils.Unauthorized(ctx, "无效的 Token")
 		return

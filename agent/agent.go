@@ -490,6 +490,7 @@ func (a *Agent) doRequest(method, path string, body interface{}) (*http.Response
 
 	req.Header.Set("Authorization", "Bearer "+a.config.Token)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Machine-ID", a.machineID)
 
 	return a.client.Do(req)
 }

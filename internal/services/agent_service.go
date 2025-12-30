@@ -230,6 +230,15 @@ func (s *AgentService) GetByToken(token string) *models.Agent {
 	return &agent
 }
 
+// GetByMachineID 根据 MachineID 获取 Agent
+func (s *AgentService) GetByMachineID(machineID string) *models.Agent {
+	var agent models.Agent
+	if err := database.DB.Where("machine_id = ?", machineID).First(&agent).Error; err != nil {
+		return nil
+	}
+	return &agent
+}
+
 // List 获取 Agent 列表
 func (s *AgentService) List() []models.Agent {
 	var agents []models.Agent
