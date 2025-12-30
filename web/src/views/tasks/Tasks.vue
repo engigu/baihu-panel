@@ -208,15 +208,15 @@ watch(() => route.query.agent_id, (newVal) => {
       <!-- 表头 -->
       <div class="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 border-b bg-muted/50 text-xs sm:text-sm text-muted-foreground font-medium min-w-[360px] sm:min-w-[800px]">
         <span class="w-12 sm:w-14 shrink-0">ID</span>
-        <span class="w-10 sm:w-12 shrink-0 text-center">类型</span>
+        <span class="w-6 sm:w-8 shrink-0 text-center">类型</span>
         <span class="flex-1 min-w-0">名称</span>
         <span class="w-20 shrink-0 hidden md:block">执行位置</span>
         <span class="w-32 sm:flex-1 shrink-0 sm:shrink hidden sm:block">命令/地址</span>
-        <span class="w-32 shrink-0 hidden md:block">定时规则</span>
+        <span class="w-36 shrink-0 hidden md:block">定时规则</span>
         <span class="w-40 shrink-0 hidden lg:block">上次执行</span>
         <span class="w-40 shrink-0 hidden lg:block">下次执行</span>
         <span class="w-8 sm:w-12 shrink-0 text-center">状态</span>
-        <span class="w-20 sm:w-36 shrink-0 text-center">操作</span>
+        <span class="w-20 sm:w-36 shrink-0">操作</span>
       </div>
       <!-- 列表 -->
       <div class="divide-y min-w-[360px] sm:min-w-[800px]">
