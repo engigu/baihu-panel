@@ -79,15 +79,30 @@ COPY agent/ ./agent/
 WORKDIR /app/agent
 RUN go env -w GOPROXY=https://goproxy.cn,direct && go mod download
 
-# Build agent for all platforms and package as tar.gz
+# Build agent for all platforms and package as tar.gz (parallel build)
 RUN VERSION_VAL=$(cat /build-info/version.txt) && \
     BUILD_TIME_VAL=$(cat /build-info/build_time.txt) && \
+    LDFLAGS="-s -w -X 'main.Version=${VERSION_VAL}' -X 'main.BuildTime=${BUILD_TIME_VAL}'" && \
     mkdir -p /opt/agent && \
     echo "${VERSION_VAL}" > /opt/agent/version.txt && \
-    # Linux amd64
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=${VERSION_VAL}' -X 'main.BuildTime=${BUILD_TIME_VAL}'" -o baihu-agent . && \
-    tar -czvf /opt/agent/baihu-agent-linux-amd64.tar.gz baihu-agent config.example.ini && rm baihu-agent && \
-    echo "Agent build completed"
+    # 并行构建所有平台
+    (CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o baihu-agent-linux-amd64 . &) && \
+    (CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o baihu-agent-linux-arm64 . &) && \
+    (CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o baihu-agent-darwin-amd64 . &) && \
+    (CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o baihu-agent-darwin-arm64 . &) && \
+    # (CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o baihu-agent-windows-amd64.exe . &) && \
+    wait && \
+    # 打包各平台
+    for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do \
+        mv baihu-agent-${platform} baihu-agent && \
+        tar -czvf /opt/agent/baihu-agent-${platform}.tar.gz baihu-agent config.example.ini && \
+        rm baihu-agent; \
+    done && \
+    # Windows 单独处理（exe 后缀）
+    # mv baihu-agent-windows-amd64.exe baihu-agent.exe && \
+    # tar -czvf /opt/agent/baihu-agent-windows-amd64.tar.gz baihu-agent.exe config.example.ini && \
+    # rm baihu-agent.exe && \
+    echo "Agent build completed for all platforms"
 # ================================
 # Stage 4: Final image
 # ================================
