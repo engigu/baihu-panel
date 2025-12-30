@@ -25,9 +25,9 @@ FROM alpine:3.19 AS build-info
 ARG VERSION
 ARG BUILD_TIME
 
-# 生成版本信息文件，确保主服务和 Agent 使用相同的值
-RUN VERSION_VAL="${VERSION:-dev-$(date '+%Y%m%d%H%M%S')}" && \
-    BUILD_TIME_VAL="${BUILD_TIME:-$(date '+%Y-%m-%d %H:%M:%S')}" && \
+# 生成版本信息文件，确保主服务和 Agent 使用相同的值（使用东八区时间）
+RUN VERSION_VAL="${VERSION:-dev-$(TZ=Asia/Shanghai date '+%Y%m%d%H%M%S')}" && \
+    BUILD_TIME_VAL="${BUILD_TIME:-$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')}" && \
     mkdir -p /build-info && \
     echo "${VERSION_VAL}" > /build-info/version.txt && \
     echo "${BUILD_TIME_VAL}" > /build-info/build_time.txt
