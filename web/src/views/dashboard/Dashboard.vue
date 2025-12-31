@@ -16,6 +16,8 @@ const chartDays = computed(() => isMobile.value ? 15 : 30)
 
 let lineChart: ApexCharts | null = null
 let pieChart: ApexCharts | null = null
+let themeObserver: MutationObserver | null = null
+let themeChangeTimeout: number | null = null
 
 const statItems = [
   { key: 'today_execs', label: '今日执行', icon: Play, route: '/history' },
@@ -25,6 +27,28 @@ const statItems = [
   { key: 'scheduled', label: '调度注册', icon: Clock, route: '/tasks' },
   { key: 'running', label: '正在运行', icon: Play, route: '/tasks' },
 ]
+
+const isDark = ref(document.documentElement.classList.contains('dark'))
+
+function getTextColor() {
+  return isDark.value ? '#94a3b8' : '#64748b'
+}
+
+function getGridColor() {
+  return isDark.value ? '#334155' : '#e2e8f0'
+}
+
+function handleThemeChange() {
+  const newIsDark = document.documentElement.classList.contains('dark')
+  if (newIsDark !== isDark.value) {
+    isDark.value = newIsDark
+    chartsLoaded.value = false
+    if (themeChangeTimeout) clearTimeout(themeChangeTimeout)
+    themeChangeTimeout = window.setTimeout(() => {
+      reloadCharts()
+    }, 50)
+  }
+}
 
 function navigateTo(route?: string) {
   if (route) router.push(route)
@@ -48,7 +72,6 @@ async function reloadCharts() {
     pieChart.destroy()
     pieChart = null
   }
-  chartsLoaded.value = false
 
   // 重新获取数据
   const [sendStatsData, taskStatsData] = await Promise.all([
@@ -62,10 +85,23 @@ async function reloadCharts() {
     renderLineChart()
     renderPieChart()
     chartsLoaded.value = true
-  }, 100)
+  }, 50)
 }
 
 const renderLineChart = () => {
+  if (lineChart) {
+    lineChart.destroy()
+    lineChart = null
+  }
+  
+  const container = document.querySelector("#stats-chart")
+  if (!container) return
+  
+  // 清空容器
+  container.innerHTML = ''
+  
+  const textColor = getTextColor()
+  const gridColor = getGridColor()
   const options = {
     series: [
       { name: '执行总数', data: sendStats.value.map(item => item.total) },
@@ -97,7 +133,7 @@ const renderLineChart = () => {
     markers: {
       size: 6,
       colors: ['#3b82f6', '#10b981', '#ef4444'],
-      strokeColors: '#fff',
+      strokeColors: isDark.value ? '#1e293b' : '#fff',
       strokeWidth: 2,
       hover: { size: 8, sizeOffset: 3 }
     },
@@ -105,11 +141,11 @@ const renderLineChart = () => {
       categories: sendStats.value.map(item => item.day.slice(5)),
       axisBorder: { show: false },
       axisTicks: { show: false },
-      labels: { style: { colors: '#64748b', fontSize: '12px', fontFamily: 'Inter, sans-serif' } }
+      labels: { style: { colors: textColor, fontSize: '12px', fontFamily: 'Inter, sans-serif' } }
     },
     yaxis: {
       labels: {
-        style: { colors: '#64748b', fontSize: '12px', fontFamily: 'Inter, sans-serif' },
+        style: { colors: textColor, fontSize: '12px', fontFamily: 'Inter, sans-serif' },
         formatter: (val: number) => String(val),
         offsetX: -15,
         minWidth: 20
@@ -119,7 +155,7 @@ const renderLineChart = () => {
     fill: {
       type: 'gradient',
       gradient: {
-        shade: 'light',
+        shade: isDark.value ? 'dark' : 'light',
         type: 'vertical',
         shadeIntensity: 0.5,
         gradientToColors: ['#60a5fa', '#34d399', '#f87171'],
@@ -130,7 +166,7 @@ const renderLineChart = () => {
       }
     },
     grid: {
-      borderColor: '#e2e8f0',
+      borderColor: gridColor,
       strokeDashArray: 3,
       xaxis: { lines: { show: false } },
       yaxis: { lines: { show: true } },
@@ -144,13 +180,14 @@ const renderLineChart = () => {
       offsetX: -5,
       fontSize: '12px',
       fontFamily: 'Inter, sans-serif',
+      labels: { colors: textColor },
       markers: { width: 8, height: 8, radius: 4 }
     },
     tooltip: {
       enabled: true,
       shared: true,
       intersect: false,
-      theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+      theme: isDark.value ? 'dark' : 'light',
       style: { fontSize: '12px', fontFamily: 'Inter, sans-serif' },
       x: { show: true },
       marker: { show: true },
@@ -186,60 +223,124 @@ const renderLineChart = () => {
     },
     responsive: [{ breakpoint: 768, options: { chart: { height: 200 }, legend: { position: 'bottom', offsetY: 0 } } }]
   }
-  lineChart = new ApexCharts(document.querySelector("#stats-chart"), options)
+  lineChart = new ApexCharts(container, options)
   lineChart.render()
 }
 
 const renderPieChart = () => {
   if (taskStats.value.length === 0) return
+  
+  if (pieChart) {
+    pieChart.destroy()
+    pieChart = null
+  }
+  
+  const container = document.querySelector("#pie-chart")
+  if (!container) return
+  
+  // 清空容器
+  container.innerHTML = ''
+  
+  const totalCount = taskStats.value.reduce((sum, item) => sum + item.count, 0)
+  const textColor = getTextColor()
   const options = {
     series: taskStats.value.map(item => item.count),
     chart: {
-      type: 'pie',
-      height: 240,
+      type: 'donut',
+      height: 200,
       toolbar: { show: false },
       background: 'transparent',
       animations: {
-        enabled: true,
-        easing: 'easeinout',
-        speed: 800,
-        animateGradually: { enabled: true, delay: 150 },
-        dynamicAnimation: { enabled: true, speed: 350 }
+        enabled: false
       }
     },
     labels: taskStats.value.map(item => item.task_name),
     colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'],
     legend: {
-      position: 'bottom',
-      fontSize: '12px',
-      fontFamily: 'Inter, sans-serif',
-      markers: { width: 8, height: 8, radius: 4 }
+      show: false
+    },
+    stroke: {
+      show: true,
+      width: 2,
+      colors: [isDark.value ? '#1e293b' : '#ffffff']
     },
     plotOptions: {
       pie: {
-        donut: { size: '0%' },
+        donut: {
+          size: '50%',
+          labels: {
+            show: true,
+            name: {
+              show: true,
+              fontSize: '12px',
+              fontFamily: 'Inter, sans-serif',
+              fontWeight: 600,
+              color: textColor,
+              offsetY: -10
+            },
+            value: {
+              show: true,
+              fontSize: '12px',
+              fontFamily: 'Inter, sans-serif',
+              fontWeight: 'bold',
+              color: textColor,
+              offsetY: 5,
+              formatter: (val: string) => val + ' 次'
+            },
+            total: {
+              show: true,
+              showAlways: false,
+              label: '总执行',
+              fontSize: '12px',
+              fontFamily: 'Inter, sans-serif',
+              fontWeight: 600,
+              color: textColor,
+              formatter: () => String(totalCount) + ' 次'
+            }
+          }
+        },
         expandOnClick: true
       }
     },
     dataLabels: {
       enabled: true,
       formatter: (val: number) => val.toFixed(1) + '%',
-      style: { fontSize: '10px', fontFamily: 'Inter, sans-serif', fontWeight: 'bold' }
+      style: { 
+        fontSize: '11px', 
+        fontFamily: 'Inter, sans-serif', 
+        fontWeight: 'bold', 
+        colors: ['#ffffff']
+      },
+      dropShadow: { 
+        enabled: true,
+        top: 1,
+        left: 1,
+        blur: 2,
+        color: '#000',
+        opacity: 0.5
+      }
     },
     tooltip: {
       enabled: true,
-      theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+      theme: isDark.value ? 'dark' : 'light',
       style: { fontSize: '12px', fontFamily: 'Inter, sans-serif' },
       y: { formatter: (val: number) => val + ' 次' }
     },
     responsive: [{ breakpoint: 768, options: { chart: { height: 200 }, legend: { position: 'bottom' } } }]
   }
-  pieChart = new ApexCharts(document.querySelector("#pie-chart"), options)
+  pieChart = new ApexCharts(container, options)
   pieChart.render()
 }
 
 onMounted(async () => {
   window.addEventListener('resize', handleResize)
+  
+  // 监听主题变化
+  themeObserver = new MutationObserver(() => {
+    handleThemeChange()
+  })
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+  
   try {
     const [statsData, sendStatsData, taskStatsData] = await Promise.all([
       api.dashboard.stats(),
@@ -259,6 +360,14 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  if (themeObserver) {
+    themeObserver.disconnect()
+    themeObserver = null
+  }
+  if (themeChangeTimeout) {
+    clearTimeout(themeChangeTimeout)
+    themeChangeTimeout = null
+  }
   if (lineChart) lineChart.destroy()
   if (pieChart) pieChart.destroy()
 })

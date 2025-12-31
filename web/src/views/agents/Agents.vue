@@ -224,16 +224,16 @@ onUnmounted(() => {
       </TabsList>
 
       <TabsContent value="agents" class="mt-4">
-        <div class="rounded-lg border bg-card overflow-x-auto">
+        <div class="rounded-lg border bg-card overflow-x-auto hide-scrollbar">
           <div class="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 border-b bg-muted/50 text-xs sm:text-sm text-muted-foreground font-medium min-w-[360px]">
             <span class="w-10 sm:w-12 shrink-0">ID</span>
             <span class="w-6 shrink-0"></span>
-            <span class="flex-1 min-w-[80px] sm:w-32 sm:shrink-0 sm:flex-none">名称</span>
+            <span class="w-24 sm:w-32 shrink-0">名称</span>
             <span class="w-24 sm:w-28 shrink-0 hidden sm:block">IP</span>
             <span class="w-20 sm:w-32 shrink-0 hidden md:block">主机名</span>
             <span class="w-20 sm:w-36 shrink-0 hidden lg:block">版本</span>
             <span class="w-40 shrink-0 hidden xl:block">心跳时间</span>
-            <span class="flex-1 min-w-[140px] hidden xl:block">创建时间</span>
+            <span class="w-40 shrink-0 hidden xl:block">创建时间</span>
             <span class="w-20 sm:w-36 shrink-0">操作</span>
           </div>
           <div class="divide-y min-w-[360px]">
@@ -249,12 +249,12 @@ onUnmounted(() => {
                   <span :class="isOnline(agent) ? 'bg-green-500' : 'bg-gray-400'" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
                 </span>
               </span>
-              <span class="flex-1 min-w-[80px] sm:w-32 sm:shrink-0 sm:flex-none font-medium text-xs sm:text-sm truncate cursor-pointer hover:text-primary" @click="viewDetail(agent)" :title="agent.name">{{ agent.name }}</span>
+              <span class="w-24 sm:w-32 shrink-0 font-medium text-xs sm:text-sm truncate cursor-pointer hover:text-primary" @click="viewDetail(agent)" :title="agent.name">{{ agent.name }}</span>
               <span class="w-24 sm:w-28 shrink-0 text-xs sm:text-sm text-muted-foreground truncate hidden sm:block">{{ agent.ip || '-' }}</span>
               <span class="w-20 sm:w-32 shrink-0 text-xs sm:text-sm text-muted-foreground truncate hidden md:block">{{ agent.hostname || '-' }}</span>
               <span class="w-20 sm:w-36 shrink-0 text-xs sm:text-sm text-muted-foreground truncate hidden lg:block">{{ agent.version || '-' }}</span>
               <span class="w-40 shrink-0 text-xs sm:text-sm text-muted-foreground hidden xl:block">{{ agent.last_seen || '-' }}</span>
-              <span class="flex-1 min-w-[140px] text-xs sm:text-sm text-muted-foreground hidden xl:block">{{ agent.created_at || '-' }}</span>
+              <span class="w-40 shrink-0 text-xs sm:text-sm text-muted-foreground hidden xl:block">{{ agent.created_at || '-' }}</span>
               <span class="w-20 sm:w-36 shrink-0 flex justify-end gap-0.5 sm:gap-1">
                 <Button variant="ghost" size="icon" class="h-6 w-6 sm:h-7 sm:w-7" @click="toggleEnabled(agent)" :title="agent.enabled ? '禁用' : '启用'">
                   <Power v-if="agent.enabled" class="h-3 w-3 sm:h-3.5 sm:w-3.5 text-green-600" />
@@ -282,7 +282,7 @@ onUnmounted(() => {
       </TabsContent>
 
       <TabsContent value="regcodes" class="mt-4">
-        <div class="rounded-lg border bg-card overflow-x-auto">
+        <div class="rounded-lg border bg-card overflow-x-auto hide-scrollbar">
           <div class="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 border-b bg-muted/50 text-xs sm:text-sm text-muted-foreground font-medium min-w-[500px]">
             <span class="w-6 shrink-0"></span>
             <span class="flex-1 min-w-[200px]">令牌</span>
