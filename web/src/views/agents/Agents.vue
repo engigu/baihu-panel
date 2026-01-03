@@ -417,6 +417,10 @@ onUnmounted(() => {
               <div class="text-sm">{{ viewingAgent.version || '-' }}</div>
             </div>
             <div class="flex items-center justify-between sm:block">
+              <Label class="text-muted-foreground text-xs">构建时间</Label>
+              <div class="text-sm">{{ viewingAgent.build_time || '-' }}</div>
+            </div>
+            <div class="flex items-center justify-between sm:block">
               <Label class="text-muted-foreground text-xs">在线状态</Label>
               <div class="flex items-center gap-2">
                 <span class="relative flex h-2.5 w-2.5">
@@ -437,10 +441,6 @@ onUnmounted(() => {
             <div class="flex items-center justify-between sm:block">
               <Label class="text-muted-foreground text-xs">注册时间</Label>
               <div class="text-sm">{{ viewingAgent.created_at || '-' }}</div>
-            </div>
-            <div class="flex items-center justify-between sm:block">
-              <Label class="text-muted-foreground text-xs">更新时间</Label>
-              <div class="text-sm">{{ viewingAgent.updated_at || '-' }}</div>
             </div>
           </div>
           <div v-if="viewingAgent.description" class="pt-2 border-t">

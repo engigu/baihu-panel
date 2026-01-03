@@ -185,7 +185,6 @@ watch(() => route.query.task_id, (newTaskId) => {
               <span class="flex-1 min-w-0 font-medium truncate text-xs">{{ log.task_name }}</span>
               <span class="w-8 flex justify-center shrink-0">
                 <span class="relative flex h-2.5 w-2.5">
-                  <span v-if="log.status === 'success'" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                   <span :class="log.status === 'success' ? 'bg-green-500' : log.status === 'failed' ? 'bg-red-500' : 'bg-yellow-500'" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
                 </span>
               </span>
@@ -204,7 +203,6 @@ watch(() => route.query.task_id, (newTaskId) => {
               </code>
               <span class="w-12 flex justify-center shrink-0">
                 <span class="relative flex h-2.5 w-2.5">
-                  <span v-if="log.status === 'success'" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                   <span :class="log.status === 'success' ? 'bg-green-500' : log.status === 'failed' ? 'bg-red-500' : 'bg-yellow-500'" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
                 </span>
               </span>
@@ -237,7 +235,6 @@ watch(() => route.query.task_id, (newTaskId) => {
             <span class="text-muted-foreground">状态</span>
             <span class="flex items-center gap-1.5">
               <span class="relative flex h-2.5 w-2.5">
-                <span v-if="selectedLog.status === 'success'" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                 <span :class="selectedLog.status === 'success' ? 'bg-green-500' : selectedLog.status === 'failed' ? 'bg-red-500' : 'bg-yellow-500'" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
               </span>
               {{ selectedLog.status }}
