@@ -1,4 +1,4 @@
-package services
+package tasks
 
 import (
 	"baihu/internal/database"
@@ -15,15 +15,22 @@ import (
 	"time"
 )
 
+// AgentWSManager 接口定义（避免循环依赖）
+type AgentWSManager interface {
+	SendToAgent(agentID uint, msgType string, data interface{}) error
+}
+
 // TaskExecutionService 统一的任务执行服务
 type TaskExecutionService struct {
 	taskLogService *TaskLogService
+	agentWSManager AgentWSManager
 }
 
 // NewTaskExecutionService 创建任务执行服务
-func NewTaskExecutionService() *TaskExecutionService {
+func NewTaskExecutionService(agentWSManager AgentWSManager, sendStatsService SendStatsService) *TaskExecutionService {
 	return &TaskExecutionService{
-		taskLogService: NewTaskLogService(),
+		taskLogService: NewTaskLogService(sendStatsService),
+		agentWSManager: agentWSManager,
 	}
 }
 
@@ -127,8 +134,10 @@ func (s *TaskExecutionService) executeRemote(req *TaskExecutionRequest) error {
 	}
 
 	// 通过 WebSocket 发送立即执行命令给 Agent
-	manager := GetAgentWSManager()
-	err := manager.SendToAgent(agentID, "execute", map[string]interface{}{
+	if s.agentWSManager == nil {
+		return fmt.Errorf("AgentWSManager 未初始化")
+	}
+	err := s.agentWSManager.SendToAgent(agentID, "execute", map[string]interface{}{
 		"task_id": task.ID,
 	})
 	if err != nil {

@@ -1,4 +1,4 @@
-package services
+package tasks
 
 import (
 	"baihu/internal/constant"
@@ -16,6 +16,16 @@ import (
 	"sync"
 	"time"
 )
+
+// SettingsService 接口定义（避免循环依赖）
+type SettingsService interface {
+	Get(section, key string) string
+}
+
+// EnvService 接口定义（避免循环依赖）
+type EnvService interface {
+	GetEnvVarsByIDs(ids string) []string
+}
 
 // ExecutionResult represents the result of a task execution
 type ExecutionResult struct {
@@ -36,6 +46,8 @@ type taskJob struct {
 type ExecutorService struct {
 	taskService          *TaskService
 	taskExecutionService *TaskExecutionService
+	settingsService      SettingsService
+	envService           EnvService
 	results              []ExecutionResult
 	runningTasks         map[int]bool
 	mu                   sync.RWMutex
@@ -50,9 +62,8 @@ type ExecutorService struct {
 }
 
 // NewExecutorService creates a new executor service
-func NewExecutorService(taskService *TaskService) *ExecutorService {
+func NewExecutorService(taskService *TaskService, taskExecutionService *TaskExecutionService, settingsService SettingsService, envService EnvService) *ExecutorService {
 	// 从设置中读取调度配置
-	settingsService := NewSettingsService()
 	workerCount := getIntSetting(settingsService, constant.SectionScheduler, constant.KeyWorkerCount, 4)
 	queueSize := getIntSetting(settingsService, constant.SectionScheduler, constant.KeyQueueSize, 100)
 	rateInterval := getIntSetting(settingsService, constant.SectionScheduler, constant.KeyRateInterval, 200)
@@ -61,7 +72,9 @@ func NewExecutorService(taskService *TaskService) *ExecutorService {
 
 	es := &ExecutorService{
 		taskService:          taskService,
-		taskExecutionService: NewTaskExecutionService(),
+		taskExecutionService: taskExecutionService,
+		settingsService:      settingsService,
+		envService:           envService,
 		results:              make([]ExecutionResult, 0, 100),
 		runningTasks:         make(map[int]bool),
 		taskQueue:            make(chan taskJob, queueSize),
@@ -77,7 +90,7 @@ func NewExecutorService(taskService *TaskService) *ExecutorService {
 }
 
 // getIntSetting 从设置中获取整数值
-func getIntSetting(s *SettingsService, section, key string, defaultVal int) int {
+func getIntSetting(s SettingsService, section, key string, defaultVal int) int {
 	val := s.Get(section, key)
 	if val == "" {
 		return defaultVal
@@ -128,10 +141,9 @@ func (es *ExecutorService) Reload() {
 	logger.Info("[Executor] 已停止工作线程")
 
 	// 从设置中读取新配置
-	settingsService := NewSettingsService()
-	workerCount := getIntSetting(settingsService, constant.SectionScheduler, constant.KeyWorkerCount, 4)
-	queueSize := getIntSetting(settingsService, constant.SectionScheduler, constant.KeyQueueSize, 100)
-	rateInterval := getIntSetting(settingsService, constant.SectionScheduler, constant.KeyRateInterval, 200)
+	workerCount := getIntSetting(es.settingsService, constant.SectionScheduler, constant.KeyWorkerCount, 4)
+	queueSize := getIntSetting(es.settingsService, constant.SectionScheduler, constant.KeyQueueSize, 100)
+	rateInterval := getIntSetting(es.settingsService, constant.SectionScheduler, constant.KeyRateInterval, 200)
 
 	// 重建 channel 和配置
 	es.mu.Lock()
@@ -228,8 +240,7 @@ func (es *ExecutorService) executeNormalTask(task *models.Task) *ExecutionResult
 	}
 
 	// 加载环境变量
-	envService := NewEnvService()
-	envVars := envService.GetEnvVarsByIDs(task.Envs)
+	envVars := es.envService.GetEnvVarsByIDs(task.Envs)
 
 	// 确定工作目录
 	workDir := task.WorkDir

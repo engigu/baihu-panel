@@ -6,18 +6,19 @@ import (
 
 	"baihu/internal/constant"
 	"baihu/internal/services"
+	"baihu/internal/services/tasks"
 	"baihu/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
 
 type TaskController struct {
-	taskService    *services.TaskService
-	cronService    *services.CronService
+	taskService    *tasks.TaskService
+	cronService    *tasks.CronService
 	agentWSManager *services.AgentWSManager
 }
 
-func NewTaskController(taskService *services.TaskService, cronService *services.CronService) *TaskController {
+func NewTaskController(taskService *tasks.TaskService, cronService *tasks.CronService) *TaskController {
 	return &TaskController{
 		taskService:    taskService,
 		cronService:    cronService,

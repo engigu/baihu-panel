@@ -3,17 +3,17 @@ package controllers
 import (
 	"strconv"
 
-	"baihu/internal/services"
+	"baihu/internal/services/tasks"
 	"baihu/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
 
 type ExecutorController struct {
-	executorService *services.ExecutorService
+	executorService *tasks.ExecutorService
 }
 
-func NewExecutorController(executorService *services.ExecutorService) *ExecutorController {
+func NewExecutorController(executorService *tasks.ExecutorService) *ExecutorController {
 	return &ExecutorController{executorService: executorService}
 }
 

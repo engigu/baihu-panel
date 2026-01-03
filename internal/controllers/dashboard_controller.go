@@ -7,18 +7,18 @@ import (
 	"baihu/internal/constant"
 	"baihu/internal/database"
 	"baihu/internal/models"
-	"baihu/internal/services"
+	"baihu/internal/services/tasks"
 	"baihu/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
 
 type DashboardController struct {
-	cronService     *services.CronService
-	executorService *services.ExecutorService
+	cronService     *tasks.CronService
+	executorService *tasks.ExecutorService
 }
 
-func NewDashboardController(cronService *services.CronService, executorService *services.ExecutorService) *DashboardController {
+func NewDashboardController(cronService *tasks.CronService, executorService *tasks.ExecutorService) *DashboardController {
 	return &DashboardController{
 		cronService:     cronService,
 		executorService: executorService,
@@ -45,13 +45,29 @@ func (dc *DashboardController) GetStats(c *gin.Context) {
 	today := time.Now().Format("2006-01-02")
 	database.DB.Model(&models.SendStats{}).Where("day = ?", today).Select("COALESCE(SUM(num), 0)").Scan(&todayExecs)
 
+	// 调度统计：本地调度 + Agent 调度
+	// 本地调度：agent_id 为 NULL 且 enabled = true 的任务
+	localScheduled := dc.cronService.GetScheduledCount()
+	
+	// Agent 调度：agent_id 不为 NULL 且 enabled = true 的任务
+	var agentScheduled int64
+	database.DB.Model(&models.Task{}).
+		Where("agent_id IS NOT NULL AND enabled = ?", true).
+		Count(&agentScheduled)
+	
+	totalScheduled := localScheduled + int(agentScheduled)
+
+	// 正在运行：目前只能统计本地运行的任务
+	// Agent 端的运行状态需要通过心跳上报（未来优化）
+	running := dc.executorService.GetRunningCount()
+
 	stats := StatsResponse{
 		Tasks:      taskCount,
 		TodayExecs: todayExecs,
 		Envs:       envCount,
 		Logs:       logCount,
-		Scheduled:  dc.cronService.GetScheduledCount(),
-		Running:    dc.executorService.GetRunningCount(),
+		Scheduled:  totalScheduled,
+		Running:    running,
 	}
 
 	utils.Success(c, stats)

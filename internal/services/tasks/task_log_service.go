@@ -1,4 +1,4 @@
-package services
+package tasks
 
 import (
 	"baihu/internal/database"
@@ -9,12 +9,21 @@ import (
 	"time"
 )
 
+// SendStatsService 接口定义（避免循环依赖）
+type SendStatsService interface {
+	IncrementStats(taskID uint, status string) error
+}
+
 // TaskLogService 任务日志服务
-type TaskLogService struct{}
+type TaskLogService struct {
+	sendStatsService SendStatsService
+}
 
 // NewTaskLogService 创建任务日志服务
-func NewTaskLogService() *TaskLogService {
-	return &TaskLogService{}
+func NewTaskLogService(sendStatsService SendStatsService) *TaskLogService {
+	return &TaskLogService{
+		sendStatsService: sendStatsService,
+	}
 }
 
 // CleanConfig 清理配置
@@ -37,8 +46,11 @@ func (s *TaskLogService) SaveTaskLog(taskLog *models.TaskLog) error {
 
 // UpdateTaskStats 更新任务统计
 func (s *TaskLogService) UpdateTaskStats(taskID uint, status string) {
-	sendStatsService := NewSendStatsService()
-	err := sendStatsService.IncrementStats(taskID, status)
+	if s.sendStatsService == nil {
+		logger.Error("[TaskLog] SendStatsService 未初始化")
+		return
+	}
+	err := s.sendStatsService.IncrementStats(taskID, status)
 	if err != nil {
 		logger.Errorf("UpdateTaskStats err: %v", err)
 		return

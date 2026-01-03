@@ -1,4 +1,4 @@
-package services
+package tasks
 
 import (
 	"baihu/internal/database"

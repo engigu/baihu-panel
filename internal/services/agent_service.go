@@ -5,6 +5,7 @@ import (
 	"baihu/internal/database"
 	"baihu/internal/logger"
 	"baihu/internal/models"
+	"baihu/internal/services/tasks"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -350,7 +351,10 @@ func (s *AgentService) buildEnvVarsString(envIDs string) string {
 
 // ReportResult Agent 上报执行结果
 func (s *AgentService) ReportResult(result *models.AgentTaskResult) error {
-	taskExecutionService := NewTaskExecutionService()
+	// 获取依赖的服务
+	agentWSManager := GetAgentWSManager()
+	sendStatsService := NewSendStatsService()
+	taskExecutionService := tasks.NewTaskExecutionService(agentWSManager, sendStatsService)
 	
 	// 使用统一的结果处理流程
 	return taskExecutionService.ProcessAgentResult(result)

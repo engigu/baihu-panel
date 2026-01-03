@@ -4,9 +4,10 @@ import (
 	"baihu/internal/constant"
 	"baihu/internal/controllers"
 	"baihu/internal/services"
+	"baihu/internal/services/tasks"
 )
 
-var cronService *services.CronService
+var cronService *tasks.CronService
 
 func RegisterControllers() *Controllers {
 	// Initialize services
@@ -17,13 +18,18 @@ func RegisterControllers() *Controllers {
 	initService := services.NewInitService(settingsService)
 	userService := initService.Initialize()
 
-	taskService := services.NewTaskService()
+	taskService := tasks.NewTaskService()
 	envService := services.NewEnvService()
 	scriptService := services.NewScriptService()
-	executorService := services.NewExecutorService(taskService)
+	sendStatsService := services.NewSendStatsService()
+	agentWSManager := services.GetAgentWSManager()
+	
+	// 创建任务执行服务（需要依赖注入）
+	taskExecutionService := tasks.NewTaskExecutionService(agentWSManager, sendStatsService)
+	executorService := tasks.NewExecutorService(taskService, taskExecutionService, settingsService, envService)
 
 	// Initialize cron service
-	cronService = services.NewCronService(taskService, executorService)
+	cronService = tasks.NewCronService(taskService, executorService)
 	cronService.Start()
 
 	// Initialize and return controllers

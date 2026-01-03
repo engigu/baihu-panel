@@ -9,6 +9,7 @@ import (
 	"baihu/internal/database"
 	"baihu/internal/models"
 	"baihu/internal/services"
+	"baihu/internal/services/tasks"
 	"baihu/internal/utils"
 	"fmt"
 	"os"
@@ -23,10 +24,10 @@ type SettingsController struct {
 	settingsService *services.SettingsService
 	loginLogService *services.LoginLogService
 	backupService   *services.BackupService
-	executorService *services.ExecutorService
+	executorService *tasks.ExecutorService
 }
 
-func NewSettingsController(userService *services.UserService, loginLogService *services.LoginLogService, executorService *services.ExecutorService) *SettingsController {
+func NewSettingsController(userService *services.UserService, loginLogService *services.LoginLogService, executorService *tasks.ExecutorService) *SettingsController {
 	return &SettingsController{
 		userService:     userService,
 		settingsService: services.NewSettingsService(),
