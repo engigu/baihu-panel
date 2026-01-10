@@ -62,10 +62,6 @@ const cleanConfig = computed(() => {
   return JSON.stringify({ type: cleanType.value, keep: cleanKeep.value })
 })
 
-const onlineAgents = computed(() => {
-  return allAgents.value.filter(a => a.enabled)
-})
-
 watch(() => props.open, async (val) => {
   if (val) {
     form.value = { ...props.task }
@@ -93,8 +89,8 @@ watch(() => props.open, async (val) => {
     } else {
       repoConfig.value = { source_type: 'git', source_url: '', target_path: '', branch: '', sparse_path: '', single_file: false, proxy: 'none', proxy_url: '', auth_token: '' }
     }
-    // 解析 Agent
-    selectedAgentId.value = props.task?.agent_id ? String(props.task.agent_id) : 'local'
+    // 仓库任务暂时仅支持本地执行
+    selectedAgentId.value = 'local'
     // 加载 Agent 列表
     await loadAgents()
   }
@@ -163,17 +159,15 @@ async function save() {
         <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-3">
           <Label class="sm:text-right text-sm">执行位置</Label>
           <div class="sm:col-span-3">
-            <Select v-model="selectedAgentId">
+            <Select v-model="selectedAgentId" disabled>
               <SelectTrigger class="h-8 text-sm">
-                <SelectValue placeholder="选择执行位置" />
+                <SelectValue placeholder="本地执行" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="local">本地执行</SelectItem>
-                <SelectItem v-for="agent in onlineAgents" :key="agent.id" :value="String(agent.id)">
-                  {{ agent.name }} ({{ agent.status === 'online' ? '在线' : '离线' }})
-                </SelectItem>
               </SelectContent>
             </Select>
+            <p class="text-xs text-muted-foreground mt-1">仓库同步任务暂时仅支持本地执行</p>
           </div>
         </div>
         <div v-if="repoConfig.source_type === 'git'" class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-3">
