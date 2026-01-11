@@ -18,6 +18,7 @@ let lineChart: ApexCharts | null = null
 let pieChart: ApexCharts | null = null
 let themeObserver: MutationObserver | null = null
 let themeChangeTimeout: number | null = null
+let isInitializing = true
 
 const statItems = [
   { key: 'today_execs', label: '今日执行', icon: Play, route: '/history' },
@@ -39,6 +40,9 @@ function getGridColor() {
 }
 
 function handleThemeChange() {
+  // 初始化期间忽略主题变化
+  if (isInitializing) return
+  
   const newIsDark = document.documentElement.classList.contains('dark')
   if (newIsDark !== isDark.value) {
     isDark.value = newIsDark
@@ -343,12 +347,6 @@ const renderPieChart = () => {
 onMounted(async () => {
   window.addEventListener('resize', handleResize)
   
-  // 监听主题变化
-  themeObserver = new MutationObserver(() => {
-    handleThemeChange()
-  })
-  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
-  
   try {
     const [statsData, sendStatsData, taskStatsData] = await Promise.all([
       api.dashboard.stats(),
@@ -358,10 +356,22 @@ onMounted(async () => {
     stats.value = statsData
     sendStats.value = sendStatsData
     taskStats.value = taskStatsData
+    
+    // 渲染图表
     setTimeout(() => {
       renderLineChart()
       renderPieChart()
       chartsLoaded.value = true
+      
+      // 图表渲染完成后，延迟启动主题监听，避免初始化时的闪烁
+      setTimeout(() => {
+        isInitializing = false
+        // 监听主题变化
+        themeObserver = new MutationObserver(() => {
+          handleThemeChange()
+        })
+        themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+      }, 500)
     }, 100)
   } catch {}
 })
