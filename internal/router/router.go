@@ -83,9 +83,19 @@ func Setup(c *Controllers) *gin.Engine {
 			return
 		}
 
-		// 注入 base URL 配置到 HTML
-		// 前端使用 urlPrefix，后端 API 使用 urlPrefix + /api/v1
 		html := string(data)
+		
+		// 如果配置了 URL 前缀，需要将绝对路径资源添加前缀
+		if urlPrefix != "" {
+			// 替换 /assets/ 为 /prefix/assets/
+			html = strings.ReplaceAll(html, `"/assets/`, `"`+urlPrefix+`/assets/`)
+			html = strings.ReplaceAll(html, `'/assets/`, `'`+urlPrefix+`/assets/`)
+			// 替换 /logo.svg 为 /prefix/logo.svg
+			html = strings.ReplaceAll(html, `"/logo.svg"`, `"`+urlPrefix+`/logo.svg"`)
+			html = strings.ReplaceAll(html, `'/logo.svg'`, `'`+urlPrefix+`/logo.svg'`)
+		}
+		
+		// 注入 base URL 配置到 HTML
 		configScript := `<script>window.__BASE_URL__ = "` + urlPrefix + `"; window.__API_VERSION__ = "/api/v1";</script>`
 		html = strings.Replace(html, "</head>", configScript+"</head>", 1)
 

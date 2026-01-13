@@ -19,18 +19,6 @@ export default defineConfig({
       }
     }
   },
-  build: {
-    // 使用相对路径，这样可以部署在任何路径下
-    // 资源引用会使用 ./assets/ 而不是 /assets/
-    rollupOptions: {
-      output: {
-        // 确保资源使用相对路径
-        assetFileNames: 'assets/[name]-[hash][extname]',
-        chunkFileNames: 'assets/[name]-[hash].js',
-        entryFileNames: 'assets/[name]-[hash].js'
-      }
-    }
-  },
-  // 使用相对路径作为 base，这样资源会相对于 HTML 文件加载
-  base: './'
+  // 使用绝对路径，后端会根据 url_prefix 动态注入正确的路径
+  base: '/'
 })
