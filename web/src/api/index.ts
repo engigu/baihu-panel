@@ -1,4 +1,7 @@
-const BASE_URL = '/api'
+// 获取 base URL（从后端注入的全局变量）
+const BASE_URL = (window as any).__BASE_URL__ || ''
+const API_VERSION = (window as any).__API_VERSION__ || '/api/v1'
+const API_BASE_URL = BASE_URL + API_VERSION
 
 interface ApiResponse<T> {
   code: number
@@ -7,7 +10,7 @@ interface ApiResponse<T> {
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${url}`, {
+  const res = await fetch(`${API_BASE_URL}${url}`, {
     ...options,
     credentials: 'include', // 携带 Cookie
     headers: {
@@ -20,7 +23,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   
   if (json.code === 401) {
     // 未登录或登录过期，跳转到登录页
-    window.location.href = '/login'
+    window.location.href = BASE_URL + '/login'
     throw new Error(json.msg || '请先登录')
   }
   
@@ -34,7 +37,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 // 检查登录状态（不触发自动跳转）
 export async function checkAuth(): Promise<boolean> {
   try {
-    const res = await fetch(`${BASE_URL}/auth/me`, {
+    const res = await fetch(`${API_BASE_URL}/auth/me`, {
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' }
     })
@@ -128,18 +131,18 @@ export const api = {
     },
     createBackup: () => request('/settings/backup', { method: 'POST' }),
     getBackupStatus: () => request<{ has_backup: boolean; backup_time: string }>('/settings/backup/status'),
-    downloadBackup: () => `${BASE_URL}/settings/backup/download`,
+    downloadBackup: () => `${API_BASE_URL}/settings/backup/download`,
     restoreBackup: async (file: File) => {
       const formData = new FormData()
       formData.append('file', file)
-      const res = await fetch(`${BASE_URL}/settings/restore`, {
+      const res = await fetch(`${API_BASE_URL}/settings/restore`, {
         method: 'POST',
         credentials: 'include',
         body: formData
       })
       const json: ApiResponse<null> = await res.json()
       if (json.code === 401) {
-        window.location.href = '/login'
+        window.location.href = BASE_URL + '/login'
         throw new Error('请先登录')
       }
       if (json.code !== 200) throw new Error(json.msg || '恢复失败')
@@ -157,14 +160,14 @@ export const api = {
       formData.append('file', file)
       if (targetPath) formData.append('path', targetPath)
       
-      const res = await fetch(`${BASE_URL}/files/upload`, {
+      const res = await fetch(`${API_BASE_URL}/files/upload`, {
         method: 'POST',
         credentials: 'include',
         body: formData
       })
       const json: ApiResponse<null> = await res.json()
       if (json.code === 401) {
-        window.location.href = '/login'
+        window.location.href = BASE_URL + '/login'
         throw new Error('请先登录')
       }
       if (json.code !== 200) throw new Error(json.msg || '上传失败')
@@ -180,14 +183,14 @@ export const api = {
       }
       if (targetPath) formData.append('path', targetPath)
       
-      const res = await fetch(`${BASE_URL}/files/uploadfiles`, {
+      const res = await fetch(`${API_BASE_URL}/files/uploadfiles`, {
         method: 'POST',
         credentials: 'include',
         body: formData
       })
       const json: ApiResponse<null> = await res.json()
       if (json.code === 401) {
-        window.location.href = '/login'
+        window.location.href = BASE_URL + '/login'
         throw new Error('请先登录')
       }
       if (json.code !== 200) throw new Error(json.msg || '上传失败')
@@ -215,7 +218,7 @@ export const api = {
       request('/agents/' + id, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) => request('/agents/' + id, { method: 'DELETE' }),
     forceUpdate: (id: number) => request('/agents/' + id + '/update', { method: 'POST' }),
-    downloadUrl: (os: string, arch: string) => `${BASE_URL}/agent/download?os=${os}&arch=${arch}`,
+    downloadUrl: (os: string, arch: string) => `${API_BASE_URL}/agent/download?os=${os}&arch=${arch}`,
     // 令牌管理
     listTokens: () => request<AgentToken[]>('/agents/tokens'),
     createToken: (data: { remark?: string; max_uses?: number; expires_at?: string }) =>

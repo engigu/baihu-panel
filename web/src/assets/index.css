@@ -134,13 +134,25 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply outline-ring/50;
+  }
+  *,
+  ::before,
+  ::after {
+    border-color: transparent;
+  }
+  .border,
+  [class*="border-"] {
+    border-color: var(--border);
   }
   body {
     @apply bg-background text-foreground antialiased;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     font-size: 14px;
     line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 }
 
@@ -155,20 +167,20 @@ body {
 }
 
 /* 卡片增强 - 添加微妙阴影 */
-[class*="card"] {
+[data-slot="card"] {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
 }
 
-[class*="card"]:hover {
+[data-slot="card"]:hover {
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.08);
 }
 
-.dark [class*="card"] {
+.dark [data-slot="card"] {
   box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
 }
 
-.dark [class*="card"]:hover {
+.dark [data-slot="card"]:hover {
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
 }
 
@@ -228,6 +240,27 @@ code, pre {
 pre code {
   padding: 0;
   background: transparent;
+}
+
+/* Windows 小字体优化 */
+.text-xs, .text-sm, [class*="text-xs"], [class*="text-sm"] {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+/* 表格和列表中的小字体优化 */
+table, [role="table"] {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 命令和路径文本优化 */
+code, pre, [class*="font-mono"] {
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  font-weight: 400;
 }
 
 /* 徽章和标签增强 */

@@ -3,9 +3,11 @@ package router
 import (
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"baihu/internal/controllers"
 	"baihu/internal/middleware"
+	"baihu/internal/services"
 	"baihu/internal/static"
 
 	"github.com/gin-gonic/gin"
@@ -47,14 +49,18 @@ func Setup(c *Controllers) *gin.Engine {
 	router := gin.New()
 	router.Use(middleware.GinLogger(), middleware.GinRecovery())
 
+	// 获取 URL 前缀
+	cfg := services.GetConfig()
+	urlPrefix := strings.TrimSuffix(cfg.Server.URLPrefix, "/")
+
 	// Serve embedded Vue SPA static files with cache headers
 	staticFS := static.GetFS()
-	assetsGroup := router.Group("/assets")
+	assetsGroup := router.Group(urlPrefix + "/assets")
 	assetsGroup.Use(cacheControl("public, max-age=31536000, immutable")) // 1 year cache for hashed assets
 	assetsGroup.StaticFS("/", http.FS(mustSubFS(staticFS, "assets")))
 
 	// Serve logo.svg with short cache
-	router.GET("/logo.svg", func(ctx *gin.Context) {
+	router.GET(urlPrefix+"/logo.svg", func(ctx *gin.Context) {
 		data, err := static.ReadFile("logo.svg")
 		if err != nil {
 			ctx.Status(404)
@@ -66,17 +72,29 @@ func Setup(c *Controllers) *gin.Engine {
 
 	// SPA fallback - serve index.html (no cache for HTML)
 	router.NoRoute(func(ctx *gin.Context) {
+		// 只处理带前缀的路径或根路径
+		if urlPrefix != "" && !strings.HasPrefix(ctx.Request.URL.Path, urlPrefix) {
+			ctx.Status(404)
+			return
+		}
 		data, err := static.ReadFile("index.html")
 		if err != nil {
 			ctx.String(500, "index.html not found")
 			return
 		}
+
+		// 注入 base URL 配置到 HTML
+		// 前端使用 urlPrefix，后端 API 使用 urlPrefix + /api/v1
+		html := string(data)
+		configScript := `<script>window.__BASE_URL__ = "` + urlPrefix + `"; window.__API_VERSION__ = "/api/v1";</script>`
+		html = strings.Replace(html, "</head>", configScript+"</head>", 1)
+
 		ctx.Header("Cache-Control", "no-cache, no-store, must-revalidate")
-		ctx.Data(200, "text/html; charset=utf-8", data)
+		ctx.Data(200, "text/html; charset=utf-8", []byte(html))
 	})
 
-	// API routes
-	api := router.Group("/api")
+	// API routes - 添加 /api/v1 版本前缀
+	api := router.Group(urlPrefix + "/api/v1")
 	{
 		// Health check (无需认证)
 		api.GET("/ping", func(ctx *gin.Context) {

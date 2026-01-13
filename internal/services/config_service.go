@@ -10,8 +10,9 @@ import (
 )
 
 type ServerConfig struct {
-	Port int    `ini:"port"`
-	Host string `ini:"host"`
+	Port      int    `ini:"port"`
+	Host      string `ini:"host"`
+	URLPrefix string `ini:"url_prefix"`
 }
 
 type DatabaseConfig struct {
@@ -111,6 +112,9 @@ func LoadConfig(path string) (*AppConfig, error) {
 
 	// 输出配置信息（隐藏敏感信息）
 	logger.Infof("[Config] 服务地址: %s:%d", Config.Server.Host, Config.Server.Port)
+	if Config.Server.URLPrefix != "" {
+		logger.Infof("[Config] URL前缀: %s", Config.Server.URLPrefix)
+	}
 	logger.Infof("[Config] 数据库: type=%s, host=%s, port=%d, dbname=%s",
 		Config.Database.Type, Config.Database.Host, Config.Database.Port, Config.Database.DBName)
 
@@ -122,6 +126,7 @@ func applyEnvOverrides() {
 	// Server
 	getEnvInt("BH_SERVER_PORT", &Config.Server.Port)
 	getEnvStr("BH_SERVER_HOST", &Config.Server.Host)
+	getEnvStr("BH_SERVER_URL_PREFIX", &Config.Server.URLPrefix)
 
 	// Database
 	getEnvStr("BH_DB_TYPE", &Config.Database.Type)

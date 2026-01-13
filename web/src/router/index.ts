@@ -1,6 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { checkAuth } from '@/api'
 
+// 获取 base URL（从后端注入的全局变量）
+const BASE_URL = (window as any).__BASE_URL__ || ''
+
 // 缓存认证状态，避免每次路由跳转都请求
 let authChecked = false
 let isAuth = false
@@ -21,7 +24,7 @@ export function resetAuthCache() {
 }
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(BASE_URL),
   routes: [
     {
       path: '/login',

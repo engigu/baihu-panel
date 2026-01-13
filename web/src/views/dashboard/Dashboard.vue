@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ListTodo, Variable, Clock, Play, ScrollText } from 'lucide-vue-next'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -77,6 +77,8 @@ async function reloadCharts() {
     pieChart = null
   }
 
+  chartsLoaded.value = false
+
   // 重新获取数据
   const [sendStatsData, taskStatsData] = await Promise.all([
     api.dashboard.sendStats(chartDays.value),
@@ -85,21 +87,30 @@ async function reloadCharts() {
   sendStats.value = sendStatsData
   taskStats.value = taskStatsData
 
-  setTimeout(() => {
+  // 等待 Vue 更新 DOM
+  await nextTick()
+  await new Promise(resolve => setTimeout(resolve, 100))
+  
+  // 检查容器是否存在再渲染
+  const statsChart = document.querySelector("#stats-chart")
+  const pieChartEl = document.querySelector("#pie-chart")
+  
+  if (statsChart && pieChartEl && statsChart.parentElement && pieChartEl.parentElement) {
     renderLineChart()
     renderPieChart()
+    await nextTick()
     chartsLoaded.value = true
-  }, 50)
+  }
 }
 
 const renderLineChart = () => {
+  const container = document.querySelector("#stats-chart")
+  if (!container || !container.parentElement) return
+  
   if (lineChart) {
     lineChart.destroy()
     lineChart = null
   }
-  
-  const container = document.querySelector("#stats-chart")
-  if (!container) return
   
   // 清空容器
   container.innerHTML = ''
@@ -234,13 +245,13 @@ const renderLineChart = () => {
 const renderPieChart = () => {
   if (taskStats.value.length === 0) return
   
+  const container = document.querySelector("#pie-chart")
+  if (!container || !container.parentElement) return
+  
   if (pieChart) {
     pieChart.destroy()
     pieChart = null
   }
-  
-  const container = document.querySelector("#pie-chart")
-  if (!container) return
   
   // 清空容器
   container.innerHTML = ''
@@ -416,11 +427,10 @@ onUnmounted(() => {
           <CardTitle class="text-base sm:text-lg">执行统计</CardTitle>
           <CardDescription class="text-xs sm:text-sm">最近{{ chartDays }}天任务执行情况</CardDescription>
         </CardHeader>
-        <CardContent class="pb-8">
-          <div id="stats-chart" class="w-full h-[300px] sm:h-[300px]">
-            <div v-if="!chartsLoaded" class="h-full flex items-center justify-center text-muted-foreground text-sm">
-              加载中...
-            </div>
+        <CardContent class="pb-8 relative">
+          <div id="stats-chart" class="w-full h-[300px] sm:h-[300px]"></div>
+          <div v-if="!chartsLoaded" class="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm bg-card">
+            加载中...
           </div>
         </CardContent>
       </Card>
@@ -430,14 +440,13 @@ onUnmounted(() => {
           <CardTitle class="text-base sm:text-lg">任务占比</CardTitle>
           <CardDescription class="text-xs sm:text-sm">最近{{ chartDays }}天任务执行分布</CardDescription>
         </CardHeader>
-        <CardContent class="pb-8">
-          <div id="pie-chart" class="w-full h-[300px] sm:h-[300px]">
-            <div v-if="!chartsLoaded" class="h-full flex items-center justify-center text-muted-foreground text-sm">
-              加载中...
-            </div>
-            <div v-else-if="taskStats.length === 0" class="h-full flex items-center justify-center text-muted-foreground text-sm">
-              暂无数据
-            </div>
+        <CardContent class="pb-8 relative">
+          <div id="pie-chart" class="w-full h-[300px] sm:h-[300px]"></div>
+          <div v-if="!chartsLoaded" class="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm bg-card">
+            加载中...
+          </div>
+          <div v-else-if="taskStats.length === 0" class="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm bg-card">
+            暂无数据
           </div>
         </CardContent>
       </Card>

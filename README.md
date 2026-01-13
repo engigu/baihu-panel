@@ -103,6 +103,12 @@ docker run -d \
   ghcr.io/engigu/baihu:latest
 ```
 
+> **提示**：如需通过反向代理部署在子路径（如 `/baihu`），添加环境变量：
+> ```bash
+> -e BH_SERVER_URL_PREFIX=/baihu
+> ```
+> 配置后访问地址为 `http://your-domain.com/baihu`，详见下方「URL 前缀配置」说明。
+
 **Docker Compose（SQLite）：**
 
 ```yaml
@@ -122,6 +128,7 @@ services:
       - BH_DB_TYPE=sqlite
       - BH_DB_PATH=/app/data/baihu.db
       - BH_DB_TABLE_PREFIX=baihu_
+      # - BH_SERVER_URL_PREFIX=/baihu  # 可选：配置 URL 前缀用于反向代理
     logging:
       driver: json-file
       options:
@@ -152,6 +159,8 @@ docker run -d \
   ghcr.io/engigu/baihu:latest
 ```
 
+> **提示**：如需配置 URL 前缀，添加 `-e BH_SERVER_URL_PREFIX=/baihu`
+
 **Docker Compose（MySQL）：**
 
 ```yaml
@@ -168,6 +177,7 @@ services:
       - TZ=Asia/Shanghai
       - BH_SERVER_PORT=8052
       - BH_SERVER_HOST=0.0.0.0
+      # - BH_SERVER_URL_PREFIX=/baihu  # 可选：配置 URL 前缀
       - BH_DB_TYPE=mysql
       - BH_DB_HOST=mysql-server
       - BH_DB_PORT=3306
@@ -228,6 +238,21 @@ services:
 ```
 
 首次使用需要复制 `configs/config.example.ini` 为 `configs/config.ini`，然后根据需要修改配置。
+
+**配置文件示例（`configs/config.ini`）：**
+
+```ini
+[server]
+port = 8052
+host = 0.0.0.0
+# 可选：配置 URL 前缀用于反向代理，例如 /baihu
+url_prefix = 
+
+[database]
+type = sqlite
+path = ./data/baihu.db
+table_prefix = baihu_
+```
 
 </details>
 
@@ -377,6 +402,73 @@ Message-Push-Nest 提供了便捷的推送代码生成功能：
 
 > 环境变量优先级高于配置文件，两种方式可以混合使用。
 
+<details>
+<summary><b>方式四：Nginx 反向代理部署（HTTPS）</b></summary>
+
+如果需要通过域名和 HTTPS 访问白虎面板，可以使用 Nginx 作为反向代理。
+
+**Nginx 配置示例：**
+
+```nginx
+# 在 http 块中添加 WebSocket 升级配置
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name example.com;
+    
+    ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    
+    access_log /var/log/nginx/example.access.log;
+    error_log  /var/log/nginx/example.error.log warn;
+    
+    location / {
+        proxy_pass http://172.17.0.1:8052;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        
+        # WebSocket 支持（终端功能需要）
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        
+        proxy_buffering off;
+        proxy_read_timeout 60s;
+    }
+}
+
+# HTTP 自动跳转 HTTPS（可选）
+server {
+    listen 80;
+    server_name example.com;
+    return 301 https://$server_name$request_uri;
+}
+```
+
+**配置说明：**
+
+1. 将 `example.com` 替换为你的域名
+2. 修改 SSL 证书路径为你的实际路径
+3. `172.17.0.1:8052` 是 Docker 容器的宿主机地址和端口，根据实际情况修改
+4. WebSocket 配置是必需的，否则在线终端功能无法使用
+
+
+**重载 Nginx 配置：**
+
+```bash
+nginx -t && nginx -s reload
+```
+
+</details>
+
 
 ### 访问面板
 
@@ -445,6 +537,7 @@ table_prefix = baihu_
 |----------|----------|------|--------|
 | `BH_SERVER_PORT` | server.port | 服务端口 | 8052 |
 | `BH_SERVER_HOST` | server.host | 监听地址 | 0.0.0.0 |
+| `BH_SERVER_URL_PREFIX` | server.url_prefix | URL 前缀，用于反向代理子路径部署 | - |
 | `BH_DB_TYPE` | database.type | 数据库类型 (sqlite/mysql) | sqlite |
 | `BH_DB_HOST` | database.host | 数据库地址 | localhost |
 | `BH_DB_PORT` | database.port | 数据库端口 | 3306 |
@@ -454,6 +547,48 @@ table_prefix = baihu_
 | `BH_DB_PATH` | database.path | SQLite 文件路径 | ./data/baihu.db |
 | `BH_DB_TABLE_PREFIX` | database.table_prefix | 表前缀 | baihu_ |
 | `BH_SECRET` | security.secret | JWT 密钥 | 手动指定 |
+
+### URL 前缀配置
+
+如果需要通过反向代理（如 Nginx）将白虎面板部署在子路径下，可以配置 URL 前缀。
+
+**配置方式：**
+
+```bash
+# 方式一：配置文件
+[server]
+url_prefix = /baihu
+
+# 方式二：环境变量
+-e BH_SERVER_URL_PREFIX=/baihu
+```
+
+**配置效果：**
+
+配置 `url_prefix = /baihu` 后，访问路径变为：
+
+| 类型 | 路径示例 |
+|------|---------|
+| 前端页面 | `http://your-domain.com/baihu/` |
+| 登录页面 | `http://your-domain.com/baihu/login` |
+| 任务管理 | `http://your-domain.com/baihu/tasks` |
+| API 接口 | `http://your-domain.com/baihu/api/v1/*` |
+| WebSocket | `ws://your-domain.com/baihu/api/v1/terminal/ws` |
+
+**Nginx 反向代理配置示例：**
+
+```nginx
+location /baihu/ {
+    proxy_pass http://localhost:8052/baihu/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
 
 **MySQL 示例：**
 

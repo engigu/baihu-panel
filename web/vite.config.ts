@@ -18,5 +18,7 @@ export default defineConfig({
         ws: true
       }
     }
-  }
+  },
+  // 支持通过环境变量设置 base URL（开发时测试用）
+  base: process.env.VITE_BASE_URL || '/'
 })

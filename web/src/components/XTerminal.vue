@@ -128,7 +128,9 @@ function initTerminal(forceConnect = false) {
 
 function connectWebSocket() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${protocol}//${window.location.host}/api/terminal/ws`
+  const baseUrl = (window as any).__BASE_URL__ || ''
+  const apiVersion = (window as any).__API_VERSION__ || '/api/v1'
+  const wsUrl = `${protocol}//${window.location.host}${baseUrl}${apiVersion}/terminal/ws`
 
   ws = new WebSocket(wsUrl)
 
