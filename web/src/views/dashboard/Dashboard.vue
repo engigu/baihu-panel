@@ -464,8 +464,8 @@ onUnmounted(() => {
           <CardTitle class="text-base sm:text-lg">执行统计</CardTitle>
           <CardDescription class="text-xs sm:text-sm">最近{{ chartDays }}天任务执行情况</CardDescription>
         </CardHeader>
-        <CardContent class="pb-8 relative">
-          <div id="stats-chart" class="w-full h-[300px] sm:h-[300px]"></div>
+        <CardContent class="relative h-[300px]">
+          <div id="stats-chart" class="w-full h-full"></div>
           <div v-if="!chartsLoaded" class="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm bg-card">
             加载中...
           </div>
@@ -477,8 +477,8 @@ onUnmounted(() => {
           <CardTitle class="text-base sm:text-lg">任务占比</CardTitle>
           <CardDescription class="text-xs sm:text-sm">最近{{ chartDays }}天任务执行分布</CardDescription>
         </CardHeader>
-        <CardContent class="pb-8 relative">
-          <div id="pie-chart" class="w-full h-[300px] sm:h-[300px]"></div>
+        <CardContent class="relative h-[300px]">
+          <div id="pie-chart" class="w-full h-full"></div>
           <div v-if="!chartsLoaded" class="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm bg-card">
             加载中...
           </div>
