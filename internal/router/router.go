@@ -44,20 +44,6 @@ func cacheControl(value string) gin.HandlerFunc {
 	}
 }
 
-// stripPrefixMiddleware 创建一个中间件，用于去除 URL 前缀
-func stripPrefixMiddleware(prefix string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if prefix != "" && strings.HasPrefix(c.Request.URL.Path, prefix) {
-			// 去除前缀
-			c.Request.URL.Path = strings.TrimPrefix(c.Request.URL.Path, prefix)
-			if c.Request.URL.Path == "" {
-				c.Request.URL.Path = "/"
-			}
-		}
-		c.Next()
-	}
-}
-
 func Setup(c *Controllers) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
@@ -67,19 +53,22 @@ func Setup(c *Controllers) *gin.Engine {
 	cfg := services.GetConfig()
 	urlPrefix := strings.TrimSuffix(cfg.Server.URLPrefix, "/")
 
-	// 如果配置了 URL 前缀，使用中间件去除前缀
+	// 创建一个路由组，如果有前缀则使用前缀，否则使用根路径
+	var root *gin.RouterGroup
 	if urlPrefix != "" {
-		router.Use(stripPrefixMiddleware(urlPrefix))
+		root = router.Group(urlPrefix)
+	} else {
+		root = router.Group("")
 	}
 
 	// Serve embedded Vue SPA static files with cache headers
 	staticFS := static.GetFS()
-	assetsGroup := router.Group("/assets")
+	assetsGroup := root.Group("/assets")
 	assetsGroup.Use(cacheControl("public, max-age=31536000, immutable")) // 1 year cache for hashed assets
 	assetsGroup.StaticFS("/", http.FS(mustSubFS(staticFS, "assets")))
 
 	// Serve logo.svg with short cache
-	router.GET("/logo.svg", func(ctx *gin.Context) {
+	root.GET("/logo.svg", func(ctx *gin.Context) {
 		data, err := static.ReadFile("logo.svg")
 		if err != nil {
 			ctx.Status(404)
@@ -89,19 +78,8 @@ func Setup(c *Controllers) *gin.Engine {
 		ctx.Data(200, "image/svg+xml", data)
 	})
 
-	// SPA fallback - serve index.html (no cache for HTML)
-	router.NoRoute(func(ctx *gin.Context) {
-		data, err := static.ReadFile("index.html")
-		if err != nil {
-			ctx.String(500, "index.html not found")
-			return
-		}
-		ctx.Header("Cache-Control", "no-cache, no-store, must-revalidate")
-		ctx.Data(200, "text/html; charset=utf-8", data)
-	})
-
 	// API routes
-	api := router.Group("/api/v1")
+	api := root.Group("/api/v1")
 	{
 		// Health check (无需认证)
 		api.GET("/ping", func(ctx *gin.Context) {
@@ -250,6 +228,24 @@ func Setup(c *Controllers) *gin.Engine {
 			agentAPI.GET("/ws", c.Agent.WSConnect) // WebSocket 连接
 		}
 	}
+
+	// SPA fallback - serve index.html (no cache for HTML)
+	// 必须在最后注册，作为兜底路由
+	router.NoRoute(func(ctx *gin.Context) {
+		// 如果配置了前缀，只处理带前缀的路径
+		if urlPrefix != "" && !strings.HasPrefix(ctx.Request.URL.Path, urlPrefix) {
+			ctx.Status(404)
+			return
+		}
+		
+		data, err := static.ReadFile("index.html")
+		if err != nil {
+			ctx.String(500, "index.html not found")
+			return
+		}
+		ctx.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+		ctx.Data(200, "text/html; charset=utf-8", data)
+	})
 
 	return router
 }
