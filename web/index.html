@@ -2,22 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <script>
-      // 这个脚本会被后端注入 __BASE_URL__，必须在所有资源加载前执行
-      // 后端会在这里注入: window.__BASE_URL__ = "/baihu";
-    </script>
-    <script>
-      // 在任何资源加载前设置 base 标签
-      if (window.__BASE_URL__) {
-        document.write('<base href="' + window.__BASE_URL__ + '/">');
-      }
-    </script>
-    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="icon" type="image/svg+xml" href="./logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title></title>
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

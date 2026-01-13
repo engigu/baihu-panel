@@ -246,10 +246,9 @@ func Setup(c *Controllers) *gin.Engine {
 		
 		html := string(data)
 		
-		// 在第一个 script 标签中注入配置
-		// 这样可以确保在资源加载前就设置好 base 标签
-		configScript := `window.__BASE_URL__ = "` + urlPrefix + `"; window.__API_VERSION__ = "/api/v1";`
-		html = strings.Replace(html, "// 后端会在这里注入:", configScript + "\n      //", 1)
+		// 注入配置变量供前端使用（API 调用和路由）
+		configScript := `<script>window.__BASE_URL__ = "` + urlPrefix + `"; window.__API_VERSION__ = "/api/v1";</script>`
+		html = strings.Replace(html, "</head>", configScript+"</head>", 1)
 		
 		ctx.Header("Cache-Control", "no-cache, no-store, must-revalidate")
 		ctx.Data(200, "text/html; charset=utf-8", []byte(html))

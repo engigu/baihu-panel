@@ -19,5 +19,7 @@ export default defineConfig({
       }
     }
   },
-  base: '/'
+  // 使用相对路径，这样动态导入的模块也会使用相对路径
+  // 浏览器会根据当前页面 URL 解析相对路径
+  base: './'
 })
