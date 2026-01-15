@@ -1,4 +1,10 @@
-# 白虎面板 [![Hits](https://hits.sh/github.com/engigu/baihu-panel.svg?view=today-total)](https://hits.sh/github.com/engigu/baihu-panel/)
+# 白虎面板 
+
+[![Hits](https://hits.sh/github.com/engigu/baihu-panel.svg?view=today-total)](https://hits.sh/github.com/engigu/baihu-panel/)
+[![Image Tags](https://ghcr-badge.egpl.dev/engigu/baihu/tags?color=%2344cc11&ignore=latest%2Cmain*%2Cdev&n=3&label=image+tags&trim=)](https://ghcr-badge.egpl.dev/engigu/baihu/tags)
+![Latest Version](https://ghcr-badge.egpl.dev/engigu/baihu/latest_tag?color=%2344cc11&ignore=latest&label=version&trim=)
+![Image Size](https://ghcr-badge.egpl.dev/engigu/baihu/size?color=%2344cc11&tag=latest&label=image+size&trim=)
+
 
 白虎面板是一个轻量级定时任务管理系统，基于`Go`+`Vue3`构建，`docker`或者`docker-compose`，内置`python3`、`nodejs`、`bash`环境，开箱即用。
 
