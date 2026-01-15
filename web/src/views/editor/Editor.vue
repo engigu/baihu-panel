@@ -76,8 +76,8 @@ async function loadTree() {
 
 async function handleSelect(node: FileNode) {
   selectedPath.value = node.path
-  // 更新 URL
-  router.replace({ name: 'editor', params: { path: node.path } })
+  // 更新 URL 使用 query 参数
+  router.replace({ name: 'editor', query: { file: node.path } })
   
   if (node.isDir) {
     if (expandedDirs.value.has(node.path)) {
@@ -195,14 +195,19 @@ async function runScript() {
   }
   
   showTerminalDialog.value = true
-  // 等待 DOM 更新后初始化终端
+  // 等待 DOM 更新后初始化终端，增加延迟确保 Dialog 完全渲染
   await nextTick()
-  terminalRef.value?.initTerminal(true)
+  setTimeout(() => {
+    terminalRef.value?.initTerminal(true)
+  }, 100)
 }
 
 function closeTerminal() {
   showTerminalDialog.value = false
-  terminalRef.value?.dispose()
+  // 延迟清理，确保 Dialog 关闭动画完成
+  setTimeout(() => {
+    terminalRef.value?.dispose()
+  }, 300)
 }
 
 async function handleMove(oldPath: string, newPath: string) {
@@ -212,10 +217,10 @@ async function handleMove(oldPath: string, newPath: string) {
     if (selectedFile.value === oldPath) {
       selectedFile.value = newPath
       selectedPath.value = newPath
-      router.replace({ name: 'editor', params: { path: newPath } })
+      router.replace({ name: 'editor', query: { file: newPath } })
     } else if (selectedPath.value === oldPath) {
       selectedPath.value = newPath
-      router.replace({ name: 'editor', params: { path: newPath } })
+      router.replace({ name: 'editor', query: { file: newPath } })
     }
     await loadTree()
   } catch {
@@ -309,7 +314,7 @@ function expandParentDirs(path: string) {
 // 从 URL 初始化选中状态
 async function initFromUrl() {
   await loadTree()
-  const urlPath = route.params.path as string
+  const urlPath = route.query.file as string
   if (urlPath) {
     selectedPath.value = urlPath
     expandParentDirs(urlPath)
@@ -319,6 +324,7 @@ async function initFromUrl() {
       selectedFile.value = urlPath
       fileContent.value = res.content
       originalContent.value = res.content
+      isEditMode.value = false
     } catch {
       // 可能是文件夹，忽略错误
     }

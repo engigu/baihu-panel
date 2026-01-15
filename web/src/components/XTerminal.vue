@@ -71,7 +71,7 @@ function initTerminal(forceConnect = false) {
     try {
       fitAddon?.fit()
     } catch (e) {
-      console.warn('Terminal fit failed:', e)
+      // 忽略 fit 错误
     }
   }, 50)
   
@@ -79,10 +79,10 @@ function initTerminal(forceConnect = false) {
 
   // autoConnect 或者强制连接时才连接
   if (props.autoConnect || forceConnect) {
-    // 延迟连接，确保终端完全初始化
+    // 延迟连接，确保终端完全初始化和旧连接完全关闭
     setTimeout(() => {
       connectWebSocket()
-    }, 100)
+    }, 200)
   }
 
   // 清除当前输入行（Windows 模式用）
@@ -144,12 +144,23 @@ function initTerminal(forceConnect = false) {
 }
 
 function connectWebSocket() {
+  // 如果已有连接，先关闭
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    ws.close()
+    ws = null
+  }
+
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const baseUrl = (window as any).__BASE_URL__ || ''
   const apiVersion = (window as any).__API_VERSION__ || '/api/v1'
   const wsUrl = `${protocol}//${window.location.host}${baseUrl}${apiVersion}/terminal/ws`
 
-  ws = new WebSocket(wsUrl)
+  try {
+    ws = new WebSocket(wsUrl)
+  } catch {
+    terminal?.writeln('\x1b[31m无法创建 WebSocket 连接\x1b[0m')
+    return
+  }
 
   ws.onopen = () => {
     terminal?.writeln('\x1b[32m已连接到终端\x1b[0m')
@@ -159,7 +170,6 @@ function connectWebSocket() {
     if (props.initialCommand) {
       setTimeout(() => {
         if (ws && ws.readyState === WebSocket.OPEN) {
-          // 直接发送命令，PTY 会回显
           ws.send(props.initialCommand + '\r')
         }
       }, 100)
