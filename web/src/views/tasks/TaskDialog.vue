@@ -268,7 +268,7 @@ async function save() {
             <div v-if="selectedEnvs.length > 0" class="flex flex-wrap gap-1">
               <Badge v-for="env in selectedEnvs" :key="env.id" variant="secondary" class="gap-0.5 pr-0.5 text-xs h-5">
                 {{ env.name }}
-                <X class="h-2.5 w-2.5 cursor-pointer hover:text-destructive" @click="removeEnv(env.id)" />
+                <X class="h-2.5 w-2.5 cursor-pointer hover:text-destructive" @click.stop="removeEnv(env.id)" />
               </Badge>
             </div>
           </div>
