@@ -23,6 +23,8 @@
 
 ![baihu.gif](https://f.pz.al/pzal/2025/12/24/f0d171f9a686d.gif)
 
+如果项目有用，请帮忙点个star。
+
 ## 特色
 
 - **轻量级：** docker/compose部署，无需复杂配置，开箱即用
