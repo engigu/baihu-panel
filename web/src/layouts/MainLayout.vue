@@ -17,7 +17,7 @@ function loadSentenceFromCache(): string | null {
   try {
     const cached = localStorage.getItem(SENTENCE_CACHE_KEY)
     const cacheTime = localStorage.getItem(SENTENCE_CACHE_TIME_KEY)
-    
+
     if (cached && cacheTime) {
       const age = Date.now() - parseInt(cacheTime)
       // 如果缓存未过期，使用缓存
@@ -101,19 +101,13 @@ onMounted(() => {
 <template>
   <div class="flex h-screen bg-muted/40">
     <!-- Mobile Menu Overlay -->
-    <div
-      v-if="mobileMenuOpen"
-      class="fixed inset-0 bg-black/50 z-40 lg:hidden"
-      @click="mobileMenuOpen = false"
-    />
+    <div v-if="mobileMenuOpen" class="fixed inset-0 bg-black/50 z-40 lg:hidden" @click="mobileMenuOpen = false" />
 
     <!-- Sidebar -->
-    <aside
-      :class="[
-        'fixed lg:static inset-y-0 left-0 z-50 w-44 border-r bg-background flex flex-col transform transition-transform duration-200 ease-in-out lg:transform-none',
-        mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-      ]"
-    >
+    <aside :class="[
+      'fixed lg:static inset-y-0 left-0 z-50 w-44 border-r bg-background flex flex-col transform transition-transform duration-200 ease-in-out lg:transform-none',
+      mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+    ]">
       <div class="h-14 flex items-center justify-center px-4 font-semibold text-lg border-b relative">
         <span>{{ siteSettings.title }}</span>
         <Button variant="ghost" size="icon" class="h-8 w-8 lg:hidden absolute right-2" @click="mobileMenuOpen = false">
@@ -121,25 +115,18 @@ onMounted(() => {
         </Button>
       </div>
       <nav class="flex-1 px-3 py-6 space-y-1 flex flex-col items-center">
-        <RouterLink
-          v-for="item in navItems"
-          :key="item.to"
-          :to="item.to"
-          custom
-          v-slot="{ navigate }"
-        >
-          <Button
-            variant="ghost"
+        <RouterLink v-for="item in navItems" :key="item.to" :to="item.to" custom v-slot="{ navigate }">
+          <Button variant="ghost"
             :class="['justify-start gap-3 h-9 px-3', isItemActive(item) && 'bg-accent text-accent-foreground']"
-            @click="handleNavClick(navigate)"
-          >
+            @click="handleNavClick(navigate)">
             <component :is="item.icon" class="h-4 w-4" />
             {{ item.label }}
           </Button>
         </RouterLink>
       </nav>
       <div class="px-3 py-4 border-t flex justify-center">
-        <Button variant="ghost" class="justify-start gap-3 h-9 px-3 text-muted-foreground hover:text-foreground" @click="logout">
+        <Button variant="ghost" class="justify-start gap-3 h-9 px-3 text-muted-foreground hover:text-foreground"
+          @click="logout">
           <LogOut class="h-4 w-4" />
           退出登录
         </Button>
@@ -153,7 +140,7 @@ onMounted(() => {
           <Button variant="ghost" size="icon" class="h-8 w-8 lg:hidden" @click="mobileMenuOpen = true">
             <Menu class="h-5 w-5" />
           </Button>
-          <span class="text-sm text-muted-foreground truncate max-w-[200px] sm:max-w-none">{{ sentence }}</span>
+          <span class="text-sm text-muted-foreground truncate max-w-[300px] sm:max-w-none">{{ sentence }}</span>
         </div>
         <ThemeToggle />
       </div>

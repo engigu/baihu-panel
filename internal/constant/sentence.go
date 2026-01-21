@@ -18,9 +18,9 @@ type Sentence struct {
 }
 
 var (
-	lineCount     int
-	lineOffsets   []int64
-	sentenceOnce  sync.Once
+	lineCount    int
+	lineOffsets  []int64
+	sentenceOnce sync.Once
 )
 
 // initSentences 初始化：统计行数和记录每行偏移
@@ -44,13 +44,16 @@ func GetRandomSentence() string {
 	}
 
 	targetLine := rand.Intn(lineCount)
-	
+
 	scanner := bufio.NewScanner(bytes.NewReader(sentenceData))
 	currentLine := 0
 	for scanner.Scan() {
 		if currentLine == targetLine {
 			var s Sentence
 			if err := json.Unmarshal(scanner.Bytes(), &s); err == nil && s.Name != "" {
+				if s.From != "" {
+					return "\"" + s.Name + "\"—— " + s.From
+				}
 				return s.Name
 			}
 			break
