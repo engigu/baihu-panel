@@ -140,7 +140,7 @@ onMounted(() => {
           <Button variant="ghost" size="icon" class="h-8 w-8 lg:hidden" @click="mobileMenuOpen = true">
             <Menu class="h-5 w-5" />
           </Button>
-          <span class="text-sm text-muted-foreground truncate max-w-[300px] sm:max-w-none">{{ sentence }}</span>
+          <span class="text-[10px] sm:text-sm text-muted-foreground truncate flex-1 min-w-0 mr-4" :title="sentence">{{ sentence }}</span>
         </div>
         <ThemeToggle />
       </div>
