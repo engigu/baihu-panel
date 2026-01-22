@@ -140,11 +140,11 @@ onMounted(() => {
     <!-- Main Content -->
     <main class="flex-1 overflow-auto w-full">
       <div class="h-14 border-b bg-background flex items-center justify-between px-4 lg:px-6">
-        <div class="flex items-center gap-3">
-          <Button variant="ghost" size="icon" class="h-8 w-8 lg:hidden" @click="mobileMenuOpen = true">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <Button variant="ghost" size="icon" class="h-8 w-8 lg:hidden shrink-0" @click="mobileMenuOpen = true">
             <Menu class="h-5 w-5" />
           </Button>
-          <span class="text-sm text-muted-foreground truncate flex-1 min-w-0 mr-4" :title="sentence">
+          <span class="text-sm text-muted-foreground truncate" :title="sentence">
             <span class="hidden sm:inline">{{ sentence }}</span>
             <span class="sm:hidden">{{ sentenceContent }}</span>
           </span>

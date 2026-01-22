@@ -12,12 +12,7 @@ const displayStats = ref<Stats>({ tasks: 0, today_execs: 0, envs: 0, logs: 0, sc
 const sendStats = ref<DailyStats[]>([])
 const taskStats = ref<TaskStatsItem[]>([])
 const chartsLoaded = ref(false)
-const sentence = ref('')
 const isMobile = ref(window.innerWidth < 768)
-const sentenceContent = computed(() => {
-  const match = sentence.value.match(/^"(.+)"—— /)
-  return match ? match[1] : sentence.value
-})
 const chartDays = computed(() => isMobile.value ? 15 : 30)
 
 let lineChart: ApexCharts | null = null
@@ -402,16 +397,14 @@ onMounted(async () => {
   window.addEventListener('resize', handleResize)
 
   try {
-    const [statsData, sendStatsData, taskStatsData, sentenceData] = await Promise.all([
+    const [statsData, sendStatsData, taskStatsData] = await Promise.all([
       api.dashboard.stats(),
       api.dashboard.sendStats(chartDays.value),
-      api.dashboard.taskStats(chartDays.value),
-      api.dashboard.sentence()
+      api.dashboard.taskStats(chartDays.value)
     ])
     updateStats(statsData)
     sendStats.value = sendStatsData
     taskStats.value = taskStatsData
-    sentence.value = sentenceData.sentence
 
     // 渲染图表
     setTimeout(() => {
@@ -451,10 +444,7 @@ onUnmounted(() => {
   <div class="space-y-4">
     <div>
       <h2 class="text-2xl font-bold tracking-tight">数据仪表</h2>
-      <p class="text-muted-foreground truncate" :title="sentence">
-        <span class="hidden sm:inline">{{ sentence || '查看系统运行状态和统计数据' }}</span>
-        <span class="sm:hidden">{{ sentenceContent || '查看系统运行状态和统计数据' }}</span>
-      </p>
+      <p class="text-muted-foreground">查看系统运行状态和统计数据</p>
     </div>
 
     <div class="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
