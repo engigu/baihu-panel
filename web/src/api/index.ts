@@ -18,19 +18,19 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
       ...options?.headers
     }
   })
-  
+
   const json: ApiResponse<T> = await res.json()
-  
+
   if (json.code === 401) {
     // 未登录或登录过期，跳转到登录页
     window.location.href = BASE_URL + '/login'
     throw new Error(json.msg || '请先登录')
   }
-  
+
   if (json.code !== 200) {
     throw new Error(json.msg || '请求失败')
   }
-  
+
   return json.data
 }
 
@@ -69,7 +69,7 @@ export const api = {
     create: (data: Partial<Task>) => request<Task>('/tasks', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: Partial<Task>) => request<Task>(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) => request(`/tasks/${id}`, { method: 'DELETE' }),
-    execute: (id: number) => request(`/execute/task/${id}`, { method: 'POST' })
+    execute: (id: number) => request<ExecutionResult>(`/execute/task/${id}`, { method: 'POST' })
   },
   scripts: {
     list: () => request<Script[]>('/scripts'),
@@ -103,6 +103,7 @@ export const api = {
       if (params?.task_name) query.set('task_name', params.task_name)
       return request<LogListResponse>(`/logs?${query}`)
     },
+    get: (id: number) => request<LogDetail>(`/logs/${id}`),
     detail: (id: number) => request<LogDetail>(`/logs/${id}`)
   },
   dashboard: {
@@ -159,7 +160,7 @@ export const api = {
       const formData = new FormData()
       formData.append('file', file)
       if (targetPath) formData.append('path', targetPath)
-      
+
       const res = await fetch(`${API_BASE_URL}/files/upload`, {
         method: 'POST',
         credentials: 'include',
@@ -182,7 +183,7 @@ export const api = {
         }
       }
       if (targetPath) formData.append('path', targetPath)
-      
+
       const res = await fetch(`${API_BASE_URL}/files/uploadfiles`, {
         method: 'POST',
         credentials: 'include',
@@ -261,6 +262,16 @@ export interface RepoConfig {
   proxy: string
   proxy_url: string
   auth_token: string
+  concurrency?: number
+}
+
+export interface ExecutionResult {
+  TaskID: number
+  Success: boolean
+  Output: string
+  Error: string
+  Start: string
+  End: string
 }
 
 export interface TaskListResponse {

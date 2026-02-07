@@ -48,6 +48,21 @@ const (
 	KeyWorkerCount  = "worker_count"
 	KeyQueueSize    = "queue_size"
 	KeyRateInterval = "rate_interval"
+
+	// WebSocket 消息类型
+	WSTypeHeartbeat     = "heartbeat"
+	WSTypeHeartbeatAck  = "heartbeat_ack"
+	WSTypeTasks         = "tasks"
+	WSTypeTaskResult    = "task_result"
+	WSTypeTaskLog       = "task_log"
+	WSTypeExecute       = "execute"
+	WSTypeUpdate        = "update"
+	WSTypeDisconnect    = "disconnect"
+	WSTypeConnected     = "connected"
+	WSTypeDisabled      = "disabled"
+	WSTypeEnabled       = "enabled"
+	WSTypeFetchTasks    = "fetch_tasks"
+	WSTypeTaskHeartbeat = "task_heartbeat"
 )
 
 // TablePrefix 表前缀，从配置文件读取

@@ -13,16 +13,16 @@ import (
 )
 
 type TaskController struct {
-	taskService    *tasks.TaskService
-	cronService    *tasks.CronService
-	agentWSManager *services.AgentWSManager
+	taskService     *tasks.TaskService
+	executorService *tasks.ExecutorService
+	agentWSManager  *services.AgentWSManager
 }
 
-func NewTaskController(taskService *tasks.TaskService, cronService *tasks.CronService) *TaskController {
+func NewTaskController(taskService *tasks.TaskService, executorService *tasks.ExecutorService) *TaskController {
 	return &TaskController{
-		taskService:    taskService,
-		cronService:    cronService,
-		agentWSManager: services.GetAgentWSManager(),
+		taskService:     taskService,
+		executorService: executorService,
+		agentWSManager:  services.GetAgentWSManager(),
 	}
 }
 
@@ -74,7 +74,7 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		return
 	}
 
-	if err := tc.cronService.ValidateCron(req.Schedule); err != nil {
+	if err := tc.executorService.ValidateCron(req.Schedule); err != nil {
 		utils.BadRequest(c, "无效的cron表达式: "+err.Error())
 		return
 	}
@@ -86,12 +86,12 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 	}
 
 	task := tc.taskService.CreateTask(req.Name, req.Command, req.Schedule, req.Timeout, workDir, req.CleanConfig, req.Envs, req.Type, req.Config, req.AgentID)
-	
+
 	// 如果是 Agent 任务，通知 Agent；否则添加到本地 cron
 	if task.AgentID != nil && *task.AgentID > 0 {
 		tc.agentWSManager.BroadcastTasks(*task.AgentID)
 	} else {
-		tc.cronService.AddTask(task)
+		tc.executorService.AddCronTask(task)
 	}
 
 	utils.Success(c, task)
@@ -101,7 +101,7 @@ func (tc *TaskController) GetTasks(c *gin.Context) {
 	p := utils.ParsePagination(c)
 	name := c.DefaultQuery("name", "")
 	agentIDStr := c.DefaultQuery("agent_id", "")
-	
+
 	var agentID *uint
 	if agentIDStr != "" {
 		if id, err := strconv.ParseUint(agentIDStr, 10, 32); err == nil {
@@ -164,7 +164,7 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 	}
 
 	if req.Schedule != "" {
-		if err := tc.cronService.ValidateCron(req.Schedule); err != nil {
+		if err := tc.executorService.ValidateCron(req.Schedule); err != nil {
 			utils.BadRequest(c, "无效的cron表达式: "+err.Error())
 			return
 		}
@@ -185,7 +185,7 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 	// 处理任务调度
 	if task.AgentID != nil && *task.AgentID > 0 {
 		// Agent 任务：从本地 cron 移除，通知 Agent
-		tc.cronService.RemoveTask(task.ID)
+		tc.executorService.RemoveCronTask(task.ID)
 		tc.agentWSManager.BroadcastTasks(*task.AgentID)
 		// 如果 agent 变更了，也通知旧 agent
 		if oldAgentID != nil && *oldAgentID > 0 && *oldAgentID != *task.AgentID {
@@ -194,9 +194,9 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 	} else {
 		// 本地任务
 		if task.Enabled {
-			tc.cronService.AddTask(task)
+			tc.executorService.AddCronTask(task)
 		} else {
-			tc.cronService.RemoveTask(task.ID)
+			tc.executorService.RemoveCronTask(task.ID)
 		}
 		// 如果之前是 agent 任务，通知旧 agent 移除
 		if oldAgentID != nil && *oldAgentID > 0 {
@@ -221,7 +221,7 @@ func (tc *TaskController) DeleteTask(c *gin.Context) {
 		agentID = task.AgentID
 	}
 
-	tc.cronService.RemoveTask(uint(id))
+	tc.executorService.RemoveCronTask(uint(id))
 
 	success := tc.taskService.DeleteTask(id)
 	if !success {

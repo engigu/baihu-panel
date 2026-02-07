@@ -1,11 +1,6 @@
 package services
 
 import (
-	"github.com/engigu/baihu-panel/internal/constant"
-	"github.com/engigu/baihu-panel/internal/database"
-	"github.com/engigu/baihu-panel/internal/logger"
-	"github.com/engigu/baihu-panel/internal/models"
-	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -13,6 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/database"
+	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/services/tasks"
 
 	"gorm.io/gorm"
 )
@@ -308,7 +309,7 @@ func (s *AgentService) GetTasks(agentID uint) []models.AgentTask {
 	for i, task := range tasks {
 		// 将环境变量 ID 转换为实际的环境变量键值对
 		envVarsStr := s.buildEnvVarsString(task.Envs)
-		
+
 		result[i] = models.AgentTask{
 			ID:       task.ID,
 			Name:     task.Name,
@@ -353,11 +354,32 @@ func (s *AgentService) buildEnvVarsString(envIDs string) string {
 func (s *AgentService) ReportResult(result *models.AgentTaskResult) error {
 	// 获取依赖的服务
 	agentWSManager := GetAgentWSManager()
+
+	// 先尝试通知正在等待的 goroutine
+	if agentWSManager.NotifyRemoteResult(result) {
+		logger.Infof("[Agent] 已通知正在等待任务 #%d 结果的 goroutine", result.TaskID)
+		return nil
+	}
+
+	// 如果没有人在等待（例如服务重启后），则由本协程负责处理结果入库
+	// 如果没有人在等待（例如服务重启后），则由本协程负责处理结果入库（记录日志并清理）
+	logger.Infof("[Agent] 没有找到等待任务 #%d 结果的 goroutine，直接处理结果", result.TaskID)
 	sendStatsService := NewSendStatsService()
-	taskExecutionService := tasks.NewTaskExecutionService(agentWSManager, sendStatsService)
-	
-	// 使用统一的结果处理流程
-	return taskExecutionService.ProcessAgentResult(result)
+	taskLogService := tasks.NewTaskLogService(sendStatsService)
+
+	// 创建日志对象
+	taskLog, err := taskLogService.CreateTaskLogFromAgentResult(result)
+	if err != nil {
+		return err
+	}
+	// 处理完成逻辑（保存日志、更新统计、清理旧日志等）
+	return taskLogService.ProcessTaskCompletion(taskLog)
+}
+
+// UpdateTaskDuration 更新任务耗时（心跳）
+func (s *AgentService) UpdateTaskDuration(logID uint, duration int64) error {
+	taskLogService := tasks.NewTaskLogService(nil)
+	return taskLogService.UpdateTaskDuration(logID, duration)
 }
 
 // UpdateOfflineAgents 更新离线 Agent 状态（超过 2 分钟无心跳）
@@ -365,6 +387,13 @@ func (s *AgentService) UpdateOfflineAgents() {
 	cutoff := time.Now().Add(-2 * time.Minute)
 	database.DB.Model(&models.Agent{}).
 		Where("status = ? AND last_seen < ?", "online", cutoff).
+		Update("status", "offline")
+}
+
+// ResetAllAgentsToOffline 将所有 Agents 状态重置为离线（用于服务启动时）
+func (s *AgentService) ResetAllAgentsToOffline() {
+	database.DB.Model(&models.Agent{}).
+		Where("status = ?", "online").
 		Update("status", "offline")
 }
 
@@ -420,7 +449,7 @@ func (s *AgentService) CheckNeedUpdate(agentVersion, agentBuildTime string) bool
 // GetAvailablePlatforms 获取可用的平台列表
 func (s *AgentService) GetAvailablePlatforms() []map[string]string {
 	platforms := []map[string]string{}
-	
+
 	// 优先从 /opt/agent 读取（容器内）
 	agentDir := "/opt/agent"
 	files, err := os.ReadDir(agentDir)

@@ -114,3 +114,21 @@ func WithField(key string, value interface{}) *logrus.Entry {
 func WithFields(fields logrus.Fields) *logrus.Entry {
 	return Log.WithFields(fields)
 }
+
+// SchedulerLogger 兼容 internal/executor 的日志接口
+type SchedulerLogger struct{}
+
+func (s *SchedulerLogger) Infof(format string, args ...interface{}) {
+	Log.Infof(format, args...)
+}
+func (s *SchedulerLogger) Warnf(format string, args ...interface{}) {
+	Log.Warnf(format, args...)
+}
+func (s *SchedulerLogger) Errorf(format string, args ...interface{}) {
+	Log.Errorf(format, args...)
+}
+
+// NewSchedulerLogger 创建一个兼容 executor.SchedulerLogger 的实例
+func NewSchedulerLogger() *SchedulerLogger {
+	return &SchedulerLogger{}
+}

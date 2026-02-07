@@ -2,57 +2,37 @@ package main
 
 import (
 	"bytes"
-	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/engigu/baihu-panel/internal/executor"
+	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/utils"
 	"github.com/gorilla/websocket"
-	"github.com/robfig/cron/v3"
 )
-
-// findAvailableShell 查找可用的 shell
-func findAvailableShell() string {
-	// 优先使用环境变量中的 SHELL
-	if envShell := os.Getenv("SHELL"); envShell != "" {
-		return envShell
-	}
-
-	// 尝试按优先级查找可用的 shell
-	shells := []string{"/bin/bash", "/bin/zsh", "/bin/sh"}
-	for _, sh := range shells {
-		if _, err := os.Stat(sh); err == nil {
-			return sh
-		}
-	}
-
-	// 最后回退到 sh（应该总是存在）
-	return "sh"
-}
 
 // WebSocket 消息类型
 const (
-	WSTypeHeartbeat    = "heartbeat"
-	WSTypeHeartbeatAck = "heartbeat_ack"
-	WSTypeTasks        = "tasks"
-	WSTypeTaskResult   = "task_result"
-	WSTypeUpdate       = "update"
-	WSTypeConnected    = "connected"
-	WSTypeDisabled     = "disabled"
-	WSTypeEnabled      = "enabled"
-	WSTypeFetchTasks   = "fetch_tasks"
+	WSTypeHeartbeat     = "heartbeat"
+	WSTypeHeartbeatAck  = "heartbeat_ack"
+	WSTypeTasks         = "tasks"
+	WSTypeTaskResult    = "task_result"
+	WSTypeUpdate        = "update"
+	WSTypeConnected     = "connected"
+	WSTypeDisabled      = "disabled"
+	WSTypeEnabled       = "enabled"
+	WSTypeFetchTasks    = "fetch_tasks"
+	WSTypeTaskLog       = "task_log"
+	WSTypeExecute       = "execute"
+	WSTypeTaskHeartbeat = "task_heartbeat"
 )
 
 type WSMessage struct {
@@ -72,8 +52,33 @@ type AgentTask struct {
 	Enabled  bool   `json:"enabled"`
 }
 
+func (t *AgentTask) GetID() string {
+	return fmt.Sprintf("%d", t.ID)
+}
+
+func (t *AgentTask) GetName() string {
+	return t.Name
+}
+
+func (t *AgentTask) GetCommand() string {
+	return t.Command
+}
+
+func (t *AgentTask) GetTimeout() int {
+	return t.Timeout
+}
+
+func (t *AgentTask) GetSchedule() string {
+	if t.Schedule != "" {
+		return t.Schedule
+	}
+	return t.Cron
+}
+
 type TaskResult struct {
 	TaskID    uint   `json:"task_id"`
+	LogID     uint   `json:"log_id"`
+	AgentID   uint   `json:"agent_id"` // 仅用于 HTTP 上报时后端补充
 	Command   string `json:"command"`
 	Output    string `json:"output"`
 	Status    string `json:"status"`
@@ -87,9 +92,9 @@ type Agent struct {
 	config        *Config
 	configFile    string
 	machineID     string
-	cron          *cron.Cron
-	tasks         map[uint]*AgentTask
-	entryMap      map[uint]cron.EntryID
+	scheduler     *executor.Scheduler
+	cronManager   *executor.CronManager
+	tasks         map[uint]*AgentTask // 本地任务缓存，用于执行 lookup
 	lastTaskCount int
 	mu            sync.RWMutex
 	client        *http.Client
@@ -99,79 +104,121 @@ type Agent struct {
 	wsStopCh      chan struct{} // 用于停止当前 WebSocket 相关的 goroutine
 }
 
-// generateMachineID 生成机器识别码
-func generateMachineID() string {
-	var parts []string
-
-	// 主机名
-	if hostname, err := os.Hostname(); err == nil {
-		parts = append(parts, hostname)
-	}
-
-	// 获取所有非回环网卡的 MAC 地址，排序后取第一个（最稳定）
-	if interfaces, err := net.Interfaces(); err == nil {
-		var macs []string
-		for _, iface := range interfaces {
-			// 跳过回环接口、没有 MAC 地址的接口、虚拟接口
-			if iface.Flags&net.FlagLoopback != 0 || len(iface.HardwareAddr) == 0 {
-				continue
-			}
-			// 跳过 docker/veth 等虚拟网卡
-			name := strings.ToLower(iface.Name)
-			if strings.HasPrefix(name, "docker") || strings.HasPrefix(name, "veth") ||
-				strings.HasPrefix(name, "br-") || strings.HasPrefix(name, "virbr") {
-				continue
-			}
-			macs = append(macs, iface.HardwareAddr.String())
-		}
-		sort.Strings(macs)
-		// 只使用第一个 MAC 地址（最稳定）
-		if len(macs) > 0 {
-			parts = append(parts, macs[0])
-		}
-	}
-
-	// 操作系统和架构
-	parts = append(parts, runtime.GOOS, runtime.GOARCH)
-
-	data := strings.Join(parts, "|")
-	hash := sha256.Sum256([]byte(data))
-	return hex.EncodeToString(hash[:])
-}
-
 func NewAgent(config *Config, configFile string) *Agent {
-	return &Agent{
+	a := &Agent{
 		config:     config,
 		configFile: configFile,
-		machineID:  generateMachineID(),
-		cron:       cron.New(cron.WithSeconds(), cron.WithLocation(cstZone)),
+		machineID:  utils.GenerateMachineID(),
 		tasks:      make(map[uint]*AgentTask),
-		entryMap:   make(map[uint]cron.EntryID),
 		client:     &http.Client{Timeout: 30 * time.Second},
 		stopCh:     make(chan struct{}),
 	}
+
+	// 初始化调度器
+	handler := &AgentHandler{agent: a}
+	schedCfg := executor.SchedulerConfig{
+		WorkerCount:  runtime.NumCPU(),
+		QueueSize:    100,
+		RateInterval: 100 * time.Millisecond,
+	}
+	a.scheduler = executor.NewScheduler(schedCfg, handler)
+	a.scheduler.SetLogger(logger.NewSchedulerLogger())
+	a.cronManager = executor.NewCronManager(a.scheduler)
+	a.cronManager.SetLogger(logger.NewSchedulerLogger())
+
+	return a
 }
+
+// AgentHandler 实现 executor.SchedulerEventHandler
+type AgentHandler struct {
+	agent *Agent
+}
+
+func (h *AgentHandler) OnTaskScheduled(req *executor.ExecutionRequest) {}
+
+func (h *AgentHandler) OnTaskExecuting(req *executor.ExecutionRequest) (io.Writer, io.Writer, error) {
+	if req.LogID > 0 {
+		writer := &RealTimeLogWriter{agent: h.agent, logID: req.LogID}
+		return writer, writer, nil
+	}
+	return nil, nil, nil
+}
+
+func (h *AgentHandler) OnTaskHeartbeat(req *executor.ExecutionRequest, duration int64) {
+	if req.LogID > 0 {
+		h.agent.sendWSMessage(WSTypeTaskHeartbeat, map[string]interface{}{
+			"log_id":   req.LogID,
+			"duration": duration,
+		})
+	}
+}
+
+func (h *AgentHandler) OnTaskStarted(req *executor.ExecutionRequest) {}
+
+func (h *AgentHandler) OnTaskCompleted(req *executor.ExecutionRequest, result *executor.ExecutionResult) {
+	var taskID uint
+	fmt.Sscanf(req.TaskID, "%d", &taskID)
+
+	h.agent.sendTaskResult(&TaskResult{
+		TaskID:    taskID,
+		LogID:     result.LogID,
+		Command:   req.Command,
+		Output:    result.Output,
+		Status:    result.Status,
+		Duration:  result.Duration,
+		ExitCode:  result.ExitCode,
+		StartTime: result.StartTime.Unix(),
+		EndTime:   result.EndTime.Unix(),
+	})
+}
+
+func (h *AgentHandler) OnTaskFailed(req *executor.ExecutionRequest, err error) {
+	errMsg := fmt.Sprintf("任务执行失败: %v", err)
+	// 先发送日志，确保服务端能收到错误信息
+	h.agent.sendWSMessage(WSTypeTaskLog, map[string]interface{}{
+		"log_id":  req.LogID,
+		"content": errMsg,
+	})
+
+	var taskID uint
+	fmt.Sscanf(req.TaskID, "%d", &taskID)
+
+	h.agent.sendTaskResult(&TaskResult{
+		TaskID:    taskID,
+		LogID:     req.LogID,
+		Command:   req.Command,
+		Output:    errMsg,
+		Status:    "failed",
+		Duration:  0,
+		ExitCode:  1,
+		StartTime: time.Now().Unix(),
+		EndTime:   time.Now().Unix(),
+	})
+}
+
+func (h *AgentHandler) OnCronNextRun(req *executor.ExecutionRequest, nextRun time.Time) {}
 
 func (a *Agent) Start() error {
 	if a.config.Token == "" {
 		return fmt.Errorf("缺少令牌，请在配置文件中设置 token")
 	}
 
-	log.Infof("机器识别码: %s", a.machineID[:16]+"...")
-	a.cron.Start()
+	logger.Infof("机器识别码: %s", a.machineID[:16]+"...")
+	a.scheduler.Start()
+	a.cronManager.Start()
 
 	go a.wsLoop()
 
-	log.Info("Agent 已启动 (时区: Asia/Shanghai, 模式: WebSocket)")
+	logger.Info("Agent 已启动 (时区: Asia/Shanghai, 模式: WebSocket)")
 	return nil
 }
 
 func (a *Agent) Stop() {
 	close(a.stopCh)
 	a.closeWS()
-	ctx := a.cron.Stop()
-	<-ctx.Done()
-	log.Info("Agent 已停止")
+	a.cronManager.Stop()
+	a.scheduler.Stop()
+	logger.Info("Agent 已停止")
 }
 
 // wsLoop WebSocket 连接循环
@@ -184,14 +231,14 @@ func (a *Agent) wsLoop() {
 		}
 
 		if err := a.connectWS(); err != nil {
-			log.Warnf("WebSocket 连接失败: %v，5秒后重试...", err)
+			logger.Warnf("WebSocket 连接失败: %v，5秒后重试...", err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
 		a.readWS()
 
-		log.Warn("WebSocket 连接断开，5秒后重连...")
+		logger.Warn("WebSocket 连接断开，5秒后重连...")
 		time.Sleep(5 * time.Second)
 	}
 }
@@ -202,18 +249,18 @@ func (a *Agent) connectWS() error {
 	wsURL = strings.Replace(wsURL, "https://", "wss://", 1)
 	wsURL = fmt.Sprintf("%s/api/agent/ws?token=%s&machine_id=%s", wsURL, url.QueryEscape(a.config.Token), url.QueryEscape(a.machineID))
 
-	log.Infof("正在连接 WebSocket: %s", wsURL)
-	log.Infof("Token: %s..., MachineID: %s...", a.config.Token[:8], a.machineID[:16])
+	logger.Infof("正在连接 WebSocket: %s", wsURL)
+	logger.Infof("Token: %s..., MachineID: %s...", a.config.Token[:8], a.machineID[:16])
 
 	dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
 	conn, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		if resp != nil {
 			bodyBytes, _ := io.ReadAll(resp.Body)
-			log.Errorf("WebSocket 握手失败: HTTP %d, Body: %s", resp.StatusCode, string(bodyBytes))
+			logger.Errorf("WebSocket 握手失败: HTTP %d, Body: %s", resp.StatusCode, string(bodyBytes))
 			resp.Body.Close()
 		} else {
-			log.Errorf("WebSocket 连接失败: %v", err)
+			logger.Errorf("WebSocket 连接失败: %v", err)
 		}
 		return err
 	}
@@ -223,7 +270,7 @@ func (a *Agent) connectWS() error {
 	a.wsStopCh = make(chan struct{})
 	a.wsMu.Unlock()
 
-	log.Info("WebSocket 已连接")
+	logger.Info("WebSocket 已连接")
 	a.sendHeartbeat()
 	go a.heartbeatLoop()
 
@@ -245,7 +292,7 @@ func (a *Agent) closeWS() {
 
 func (a *Agent) readWS() {
 	defer func() {
-		log.Info("readWS 退出，准备关闭连接")
+		logger.Info("readWS 退出，准备关闭连接")
 		a.closeWS()
 	}()
 
@@ -255,13 +302,13 @@ func (a *Agent) readWS() {
 		a.wsMu.Unlock()
 
 		if conn == nil {
-			log.Warn("readWS: wsConn 为 nil")
+			logger.Warn("readWS: wsConn 为 nil")
 			return
 		}
 
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Warnf("WebSocket 读取错误: %v", err)
+			logger.Warnf("WebSocket 读取错误: %v", err)
 			return
 		}
 
@@ -283,41 +330,81 @@ func (a *Agent) handleWSMessage(msg *WSMessage) {
 	case WSTypeTasks:
 		a.handleTasks(msg.Data)
 	case WSTypeUpdate:
-		log.Info("收到更新指令，开始更新...")
+		logger.Info("收到更新指令，开始更新...")
 		go a.selfUpdate()
 	case WSTypeDisabled:
-		log.Warn("Agent 已被禁用，清空所有任务")
+		logger.Warn("Agent 已被禁用，清空所有任务")
 		a.clearAllTasks()
 	case WSTypeEnabled:
-		log.Info("Agent 已被启用，主动拉取任务")
+		logger.Info("Agent 已被启用，主动拉取任务")
 		a.fetchTasks()
-	case "execute":
+	case WSTypeExecute:
 		a.handleExecute(msg.Data)
 	}
 }
 
 func (a *Agent) fetchTasks() {
 	if err := a.sendWSMessage(WSTypeFetchTasks, map[string]interface{}{}); err != nil {
-		log.Warnf("请求任务列表失败: %v", err)
+		logger.Warnf("请求任务列表失败: %v", err)
 	}
 }
 
 func (a *Agent) handleConnected(data json.RawMessage) {
 	var resp struct {
-		AgentID    uint   `json:"agent_id"`
-		Name       string `json:"name"`
-		IsNewAgent bool   `json:"is_new_agent"`
-		MachineID  string `json:"machine_id"`
+		AgentID         uint                   `json:"agent_id"`
+		Name            string                 `json:"name"`
+		IsNewAgent      bool                   `json:"is_new_agent"`
+		MachineID       string                 `json:"machine_id"`
+		SchedulerConfig map[string]interface{} `json:"scheduler_config"`
 	}
 	json.Unmarshal(data, &resp)
 
 	if resp.IsNewAgent {
-		log.Infof("注册成功: Agent #%d, 机器码: %s", resp.AgentID, a.machineID[:16]+"...")
+		logger.Infof("注册成功: Agent #%d, 机器码: %s", resp.AgentID, a.machineID[:16]+"...")
 	} else {
-		log.Infof("连接成功: Agent #%d (已存在), 机器码: %s", resp.AgentID, a.machineID[:16]+"...")
+		logger.Infof("连接成功: Agent #%d (已存在), 机器码: %s", resp.AgentID, a.machineID[:16]+"...")
+	}
+
+	// 更新调度器配置
+	if resp.SchedulerConfig != nil {
+		a.updateSchedulerConfig(resp.SchedulerConfig)
 	}
 
 	a.fetchTasks()
+}
+
+func (a *Agent) updateSchedulerConfig(config map[string]interface{}) {
+	// 获取当前配置作为基础
+	currentCfg := a.scheduler.GetConfig()
+	newCfg := currentCfg
+
+	// 更新配置项
+	if val, ok := config["worker_count"]; ok {
+		if v, ok := val.(float64); ok { // JSON 数字解析为 float64
+			newCfg.WorkerCount = int(v)
+		}
+	}
+	if val, ok := config["queue_size"]; ok {
+		if v, ok := val.(float64); ok {
+			newCfg.QueueSize = int(v)
+		}
+	}
+	if val, ok := config["rate_interval"]; ok {
+		if v, ok := val.(float64); ok {
+			newCfg.RateInterval = time.Duration(v) * time.Millisecond
+		}
+	}
+
+	// 只有当配置发生变化时才重新加载
+	// 只有当配置发生变化时才重新加载
+	if newCfg != currentCfg {
+		logger.Infof("收到调度配置更新: workers=%d, queue=%d, rate=%v",
+			newCfg.WorkerCount, newCfg.QueueSize, newCfg.RateInterval)
+		a.scheduler.Reload(newCfg)
+	} else {
+		logger.Infof("当前调度配置: workers=%d, queue=%d, rate=%v",
+			newCfg.WorkerCount, newCfg.QueueSize, newCfg.RateInterval)
+	}
 }
 
 func (a *Agent) handleHeartbeatAck(data json.RawMessage) {
@@ -331,7 +418,7 @@ func (a *Agent) handleHeartbeatAck(data json.RawMessage) {
 	json.Unmarshal(data, &resp)
 
 	if resp.NeedUpdate && (a.config.AutoUpdate || resp.ForceUpdate) {
-		log.Infof("发现新版本 %s，开始更新...", resp.LatestVersion)
+		logger.Infof("发现新版本 %s，开始更新...", resp.LatestVersion)
 		go a.selfUpdate()
 	}
 }
@@ -344,7 +431,7 @@ func (a *Agent) handleTasks(data json.RawMessage) {
 
 	newCount := len(resp.Tasks)
 	if newCount != a.lastTaskCount {
-		log.Infof("任务列表更新: %d -> %d 个任务", a.lastTaskCount, newCount)
+		logger.Infof("任务列表更新: %d -> %d 个任务", a.lastTaskCount, newCount)
 		a.lastTaskCount = newCount
 	}
 
@@ -354,13 +441,12 @@ func (a *Agent) handleTasks(data json.RawMessage) {
 func (a *Agent) handleExecute(data json.RawMessage) {
 	var req struct {
 		TaskID uint `json:"task_id"`
+		LogID  uint `json:"log_id"`
 	}
 	if err := json.Unmarshal(data, &req); err != nil {
-		log.Errorf("解析立即执行请求失败: %v", err)
+		logger.Errorf("解析立即执行请求失败: %v", err)
 		return
 	}
-
-	log.Infof("收到立即执行命令: 任务 #%d", req.TaskID)
 
 	// 查找任务
 	a.mu.RLock()
@@ -368,12 +454,50 @@ func (a *Agent) handleExecute(data json.RawMessage) {
 	a.mu.RUnlock()
 
 	if !exists {
-		log.Warnf("任务 #%d 不存在，无法执行", req.TaskID)
+		logger.Warnf("任务 #%d 不存在，无法执行", req.TaskID)
 		return
 	}
 
-	// 立即执行任务
-	go a.executeTask(task)
+	// 准备执行请求
+	execReq := &executor.ExecutionRequest{
+		TaskID:  fmt.Sprintf("%d", task.ID),
+		LogID:   req.LogID,
+		Name:    task.Name,
+		Command: task.Command,
+		WorkDir: task.WorkDir,
+		Envs:    executor.ParseEnvVars(task.Envs),
+		Timeout: task.Timeout,
+		Type:    executor.TaskTypeManual,
+	}
+
+	// 立即执行任务（加入队列）
+	a.scheduler.EnqueueOrExecute(execReq)
+}
+
+// RealTimeLogWriter 实时日志写入器，通过 WebSocket 发送日志
+type RealTimeLogWriter struct {
+	agent *Agent
+	logID uint
+}
+
+func (w *RealTimeLogWriter) Write(p []byte) (n int, err error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	// 构造消息
+	msg := map[string]interface{}{
+		"log_id":  w.logID,
+		"content": string(p),
+	}
+
+	// 发送消息
+	if err := w.agent.sendWSMessage(WSTypeTaskLog, msg); err != nil {
+		// 如果发送失败，不阻塞程序执行，只记录日志
+		return len(p), nil
+	}
+
+	return len(p), nil
 }
 
 func (a *Agent) sendWSMessage(msgType string, data interface{}) error {
@@ -390,7 +514,7 @@ func (a *Agent) sendWSMessage(msgType string, data interface{}) error {
 
 	a.wsConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	if err := a.wsConn.WriteMessage(websocket.TextMessage, msgBytes); err != nil {
-		log.Warnf("发送消息失败 (%s): %v", msgType, err)
+		logger.Warnf("发送消息失败 (%s): %v", msgType, err)
 		return err
 	}
 	return nil
@@ -437,13 +561,13 @@ func (a *Agent) sendHeartbeat() {
 		"auto_update": a.config.AutoUpdate,
 	}
 	if err := a.sendWSMessage(WSTypeHeartbeat, data); err != nil {
-		log.Warnf("发送心跳失败: %v", err)
+		logger.Warnf("发送心跳失败: %v", err)
 	}
 }
 
 func (a *Agent) sendTaskResult(result *TaskResult) {
 	if err := a.sendWSMessage(WSTypeTaskResult, result); err != nil {
-		log.Warnf("发送任务结果失败: %v，尝试 HTTP 上报", err)
+		logger.Warnf("发送任务结果失败: %v，尝试 HTTP 上报", err)
 		a.reportResultHTTP(result)
 	}
 }
@@ -466,34 +590,31 @@ func (a *Agent) updateTasks(tasks []AgentTask) {
 		newTasks[tasks[i].ID] = &tasks[i]
 	}
 
-	for id, entryID := range a.entryMap {
+	// 1. 移除不再存在的任务
+	for id := range a.tasks {
 		if _, exists := newTasks[id]; !exists {
-			a.cron.Remove(entryID)
-			delete(a.entryMap, id)
+			a.cronManager.RemoveTask(fmt.Sprintf("%d", id))
 			delete(a.tasks, id)
-			log.Infof("移除任务 #%d", id)
+			logger.Infof("移除任务 #%d", id)
 		}
 	}
 
+	// 2. 添加或更新任务
 	for id, task := range newTasks {
 		oldTask, exists := a.tasks[id]
-		if !exists || oldTask.Schedule != task.Schedule || oldTask.Command != task.Command {
-			if entryID, ok := a.entryMap[id]; ok {
-				a.cron.Remove(entryID)
+		if !exists || oldTask.Schedule != task.Schedule || oldTask.Command != task.Command || oldTask.Enabled != task.Enabled {
+			if task.Enabled {
+				err := a.cronManager.AddTask(task)
+				if err != nil {
+					logger.Errorf("调度任务 #%d 失败: %v", id, err)
+					continue
+				}
+				logger.Infof("已调度任务 #%d %s (%s)", id, task.Name, task.GetSchedule())
+			} else {
+				a.cronManager.RemoveTask(fmt.Sprintf("%d", id))
+				logger.Infof("任务 #%d 已禁用", id)
 			}
-
-			taskCopy := *task
-			entryID, err := a.cron.AddFunc(task.Schedule, func() {
-				a.executeTask(&taskCopy)
-			})
-			if err != nil {
-				log.Errorf("添加任务 #%d 失败: %v", id, err)
-				continue
-			}
-
-			a.entryMap[id] = entryID
 			a.tasks[id] = task
-			log.Infof("调度任务 #%d %s (%s)", id, task.Name, task.Schedule)
 		}
 	}
 }
@@ -502,129 +623,17 @@ func (a *Agent) clearAllTasks() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	for id, entryID := range a.entryMap {
-		a.cron.Remove(entryID)
-		log.Infof("移除任务 #%d", id)
+	for id := range a.tasks {
+		a.cronManager.RemoveTask(fmt.Sprintf("%d", id))
+		logger.Infof("移除任务 #%d", id)
 	}
 
-	a.entryMap = make(map[uint]cron.EntryID)
 	a.tasks = make(map[uint]*AgentTask)
 	a.lastTaskCount = 0
-	log.Info("所有任务已清空")
+	logger.Info("所有任务已清空")
 }
 
-func (a *Agent) executeTask(task *AgentTask) {
-	log.Infof("执行任务 #%d %s", task.ID, task.Name)
-	
-	// 记录进程用户信息
-	log.Infof("任务 #%d 进程 UID: %d, GID: %d", task.ID, os.Getuid(), os.Getgid())
-
-	start := time.Now()
-	result := &TaskResult{
-		TaskID:    task.ID,
-		Command:   task.Command,
-		StartTime: start.Unix(),
-	}
-
-	timeout := task.Timeout
-	if timeout <= 0 {
-		timeout = 30
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Minute)
-	defer cancel()
-
-	var cmd *exec.Cmd
-	finalCommand := task.Command
-	
-	if runtime.GOOS == "windows" {
-		// Windows: 如果有工作目录，在命令前加 cd
-		if task.WorkDir != "" {
-			finalCommand = fmt.Sprintf("cd /d %s && %s", task.WorkDir, task.Command)
-			log.Infof("任务 #%d 工作目录: %s", task.ID, task.WorkDir)
-		}
-		cmd = exec.CommandContext(ctx, "cmd", "/c", finalCommand)
-	} else {
-		// Linux/Unix: 如果有工作目录，在命令前加 cd
-		if task.WorkDir != "" {
-			finalCommand = fmt.Sprintf("cd %s && %s", task.WorkDir, task.Command)
-			log.Infof("任务 #%d 工作目录: %s", task.ID, task.WorkDir)
-		}
-		// 尝试按优先级查找可用的 shell
-		shell := findAvailableShell()
-		cmd = exec.CommandContext(ctx, shell, "-c", finalCommand)
-	}
-
-	// 处理环境变量（始终继承系统环境变量）
-	cmd.Env = os.Environ()
-	if task.Envs != "" {
-		envVars := a.parseEnvVars(task.Envs)
-		if len(envVars) > 0 {
-			cmd.Env = append(cmd.Env, envVars...)
-			log.Infof("任务 #%d 设置了 %d 个环境变量", task.ID, len(envVars))
-		}
-	}
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	end := time.Now()
-
-	result.EndTime = end.Unix()
-	result.Duration = end.Sub(start).Milliseconds()
-	result.Output = stdout.String()
-
-	if err != nil {
-		result.Status = "failed"
-		errMsg := stderr.String()
-		if errMsg == "" {
-			errMsg = err.Error()
-		} else {
-			errMsg = stderr.String() + "\n" + err.Error()
-		}
-		
-		// 如果是工作目录错误，添加更明确的提示
-		if task.WorkDir != "" && strings.Contains(err.Error(), "chdir") {
-			errMsg = fmt.Sprintf("[工作目录错误] 无法切换到目录: %s\n%s", task.WorkDir, errMsg)
-		}
-		
-		result.Output += "\n[ERROR]\n" + errMsg
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			result.ExitCode = exitErr.ExitCode()
-		} else {
-			result.ExitCode = 1
-		}
-	} else {
-		result.Status = "success"
-		result.ExitCode = 0
-	}
-
-	a.sendTaskResult(result)
-	log.Infof("任务 #%d 执行完成 (%s)", result.TaskID, result.Status)
-}
-
-// parseEnvVars 解析环境变量字符串 "KEY1=VALUE1,KEY2=VALUE2"
-func (a *Agent) parseEnvVars(envStr string) []string {
-	if envStr == "" {
-		return nil
-	}
-
-	pairs := strings.Split(envStr, ",")
-	result := make([]string, 0, len(pairs))
-	
-	for _, pair := range pairs {
-		if pair == "" {
-			continue
-		}
-		// 解码特殊字符
-		pair = strings.ReplaceAll(pair, "{{COMMA}}", ",")
-		pair = strings.ReplaceAll(pair, "{{EQUAL}}", "=")
-		result = append(result, pair)
-	}
-	
-	return result
-}
+// executeTask 已被 AgentHandler.OnTaskCompleted 代替，此处删除旧实现
 
 func (a *Agent) doRequest(method, path string, body interface{}) (*http.Response, error) {
 	var bodyReader io.Reader

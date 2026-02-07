@@ -7,7 +7,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/services/tasks"
 )
 
-var cronService *tasks.CronService
+var executorService *tasks.ExecutorService
 
 func RegisterControllers() *Controllers {
 	// Initialize services
@@ -23,35 +23,41 @@ func RegisterControllers() *Controllers {
 	scriptService := services.NewScriptService()
 	sendStatsService := services.NewSendStatsService()
 	agentWSManager := services.GetAgentWSManager()
-	
-	// 创建任务执行服务（需要依赖注入）
-	taskExecutionService := tasks.NewTaskExecutionService(agentWSManager, sendStatsService)
-	executorService := tasks.NewExecutorService(taskService, taskExecutionService, settingsService, envService)
 
-	// Initialize cron service
-	cronService = tasks.NewCronService(taskService, executorService)
-	cronService.Start()
+	taskLogService := tasks.NewTaskLogService(sendStatsService)
+	// 创建任务执行服务（需要依赖注入）
+
+	// 清理 task 运行状态的任务可以直接由 executorService 承担或在此处通过 Database 直接清理
+	// 简单期间，我们使用一个新方法 tasks.CleanupRunningTasks() 或者让 executorService 启动时清理
+
+	executorService = tasks.NewExecutorService(taskService, taskLogService, agentWSManager, settingsService, envService)
+	// 启动时清理残留的运行状态
+	_ = executorService.CleanupRunningTasks()
+
+	// 启动计划任务
+	executorService.StartCron()
 
 	// Initialize and return controllers
 	return &Controllers{
-		Task:       controllers.NewTaskController(taskService, cronService),
+		Task:       controllers.NewTaskController(taskService, executorService),
 		Auth:       controllers.NewAuthController(userService, settingsService, loginLogService),
 		Env:        controllers.NewEnvController(envService),
 		Script:     controllers.NewScriptController(scriptService),
 		Executor:   controllers.NewExecutorController(executorService),
 		File:       controllers.NewFileController(constant.ScriptsWorkDir),
-		Dashboard:  controllers.NewDashboardController(cronService, executorService),
+		Dashboard:  controllers.NewDashboardController(executorService),
 		Log:        controllers.NewLogController(),
+		LogWS:      controllers.NewLogWSController(),
 		Terminal:   controllers.NewTerminalController(envService),
 		Settings:   controllers.NewSettingsController(userService, loginLogService, executorService),
 		Dependency: controllers.NewDependencyController(),
-		Agent:      controllers.NewAgentController(),
+		Agent:      controllers.NewAgentController(settingsService),
 	}
 }
 
-// StopCron stops the cron service gracefully
+// StopCron 停止计划任务服务
 func StopCron() {
-	if cronService != nil {
-		cronService.Stop()
+	if executorService != nil {
+		executorService.Stop()
 	}
 }

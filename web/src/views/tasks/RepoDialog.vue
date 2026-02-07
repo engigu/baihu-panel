@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import DirTreeSelect from '@/components/DirTreeSelect.vue'
 import { api, type Task, type RepoConfig, type Agent } from '@/api'
@@ -48,14 +49,22 @@ const repoConfig = ref<RepoConfig>({
   branch: '',
   sparse_path: '',
   single_file: false,
-  proxy: 'none',
   proxy_url: '',
-  auth_token: ''
+  auth_token: '',
+  concurrency: 1,
+  proxy: ''
 })
 const cleanType = ref('none')
 const cleanKeep = ref(30)
 const allAgents = ref<Agent[]>([])
 const selectedAgentId = ref<string>('local')
+
+const concurrencyEnabled = computed({
+  get: () => repoConfig.value.concurrency === 1,
+  set: (val: boolean) => {
+    repoConfig.value.concurrency = val ? 1 : 0
+  }
+})
 
 const cleanConfig = computed(() => {
   if (!cleanType.value || cleanType.value === 'none' || cleanKeep.value <= 0) return ''
@@ -80,14 +89,34 @@ watch(() => props.open, async (val) => {
       cleanKeep.value = 30
     }
     // 解析仓库配置
-    if (props.task?.config) {
+    // 解析仓库配置
+    const defaultConfig: RepoConfig = {
+      source_type: 'git',
+      source_url: '',
+      target_path: '',
+      branch: '',
+      sparse_path: '',
+      single_file: false,
+      proxy: 'none',
+      proxy_url: '',
+      auth_token: '',
+      concurrency: 1
+    }
+    const configStr = props.task?.config
+    if (configStr) {
       try {
-        repoConfig.value = JSON.parse(props.task.config)
+        const parsed = JSON.parse(configStr)
+        // 兼容旧字段: 优先使用 $task_concurrency, 若无则默认 1
+        let concurrency = 1
+        if (parsed['$task_concurrency'] !== undefined) {
+             concurrency = parsed['$task_concurrency'] === 1 ? 1 : 0
+        }
+        repoConfig.value = { ...defaultConfig, ...parsed, concurrency }
       } catch {
-        repoConfig.value = { source_type: 'git', source_url: '', target_path: '', branch: '', sparse_path: '', single_file: false, proxy: 'none', proxy_url: '', auth_token: '' }
+        repoConfig.value = defaultConfig
       }
     } else {
-      repoConfig.value = { source_type: 'git', source_url: '', target_path: '', branch: '', sparse_path: '', single_file: false, proxy: 'none', proxy_url: '', auth_token: '' }
+      repoConfig.value = defaultConfig
     }
     // 仓库任务暂时仅支持本地执行
     selectedAgentId.value = 'local'
@@ -106,7 +135,15 @@ async function save() {
   try {
     form.value.clean_config = cleanConfig.value
     form.value.type = 'repo'
-    form.value.config = JSON.stringify(repoConfig.value)
+    // 确保 concurrency 字段被正确保存到 config 中
+    // 注意：我们将 concurrency 存储在 config 的 $task_concurrency 字段中
+    // 同时也保留在 repoConfig 对象中以便回显
+    const configToSave: any = {
+      ...repoConfig.value,
+      '$task_concurrency': repoConfig.value.concurrency !== undefined ? repoConfig.value.concurrency : 1
+    }
+    
+    form.value.config = JSON.stringify(configToSave)
     form.value.command = `[${repoConfig.value.source_type}] ${repoConfig.value.source_url}`
     form.value.agent_id = selectedAgentId.value === 'local' ? null : Number(selectedAgentId.value)
     if (props.isEdit && form.value.id) {
@@ -203,6 +240,14 @@ async function save() {
         <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-3">
           <Label class="sm:text-right text-sm">认证Token</Label>
           <Input v-model="repoConfig.auth_token" type="text" placeholder="可选，用于私有仓库" class="sm:col-span-3 h-8 text-sm" autocomplete="new-password" />
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-3">
+          <Label class="sm:text-right text-sm">并发控制</Label>
+          <div class="sm:col-span-3 flex items-center gap-2">
+            <Switch v-model:checked="concurrencyEnabled" />
+            <span class="text-sm text-muted-foreground">允许并发</span>
+            <span class="text-xs text-muted-foreground ml-2">(如果任务未执行完成，是否允许再次执行)</span>
+          </div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-3">
           <Label class="sm:text-right text-sm">定时规则</Label>

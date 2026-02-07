@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import DirTreeSelect from '@/components/DirTreeSelect.vue'
@@ -44,6 +45,13 @@ const selectedAgentId = ref<string>('local')
 const envSearchQuery = ref('')
 // 为每个执行位置保存独立的工作目录配置
 const workDirCache = ref<Record<string, string>>({})
+const concurrency = ref(0)
+const concurrencyEnabled = ref(false)
+
+// 监听 concurrencyEnabled 的变化，同步到 concurrency
+watch(concurrencyEnabled, (val) => {
+  concurrency.value = val ? 1 : 0
+})
 
 // 当前显示的工作目录（根据选择的执行位置）
 const currentWorkDir = computed({
@@ -93,6 +101,36 @@ watch(() => props.open, async (val) => {
       cleanType.value = 'none'
       cleanKeep.value = 30
     }
+    // 解析任务配置
+    try {
+      // 确保 config 是有效的 JSON 对象字符串
+      let configStr = props.task?.config
+      // 如果是 null/undefined 或者空字符串，初始化为 '{}'
+      if (!configStr) {
+        configStr = '{}'
+      }
+      
+      const parsed = JSON.parse(configStr)
+      // 确保解析结果是对象
+      if (parsed && typeof parsed === 'object') {
+        const val = parsed['$task_concurrency']
+        if (typeof val === 'number') {
+          // 如果已存在并发配置，直接使用（0 或 1）
+          concurrency.value = val
+          concurrencyEnabled.value = val === 1
+        } else {
+          // 默认值：允许并发
+          concurrency.value = 1
+          concurrencyEnabled.value = true
+        }
+      } else {
+        concurrency.value = 1
+        concurrencyEnabled.value = true
+      }
+    } catch {
+      concurrency.value = 1
+      concurrencyEnabled.value = true
+    }
     // 解析环境变量
     if (props.task?.envs) {
       selectedEnvIds.value = props.task.envs.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
@@ -140,8 +178,31 @@ async function save() {
     form.value.envs = selectedEnvIds.value.join(',')
     form.value.type = 'task'
     form.value.agent_id = selectedAgentId.value === 'local' ? null : Number(selectedAgentId.value)
+    
+    // 保存配置 - 确保 concurrency 字段被正确保存
+    let config: Record<string, any> = {}
+    
+    // 如果 form.value.config 存在，先解析它以保留其他配置
+    if (form.value.config) {
+      try {
+        const parsed = JSON.parse(form.value.config)
+        if (parsed && typeof parsed === 'object') {
+          config = parsed
+        }
+      } catch {
+        config = {}
+      }
+    }
+    
+    // 更新并发控制字段 (1: 开启, 0: 关闭)
+    config['$task_concurrency'] = concurrency.value
+    
+    // 重新序列化配置
+    form.value.config = JSON.stringify(config)
+
     // 保存当前选择的执行位置对应的工作目录
     form.value.work_dir = currentWorkDir.value
+    
     if (props.isEdit && form.value.id) {
       await api.tasks.update(form.value.id, form.value)
       toast.success('任务已更新')
@@ -151,7 +212,9 @@ async function save() {
     }
     emit('update:open', false)
     emit('saved')
-  } catch { toast.error('保存失败') }
+  } catch (error) { 
+    toast.error('保存失败') 
+  }
 }
 </script>
 
@@ -185,7 +248,7 @@ async function save() {
                 <SelectValue placeholder="选择执行位置" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="local">本地执行</SelectItem>
+              <SelectItem value="local">本地执行</SelectItem>
                 <SelectItem v-for="agent in onlineAgents" :key="agent.id" :value="String(agent.id)">
                   {{ agent.name }} ({{ agent.status === 'online' ? '在线' : '离线' }})
                 </SelectItem>
@@ -233,6 +296,16 @@ async function save() {
               </Select>
               <Input v-if="cleanType && cleanType !== 'none'" v-model.number="cleanKeep" type="number" :placeholder="cleanType === 'day' ? '7' : '100'" class="w-20 h-9 text-sm" />
             </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-2 sm:gap-3">
+          <Label class="sm:text-right text-sm pt-2">并发控制</Label>
+          <div class="sm:col-span-3 space-y-1.5">
+            <div class="flex items-center gap-2">
+              <Switch v-model="concurrencyEnabled" />
+              <span class="text-sm text-muted-foreground">允许并发</span>
+            </div>
+            <p class="text-xs text-muted-foreground">如果任务未执行完成，是否允许再次执行</p>
           </div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-2 sm:gap-3">

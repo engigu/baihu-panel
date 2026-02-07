@@ -1,12 +1,13 @@
 package tasks
 
 import (
+	"encoding/json"
+	"time"
+
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/utils"
-	"encoding/json"
-	"time"
 )
 
 // SendStatsService 接口定义（避免循环依赖）
@@ -32,9 +33,31 @@ type CleanConfig struct {
 	Keep int    `json:"keep"` // 保留天数或条数
 }
 
-// SaveTaskLog 保存任务日志（通用方法）
-func (s *TaskLogService) SaveTaskLog(taskLog *models.TaskLog) error {
+// CreateEmptyLog 创建一个空的日志记录（任务开始时调用）
+func (s *TaskLogService) CreateEmptyLog(taskID uint, command string) (*models.TaskLog, error) {
+	startTime := models.LocalTime(time.Now())
+	taskLog := &models.TaskLog{
+		TaskID:    taskID,
+		Command:   command,
+		Status:    "running",
+		StartTime: &startTime,
+	}
 	if err := database.DB.Create(taskLog).Error; err != nil {
+		return nil, err
+	}
+	return taskLog, nil
+}
+
+// SaveTaskLog 保存或更新任务日志
+func (s *TaskLogService) SaveTaskLog(taskLog *models.TaskLog) error {
+	var err error
+	if taskLog.ID > 0 {
+		err = database.DB.Model(taskLog).Updates(taskLog).Error
+	} else {
+		err = database.DB.Create(taskLog).Error
+	}
+
+	if err != nil {
 		return err
 	}
 
@@ -42,6 +65,11 @@ func (s *TaskLogService) SaveTaskLog(taskLog *models.TaskLog) error {
 	database.DB.Model(&models.Task{}).Where("id = ?", taskLog.TaskID).Update("last_run", time.Now())
 
 	return nil
+}
+
+// UpdateTaskDuration 更新任务耗时（心跳）
+func (s *TaskLogService) UpdateTaskDuration(logID uint, duration int64) error {
+	return database.DB.Model(&models.TaskLog{}).Where("id = ?", logID).Update("duration", duration).Error
 }
 
 // UpdateTaskStats 更新任务统计
@@ -100,7 +128,7 @@ func (s *TaskLogService) CleanTaskLogs(taskID uint) {
 
 // ProcessTaskCompletion 处理任务完成后的所有操作（保存日志、更新统计、清理旧日志）
 func (s *TaskLogService) ProcessTaskCompletion(taskLog *models.TaskLog) error {
-	// 1. 保存日志
+	// 1. 保存/更新日志
 	if err := s.SaveTaskLog(taskLog); err != nil {
 		return err
 	}
@@ -147,12 +175,19 @@ func (s *TaskLogService) CreateTaskLogFromAgentResult(result *models.AgentTaskRe
 }
 
 // CreateTaskLogFromLocalExecution 从本地执行结果创建任务日志
-func (s *TaskLogService) CreateTaskLogFromLocalExecution(taskID uint, command, output, status string, duration int64, exitCode int, start, end time.Time) (*models.TaskLog, error) {
-	// 压缩输出
-	compressed, err := utils.CompressToBase64(output)
-	if err != nil {
-		logger.Errorf("[TaskLog] 压缩日志失败: %v", err)
-		compressed = ""
+func (s *TaskLogService) CreateTaskLogFromLocalExecution(taskID uint, command, output, status string, duration int64, exitCode int, start, end time.Time, isCompressed bool) (*models.TaskLog, error) {
+	var compressed string
+	var err error
+
+	if isCompressed {
+		compressed = output
+	} else {
+		// 压缩输出
+		compressed, err = utils.CompressToBase64(output)
+		if err != nil {
+			logger.Errorf("[TaskLog] 压缩日志失败: %v", err)
+			compressed = ""
+		}
 	}
 
 	startTime := models.LocalTime(start)

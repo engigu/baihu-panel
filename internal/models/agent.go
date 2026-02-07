@@ -16,7 +16,7 @@ type Agent struct {
 	Status      string         `json:"status" gorm:"size:20;default:'pending'"` // 状态: pending(待审核), online, offline, blocked(拉黑)
 	LastSeen    *LocalTime     `json:"last_seen"`                               // 最后心跳时间
 	IP          string         `json:"ip" gorm:"size:45"`                       // Agent IP 地址
-	Version     string         `json:"version" gorm:"size:20"`                  // Agent 版本
+	Version     string         `json:"version" gorm:"size:50"`                  // Agent 版本
 	BuildTime   string         `json:"build_time" gorm:"size:30"`               // Agent 构建时间
 	Hostname    string         `json:"hostname" gorm:"size:100"`                // Agent 主机名
 	OS          string         `json:"os" gorm:"size:20"`                       // 操作系统
@@ -65,6 +65,7 @@ type AgentTask struct {
 // AgentTaskResult Agent 上报的任务执行结果
 type AgentTaskResult struct {
 	TaskID    uint   `json:"task_id"`
+	LogID     uint   `json:"log_id"`
 	AgentID   uint   `json:"agent_id"`
 	Command   string `json:"command"`
 	Output    string `json:"output"`

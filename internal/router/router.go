@@ -22,6 +22,7 @@ type Controllers struct {
 	File       *controllers.FileController
 	Dashboard  *controllers.DashboardController
 	Log        *controllers.LogController
+	LogWS      *controllers.LogWSController
 	Terminal   *controllers.TerminalController
 	Settings   *controllers.SettingsController
 	Dependency *controllers.DependencyController
@@ -166,6 +167,7 @@ func Setup(c *Controllers) *gin.Engine {
 			logs := authorized.Group("/logs")
 			{
 				logs.GET("", c.Log.GetLogs)
+				logs.GET("/ws", c.LogWS.StreamLog)
 				logs.GET("/:id", c.Log.GetLogDetail)
 			}
 
@@ -246,7 +248,7 @@ func Setup(c *Controllers) *gin.Engine {
 
 		data, err := static.ReadFile("index.html")
 		if err != nil {
-			ctx.String(500, "index.html not found")
+			ctx.Status(404)
 			return
 		}
 

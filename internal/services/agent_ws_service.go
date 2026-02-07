@@ -1,22 +1,25 @@
 package services
 
 import (
-	"github.com/engigu/baihu-panel/internal/database"
-	"github.com/engigu/baihu-panel/internal/logger"
-	"github.com/engigu/baihu-panel/internal/models"
 	"encoding/json"
 	"sync"
 	"time"
+
+	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/database"
+	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/models"
 
 	"github.com/gorilla/websocket"
 )
 
 // AgentWSManager WebSocket 连接管理器
 type AgentWSManager struct {
-	connections   map[uint]*AgentConnection // agentID -> connection
-	ipConnections map[string]int            // IP -> 连接数
-	ipLastAttempt map[string]time.Time      // IP -> 最后连接尝试时间
-	ipFailCount   map[string]int            // IP -> 连续失败次数
+	connections   map[uint]*AgentConnection             // agentID -> connection
+	ipConnections map[string]int                        // IP -> 连接数
+	ipLastAttempt map[string]time.Time                  // IP -> 最后连接尝试时间
+	ipFailCount   map[string]int                        // IP -> 连续失败次数
+	remoteWaiters map[uint]chan *models.AgentTaskResult // logID -> result channel
 	mu            sync.RWMutex
 }
 
@@ -47,16 +50,19 @@ type WSMessage struct {
 
 // 消息类型常量
 const (
-	WSTypeHeartbeat    = "heartbeat"
-	WSTypeHeartbeatAck = "heartbeat_ack"
-	WSTypeTasks        = "tasks"
-	WSTypeTaskResult   = "task_result"
-	WSTypeUpdate       = "update"
-	WSTypeDisconnect   = "disconnect"
-	WSTypeConnected    = "connected"   // 连接成功，包含注册状态
-	WSTypeDisabled     = "disabled"    // Agent 被禁用
-	WSTypeEnabled      = "enabled"     // Agent 被启用
-	WSTypeFetchTasks   = "fetch_tasks" // Agent 请求任务列表
+	WSTypeHeartbeat     = constant.WSTypeHeartbeat
+	WSTypeHeartbeatAck  = constant.WSTypeHeartbeatAck
+	WSTypeTasks         = constant.WSTypeTasks
+	WSTypeTaskResult    = constant.WSTypeTaskResult
+	WSTypeUpdate        = constant.WSTypeUpdate
+	WSTypeDisconnect    = constant.WSTypeDisconnect
+	WSTypeConnected     = constant.WSTypeConnected
+	WSTypeDisabled      = constant.WSTypeDisabled
+	WSTypeEnabled       = constant.WSTypeEnabled
+	WSTypeFetchTasks    = constant.WSTypeFetchTasks
+	WSTypeTaskLog       = constant.WSTypeTaskLog
+	WSTypeExecute       = constant.WSTypeExecute
+	WSTypeTaskHeartbeat = constant.WSTypeTaskHeartbeat
 )
 
 var agentWSManager *AgentWSManager
@@ -70,6 +76,7 @@ func GetAgentWSManager() *AgentWSManager {
 			ipConnections: make(map[string]int),
 			ipLastAttempt: make(map[string]time.Time),
 			ipFailCount:   make(map[string]int),
+			remoteWaiters: make(map[uint]chan *models.AgentTaskResult),
 		}
 		go agentWSManager.cleanupLoop()
 	})
@@ -215,6 +222,37 @@ func (m *AgentWSManager) BroadcastTasks(agentID uint) {
 	})
 }
 
+// RegisterRemoteWaiter 注册远程任务结果等待者
+func (m *AgentWSManager) RegisterRemoteWaiter(logID uint) chan *models.AgentTaskResult {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ch := make(chan *models.AgentTaskResult, 1)
+	m.remoteWaiters[logID] = ch
+	return ch
+}
+
+// UnregisterRemoteWaiter 注销远程任务结果等待者
+func (m *AgentWSManager) UnregisterRemoteWaiter(logID uint) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.remoteWaiters, logID)
+}
+
+// NotifyRemoteResult 通知远程任务结果
+func (m *AgentWSManager) NotifyRemoteResult(result *models.AgentTaskResult) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if ch, ok := m.remoteWaiters[result.LogID]; ok {
+		select {
+		case ch <- result:
+			return true
+		default:
+			return false
+		}
+	}
+	return false
+}
+
 // OnlineCount 在线 Agent 数量
 func (m *AgentWSManager) OnlineCount() int {
 	m.mu.RLock()
@@ -226,6 +264,11 @@ func (m *AgentWSManager) OnlineCount() int {
 func (m *AgentWSManager) cleanupLoop() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
+
+	// 启动时，先将所有 "online" 状态的 Agent 重置为 "offline"
+	// 因为 WebSocket 连接在应用启动时是空的，所有 Agent 客观上都是离线状态
+	// 等它们重新连接上来后，会变为 "online"
+	NewAgentService().ResetAllAgentsToOffline()
 
 	for range ticker.C {
 		m.mu.Lock()
@@ -247,6 +290,15 @@ func (m *AgentWSManager) cleanupLoop() {
 				logger.Infof("[AgentWS] Agent #%d 心跳超时，已断开", agentID)
 			}
 		}
+
+		// 定期清理数据库中的过期状态（处理服务重启或异常终止的情况）
+		// 有些 Agent 虽然没有连接，但数据库状态可能是 "online"
+		cutoff := now.Add(-2 * time.Minute)
+		database.DB.Model(&models.Agent{}).
+			Where("status = ? AND last_seen < ?", "online", cutoff).
+			Update("status", "offline")
+
+		// 清理过期的限流记录（超过 10 分钟未活动）
 
 		// 清理过期的限流记录（超过 10 分钟未活动）
 		for ip, lastAttempt := range m.ipLastAttempt {

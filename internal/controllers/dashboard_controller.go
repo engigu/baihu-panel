@@ -14,13 +14,11 @@ import (
 )
 
 type DashboardController struct {
-	cronService     *tasks.CronService
 	executorService *tasks.ExecutorService
 }
 
-func NewDashboardController(cronService *tasks.CronService, executorService *tasks.ExecutorService) *DashboardController {
+func NewDashboardController(executorService *tasks.ExecutorService) *DashboardController {
 	return &DashboardController{
-		cronService:     cronService,
 		executorService: executorService,
 	}
 }
@@ -47,14 +45,14 @@ func (dc *DashboardController) GetStats(c *gin.Context) {
 
 	// 调度统计：本地调度 + Agent 调度
 	// 本地调度：agent_id 为 NULL 且 enabled = true 的任务
-	localScheduled := dc.cronService.GetScheduledCount()
-	
+	localScheduled := dc.executorService.GetScheduledCount()
+
 	// Agent 调度：agent_id 不为 NULL 且 enabled = true 的任务
 	var agentScheduled int64
 	database.DB.Model(&models.Task{}).
 		Where("agent_id IS NOT NULL AND enabled = ?", true).
 		Count(&agentScheduled)
-	
+
 	totalScheduled := localScheduled + int(agentScheduled)
 
 	// 正在运行：目前只能统计本地运行的任务

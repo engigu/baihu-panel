@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
 import TaskDialog from './TaskDialog.vue'
 import RepoDialog from './RepoDialog.vue'
-import { Plus, Play, Pencil, Trash2, Search, ScrollText, GitBranch, Terminal, Server, Monitor, X } from 'lucide-vue-next'
+import { Plus, Play, Pencil, Trash2, Search, ScrollText, GitBranch, Terminal, Server, Monitor, X, Loader2 } from 'lucide-vue-next'
 import { api, type Task, type Agent } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
@@ -137,8 +137,22 @@ async function deleteTask() {
   deleteTaskId.value = null
 }
 
+const executingTaskId = ref<number | null>(null)
+
 async function runTask(id: number) {
-  try { await api.tasks.execute(id); toast.success('任务已执行') } catch { toast.error('执行失败') }
+  executingTaskId.value = id
+  toast.message('正在执行...', { id: 'executing' })
+  try {
+    const res = await api.tasks.execute(id)
+    if (res.Success === false) {
+      throw new Error(res.Error || '执行失败')
+    }
+    toast.success('触发成功', { id: 'executing' })
+  } catch (error: any) {
+    toast.error(error?.message || '执行失败', { id: 'executing' })
+  } finally {
+    executingTaskId.value = null
+  }
 }
 
 async function toggleTask(task: Task, enabled: boolean) {
@@ -252,8 +266,9 @@ watch(() => route.query.agent_id, (newVal) => {
             </span>
           </span>
           <span class="w-20 sm:w-36 shrink-0 flex justify-center gap-0.5 sm:gap-1">
-            <Button variant="ghost" size="icon" class="h-6 w-6 sm:h-7 sm:w-7" @click="runTask(task.id)" title="执行">
-              <Play class="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+            <Button variant="ghost" size="icon" class="h-6 w-6 sm:h-7 sm:w-7" @click="runTask(task.id)" title="执行" :disabled="executingTaskId === task.id">
+              <Loader2 v-if="executingTaskId === task.id" class="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin" />
+              <Play v-else class="h-3 w-3 sm:h-3.5 sm:w-3.5" />
             </Button>
             <Button variant="ghost" size="icon" class="h-6 w-6 sm:h-7 sm:w-7" @click="viewLogs(task.id)" title="日志">
               <ScrollText class="h-3 w-3 sm:h-3.5 sm:w-3.5" />

@@ -1,15 +1,18 @@
 package controllers
 
 import (
-	"github.com/engigu/baihu-panel/internal/logger"
-	"github.com/engigu/baihu-panel/internal/models"
-	"github.com/engigu/baihu-panel/internal/services"
-	"github.com/engigu/baihu-panel/internal/utils"
 	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/services"
+	"github.com/engigu/baihu-panel/internal/services/tasks"
+	"github.com/engigu/baihu-panel/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -23,15 +26,17 @@ var agentUpgrader = websocket.Upgrader{
 
 // AgentController Agent 控制器
 type AgentController struct {
-	agentService *services.AgentService
-	wsManager    *services.AgentWSManager
+	agentService    *services.AgentService
+	wsManager       *services.AgentWSManager
+	settingsService *services.SettingsService
 }
 
 // NewAgentController 创建 Agent 控制器
-func NewAgentController() *AgentController {
+func NewAgentController(settingsService *services.SettingsService) *AgentController {
 	return &AgentController{
-		agentService: services.NewAgentService(),
-		wsManager:    services.GetAgentWSManager(),
+		agentService:    services.NewAgentService(),
+		wsManager:       services.GetAgentWSManager(),
+		settingsService: settingsService,
 	}
 }
 
@@ -209,7 +214,7 @@ func (c *AgentController) GetTasks(ctx *gin.Context) {
 
 	// 先尝试通过 token 查找 Agent
 	agent := c.agentService.GetByToken(token)
-	
+
 	// 如果找不到，尝试验证令牌并通过 machine_id 查找
 	if agent == nil {
 		machineID := ctx.GetHeader("X-Machine-ID")
@@ -332,7 +337,6 @@ func (c *AgentController) ForceUpdate(ctx *gin.Context) {
 	utils.SuccessMsg(ctx, "已标记强制更新，Agent 下次心跳时将自动更新")
 }
 
-
 // ========== WebSocket ==========
 
 // WSConnect Agent WebSocket 连接
@@ -411,15 +415,26 @@ func (c *AgentController) WSConnect(ctx *gin.Context) {
 	// 更新 Agent 状态
 	c.agentService.Heartbeat(token, ip, "", "", "", "", "")
 
-	// 发送连接成功消息（包含注册状态）
+	// 获取调度配置
+	workerCount := getIntSetting(c.settingsService, constant.SectionScheduler, constant.KeyWorkerCount, 4)
+	queueSize := getIntSetting(c.settingsService, constant.SectionScheduler, constant.KeyQueueSize, 100)
+	rateInterval := getIntSetting(c.settingsService, constant.SectionScheduler, constant.KeyRateInterval, 200)
+
+	// 发送连接成功消息（包含注册状态和调度配置）
 	c.wsManager.SendToAgent(agent.ID, services.WSTypeConnected, map[string]interface{}{
 		"agent_id":     agent.ID,
 		"name":         agent.Name,
 		"is_new_agent": isNewAgent,
 		"machine_id":   machineID,
+		"scheduler_config": map[string]interface{}{
+			"worker_count":  workerCount,
+			"queue_size":    queueSize,
+			"rate_interval": rateInterval,
+		},
 	})
 
-	logger.Infof("[AgentWS] Agent #%d 连接成功", agent.ID)
+	logger.Infof("[AgentWS] Agent #%d 连接成功 (配置: workers=%d, queue=%d, rate=%d)",
+		agent.ID, workerCount, queueSize, rateInterval)
 
 	// 启动读写协程
 	go c.wsWritePump(ac)
@@ -513,8 +528,30 @@ func (c *AgentController) handleWSMessage(ac *services.AgentConnection, agent *m
 	case services.WSTypeTaskResult:
 		c.handleTaskResult(agent, msg.Data)
 
+	case services.WSTypeTaskLog:
+		c.handleTaskLog(agent, msg.Data)
+
 	case services.WSTypeFetchTasks:
 		c.handleFetchTasks(agent)
+
+	case services.WSTypeTaskHeartbeat: // 任务心跳
+		c.handleTaskHeartbeat(agent, msg.Data)
+	}
+}
+
+// handleTaskHeartbeat 处理任务心跳
+func (c *AgentController) handleTaskHeartbeat(agent *models.Agent, data json.RawMessage) {
+	var req struct {
+		LogID    uint  `json:"log_id"`
+		Duration int64 `json:"duration"`
+	}
+	if err := json.Unmarshal(data, &req); err != nil {
+		logger.Errorf("[AgentWS] 解析心跳消息失败: %v", err)
+		return
+	}
+	if req.LogID > 0 {
+		logger.Infof("[AgentWS] 收到任务心跳: LogID=%d, Duration=%dms", req.LogID, req.Duration)
+		c.agentService.UpdateTaskDuration(req.LogID, req.Duration)
 	}
 }
 
@@ -573,6 +610,25 @@ func (c *AgentController) handleTaskResult(agent *models.Agent, data json.RawMes
 
 	result.AgentID = agent.ID
 	c.agentService.ReportResult(&result)
+}
+
+// handleTaskLog 处理 Agent 发送的实时日志
+func (c *AgentController) handleTaskLog(agent *models.Agent, data json.RawMessage) {
+	var logMsg struct {
+		LogID   uint   `json:"log_id"`
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal(data, &logMsg); err != nil {
+		logger.Errorf("[AgentWS] 解析日志消息失败: %v", err)
+		return
+	}
+
+	tl := tasks.GetActiveLog(logMsg.LogID)
+	if tl != nil {
+		tl.Write([]byte(logMsg.Content))
+	} else {
+		logger.Warnf("[AgentWS] 收到任务日志但未找到活跃 TinyLog: LogID=%d, ContentSize=%d", logMsg.LogID, len(logMsg.Content))
+	}
 }
 
 // NotifyTaskUpdate 通知 Agent 任务更新
@@ -634,4 +690,17 @@ func (c *AgentController) DeleteToken(ctx *gin.Context) {
 	}
 
 	utils.SuccessMsg(ctx, "删除成功")
+}
+
+// getIntSetting 辅助方法
+func getIntSetting(s *services.SettingsService, section, key string, defaultVal int) int {
+	val := s.Get(section, key)
+
+	if val == "" {
+		return defaultVal
+	}
+	if result, err := strconv.Atoi(val); err == nil {
+		return result
+	}
+	return defaultVal
 }

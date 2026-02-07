@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 const ServiceName = "baihu-agent"
@@ -21,9 +23,6 @@ var (
 	Version   = "dev"
 	BuildTime = ""
 )
-
-// 东八区时区
-var cstZone = time.FixedZone("CST", 8*3600)
 
 // 全局配置
 var (
@@ -335,7 +334,7 @@ func cmdTasks() {
 
 	agent := &Agent{
 		config:    config,
-		machineID: generateMachineID(),
+		machineID: utils.GenerateMachineID(),
 		client:    &http.Client{Timeout: 30 * time.Second},
 	}
 
@@ -400,7 +399,7 @@ func cmdLogs() {
 	}
 
 	fmt.Printf("日志文件: %s\n", logFile)
-	fmt.Println("按 Ctrl+C 退出\n")
+	fmt.Println("按 Ctrl+C 退出")
 
 	// 使用 tail -f 实时跟踪日志
 	cmd := exec.Command("tail", "-f", "-n", "50", logFile)

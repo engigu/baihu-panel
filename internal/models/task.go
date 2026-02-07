@@ -1,6 +1,8 @@
 package models
 
 import (
+	"fmt"
+
 	"github.com/engigu/baihu-panel/internal/constant"
 
 	"gorm.io/gorm"
@@ -25,6 +27,11 @@ type RepoConfig struct {
 	AuthToken  string `json:"auth_token"`  // 认证 Token
 }
 
+// TaskConfig  任务配置  RepoConfig+TaskConfig=task.config
+type TaskConfig struct {
+	Concurrency int `json:"$task_concurrency"` // 0: disable concurrency, 1: enable concurrency
+}
+
 // Task represents a scheduled task
 type Task struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
@@ -39,6 +46,7 @@ type Task struct {
 	Envs        string         `json:"envs" gorm:"size:255;default:''"`         // 环境变量ID列表，逗号分隔
 	AgentID     *uint          `json:"agent_id" gorm:"index"`                   // Agent ID，为空表示本地执行
 	Enabled     bool           `json:"enabled" gorm:"default:true"`
+	RunningGo   string         `json:"running_go" gorm:"type:text"` // 正在运行的 go routine id 数组 (JSON)
 	LastRun     *LocalTime     `json:"last_run"`
 	NextRun     *LocalTime     `json:"next_run"`
 	CreatedAt   LocalTime      `json:"created_at"`
@@ -48,6 +56,26 @@ type Task struct {
 
 func (Task) TableName() string {
 	return constant.TablePrefix + "tasks"
+}
+
+func (t *Task) GetID() string {
+	return fmt.Sprintf("%d", t.ID)
+}
+
+func (t *Task) GetName() string {
+	return t.Name
+}
+
+func (t *Task) GetCommand() string {
+	return t.Command
+}
+
+func (t *Task) GetTimeout() int {
+	return t.Timeout
+}
+
+func (t *Task) GetSchedule() string {
+	return t.Schedule
 }
 
 // TaskLog represents a log entry for task execution

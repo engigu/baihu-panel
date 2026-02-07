@@ -24,23 +24,37 @@ build:
 # Build all (frontend + backend)
 build-all: build-web build
 
-# Build agent for all platforms (local development)
-build-agent:
+# Build agent for all platforms
+build-agent: build-agent-linux-amd64 build-agent-linux-arm64 build-agent-windows-amd64 build-agent-darwin-amd64 build-agent-darwin-arm64
+	@echo "All agent packages built in data/agent/"
+	@ls -lh data/agent/*.tar.gz
+
+AGENT_LDFLAGS=-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'
+
+build-agent-linux-amd64:
 	@mkdir -p data/agent
 	@echo "$(VERSION)" > data/agent/version.txt
-	@echo "Building and packaging agents..."
-	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o baihu-agent . && \
-		tar -czvf ../data/agent/baihu-agent-linux-amd64.tar.gz baihu-agent config.example.ini && rm baihu-agent
-	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o baihu-agent . && \
-		tar -czvf ../data/agent/baihu-agent-linux-arm64.tar.gz baihu-agent config.example.ini && rm baihu-agent
-	cd agent && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o baihu-agent.exe . && \
-		tar -czvf ../data/agent/baihu-agent-windows-amd64.tar.gz baihu-agent.exe config.example.ini && rm baihu-agent.exe
-	cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o baihu-agent . && \
-		tar -czvf ../data/agent/baihu-agent-darwin-amd64.tar.gz baihu-agent config.example.ini && rm baihu-agent
-	cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'" -o baihu-agent . && \
-		tar -czvf ../data/agent/baihu-agent-darwin-arm64.tar.gz baihu-agent config.example.ini && rm baihu-agent
-	@echo "Agent packages built in data/agent/"
-	@ls -lh data/agent/*.tar.gz
+	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(AGENT_LDFLAGS)" -o ../data/agent/baihu-agent-linux-amd64 .
+
+build-agent-linux-arm64:
+	@mkdir -p data/agent
+	@echo "$(VERSION)" > data/agent/version.txt
+	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="$(AGENT_LDFLAGS)" -o ../data/agent/baihu-agent-linux-arm64 .
+
+build-agent-windows-amd64:
+	@mkdir -p data/agent
+	@echo "$(VERSION)" > data/agent/version.txt
+	cd agent && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(AGENT_LDFLAGS)" -o ../data/agent/baihu-agent-windows-amd64.exe .
+
+build-agent-darwin-amd64:
+	@mkdir -p data/agent
+	@echo "$(VERSION)" > data/agent/version.txt
+	cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="$(AGENT_LDFLAGS)" -o ../data/agent/baihu-agent-darwin-amd64 .
+
+build-agent-darwin-arm64:
+	@mkdir -p data/agent
+	@echo "$(VERSION)" > data/agent/version.txt
+	cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(AGENT_LDFLAGS)" -o ../data/agent/baihu-agent-darwin-arm64 .
 
 # Clean built files
 clean:
