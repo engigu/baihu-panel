@@ -1,16 +1,16 @@
 package tasks
 
 import (
-	"github.com/engigu/baihu-panel/internal/constant"
-	"github.com/engigu/baihu-panel/internal/logger"
-	"github.com/engigu/baihu-panel/internal/utils"
-	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 // SettingsService 接口定义（避免循环依赖）
@@ -262,9 +262,6 @@ func (es *ExecutorService) ExecuteCommandWithOptions(command string, timeout tim
 
 	shell, args := utils.GetShellCommand(command)
 	cmd := exec.CommandContext(ctx, shell, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
 
 	// 设置工作目录
 	if workDir != "" {
@@ -276,15 +273,15 @@ func (es *ExecutorService) ExecuteCommandWithOptions(command string, timeout tim
 		cmd.Env = append(os.Environ(), envVars...)
 	}
 
-	err := cmd.Run()
+	output, err := cmd.CombinedOutput()
 	result.End = time.Now()
 
-	result.Output = stdout.String()
+	result.Output = string(output)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			result.Error = "执行超时\n" + stderr.String()
+			result.Error = "执行超时\n"
 		} else {
-			result.Error = err.Error() + "\n" + stderr.String()
+			result.Error = err.Error()
 		}
 	} else {
 		result.Success = true

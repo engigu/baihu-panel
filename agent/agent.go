@@ -515,16 +515,11 @@ func (a *Agent) clearAllTasks() {
 
 func (a *Agent) executeTask(task *AgentTask) {
 	log.Infof("执行任务 #%d %s", task.ID, task.Name)
-	
+
 	// 记录进程用户信息
 	log.Infof("任务 #%d 进程 UID: %d, GID: %d", task.ID, os.Getuid(), os.Getgid())
 
 	start := time.Now()
-	result := &TaskResult{
-		TaskID:    task.ID,
-		Command:   task.Command,
-		StartTime: start.Unix(),
-	}
 
 	timeout := task.Timeout
 	if timeout <= 0 {
@@ -535,7 +530,7 @@ func (a *Agent) executeTask(task *AgentTask) {
 
 	var cmd *exec.Cmd
 	finalCommand := task.Command
-	
+
 	if runtime.GOOS == "windows" {
 		// Windows: 如果有工作目录，在命令前加 cd
 		if task.WorkDir != "" {
@@ -564,32 +559,26 @@ func (a *Agent) executeTask(task *AgentTask) {
 		}
 	}
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
+	output, err := cmd.CombinedOutput()
 	end := time.Now()
 
-	result.EndTime = end.Unix()
-	result.Duration = end.Sub(start).Milliseconds()
-	result.Output = stdout.String()
+	result := &TaskResult{
+		TaskID:    task.ID,
+		Command:   task.Command,
+		Output:    string(output),
+		Duration:  end.Sub(start).Milliseconds(),
+		StartTime: start.Unix(),
+		EndTime:   end.Unix(),
+	}
 
 	if err != nil {
 		result.Status = "failed"
-		errMsg := stderr.String()
-		if errMsg == "" {
-			errMsg = err.Error()
-		} else {
-			errMsg = stderr.String() + "\n" + err.Error()
-		}
-		
+
 		// 如果是工作目录错误，添加更明确的提示
 		if task.WorkDir != "" && strings.Contains(err.Error(), "chdir") {
-			errMsg = fmt.Sprintf("[工作目录错误] 无法切换到目录: %s\n%s", task.WorkDir, errMsg)
+			log.Errorf("[工作目录错误] 无法切换到目录: %s\n%s", task.WorkDir, err.Error())
 		}
-		
-		result.Output += "\n[ERROR]\n" + errMsg
+
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			result.ExitCode = exitErr.ExitCode()
 		} else {
@@ -612,7 +601,7 @@ func (a *Agent) parseEnvVars(envStr string) []string {
 
 	pairs := strings.Split(envStr, ",")
 	result := make([]string, 0, len(pairs))
-	
+
 	for _, pair := range pairs {
 		if pair == "" {
 			continue
@@ -622,7 +611,7 @@ func (a *Agent) parseEnvVars(envStr string) []string {
 		pair = strings.ReplaceAll(pair, "{{EQUAL}}", "=")
 		result = append(result, pair)
 	}
-	
+
 	return result
 }
 

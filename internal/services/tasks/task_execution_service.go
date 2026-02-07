@@ -1,12 +1,6 @@
 package tasks
 
 import (
-	"github.com/engigu/baihu-panel/internal/constant"
-	"github.com/engigu/baihu-panel/internal/database"
-	"github.com/engigu/baihu-panel/internal/logger"
-	"github.com/engigu/baihu-panel/internal/models"
-	"github.com/engigu/baihu-panel/internal/utils"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,6 +10,12 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/database"
+	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 // AgentWSManager 接口定义（避免循环依赖）
@@ -61,7 +61,7 @@ type TaskExecutionResult struct {
 func (s *TaskExecutionService) ExecuteTask(req *TaskExecutionRequest) error {
 	task := req.Task
 	start := time.Now()
-	
+
 	// 演示模式：直接返回模拟结果
 	if constant.DemoMode {
 		end := time.Now()
@@ -79,7 +79,7 @@ func (s *TaskExecutionService) ExecuteTask(req *TaskExecutionRequest) error {
 		}
 		return s.processExecutionResult(result)
 	}
-	
+
 	if req.Task.AgentID != nil && *req.Task.AgentID > 0 {
 		// 远程执行：通过 Agent
 		return s.executeRemote(req)
@@ -110,11 +110,7 @@ func (s *TaskExecutionService) executeLocal(req *TaskExecutionRequest) error {
 	}
 
 	// 执行命令
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	execErr := cmd.Run()
+	output, execErr := cmd.CombinedOutput()
 	end := time.Now()
 
 	// 构建结果
@@ -122,7 +118,7 @@ func (s *TaskExecutionService) executeLocal(req *TaskExecutionRequest) error {
 		TaskID:   task.ID,
 		AgentID:  nil,
 		Command:  task.Command,
-		Output:   stdout.String(),
+		Output:   string(output),
 		Start:    start,
 		End:      end,
 		Duration: end.Sub(start).Milliseconds(),
@@ -130,7 +126,6 @@ func (s *TaskExecutionService) executeLocal(req *TaskExecutionRequest) error {
 
 	if execErr != nil {
 		result.Status = "failed"
-		result.Output += "\n[ERROR]\n" + stderr.String() + "\n" + execErr.Error()
 		if exitErr, ok := execErr.(*exec.ExitError); ok {
 			result.ExitCode = exitErr.ExitCode()
 		} else {
@@ -386,11 +381,7 @@ func (s *TaskExecutionService) executeRepoTask(req *TaskExecutionRequest) error 
 	cmd.Dir = "/opt"
 
 	// 执行命令
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	execErr := cmd.Run()
+	output, execErr := cmd.CombinedOutput()
 	end := time.Now()
 
 	// 构建命令字符串用于日志记录
@@ -401,7 +392,7 @@ func (s *TaskExecutionService) executeRepoTask(req *TaskExecutionRequest) error 
 		TaskID:   task.ID,
 		AgentID:  nil,
 		Command:  commandStr,
-		Output:   stdout.String(),
+		Output:   string(output),
 		Start:    start,
 		End:      end,
 		Duration: end.Sub(start).Milliseconds(),
@@ -409,7 +400,6 @@ func (s *TaskExecutionService) executeRepoTask(req *TaskExecutionRequest) error 
 
 	if execErr != nil {
 		result.Status = "failed"
-		result.Output += "\n[ERROR]\n" + stderr.String() + "\n" + execErr.Error()
 		if exitErr, ok := execErr.(*exec.ExitError); ok {
 			result.ExitCode = exitErr.ExitCode()
 		} else {
