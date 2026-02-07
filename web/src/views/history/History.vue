@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -263,7 +263,7 @@ watch(() => route.query.task_id, (newTaskId) => {
                 </span>
               </span>
               <span class="w-12 text-right shrink-0 text-muted-foreground text-xs">{{ formatDuration(log.duration)
-              }}</span>
+                }}</span>
             </div>
             <!-- 大屏行 -->
             <div class="hidden sm:flex items-center gap-4 px-4 py-2">
@@ -284,7 +284,7 @@ watch(() => route.query.task_id, (newTaskId) => {
                 </span>
               </span>
               <span class="w-16 text-right shrink-0 text-muted-foreground text-xs">{{ formatDuration(log.duration)
-              }}</span>
+                }}</span>
               <span v-if="!selectedLog"
                 class="w-40 text-right shrink-0 text-muted-foreground text-xs hidden md:block">{{ log.start_time ||
                   log.created_at }}</span>
