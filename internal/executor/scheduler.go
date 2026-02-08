@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 )
@@ -14,6 +15,7 @@ type SchedulerConfig struct {
 	WorkerCount  int           // Worker 数量
 	QueueSize    int           // 队列大小
 	RateInterval time.Duration // 速率限制间隔
+	Verbose      bool          // 是否开启详细日志
 }
 
 // TaskType 任务类型
@@ -273,6 +275,15 @@ func (s *Scheduler) executeTask(req *ExecutionRequest) (*ExecutionResult, error)
 
 	s.logger.Infof("[Scheduler] 执行任务 %s (名称: %s, 类型: %s)", req.TaskID, req.Name, req.Type)
 
+	if s.config.Verbose {
+		workDir := req.WorkDir
+		if workDir == "" {
+			workDir, _ = os.Getwd()
+		}
+		s.logger.Infof("[Scheduler] 任务 #%s 进程 UID: %d, GID: %d", req.TaskID, os.Getuid(), os.Getgid())
+		s.logger.Infof("[Scheduler] 任务 #%s 工作目录: %s", req.TaskID, workDir)
+	}
+
 	// 1. 执行前事件：获取 stdout/stderr 写入器
 	var stdout, stderr io.Writer
 	var err error
@@ -340,19 +351,31 @@ func (s *Scheduler) executeTask(req *ExecutionRequest) (*ExecutionResult, error)
 
 	// 5. 构建结果
 	result := &ExecutionResult{
-		TaskID:    req.TaskID,
-		LogID:     req.LogID, // 传递 LogID
-		Success:   execResult.Status == "success",
-		Output:    stdoutBuf.String(),
-		Status:    execResult.Status,
-		Duration:  execResult.Duration,
-		ExitCode:  execResult.ExitCode,
-		StartTime: execResult.StartTime,
-		EndTime:   execResult.EndTime,
+		TaskID: req.TaskID,
+		LogID:  req.LogID, // 传递 LogID
+	}
+
+	if execResult != nil {
+		result.Success = execResult.Status == "success"
+		result.Output = stdoutBuf.String()
+		result.Status = execResult.Status
+		result.Duration = execResult.Duration
+		result.ExitCode = execResult.ExitCode
+		result.StartTime = execResult.StartTime
+		result.EndTime = execResult.EndTime
+	} else {
+		result.Success = false
+		result.Status = "failed"
+		result.StartTime = start
+		result.EndTime = time.Now()
+		result.Duration = result.EndTime.Sub(result.StartTime).Milliseconds()
 	}
 
 	if execErr != nil {
 		result.Error = execErr.Error()
+		if result.Output == "" {
+			result.Output = execErr.Error()
+		}
 		errOutput := stderrBuf.String()
 		if errOutput != "" {
 			result.Output += "\n[ERROR]\n" + errOutput

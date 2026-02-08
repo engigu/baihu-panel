@@ -120,6 +120,7 @@ func NewAgent(config *Config, configFile string) *Agent {
 		WorkerCount:  runtime.NumCPU(),
 		QueueSize:    100,
 		RateInterval: 100 * time.Millisecond,
+		Verbose:      true,
 	}
 	a.scheduler = executor.NewScheduler(schedCfg, handler)
 	a.scheduler.SetLogger(logger.NewSchedulerLogger())
