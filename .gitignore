@@ -35,7 +35,6 @@ web/dist/*
 
 # Node
 node_modules/
-web/dist/
 
 # Embedded static files (built during CI/Docker)
 internal/static/dist/
