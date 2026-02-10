@@ -6,14 +6,15 @@ import (
 	"strconv"
 
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/engigu/baihu-panel/internal/utils"
-	"os"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shirou/gopsutil/v3/process"
@@ -162,6 +163,14 @@ func (sc *SettingsController) UpdateSchedulerSettings(c *gin.Context) {
 	}
 
 	utils.SuccessMsg(c, "保存成功")
+}
+
+// GetPaths 获取系统路径信息
+func (sc *SettingsController) GetPaths(c *gin.Context) {
+	absScriptsDir, _ := filepath.Abs(constant.ScriptsWorkDir)
+	utils.Success(c, gin.H{
+		"scripts_dir": absScriptsDir,
+	})
 }
 
 // GetAbout 获取关于信息

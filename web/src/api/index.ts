@@ -122,6 +122,7 @@ export const api = {
     getScheduler: () => request<SchedulerSettings>('/settings/scheduler'),
     updateScheduler: (data: SchedulerSettings) =>
       request('/settings/scheduler', { method: 'PUT', body: JSON.stringify(data) }),
+    getPaths: () => request<{ scripts_dir: string }>('/settings/paths'),
     getAbout: () => request<AboutInfo>('/settings/about'),
     getLoginLogs: (params?: { page?: number; page_size?: number; username?: string }) => {
       const query = new URLSearchParams()

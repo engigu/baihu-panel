@@ -44,6 +44,16 @@ const hasChanges = computed(() => fileContent.value !== originalContent.value)
 const showTerminalDialog = ref(false)
 const terminalRef = ref<InstanceType<typeof XTerminal> | null>(null)
 const runCommand = ref('')
+const scriptsDir = ref('')
+
+async function fetchPaths() {
+  try {
+    const res = await api.settings.getPaths()
+    scriptsDir.value = res.scripts_dir
+  } catch {
+    scriptsDir.value = PATHS.SCRIPTS_DIR
+  }
+}
 
 // Monaco Editor 实例引用
 const editorRef = shallowRef()
@@ -188,10 +198,11 @@ async function runScript() {
   const cmd = runner ? `${runner} ${fileName}` : `./${fileName}`
 
   // 构建完整命令
+  const baseDir = scriptsDir.value || PATHS.SCRIPTS_DIR
   if (dirPath) {
-    runCommand.value = `cd ${PATHS.SCRIPTS_DIR}/${dirPath} && ${cmd}`
+    runCommand.value = `cd ${baseDir}/${dirPath} && ${cmd}`
   } else {
-    runCommand.value = `cd ${PATHS.SCRIPTS_DIR} && ${cmd}`
+    runCommand.value = `cd ${baseDir} && ${cmd}`
   }
 
   showTerminalDialog.value = true
@@ -346,7 +357,10 @@ async function initFromUrl() {
   }
 }
 
-onMounted(initFromUrl)
+onMounted(() => {
+  initFromUrl()
+  fetchPaths()
+})
 
 onMounted(() => {
   window.addEventListener('resize', handleResize)
