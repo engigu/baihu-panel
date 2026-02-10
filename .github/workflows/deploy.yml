@@ -86,8 +86,8 @@ jobs:
           port: ${{ secrets.DEPLOY_PORT }}
           script: |
             cd ${{ secrets.DEPLOY_PATH }}
-            docker-compose -f docker/docker-compose.yml pull
-            docker-compose -f docker/docker-compose.yml up -d
+            docker-compose -f docker-compose.yml pull
+            docker-compose -f docker-compose.yml up -d
 
       - name: Deploy to X server
         if: github.ref == 'refs/heads/main' && matrix.base_type == 'debian'
