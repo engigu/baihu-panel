@@ -95,6 +95,17 @@
 
 ## 快速部署 
 
+项目提供多种基础镜像，可根据具体环境选择：
+
+| 标签 (Tag) | 基础镜像 | 说明 |
+| :--- | :--- | :--- |
+| `latest` | Debian 12 | 默认版本，平衡稳定与兼容性 |
+| `latest-alpine` | Alpine | 极简版本，镜像体积最小 |
+| `latest-debian13` | Debian 13 | 尝鲜版本，基于 Debian Trixie |
+
+> **提示**：下方部署示例默认使用 `latest` 标签，如需换用 Alpine 或 Debian 13 版，只需将 `latest` 替换为 `latest-alpine` 或 `latest-debian13` 即可。
+
+
 <details>
 <summary><b>方式一：环境变量部署（推荐）</b></summary>
 
