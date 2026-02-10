@@ -12,6 +12,7 @@ type EnvironmentVariable struct {
 	Name      string         `json:"name" gorm:"size:255;not null"`
 	Value     string         `json:"value" gorm:"type:text"`
 	Remark    string         `json:"remark" gorm:"size:500"`
+	Hidden    bool           `json:"hidden" gorm:"default:true"`
 	UserID    uint           `json:"user_id" gorm:"index"`
 	CreatedAt LocalTime      `json:"created_at"`
 	UpdatedAt LocalTime      `json:"updated_at"`

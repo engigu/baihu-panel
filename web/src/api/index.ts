@@ -295,6 +295,7 @@ export interface EnvVar {
   name: string
   value: string
   remark: string
+  hidden: boolean
 }
 
 export interface EnvListResponse {

@@ -24,6 +24,7 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 		Name   string `json:"name" binding:"required"`
 		Value  string `json:"value" binding:"required"`
 		Remark string `json:"remark"`
+		Hidden *bool  `json:"hidden"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -31,7 +32,12 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 		return
 	}
 
-	envVar := ec.envService.CreateEnvVar(req.Name, req.Value, req.Remark, userID)
+	hidden := true
+	if req.Hidden != nil {
+		hidden = *req.Hidden
+	}
+
+	envVar := ec.envService.CreateEnvVar(req.Name, req.Value, req.Remark, hidden, userID)
 	utils.Success(c, envVar)
 }
 
@@ -76,6 +82,7 @@ func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
 		Name   string `json:"name"`
 		Value  string `json:"value"`
 		Remark string `json:"remark"`
+		Hidden *bool  `json:"hidden"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -83,7 +90,18 @@ func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
 		return
 	}
 
-	envVar := ec.envService.UpdateEnvVar(id, req.Name, req.Value, req.Remark)
+	// 对于更新，获取现有数据
+	existing := ec.envService.GetEnvVarByID(id)
+	if existing == nil {
+		utils.NotFound(c, "环境变量不存在")
+		return
+	}
+
+	hidden := existing.Hidden
+	if req.Hidden != nil {
+		hidden = *req.Hidden
+	}
+	envVar := ec.envService.UpdateEnvVar(id, req.Name, req.Value, req.Remark, hidden)
 	if envVar == nil {
 		utils.NotFound(c, "环境变量不存在")
 		return

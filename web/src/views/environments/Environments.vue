@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
@@ -12,6 +12,7 @@ import TextOverflow from '@/components/TextOverflow.vue'
 import { api, type EnvVar } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
+import { Switch } from '@/components/ui/switch'
 
 const { pageSize } = useSiteSettings()
 
@@ -33,8 +34,16 @@ async function loadEnvVars() {
     const res = await api.env.list({ page: currentPage.value, page_size: pageSize.value, name: filterName.value || undefined })
     envVars.value = res.data
     total.value = res.total
+    // 初始化显示状态，根据数据库的 hidden 状态同步显示
+    res.data.forEach(env => {
+      showValues.value[env.id] = !env.hidden
+    })
   } catch { toast.error('加载环境变量失败') }
 }
+
+watch(showDialog, (val) => {
+  if (!val) loadEnvVars()
+})
 
 function handleSearch() {
   if (searchTimer) clearTimeout(searchTimer)
@@ -50,7 +59,7 @@ function handlePageChange(page: number) {
 }
 
 function openCreate() {
-  editingEnv.value = { name: '', value: '', remark: '' }
+  editingEnv.value = { name: '', value: '', remark: '', hidden: true }
   isEdit.value = false
   showDialog.value = true
 }
@@ -91,8 +100,16 @@ async function deleteEnv() {
   deleteEnvId.value = null
 }
 
-function toggleShow(id: number) {
-  showValues.value[id] = !showValues.value[id]
+async function toggleShow(env: EnvVar) {
+  const newHiddenStatus = !env.hidden
+  try {
+    await api.env.update(env.id, { ...env, hidden: newHiddenStatus })
+    env.hidden = newHiddenStatus
+    showValues.value[env.id] = !newHiddenStatus
+    toast.success(newHiddenStatus ? '值已隐藏并保存' : '值已显示并保存')
+  } catch {
+    toast.error('保存显示状态失败')
+  }
 }
 
 function maskValue(value: string) {
@@ -112,7 +129,8 @@ onMounted(loadEnvVars)
       <div class="flex items-center gap-2">
         <div class="relative flex-1 sm:flex-none">
           <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input v-model="filterName" placeholder="搜索变量..." class="h-9 pl-9 w-full sm:w-56 text-sm" @input="handleSearch" />
+          <Input v-model="filterName" placeholder="搜索变量..." class="h-9 pl-9 w-full sm:w-56 text-sm"
+            @input="handleSearch" />
         </div>
         <Button @click="openCreate" class="shrink-0">
           <Plus class="h-4 w-4 sm:mr-2" /> <span class="hidden sm:inline">新建变量</span>
@@ -122,7 +140,8 @@ onMounted(loadEnvVars)
 
     <div class="rounded-lg border bg-card overflow-x-auto">
       <!-- 表头 -->
-      <div class="flex items-center gap-4 px-4 py-2 border-b bg-muted/50 text-sm text-muted-foreground font-medium min-w-[500px]">
+      <div
+        class="flex items-center gap-4 px-4 py-2 border-b bg-muted/50 text-sm text-muted-foreground font-medium min-w-[500px]">
         <span class="w-32 sm:w-48 shrink-0">变量名</span>
         <span class="w-24 sm:flex-1 shrink-0 sm:shrink">值</span>
         <span class="w-32 sm:w-48 shrink-0 hidden md:block">备注</span>
@@ -133,12 +152,10 @@ onMounted(loadEnvVars)
         <div v-if="envVars.length === 0" class="text-sm text-muted-foreground text-center py-8">
           暂无环境变量
         </div>
-        <div
-          v-for="env in envVars"
-          :key="env.id"
-          class="flex items-center gap-4 px-4 py-2 hover:bg-muted/50 transition-colors"
-        >
-          <code class="w-32 sm:w-48 font-medium truncate shrink-0 text-xs bg-muted px-2 py-1 rounded">{{ env.name }}</code>
+        <div v-for="env in envVars" :key="env.id"
+          class="flex items-center gap-4 px-4 py-2 hover:bg-muted/50 transition-colors">
+          <code
+            class="w-32 sm:w-48 font-medium truncate shrink-0 text-xs bg-muted px-2 py-1 rounded">{{ env.name }}</code>
           <span class="w-24 sm:flex-1 shrink-0 sm:shrink font-mono text-muted-foreground truncate text-xs">
             <TextOverflow :text="showValues[env.id] ? env.value : maskValue(env.value)" title="变量值" />
           </span>
@@ -146,14 +163,16 @@ onMounted(loadEnvVars)
             <TextOverflow :text="env.remark || '-'" title="备注" />
           </span>
           <span class="w-20 sm:w-24 shrink-0 flex justify-center gap-1">
-            <Button variant="ghost" size="icon" class="h-7 w-7" @click="toggleShow(env.id)" :title="showValues[env.id] ? '隐藏' : '显示'">
+            <Button variant="ghost" size="icon" class="h-7 w-7" @click="toggleShow(env)"
+              :title="showValues[env.id] ? '隐藏' : '显示'">
               <Eye v-if="!showValues[env.id]" class="h-3.5 w-3.5" />
               <EyeOff v-else class="h-3.5 w-3.5" />
             </Button>
             <Button variant="ghost" size="icon" class="h-7 w-7" @click="openEdit(env)" title="编辑">
               <Pencil class="h-3.5 w-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive" @click="confirmDelete(env.id)" title="删除">
+            <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive" @click="confirmDelete(env.id)"
+              title="删除">
               <Trash2 class="h-3.5 w-3.5" />
             </Button>
           </span>
@@ -181,6 +200,10 @@ onMounted(loadEnvVars)
             <Label>备注</Label>
             <Textarea v-model="editingEnv.remark" class="resize-none" rows="3" placeholder="变量说明..." />
           </div>
+          <div class="flex items-center justify-between space-x-2 pt-2">
+            <Label class="text-sm font-medium">隐藏变量值</Label>
+            <Switch v-model="editingEnv.hidden" />
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" @click="showDialog = false">取消</Button>
@@ -197,7 +220,8 @@ onMounted(loadEnvVars)
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>取消</AlertDialogCancel>
-          <AlertDialogAction class="bg-destructive text-white hover:bg-destructive/90" @click="deleteEnv">删除</AlertDialogAction>
+          <AlertDialogAction class="bg-destructive text-white hover:bg-destructive/90" @click="deleteEnv">删除
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
