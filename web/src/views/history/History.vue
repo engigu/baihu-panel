@@ -73,6 +73,10 @@ function handlePageChange(page: number) {
 
 async function selectLog(log: TaskLog) {
   if (logSocket) {
+    logSocket.onopen = null
+    logSocket.onmessage = null
+    logSocket.onerror = null
+    logSocket.onclose = null
     logSocket.close()
   }
 
@@ -164,6 +168,10 @@ function closeDetail() {
     durationTimer = null
   }
   if (logSocket) {
+    logSocket.onopen = null
+    logSocket.onmessage = null
+    logSocket.onerror = null
+    logSocket.onclose = null
     logSocket.close()
     logSocket = null
   }
