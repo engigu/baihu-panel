@@ -1,8 +1,8 @@
 FROM alpine:3.19
 
 ENV TZ=Asia/Shanghai
-ENV NODE_VERSION=22
-ENV PYTHON_VERSION=3.12
+ENV NODE_VERSION=23
+ENV PYTHON_VERSION=3.13
 ENV MISE_DATA_DIR=/opt/mise-base
 ENV MISE_CONFIG_DIR=/opt/mise-base
 ENV PATH="/opt/mise-base/shims:/opt/mise-base/bin:$PATH"
