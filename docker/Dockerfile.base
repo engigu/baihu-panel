@@ -1,6 +1,8 @@
 FROM debian:bookworm-slim
 
 ENV TZ=Asia/Shanghai
+ENV NODE_VERSION=22
+ENV PYTHON_VERSION=3.12
 ENV PATH="/app/envs/mise/shims:/app/envs/mise/bin:$PATH"
 
 # 安装必要系统工具
@@ -18,7 +20,7 @@ RUN sed -i 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.li
     && curl https://mise.run | MISE_INSTALL_PATH=/usr/local/bin/mise sh \
     && MISE_DATA_DIR=/opt/mise-base MISE_CONFIG_DIR=/opt/mise-base MISE_HTTP_TIMEOUT=300 \
        PYTHON_BUILD_MIRROR_URL=https://pyenv.pages.dev/api/mirror/binaries \
-       (mise use -g node@22 python@3.12 || mise use -g node@22 python@3.12) \
+       mise use -g node@${NODE_VERSION} python@${PYTHON_VERSION} \
     && mise prune -- -f \
     && apt-get purge -y --auto-remove $BUILD_DEPS \
     && rm -rf /var/lib/apt/lists/* \
