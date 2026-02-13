@@ -78,7 +78,8 @@ func (s *MiseService) Sync() error {
 func (s *MiseService) fetchLiveLanguages() ([]MiseLanguage, error) {
 	// 使用 --json 获取格式化数据
 	cmd := exec.Command("mise", "ls", "--json")
-	// 强制禁用颜色和交互
+	// 继承父进程环境变量
+	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, "MISE_NO_COLOR=1", "TERM=dumb")
 
 	output, err := cmd.Output()
@@ -127,6 +128,7 @@ func min(a, b int) int {
 
 func (s *MiseService) listFallback() ([]MiseLanguage, error) {
 	cmd := exec.Command("mise", "ls")
+	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, "MISE_NO_COLOR=1", "TERM=dumb")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
