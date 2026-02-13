@@ -200,6 +200,25 @@ function formatDuration(ms: number): string {
   return `${(ms / 60000).toFixed(1)}分钟`
 }
 
+function getStatusBadgeClass(status: string) {
+  switch (status) {
+    case TASK_STATUS.SUCCESS:
+      return 'bg-green-500/10 text-green-700 border-green-200/50 dark:bg-green-500/20 dark:text-green-400 dark:border-green-900/50'
+    case TASK_STATUS.FAILED:
+      return 'bg-red-500/10 text-red-700 border-red-200/50 dark:bg-red-500/20 dark:text-red-400 dark:border-red-900/50'
+    case TASK_STATUS.RUNNING:
+      return 'bg-blue-500/10 text-blue-700 border-blue-200/50 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-900/50'
+    case TASK_STATUS.PENDING:
+      return 'bg-amber-500/10 text-amber-700 border-amber-200/50 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-900/50'
+    case TASK_STATUS.TIMEOUT:
+      return 'bg-orange-500/10 text-orange-700 border-orange-200/50 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-900/50'
+    case TASK_STATUS.CANCELLED:
+      return 'bg-muted text-muted-foreground border-transparent'
+    default:
+      return 'bg-secondary text-secondary-foreground border-transparent'
+  }
+}
+
 function getTaskTypeTitle(type: string) {
   return type === TASK_TYPE.REPO ? '仓库同步' : '普通任务'
 }
@@ -307,7 +326,7 @@ watch(() => route.query.task_id, (newTaskId) => {
                 </div>
               </span>
               <span class="w-12 text-right shrink-0 text-muted-foreground text-xs">{{ formatDuration(log.duration)
-              }}</span>
+                }}</span>
             </div>
             <!-- 大屏行 -->
             <div class="hidden sm:flex items-center gap-4 px-4 py-2">
@@ -347,7 +366,7 @@ watch(() => route.query.task_id, (newTaskId) => {
                 </div>
               </span>
               <span class="w-16 text-right shrink-0 text-muted-foreground text-xs">{{ formatDuration(log.duration)
-              }}</span>
+                }}</span>
               <span v-if="!selectedLog"
                 class="w-40 text-right shrink-0 text-muted-foreground text-xs hidden md:block">{{ log.start_time ||
                   log.created_at }}</span>
@@ -380,18 +399,19 @@ watch(() => route.query.task_id, (newTaskId) => {
           </div>
           <div class="flex justify-between items-center">
             <span class="text-muted-foreground">状态</span>
-            <Badge
-              :variant="selectedLog.status === TASK_STATUS.SUCCESS ? 'default' : selectedLog.status === TASK_STATUS.FAILED ? 'destructive' : 'secondary'"
-              class="capitalize px-4 py-0.5">
+            <Badge variant="outline" :class="[
+              'capitalize px-3 py-1 font-semibold rounded-full border shadow-sm transition-all duration-300',
+              getStatusBadgeClass(selectedLog.status)
+            ]">
               <div class="flex items-center gap-1.5">
-                <CheckCircle2 v-if="selectedLog.status === TASK_STATUS.SUCCESS" class="h-3 w-3" />
-                <XCircle v-else-if="selectedLog.status === TASK_STATUS.FAILED" class="h-3 w-3" />
+                <CheckCircle2 v-if="selectedLog.status === TASK_STATUS.SUCCESS" class="h-3.5 w-3.5" />
+                <XCircle v-else-if="selectedLog.status === TASK_STATUS.FAILED" class="h-3.5 w-3.5" />
                 <Zap v-else-if="selectedLog.status === TASK_STATUS.RUNNING"
-                  class="h-3 w-3 fill-current animate-pulse" />
-                <Clock v-else-if="selectedLog.status === TASK_STATUS.PENDING" class="h-3 w-3" />
-                <AlertCircle v-else-if="selectedLog.status === TASK_STATUS.TIMEOUT" class="h-3 w-3" />
-                <Ban v-else-if="selectedLog.status === TASK_STATUS.CANCELLED" class="h-3 w-3" />
-                {{ selectedLog.status }}
+                  class="h-3.5 w-3.5 fill-current animate-pulse text-blue-500" />
+                <Clock v-else-if="selectedLog.status === TASK_STATUS.PENDING" class="h-3.5 w-3.5" />
+                <AlertCircle v-else-if="selectedLog.status === TASK_STATUS.TIMEOUT" class="h-3.5 w-3.5" />
+                <Ban v-else-if="selectedLog.status === TASK_STATUS.CANCELLED" class="h-3.5 w-3.5" />
+                <span class="text-xs tracking-wide uppercase">{{ selectedLog.status }}</span>
               </div>
             </Badge>
           </div>
