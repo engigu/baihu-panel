@@ -249,7 +249,8 @@ export const api = {
     list: () => request<MiseLanguage[]>('/mise/ls'),
     sync: () => request<void>('/mise/sync', { method: 'POST' }),
     plugins: () => request<string[]>('/mise/plugins'),
-    versions: (plugin: string) => request<string[]>(`/mise/versions?plugin=${plugin}`)
+    versions: (plugin: string) => request<string[]>(`/mise/versions?plugin=${plugin}`),
+    verifyCommand: (plugin: string, version: string) => request<{ command: string }>(`/mise/verify-cmd?plugin=${plugin}&version=${version}`)
   }
 }
 

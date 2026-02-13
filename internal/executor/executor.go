@@ -76,6 +76,20 @@ func Execute(ctx context.Context, req Request, stdout, stderr io.Writer) (*Resul
 func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer, hooks Hooks) (*Result, error) {
 	start := time.Now()
 
+	// 2. 执行命令
+	timeout := req.Timeout
+	if timeout <= 0 {
+		timeout = 30
+	}
+	execCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Minute)
+	defer cancel()
+
+	// 如果指定使用 mise，则预先构建好带 mise 的命令，这样 PreExecute 记录的就是完整命令
+	if req.UseMise {
+		req.Command = utils.BuildMiseCommand(req.Command, req.Languages)
+		req.UseMise = false
+	}
+
 	// 1. 执行前钩子
 	var logID uint
 	if hooks != nil {
@@ -92,19 +106,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		logID = id
 	}
 
-	// 2. 执行命令
-	timeout := req.Timeout
-	if timeout <= 0 {
-		timeout = 30
-	}
-	execCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Minute)
-	defer cancel()
-
-	finalCommand := req.Command
-	if req.UseMise {
-		finalCommand = BuildLanguageCommand(req.Command, req.Languages)
-	}
-	shell, args := utils.GetShellCommand(finalCommand)
+	shell, args := utils.GetShellCommand(req.Command)
 	cmd := exec.CommandContext(execCtx, shell, args...)
 
 	// 设置工作目录
@@ -278,31 +280,6 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	}
 
 	return result, err
-}
-
-// BuildLanguageCommand 构建语言环境执行命令 (使用 mise)
-func BuildLanguageCommand(command string, languages []map[string]string) string {
-	if len(languages) == 0 {
-		return command
-	}
-
-	var builder strings.Builder
-	builder.WriteString("mise exec")
-
-	for _, lang := range languages {
-		name := lang["name"]
-		version := lang["version"]
-		if name == "" {
-			continue
-		}
-		if version == "" {
-			version = "latest"
-		}
-		builder.WriteString(" " + name + "@" + version)
-	}
-
-	builder.WriteString(" -- " + command)
-	return builder.String()
 }
 
 // ParseEnvVars 解析环境变量字符串 "KEY1=VALUE1,KEY2=VALUE2"

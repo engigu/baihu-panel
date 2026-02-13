@@ -233,6 +233,7 @@ func Setup(c *Controllers) *gin.Engine {
 				mise.POST("/sync", c.Mise.Sync)
 				mise.GET("/plugins", c.Mise.Plugins)
 				mise.GET("/versions", c.Mise.Versions)
+				mise.GET("/verify-cmd", c.Mise.VerifyCommand)
 			}
 
 			// Agent API（供前端调用，保持在 v1 下）

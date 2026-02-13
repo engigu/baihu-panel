@@ -217,6 +217,15 @@ function getLangIcon(plugin: string) {
     return ''
 }
 
+async function handleVerify(lang: MiseLanguage) {
+    try {
+        const { command } = await api.mise.verifyCommand(lang.plugin, lang.version)
+        runInTerminal(command)
+    } catch (e) {
+        toast.error('获取验证命令失败')
+    }
+}
+
 onMounted(loadLanguages)
 </script>
 
@@ -310,7 +319,7 @@ onMounted(loadLanguages)
                             不支持管理
                         </Badge>
                         <Button variant="outline" size="sm" class="whitespace-nowrap flex-1 sm:flex-none"
-                            @click="runInTerminal(`mise exec ${lang.plugin}@${lang.version} -- env`)">
+                            @click="handleVerify(lang)">
                             环境验证
                         </Button>
                         <Button variant="ghost" size="icon" class="text-destructive h-8 w-8 shrink-0 ml-auto sm:ml-0"

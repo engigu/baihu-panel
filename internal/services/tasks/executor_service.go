@@ -124,7 +124,7 @@ func (h *ServerSchedulerHandler) OnTaskExecuting(req *executor.ExecutionRequest)
 	}
 
 	// 1. 创建初始日志记录
-	taskLog, err := h.es.taskLogService.CreateEmptyLog(task.ID, task.Command)
+	taskLog, err := h.es.taskLogService.CreateEmptyLog(task.ID, req.Command)
 	if err != nil {
 		return nil, nil, fmt.Errorf("创建初始日志失败: %v", err)
 	}
@@ -357,7 +357,7 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 		Envs:      req.Envs,
 		Timeout:   req.Timeout,
 		Languages: task.Languages,
-		UseMise:   true, // 本地业务任务启用 mise
+		UseMise:   req.UseMise, // 使用请求中的 UseMise 标志 (由调度器统一处理过)
 	}, stdout, stderr, hooks)
 }
 

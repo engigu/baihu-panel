@@ -15,6 +15,7 @@ func NewPerlManager(language string) *PerlManager {
 			InstallCmd:   []string{"cpanm"},                // 需要系统预装 cpanm
 			UninstallCmd: []string{"cpanm", "--uninstall"}, // 部分 cpanm 版本不支持，这是一个占位
 			ListCmd:      []string{"perldoc", "-l"},        // 很难列出所有，暂时简单处理
+			VerifyCmd:    []string{"perl", "-v"},
 			Separator:    " ",
 		},
 	}

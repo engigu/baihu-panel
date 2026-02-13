@@ -18,6 +18,7 @@ func NewPhpManager(language string) *PhpManager {
 			InstallCmd:   []string{"composer", "global", "require"},
 			UninstallCmd: []string{"composer", "global", "remove"},
 			ListCmd:      []string{"composer", "global", "show", "--name-only"},
+			VerifyCmd:    []string{"php", "-v"},
 			Separator:    ":",
 		},
 	}

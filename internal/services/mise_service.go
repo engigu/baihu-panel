@@ -13,6 +13,8 @@ import (
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/services/deps"
+	"github.com/engigu/baihu-panel/internal/utils"
 	"gorm.io/gorm"
 )
 
@@ -321,4 +323,15 @@ func (s *MiseService) syncToDB(languages []MiseLanguage) {
 		// 如果本地一个都没有，清空表
 		db.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.Language{})
 	}
+}
+
+// GetVerifyCommand 获取环境验证命令
+func (s *MiseService) GetVerifyCommand(plugin, version string) (string, error) {
+	m := deps.GetManager(plugin)
+	if m == nil {
+		// 如果没找到对应的包管理器（比如 java 等不支持依赖管理的），
+		// 则提供一个基础的通用验证命令
+		return utils.BuildMiseCommandSimple(plugin+" --version", plugin, version), nil
+	}
+	return m.GetVerifyCommand(version)
 }

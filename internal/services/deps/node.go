@@ -18,6 +18,7 @@ func NewNodeManager(language string) *NodeManager {
 			InstallCmd:   []string{"npm", "install", "-g"},
 			UninstallCmd: []string{"npm", "uninstall", "-g"},
 			ListCmd:      []string{"npm", "list", "-g", "--depth=0", "--json"},
+			VerifyCmd:    []string{"node", "-v"},
 			Separator:    "@",
 		},
 	}

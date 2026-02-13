@@ -18,6 +18,7 @@ func NewRubyManager(language string) *RubyManager {
 			InstallCmd:   []string{"gem", "install"},
 			UninstallCmd: []string{"gem", "uninstall", "-a", "-x"},
 			ListCmd:      []string{"gem", "list", "--local"},
+			VerifyCmd:    []string{"ruby", "-v"},
 			Separator:    " ",
 		},
 	}

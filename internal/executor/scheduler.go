@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 // safeBuffer 一个线程安全的字节缓冲区，用于合并 stdout 和 stderr
@@ -313,11 +314,12 @@ func (s *Scheduler) executeTask(req *ExecutionRequest) (*ExecutionResult, error)
 
 	s.logger.Infof("[Scheduler] 执行任务 %s (名称: %s, 类型: %s)", req.TaskID, req.Name, req.Type)
 
-	finalCommand := req.Command
+	// 如果指定使用 mise，则预先构建好带 mise 的命令，这样 OnTaskExecuting 记录的就是完整命令
 	if req.UseMise {
-		finalCommand = BuildLanguageCommand(req.Command, req.Languages)
+		req.Command = utils.BuildMiseCommand(req.Command, req.Languages)
+		req.UseMise = false
 	}
-	s.logger.Infof("[Scheduler] 实际执行命令: %s", finalCommand)
+	s.logger.Infof("[Scheduler] 实际执行命令: %s", req.Command)
 
 	if s.config.Verbose {
 		workDir := req.WorkDir

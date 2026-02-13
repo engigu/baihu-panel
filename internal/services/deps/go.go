@@ -18,6 +18,7 @@ func NewGoManager(language string) *GoManager {
 			InstallCmd:   []string{"go", "install"},
 			UninstallCmd: []string{"go", "clean", "-i"},
 			ListCmd:      []string{"go", "list", "..."},
+			VerifyCmd:    []string{"go", "version"},
 			Separator:    "@",
 		},
 	}

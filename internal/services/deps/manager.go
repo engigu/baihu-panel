@@ -7,6 +7,7 @@ import (
 
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 // Manager 依赖管理器接口
@@ -16,6 +17,7 @@ type Manager interface {
 	GetInstalledPackages(language, langVersion string) ([]models.Dependency, error)
 	GetInstallCommand(dep *models.Dependency) (string, error)
 	GetReinstallAllCommand(deps []models.Dependency) (string, error)
+	GetVerifyCommand(langVersion string) (string, error)
 }
 
 // BaseManager 基础管理器，提供通用方法
@@ -24,16 +26,12 @@ type BaseManager struct {
 	InstallCmd   []string
 	UninstallCmd []string
 	ListCmd      []string
+	VerifyCmd    []string
 	Separator    string
 }
 
 func (m *BaseManager) runMiseCommand(langVersion string, cmdArgs []string) ([]byte, error) {
-	var args []string
-	if langVersion != "" {
-		args = []string{"mise", "exec", m.Language + "@" + langVersion, "--"}
-	}
-	args = append(args, cmdArgs...)
-
+	args := utils.BuildMiseCommandArgsSimple(cmdArgs, m.Language, langVersion)
 	cmd := exec.Command(args[0], args[1:]...)
 	return cmd.CombinedOutput()
 }
@@ -69,14 +67,10 @@ func (m *BaseManager) GetInstallCommand(dep *models.Dependency) (string, error) 
 		packageSpec = dep.Name
 	}
 
-	var args []string
-	if dep.LangVersion != "" {
-		args = []string{"mise", "exec", m.Language + "@" + dep.LangVersion, "--"}
-	}
-	args = append(args, m.InstallCmd...)
+	args := append([]string{}, m.InstallCmd...)
 	args = append(args, packageSpec)
 
-	fullCmd := strings.Join(args, " ")
+	fullCmd := utils.BuildMiseCommandSimple(strings.Join(args, " "), m.Language, dep.LangVersion)
 	return fullCmd + " && echo \"__INSTALL_SUCCESS__\" || echo \"__INSTALL_FAILED__\"", nil
 }
 
@@ -98,15 +92,21 @@ func (m *BaseManager) GetReinstallAllCommand(deps []models.Dependency) (string, 
 		}
 	}
 
-	var args []string
-	if langVersion != "" {
-		args = []string{"mise", "exec", m.Language + "@" + langVersion, "--"}
-	}
-	args = append(args, m.InstallCmd...)
+	args := append([]string{}, m.InstallCmd...)
 	args = append(args, packageSpecs...)
 
-	fullCmd := strings.Join(args, " ")
+	fullCmd := utils.BuildMiseCommandSimple(strings.Join(args, " "), m.Language, langVersion)
 	return fullCmd + " && echo \"__INSTALL_SUCCESS__\" || echo \"__INSTALL_FAILED__\"", nil
+}
+
+func (m *BaseManager) GetVerifyCommand(langVersion string) (string, error) {
+	var cmd string
+	if len(m.VerifyCmd) > 0 {
+		cmd = strings.Join(m.VerifyCmd, " ")
+	} else {
+		cmd = m.Language + " --version"
+	}
+	return utils.BuildMiseCommandSimple(cmd, m.Language, langVersion), nil
 }
 
 func (m *BaseManager) Uninstall(dep *models.Dependency) error {

@@ -94,3 +94,12 @@ func (s *DependencyService) GetReinstallAllCommand(language, langVersion string)
 
 	return m.GetReinstallAllCommand(deps_list)
 }
+
+// GetVerifyCommand 获取环境验证命令
+func (s *DependencyService) GetVerifyCommand(language, langVersion string) (string, error) {
+	m := deps.GetManager(language)
+	if m == nil {
+		return "", errors.New("不支持的依赖类型: " + language)
+	}
+	return m.GetVerifyCommand(langVersion)
+}

@@ -12,12 +12,17 @@ type ElixirManager struct {
 }
 
 func NewElixirManager(language string) *ElixirManager {
+	verifyCmd := []string{"elixir", "-v"}
+	if strings.Contains(strings.ToLower(language), "erlang") {
+		verifyCmd = []string{"erl", "+V"}
+	}
 	return &ElixirManager{
 		BaseManager: BaseManager{
 			Language:     language,
 			InstallCmd:   []string{"mix", "archive.install", "hex", "--force"},
 			UninstallCmd: []string{"mix", "archive.uninstall"},
 			ListCmd:      []string{"mix", "archive"},
+			VerifyCmd:    verifyCmd,
 			Separator:    " ",
 		},
 	}

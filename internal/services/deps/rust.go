@@ -18,6 +18,7 @@ func NewRustManager(language string) *RustManager {
 			InstallCmd:   []string{"cargo", "install"},
 			UninstallCmd: []string{"cargo", "uninstall"},
 			ListCmd:      []string{"cargo", "install", "--list"},
+			VerifyCmd:    []string{"rustc", "--version"},
 			Separator:    " v",
 		},
 	}

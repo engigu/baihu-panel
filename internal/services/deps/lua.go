@@ -18,6 +18,7 @@ func NewLuaManager(language string) *LuaManager {
 			InstallCmd:   []string{"luarocks", "install"},
 			UninstallCmd: []string{"luarocks", "remove"},
 			ListCmd:      []string{"luarocks", "list"},
+			VerifyCmd:    []string{"lua", "-v"},
 			Separator:    " ",
 		},
 	}

@@ -60,3 +60,19 @@ func (c *MiseController) Versions(ctx *gin.Context) {
 	}
 	utils.Success(ctx, versions)
 }
+
+// VerifyCommand 获取验证命令
+func (c *MiseController) VerifyCommand(ctx *gin.Context) {
+	plugin := ctx.Query("plugin")
+	version := ctx.Query("version")
+	if plugin == "" {
+		utils.BadRequest(ctx, "参数 plugin 不能为空")
+		return
+	}
+	cmd, err := c.service.GetVerifyCommand(plugin, version)
+	if err != nil {
+		utils.ServerError(ctx, "获取验证命令失败: "+err.Error())
+		return
+	}
+	utils.Success(ctx, gin.H{"command": cmd})
+}
