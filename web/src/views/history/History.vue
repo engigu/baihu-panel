@@ -6,7 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
 import LogViewer from './LogViewer.vue'
-import { RefreshCw, X, Search, Maximize2, GitBranch, Terminal, CheckCircle2, XCircle, AlertCircle, Ban, Clock, Zap, Check } from 'lucide-vue-next'
+import {
+  RefreshCw, X, Search, Maximize2, GitBranch, Terminal,
+  CheckCircle2, XCircle, AlertCircle, Ban, Clock, Zap as ZapIcon, Check
+} from 'lucide-vue-next'
 import { api, type TaskLog } from '@/api'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'vue-sonner'
@@ -310,7 +313,7 @@ watch(() => route.query.task_id, (newTaskId) => {
                 </div>
                 <div v-else-if="log.status === TASK_STATUS.RUNNING"
                   class="h-5 w-5 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                  <Zap class="h-3 w-3 text-yellow-500 fill-yellow-500 animate-pulse" />
+                  <ZapIcon class="h-3 w-3 text-yellow-500 fill-yellow-500 animate-pulse" />
                 </div>
                 <div v-else-if="log.status === TASK_STATUS.PENDING"
                   class="h-5 w-5 rounded-full bg-yellow-500/10 flex items-center justify-center">
@@ -350,7 +353,7 @@ watch(() => route.query.task_id, (newTaskId) => {
                 </div>
                 <div v-else-if="log.status === TASK_STATUS.RUNNING"
                   class="h-6 w-6 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                  <Zap class="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 animate-pulse" />
+                  <ZapIcon class="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 animate-pulse" />
                 </div>
                 <div v-else-if="log.status === TASK_STATUS.PENDING"
                   class="h-6 w-6 rounded-full bg-yellow-500/10 flex items-center justify-center">
@@ -406,7 +409,7 @@ watch(() => route.query.task_id, (newTaskId) => {
               <div class="flex items-center gap-1.5">
                 <CheckCircle2 v-if="selectedLog.status === TASK_STATUS.SUCCESS" class="h-3.5 w-3.5" />
                 <XCircle v-else-if="selectedLog.status === TASK_STATUS.FAILED" class="h-3.5 w-3.5" />
-                <Zap v-else-if="selectedLog.status === TASK_STATUS.RUNNING"
+                <ZapIcon v-else-if="selectedLog.status === TASK_STATUS.RUNNING"
                   class="h-3.5 w-3.5 fill-current animate-pulse text-blue-500" />
                 <Clock v-else-if="selectedLog.status === TASK_STATUS.PENDING" class="h-3.5 w-3.5" />
                 <AlertCircle v-else-if="selectedLog.status === TASK_STATUS.TIMEOUT" class="h-3.5 w-3.5" />

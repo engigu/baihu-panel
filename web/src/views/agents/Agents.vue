@@ -6,7 +6,11 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { RefreshCw, Trash2, Edit, Copy, Server, Search, Download, RotateCw, Plus, Ticket, ListTodo, Eye, WifiOff, Zap, Check, X } from 'lucide-vue-next'
+import {
+  RefreshCw, Trash2, Edit, Copy, Server, Search, Download, RotateCw,
+  Plus, Ticket, ListTodo, Eye, Wifi as WifiIcon, WifiOff as WifiOffIcon,
+  Zap as ZapIcon, ZapOff as ZapOffIcon, Check, X
+} from 'lucide-vue-next'
 import { api, type Agent, type AgentToken } from '@/api'
 import { toast } from 'vue-sonner'
 import { useRouter } from 'vue-router'
@@ -249,10 +253,10 @@ onUnmounted(() => {
                   <span class="flex items-center shrink-0" :title="isOnline(agent) ? '在线' : '离线'">
                     <div v-if="isOnline(agent)"
                       class="h-5 w-5 rounded-full bg-green-500/10 flex items-center justify-center">
-                      <Zap class="h-3 w-3 text-green-500 fill-green-500" />
+                      <WifiIcon class="h-3 w-3 text-green-500" />
                     </div>
                     <div v-else class="h-5 w-5 rounded-full bg-muted flex items-center justify-center">
-                      <WifiOff class="h-3 w-3 text-muted-foreground" />
+                      <WifiOffIcon class="h-3 w-3 text-muted-foreground" />
                     </div>
                   </span>
                   <span class="font-medium text-sm truncate cursor-pointer hover:text-primary"
@@ -263,11 +267,11 @@ onUnmounted(() => {
                     :title="agent.enabled ? '点击禁用' : '点击启用'">
                     <div v-if="agent.enabled"
                       class="h-6 w-6 rounded-md bg-green-500/10 flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
-                      <Zap class="h-3.5 w-3.5 text-green-500 fill-green-500" />
+                      <ZapIcon class="h-3.5 w-3.5 text-green-500 fill-green-500" />
                     </div>
                     <div v-else
                       class="h-6 w-6 rounded-md bg-muted flex items-center justify-center group-hover:bg-muted/80 transition-colors">
-                      <ZapOff class="h-3.5 w-3.5 text-muted-foreground" />
+                      <ZapOffIcon class="h-3.5 w-3.5 text-muted-foreground" />
                     </div>
                   </span>
                   <Button variant="ghost" size="icon" class="h-7 w-7" @click="viewDetail(agent)" title="详情">
@@ -312,10 +316,10 @@ onUnmounted(() => {
                 <span class="flex justify-center shrink-0" :title="isOnline(agent) ? '在线' : '离线'">
                   <div v-if="isOnline(agent)"
                     class="h-6 w-6 rounded-full bg-green-500/10 flex items-center justify-center">
-                    <Zap class="h-3.5 w-3.5 text-green-500 fill-green-500" />
+                    <WifiIcon class="h-3.5 w-3.5 text-green-500" />
                   </div>
                   <div v-else class="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
-                    <WifiOff class="h-3.5 w-3.5 text-muted-foreground" />
+                    <WifiOffIcon class="h-3.5 w-3.5 text-muted-foreground" />
                   </div>
                 </span>
               </span>
@@ -337,11 +341,11 @@ onUnmounted(() => {
                   :title="agent.enabled ? '点击禁用' : '点击启用'">
                   <div v-if="agent.enabled"
                     class="h-6 w-6 rounded-md bg-green-500/10 flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
-                    <Zap class="h-3.5 w-3.5 text-green-500 fill-green-500" />
+                    <ZapIcon class="h-3.5 w-3.5 text-green-500 fill-green-500" />
                   </div>
                   <div v-else
                     class="h-6 w-6 rounded-md bg-muted flex items-center justify-center group-hover:bg-muted/80 transition-colors">
-                    <ZapOff class="h-3.5 w-3.5 text-muted-foreground" />
+                    <ZapOffIcon class="h-3.5 w-3.5 text-muted-foreground" />
                   </div>
                 </span>
                 <Button variant="ghost" size="icon" class="h-7 w-7" @click="viewDetail(agent)" title="详情">
@@ -426,6 +430,7 @@ onUnmounted(() => {
       <DialogContent class="sm:max-w-md md:max-w-lg" @openAutoFocus.prevent>
         <DialogHeader>
           <DialogTitle>Agent 详情</DialogTitle>
+          <DialogDescription class="sr-only">显示 Agent 的详细配置和状态信息</DialogDescription>
         </DialogHeader>
         <div v-if="viewingAgent" class="space-y-3">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -464,8 +469,8 @@ onUnmounted(() => {
             <div class="flex items-center justify-between sm:block">
               <Label class="text-muted-foreground text-xs">在线状态</Label>
               <div class="flex items-center gap-2">
-                <Wifi v-if="isOnline(viewingAgent)" class="h-4 w-4 text-green-500" />
-                <WifiOff v-else class="h-4 w-4 text-muted-foreground" />
+                <WifiIcon v-if="isOnline(viewingAgent)" class="h-4 w-4 text-green-500" />
+                <WifiOffIcon v-else class="h-4 w-4 text-muted-foreground" />
                 <span class="text-sm">{{ isOnline(viewingAgent) ? '在线' : '离线' }}</span>
               </div>
             </div>
@@ -495,6 +500,7 @@ onUnmounted(() => {
       <DialogContent @openAutoFocus.prevent>
         <DialogHeader>
           <DialogTitle>编辑 Agent</DialogTitle>
+          <DialogDescription class="sr-only">修改 Agent 的名称和描述信息</DialogDescription>
         </DialogHeader>
         <div class="space-y-4">
           <div>
@@ -583,6 +589,7 @@ onUnmounted(() => {
       <DialogContent @openAutoFocus.prevent>
         <DialogHeader>
           <DialogTitle>生成令牌</DialogTitle>
+          <DialogDescription class="sr-only">创建一个新的注册令牌，用于 Agent 认证</DialogDescription>
         </DialogHeader>
         <div class="space-y-4">
           <div>
