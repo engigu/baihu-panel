@@ -250,25 +250,25 @@ onMounted(async () => {
         </Button>
         <div>
           <h2 class="text-xl sm:text-2xl font-bold tracking-tight">依赖管理</h2>
-          <p class="text-muted-foreground text-sm">管理 Python 和 Node.js 依赖包</p>
+          <p class="text-muted-foreground text-sm">管理工具运行环境的依赖包</p>
         </div>
       </div>
     </div>
 
     <!-- 当前环境信息 -->
     <div v-if="language && langVersion"
-      class="bg-primary/10 border border-primary/20 rounded-lg p-3 flex items-center justify-between">
+      class="bg-primary/5 border border-primary/10 rounded-lg p-3 flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <Package class="h-4 w-4 text-primary" />
+        <Package class="h-4 w-4 text-primary/80" />
         <span class="text-sm">正在管理环境: <span class="font-bold font-mono">{{ language }}@{{ langVersion }}</span></span>
       </div>
-      <Badge variant="outline" class="font-mono text-xs">Scoped Environment</Badge>
+      <Badge variant="outline" class="font-mono text-xs border-primary/20 text-primary/80">Scoped Environment</Badge>
     </div>
 
     <div class="mt-4">
       <div class="rounded-lg border bg-card overflow-x-auto">
         <!-- 工具栏 -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 border-b bg-muted/30">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 border-b bg-muted/10">
           <div class="flex items-center gap-2">
             <Badge variant="secondary">{{ filteredDeps.length }} 个包</Badge>
           </div>
@@ -293,7 +293,7 @@ onMounted(async () => {
 
         <!-- 表头 -->
         <div
-          class="flex items-center gap-4 px-4 py-2 border-b bg-muted/50 text-sm text-muted-foreground font-medium min-w-[400px]">
+          class="flex items-center gap-4 px-4 py-2 border-b bg-muted/20 text-sm text-muted-foreground font-medium min-w-[400px]">
           <span class="flex-1">包名</span>
           <span class="w-32">版本</span>
           <span class="w-48 hidden md:block">备注</span>
@@ -311,7 +311,7 @@ onMounted(async () => {
             {{ searchQuery ? '无匹配结果' : '暂无依赖包' }}
           </div>
           <div v-else v-for="dep in filteredDeps" :key="dep.id"
-            class="flex items-center gap-4 px-4 py-2 hover:bg-muted/50 transition-colors">
+            class="flex items-center gap-4 px-4 py-2 hover:bg-muted/30 transition-colors">
             <span class="flex-1 font-mono text-sm truncate">
               <TextOverflow :text="dep.name" title="包名" />
             </span>

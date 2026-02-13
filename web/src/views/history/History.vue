@@ -245,7 +245,7 @@ watch(() => route.query.task_id, (newTaskId) => {
       <div class="flex-1 min-w-0 rounded-lg border bg-card overflow-hidden">
         <!-- 小屏表头 -->
         <div
-          class="flex sm:hidden items-center gap-2 px-3 py-2 border-b bg-muted/50 text-xs text-muted-foreground font-medium">
+          class="flex sm:hidden items-center gap-2 px-3 py-2 border-b bg-muted/20 text-xs text-muted-foreground font-medium">
           <span class="w-14 shrink-0">ID</span>
           <span class="w-10 shrink-0 text-center">类型</span>
           <span class="flex-1 min-w-0">任务名称</span>
@@ -254,7 +254,7 @@ watch(() => route.query.task_id, (newTaskId) => {
         </div>
         <!-- 大屏表头 -->
         <div
-          class="hidden sm:flex items-center gap-4 px-4 py-2 border-b bg-muted/50 text-sm text-muted-foreground font-medium">
+          class="hidden sm:flex items-center gap-4 px-4 py-2 border-b bg-muted/20 text-sm text-muted-foreground font-medium">
           <span class="w-16 shrink-0">ID</span>
           <span class="w-12 shrink-0 text-center">类型</span>
           <span class="w-36 shrink-0">任务名称</span>
@@ -269,8 +269,8 @@ watch(() => route.query.task_id, (newTaskId) => {
             暂无日志
           </div>
           <div v-for="log in logs" :key="log.id" :class="[
-            'cursor-pointer hover:bg-muted/50 transition-colors',
-            selectedLog?.id === log.id && 'bg-accent'
+            'cursor-pointer hover:bg-muted/30 transition-colors',
+            selectedLog?.id === log.id && 'bg-accent/50'
           ]" @click="selectLog(log)">
             <!-- 小屏行 -->
             <div class="flex sm:hidden items-center gap-2 px-3 py-2">
@@ -307,7 +307,7 @@ watch(() => route.query.task_id, (newTaskId) => {
                 </div>
               </span>
               <span class="w-12 text-right shrink-0 text-muted-foreground text-xs">{{ formatDuration(log.duration)
-                }}</span>
+              }}</span>
             </div>
             <!-- 大屏行 -->
             <div class="hidden sm:flex items-center gap-4 px-4 py-2">
@@ -317,7 +317,7 @@ watch(() => route.query.task_id, (newTaskId) => {
                 <Terminal v-else class="h-4 w-4 text-primary" />
               </span>
               <span class="w-36 shrink-0 font-medium truncate text-sm">{{ log.task_name }}</span>
-              <code class="flex-1 min-w-0 text-muted-foreground truncate text-xs bg-muted px-2 py-1 rounded">
+              <code class="flex-1 min-w-0 text-muted-foreground truncate text-xs bg-muted/40 px-2 py-1 rounded">
                 <TextOverflow :text="log.command" title="执行命令" />
               </code>
               <span class="w-12 flex justify-center shrink-0">
@@ -347,7 +347,7 @@ watch(() => route.query.task_id, (newTaskId) => {
                 </div>
               </span>
               <span class="w-16 text-right shrink-0 text-muted-foreground text-xs">{{ formatDuration(log.duration)
-                }}</span>
+              }}</span>
               <span v-if="!selectedLog"
                 class="w-40 text-right shrink-0 text-muted-foreground text-xs hidden md:block">{{ log.start_time ||
                   log.created_at }}</span>
@@ -409,7 +409,7 @@ watch(() => route.query.task_id, (newTaskId) => {
           </div>
           <div class="pt-1">
             <span class="text-muted-foreground">命令</span>
-            <code class="mt-1 block font-mono bg-muted px-2 py-1 rounded text-xs break-all">
+            <code class="mt-1 block font-mono bg-muted/40 px-2 py-1 rounded text-xs break-all">
               {{ selectedLog.command }}
             </code>
           </div>
@@ -424,7 +424,7 @@ watch(() => route.query.task_id, (newTaskId) => {
               {{ selectedLog.error }}
             </code>
           </div>
-          <div class="px-4 py-2 text-sm text-muted-foreground border-b bg-muted/50 flex items-center justify-between">
+          <div class="px-4 py-2 text-sm text-muted-foreground border-b bg-muted/20 flex items-center justify-between">
             <span>输出</span>
             <Button variant="ghost" size="icon" class="h-6 w-6" @click="showFullscreen = true" title="全屏查看">
               <Maximize2 class="h-3.5 w-3.5" />

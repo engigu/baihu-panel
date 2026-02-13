@@ -516,7 +516,7 @@ func (a *Agent) handleExecute(data json.RawMessage) {
 		Envs:      executor.ParseEnvVars(task.Envs),
 		Timeout:   task.Timeout,
 		Languages: task.Languages,
-		UseMise:   false,
+		UseMise:   task.UseMise(),
 		Type:      executor.TaskTypeManual,
 	}
 

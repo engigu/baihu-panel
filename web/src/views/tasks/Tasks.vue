@@ -224,7 +224,7 @@ watch(() => route.query.agent_id, (newVal) => {
     <div class="rounded-lg border bg-card overflow-x-auto">
       <!-- 表头 -->
       <div
-        class="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 border-b bg-muted/50 text-xs sm:text-sm text-muted-foreground font-medium min-w-[360px] sm:min-w-[800px]">
+        class="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 border-b bg-muted/20 text-xs sm:text-sm text-muted-foreground font-medium min-w-[360px] sm:min-w-[800px]">
         <span class="w-12 sm:w-14 shrink-0">ID</span>
         <span class="w-6 sm:w-8 shrink-0 text-center">类型</span>
         <span class="flex-1 min-w-0">名称</span>
@@ -242,7 +242,7 @@ watch(() => route.query.agent_id, (newVal) => {
           暂无任务
         </div>
         <div v-for="task in tasks" :key="task.id"
-          class="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 hover:bg-muted/50 transition-colors">
+          class="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 hover:bg-muted/30 transition-colors">
           <span class="w-12 sm:w-14 shrink-0 text-muted-foreground text-xs sm:text-sm">#{{ task.id }}</span>
           <span class="w-6 sm:w-8 shrink-0 flex justify-center" :title="getTaskTypeTitle(task.type || 'task')">
             <GitBranch v-if="task.type === TASK_TYPE.REPO" class="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
@@ -258,10 +258,10 @@ watch(() => route.query.agent_id, (newVal) => {
             <span class="truncate">{{ getExecutorName(task) }}</span>
           </span>
           <code
-            class="w-32 sm:flex-1 shrink-0 sm:shrink text-muted-foreground truncate text-xs bg-muted px-2 py-1 rounded hidden sm:block">
+            class="w-32 sm:flex-1 shrink-0 sm:shrink text-muted-foreground truncate text-xs bg-muted/40 px-2 py-1 rounded hidden sm:block">
   <TextOverflow :text="task.command" :title="task.type === TASK_TYPE.REPO ? '同步地址' : '执行命令'" />
 </code>
-          <code class="w-36 shrink-0 text-muted-foreground text-xs bg-muted px-2 py-1 rounded hidden md:block">{{ task.schedule
+          <code class="w-36 shrink-0 text-muted-foreground text-xs bg-muted/40 px-2 py-1 rounded hidden md:block">{{ task.schedule
           }}</code>
           <span class="w-40 shrink-0 text-muted-foreground text-xs hidden lg:block">{{ task.last_run || '-' }}</span>
           <span class="w-40 shrink-0 text-muted-foreground text-xs hidden lg:block">{{ task.next_run || '-' }}</span>

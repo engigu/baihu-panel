@@ -133,7 +133,7 @@ onMounted(loadEnvVars)
     <div class="rounded-lg border bg-card overflow-x-auto">
       <!-- 表头 -->
       <div
-        class="flex items-center gap-4 px-4 py-2 border-b bg-muted/50 text-sm text-muted-foreground font-medium min-w-[500px]">
+        class="flex items-center gap-4 px-4 py-2 border-b bg-muted/20 text-sm text-muted-foreground font-medium min-w-[500px]">
         <span class="w-32 sm:w-48 shrink-0">变量名</span>
         <span class="w-24 sm:flex-1 shrink-0 sm:shrink">值</span>
         <span class="w-32 sm:w-48 shrink-0 hidden md:block">备注</span>
@@ -145,9 +145,9 @@ onMounted(loadEnvVars)
           暂无环境变量
         </div>
         <div v-for="env in envVars" :key="env.id"
-          class="flex items-center gap-4 px-4 py-2 hover:bg-muted/50 transition-colors">
+          class="flex items-center gap-4 px-4 py-2 hover:bg-muted/30 transition-colors">
           <code
-            class="w-32 sm:w-48 font-medium truncate shrink-0 text-xs bg-muted px-2 py-1 rounded">{{ env.name }}</code>
+            class="w-32 sm:w-48 font-medium truncate shrink-0 text-xs bg-muted/40 px-2 py-1 rounded">{{ env.name }}</code>
           <span class="w-24 sm:flex-1 shrink-0 sm:shrink font-mono text-muted-foreground truncate text-xs">
             <TextOverflow :text="showValues[env.id] ? env.value : maskValue(env.value)" title="变量值" />
           </span>
