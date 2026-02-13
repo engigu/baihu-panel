@@ -23,20 +23,27 @@ type Task interface {
 	GetTimeout() int
 	GetWorkDir() string
 	GetEnvs() string
+	GetLanguage() string
+	GetLangVersion() string
+	GetUseMise() bool
 }
 
 // CronTask 计划任务接口
 type CronTask interface {
 	Task
 	GetSchedule() string
+	UseMise() bool
 }
 
 // Request 任务执行请求
 type Request struct {
-	Command string
-	WorkDir string
-	Envs    []string
-	Timeout int // 任务超时时间（分钟）
+	Command     string
+	WorkDir     string
+	Envs        []string
+	Timeout     int // 任务超时时间（分钟）
+	Language    string
+	LangVersion string
+	UseMise     bool
 }
 
 // Result 任务执行结果
@@ -96,6 +103,9 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	defer cancel()
 
 	finalCommand := req.Command
+	if req.UseMise {
+		finalCommand = BuildLanguageCommand(req.Command, req.Language, req.LangVersion)
+	}
 	shell, args := utils.GetShellCommand(finalCommand)
 	cmd := exec.CommandContext(execCtx, shell, args...)
 
@@ -270,6 +280,18 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	}
 
 	return result, err
+}
+
+// BuildLanguageCommand 构建语言环境执行命令 (使用 mise)
+func BuildLanguageCommand(command, language, version string) string {
+	if language == "" {
+		return command
+	}
+	v := version
+	if v == "" {
+		v = "latest"
+	}
+	return "mise exec " + language + "@" + v + " -- " + command
 }
 
 // ParseEnvVars 解析环境变量字符串 "KEY1=VALUE1,KEY2=VALUE2"

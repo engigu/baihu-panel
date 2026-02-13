@@ -44,6 +44,8 @@ type Task struct {
 	WorkDir     string         `json:"work_dir" gorm:"size:255;default:''"`     // 工作目录，为空则使用 scripts 目录
 	CleanConfig string         `json:"clean_config" gorm:"size:255;default:''"` // 清理配置 JSON
 	Envs        string         `json:"envs" gorm:"size:255;default:''"`         // 环境变量ID列表，逗号分隔
+	Language    string         `json:"language" gorm:"size:50;default:''"`      // 针对本地任务的语言名称 (mise)
+	LangVersion string         `json:"lang_version" gorm:"size:50;default:''"`  // 针对本地任务的语言版本 (mise)
 	AgentID     *uint          `json:"agent_id" gorm:"index"`                   // Agent ID，为空表示本地执行
 	Enabled     bool           `json:"enabled" gorm:"default:true"`
 	RunningGo   string         `json:"running_go" gorm:"type:text"` // 正在运行的 go routine id 数组 (JSON)
@@ -80,6 +82,22 @@ func (t *Task) GetWorkDir() string {
 
 func (t *Task) GetEnvs() string {
 	return t.Envs
+}
+
+func (t *Task) GetLanguage() string {
+	return t.Language
+}
+
+func (t *Task) GetLangVersion() string {
+	return t.LangVersion
+}
+
+func (t *Task) GetUseMise() bool {
+	return t.AgentID == nil || *t.AgentID == 0
+}
+
+func (t *Task) UseMise() bool {
+	return t.GetUseMise()
 }
 
 func (t *Task) GetSchedule() string {

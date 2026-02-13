@@ -20,6 +20,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   connected: []
   disconnected: []
+  success: []
+  failed: []
 }>()
 
 const terminalRef = ref<HTMLDivElement | null>(null)
@@ -39,7 +41,7 @@ function initTerminal(forceConnect = false) {
     terminal.dispose()
     terminal = null
   }
-  
+
   // 确保旧的 WebSocket 完全关闭
   if (ws) {
     if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
@@ -47,7 +49,7 @@ function initTerminal(forceConnect = false) {
     }
     ws = null
   }
-  
+
   inputBuffer = ''
   isPtyMode = false
 
@@ -65,7 +67,7 @@ function initTerminal(forceConnect = false) {
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
   terminal.open(terminalRef.value)
-  
+
   // 延迟调用 fit，确保 DOM 已渲染
   setTimeout(() => {
     try {
@@ -74,7 +76,7 @@ function initTerminal(forceConnect = false) {
       // 忽略 fit 错误
     }
   }, 50)
-  
+
   terminal.focus()
 
   // autoConnect 或者强制连接时才连接
@@ -187,6 +189,15 @@ function connectWebSocket() {
       return
     }
     terminal?.write(event.data)
+
+    // 检测安装结果标识
+    if (typeof event.data === 'string') {
+      if (event.data.includes('__INSTALL_SUCCESS__')) {
+        emit('success')
+      } else if (event.data.includes('__INSTALL_FAILED__')) {
+        emit('failed')
+      }
+    }
   }
 
   ws.onclose = () => {

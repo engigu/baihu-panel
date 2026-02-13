@@ -27,6 +27,7 @@ type Controllers struct {
 	Settings   *controllers.SettingsController
 	Dependency *controllers.DependencyController
 	Agent      *controllers.AgentController
+	Mise       *controllers.MiseController
 }
 
 func mustSubFS(fsys fs.FS, dir string) fs.FS {
@@ -202,9 +203,11 @@ func Setup(c *Controllers) *gin.Engine {
 				deps.POST("", c.Dependency.Create)
 				deps.DELETE("/:id", c.Dependency.Delete)
 				deps.POST("/install", c.Dependency.Install)
+				deps.POST("/install-cmd", c.Dependency.GetInstallCommand)
 				deps.POST("/uninstall/:id", c.Dependency.Uninstall)
 				deps.POST("/reinstall/:id", c.Dependency.Reinstall)
 				deps.POST("/reinstall-all", c.Dependency.ReinstallAll)
+				deps.POST("/reinstall-all-cmd", c.Dependency.GetReinstallAllCommand)
 				deps.GET("/installed", c.Dependency.GetInstalled)
 			}
 
@@ -221,6 +224,15 @@ func Setup(c *Controllers) *gin.Engine {
 				agents.GET("/tokens", c.Agent.ListTokens)
 				agents.POST("/tokens", c.Agent.CreateToken)
 				agents.DELETE("/tokens/:id", c.Agent.DeleteToken)
+			}
+
+			// Mise routes (Mise 管理)
+			mise := authorized.Group("/mise")
+			{
+				mise.GET("/ls", c.Mise.List)
+				mise.POST("/sync", c.Mise.Sync)
+				mise.GET("/plugins", c.Mise.Plugins)
+				mise.GET("/versions", c.Mise.Versions)
 			}
 
 			// Agent API（供前端调用，保持在 v1 下）

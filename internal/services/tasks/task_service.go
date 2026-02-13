@@ -11,7 +11,7 @@ func NewTaskService() *TaskService {
 	return &TaskService{}
 }
 
-func (ts *TaskService) CreateTask(name, command, schedule string, timeout int, workDir, cleanConfig, envs, taskType, config string, agentID *uint) *models.Task {
+func (ts *TaskService) CreateTask(name, command, schedule string, timeout int, workDir, cleanConfig, envs, taskType, config string, agentID *uint, language, langVersion string) *models.Task {
 	if taskType == "" {
 		taskType = "task"
 	}
@@ -25,6 +25,8 @@ func (ts *TaskService) CreateTask(name, command, schedule string, timeout int, w
 		WorkDir:     workDir,
 		CleanConfig: cleanConfig,
 		Envs:        envs,
+		Language:    language,
+		LangVersion: langVersion,
 		AgentID:     agentID,
 		Enabled:     true,
 	}
@@ -65,7 +67,7 @@ func (ts *TaskService) GetTaskByID(id int) *models.Task {
 	return &task
 }
 
-func (ts *TaskService) UpdateTask(id int, name, command, schedule string, timeout int, workDir, cleanConfig, envs string, enabled bool, taskType, config string, agentID *uint) *models.Task {
+func (ts *TaskService) UpdateTask(id int, name, command, schedule string, timeout int, workDir, cleanConfig, envs string, enabled bool, taskType, config string, agentID *uint, language, langVersion string) *models.Task {
 	var task models.Task
 	if err := database.DB.First(&task, id).Error; err != nil {
 		return nil
@@ -79,6 +81,8 @@ func (ts *TaskService) UpdateTask(id int, name, command, schedule string, timeou
 	task.Envs = envs
 	task.Enabled = enabled
 	task.AgentID = agentID
+	task.Language = language
+	task.LangVersion = langVersion
 	if taskType != "" {
 		task.Type = taskType
 	}

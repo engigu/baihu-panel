@@ -61,6 +61,8 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		WorkDir     string `json:"work_dir"`
 		CleanConfig string `json:"clean_config"`
 		Envs        string `json:"envs"`
+		Language    string `json:"language"`
+		LangVersion string `json:"lang_version"`
 		AgentID     *uint  `json:"agent_id"`
 	}
 
@@ -86,7 +88,7 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		workDir = resolveWorkDir(req.WorkDir)
 	}
 
-	task := tc.taskService.CreateTask(req.Name, req.Command, req.Schedule, req.Timeout, workDir, req.CleanConfig, req.Envs, req.Type, req.Config, req.AgentID)
+	task := tc.taskService.CreateTask(req.Name, req.Command, req.Schedule, req.Timeout, workDir, req.CleanConfig, req.Envs, req.Type, req.Config, req.AgentID, req.Language, req.LangVersion)
 
 	// 如果是 Agent 任务，通知 Agent；否则添加到本地 cron
 	if task.AgentID != nil && *task.AgentID > 0 {
@@ -156,6 +158,8 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		CleanConfig string `json:"clean_config"`
 		Envs        string `json:"envs"`
 		Enabled     bool   `json:"enabled"`
+		Language    string `json:"language"`
+		LangVersion string `json:"lang_version"`
 		AgentID     *uint  `json:"agent_id"`
 	}
 
@@ -177,7 +181,7 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		workDir = resolveWorkDir(req.WorkDir)
 	}
 
-	task := tc.taskService.UpdateTask(id, req.Name, req.Command, req.Schedule, req.Timeout, workDir, req.CleanConfig, req.Envs, req.Enabled, req.Type, req.Config, req.AgentID)
+	task := tc.taskService.UpdateTask(id, req.Name, req.Command, req.Schedule, req.Timeout, workDir, req.CleanConfig, req.Envs, req.Enabled, req.Type, req.Config, req.AgentID, req.Language, req.LangVersion)
 	if task == nil {
 		utils.NotFound(c, "任务不存在")
 		return

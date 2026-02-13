@@ -23,6 +23,7 @@ func Migrate() error {
 		&models.Dependency{},
 		&models.Agent{},
 		&models.AgentToken{},
+		&models.Language{},
 	)
 }
 
@@ -37,5 +38,14 @@ func customMigrations() error {
 			}
 		}
 	}
+	// 移除 deps 表中的 type 字段（如果存在）
+	if DB.Migrator().HasColumn(&models.Dependency{}, "type") {
+		if err := DB.Migrator().DropColumn(&models.Dependency{}, "type"); err != nil {
+			logger.Debugf("[Database] 移除 deps.type 列失败: %v", err)
+		} else {
+			logger.Infof("[Database] 已成功移除 deps 表中的冗余 type 列")
+		}
+	}
+
 	return nil
 }

@@ -52,14 +52,16 @@ func (AgentToken) TableName() string {
 
 // AgentTask Agent 任务配置（用于下发给 Agent）
 type AgentTask struct {
-	ID       uint   `json:"id"`
-	Name     string `json:"name"`
-	Command  string `json:"command"`
-	Schedule string `json:"schedule"`
-	Timeout  int    `json:"timeout"`
-	WorkDir  string `json:"work_dir"`
-	Envs     string `json:"envs"`
-	Enabled  bool   `json:"enabled"`
+	ID          uint   `json:"id"`
+	Name        string `json:"name"`
+	Command     string `json:"command"`
+	Schedule    string `json:"schedule"`
+	Timeout     int    `json:"timeout"`
+	WorkDir     string `json:"work_dir"`
+	Envs        string `json:"envs"`
+	Language    string `json:"language"`
+	LangVersion string `json:"lang_version"`
+	Enabled     bool   `json:"enabled"`
 }
 
 // AgentTaskResult Agent 上报的任务执行结果

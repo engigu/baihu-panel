@@ -42,6 +42,7 @@ const router = createRouter({
         { path: 'editor', name: 'editor', component: () => import('@/views/editor/Editor.vue') },
         { path: 'environments', name: 'environments', component: () => import('@/views/environments/Environments.vue') },
         { path: 'dependencies', name: 'dependencies', component: () => import('@/views/dependencies/Dependencies.vue') },
+        { path: 'languages', name: 'languages', component: () => import('@/views/languages/Languages.vue') },
         { path: 'agents', name: 'agents', component: () => import('@/views/agents/Agents.vue') },
         { path: 'history', name: 'history', component: () => import('@/views/history/History.vue') },
         { path: 'loginlogs', name: 'loginlogs', component: () => import('@/views/loginlogs/LoginLogs.vue') },
@@ -57,7 +58,7 @@ router.beforeEach(async (to, _from, next) => {
   // 首次访问或访问登录页时强制检查
   const forceCheck = !authChecked || to.path === '/login'
   const isAuthenticated = await getAuthStatus(forceCheck)
-  
+
   // 检查是否需要认证
   if (to.matched.some(record => record.meta.requiresAuth)) {
     if (isAuthenticated) {

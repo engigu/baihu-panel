@@ -202,19 +202,34 @@ export const api = {
     }
   },
   deps: {
-    list: (type?: string) => {
-      const query = type ? `?type=${type}` : ''
-      return request<Dependency[]>(`/deps${query}`)
+    list: (params?: { language?: string; lang_version?: string }) => {
+      const query = new URLSearchParams()
+      if (params?.language) query.set('language', params.language)
+      if (params?.lang_version) query.set('lang_version', params.lang_version)
+      return request<Dependency[]>(`/deps?${query}`)
     },
-    create: (data: { name: string; version?: string; type: string; remark?: string }) =>
+    create: (data: { name: string; version?: string; language: string; lang_version?: string; remark?: string }) =>
       request<Dependency>('/deps', { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: number) => request(`/deps/${id}`, { method: 'DELETE' }),
-    install: (data: { name: string; version?: string; type: string; remark?: string }) =>
-      request('/deps/install', { method: 'POST', body: JSON.stringify(data) }),
-    uninstall: (id: number) => request(`/deps/uninstall/${id}`, { method: 'POST' }),
+    install: (data: any) => request<any>('/deps/install', { method: 'POST', body: JSON.stringify(data) }),
+    getInstallCmd: (data: any) => request<{ command: string }>('/deps/install-cmd', { method: 'POST', body: JSON.stringify(data) }),
+    uninstall: (id: number) => request<any>(`/deps/uninstall/${id}`, { method: 'POST' }),
     reinstall: (id: number) => request(`/deps/reinstall/${id}`, { method: 'POST' }),
-    reinstallAll: (type: string) => request(`/deps/reinstall-all?type=${type}`, { method: 'POST' }),
-    getInstalled: (type: string) => request<Dependency[]>(`/deps/installed?type=${type}`)
+    reinstallAll: (language: string, lang_version?: string) => {
+      const query = new URLSearchParams({ language })
+      if (lang_version) query.set('lang_version', lang_version)
+      return request(`/deps/reinstall-all?${query}`, { method: 'POST' })
+    },
+    getReinstallAllCmd: (language: string, lang_version?: string) => {
+      const query = new URLSearchParams({ language })
+      if (lang_version) query.set('lang_version', lang_version)
+      return request<{ command: string }>(`/deps/reinstall-all-cmd?${query}`, { method: 'POST' })
+    },
+    getInstalled: (language: string, lang_version?: string) => {
+      const query = new URLSearchParams({ language })
+      if (lang_version) query.set('lang_version', lang_version)
+      return request<Dependency[]>(`/deps/installed?${query}`)
+    }
   },
   agents: {
     list: () => request<Agent[]>('/agents'),
@@ -229,6 +244,12 @@ export const api = {
     createToken: (data: { remark?: string; max_uses?: number; expires_at?: string }) =>
       request<AgentToken>('/agents/tokens', { method: 'POST', body: JSON.stringify(data) }),
     deleteToken: (id: number) => request('/agents/tokens/' + id, { method: 'DELETE' })
+  },
+  mise: {
+    list: () => request<MiseLanguage[]>('/mise/ls'),
+    sync: () => request<void>('/mise/sync', { method: 'POST' }),
+    plugins: () => request<string[]>('/mise/plugins'),
+    versions: (plugin: string) => request<string[]>(`/mise/versions?plugin=${plugin}`)
   }
 }
 
@@ -250,6 +271,8 @@ export interface Task {
   work_dir: string
   clean_config: string
   envs: string
+  language: string
+  lang_version: string
   agent_id: number | null
   enabled: boolean
   last_run: string
@@ -410,7 +433,8 @@ export interface Dependency {
   id: number
   name: string
   version: string
-  type: string
+  language: string
+  lang_version: string
   remark: string
   log: string
   created_at: string
@@ -445,4 +469,13 @@ export interface AgentToken {
   expires_at: string | null
   enabled: boolean
   created_at: string
+}
+
+export interface MiseLanguage {
+  plugin: string
+  version: string
+  source: { type?: string; path?: string } | string
+  active: boolean
+  install_path?: string
+  installed_at?: string  // 安装日期
 }

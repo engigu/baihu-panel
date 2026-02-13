@@ -326,6 +326,7 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 			WorkDir: req.WorkDir,
 			Envs:    req.Envs,
 			Timeout: req.Timeout,
+			UseMise: false, // 系统任务不使用 mise
 		}, stdout, stderr)
 	}
 
@@ -351,10 +352,13 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 	// 本地任务
 	hooks := &LocalTaskHooks{es: es, logID: req.LogID}
 	return executor.ExecuteWithHooks(ctx, executor.Request{
-		Command: req.Command,
-		WorkDir: req.WorkDir,
-		Envs:    req.Envs,
-		Timeout: req.Timeout,
+		Command:     req.Command,
+		WorkDir:     req.WorkDir,
+		Envs:        req.Envs,
+		Timeout:     req.Timeout,
+		Language:    task.Language,
+		LangVersion: task.LangVersion,
+		UseMise:     true, // 本地业务任务启用 mise
 	}, stdout, stderr, hooks)
 }
 

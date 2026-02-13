@@ -51,6 +51,8 @@ func (s *BackupService) getTableConfigs() []tableConfig {
 		{"login_logs.json", s.exportTable(&[]models.LoginLog{}, false), s.restoreTable(&[]models.LoginLog{}, false)},
 		{"agents.json", s.exportTable(&[]models.Agent{}, true), s.restoreTable(&[]models.Agent{}, true)},
 		{"tokens.json", s.exportTable(&[]models.AgentToken{}, true), s.restoreTable(&[]models.AgentToken{}, true)},
+		{"languages.json", s.exportTable(&[]models.Language{}, true), s.restoreTable(&[]models.Language{}, true)},
+		{"deps.json", s.exportTable(&[]models.Dependency{}, true), s.restoreTable(&[]models.Dependency{}, true)},
 	}
 }
 
@@ -153,6 +155,20 @@ func (s *BackupService) CreateBackup() (string, error) {
 		}
 	}
 
+	// 写入元数据信息
+	sysInfo := map[string]interface{}{
+		"version": "v2",
+		"ts":      time.Now().Format("2006-01-02 15:04:05"),
+	}
+	sysFile, err := zipWriter.Create("__sys__.json")
+	if err != nil {
+		return "", err
+	}
+	sysData, _ := json.MarshalIndent(sysInfo, "", "  ")
+	if _, err := sysFile.Write(sysData); err != nil {
+		return "", err
+	}
+
 	// 打包 scripts 文件夹
 	scriptsDir := constant.ScriptsWorkDir
 	if _, err := os.Stat(scriptsDir); err == nil {
@@ -192,6 +208,8 @@ func (s *BackupService) Restore(zipPath string) error {
 		tx.Unscoped().Where("1=1").Delete(&models.LoginLog{})
 		tx.Unscoped().Where("1=1").Delete(&models.Agent{})
 		tx.Unscoped().Where("1=1").Delete(&models.AgentToken{})
+		tx.Unscoped().Where("1=1").Delete(&models.Language{})
+		tx.Unscoped().Where("1=1").Delete(&models.Dependency{})
 
 		// 2. 依次恢复每个表
 		for _, cfg := range configs {
@@ -258,6 +276,10 @@ func (s *BackupService) restoreFromZipFile(tx *gorm.DB, f *zip.File, filename st
 			return &models.Agent{}
 		case "tokens.json":
 			return &models.AgentToken{}
+		case "languages.json":
+			return &models.Language{}
+		case "deps.json":
+			return &models.Dependency{}
 		default:
 			return nil
 		}

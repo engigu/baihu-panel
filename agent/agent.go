@@ -43,15 +43,17 @@ type WSMessage struct {
 }
 
 type AgentTask struct {
-	ID       uint   `json:"id"`
-	Name     string `json:"name"`
-	Command  string `json:"command"`
-	Schedule string `json:"schedule"`
-	Cron     string `json:"cron"`
-	Timeout  int    `json:"timeout"`
-	WorkDir  string `json:"work_dir"`
-	Envs     string `json:"envs"`
-	Enabled  bool   `json:"enabled"`
+	ID          uint   `json:"id"`
+	Name        string `json:"name"`
+	Command     string `json:"command"`
+	Schedule    string `json:"schedule"`
+	Cron        string `json:"cron"`
+	Timeout     int    `json:"timeout"`
+	WorkDir     string `json:"work_dir"`
+	Envs        string `json:"envs"`
+	Language    string `json:"language"`
+	LangVersion string `json:"lang_version"`
+	Enabled     bool   `json:"enabled"`
 }
 
 func (t *AgentTask) GetID() string {
@@ -76,6 +78,22 @@ func (t *AgentTask) GetWorkDir() string {
 
 func (t *AgentTask) GetEnvs() string {
 	return t.Envs
+}
+
+func (t *AgentTask) GetLanguage() string {
+	return t.Language
+}
+
+func (t *AgentTask) GetLangVersion() string {
+	return t.LangVersion
+}
+
+func (t *AgentTask) GetUseMise() bool {
+	return false
+}
+
+func (t *AgentTask) UseMise() bool {
+	return false
 }
 
 func (t *AgentTask) GetSchedule() string {
@@ -495,14 +513,17 @@ func (a *Agent) handleExecute(data json.RawMessage) {
 
 	// 准备执行请求
 	execReq := &executor.ExecutionRequest{
-		TaskID:  fmt.Sprintf("%d", task.ID),
-		LogID:   req.LogID,
-		Name:    task.Name,
-		Command: task.Command,
-		WorkDir: task.WorkDir,
-		Envs:    executor.ParseEnvVars(task.Envs),
-		Timeout: task.Timeout,
-		Type:    executor.TaskTypeManual,
+		TaskID:      fmt.Sprintf("%d", task.ID),
+		LogID:       req.LogID,
+		Name:        task.Name,
+		Command:     task.Command,
+		WorkDir:     task.WorkDir,
+		Envs:        executor.ParseEnvVars(task.Envs),
+		Timeout:     task.Timeout,
+		Language:    task.Language,
+		LangVersion: task.LangVersion,
+		UseMise:     false,
+		Type:        executor.TaskTypeManual,
 	}
 
 	// 立即执行任务（加入队列）

@@ -78,6 +78,9 @@ func (m *CronManager) AddTask(task CronTask) error {
 	timeout := task.GetTimeout()
 	workDir := task.GetWorkDir()
 	envs := task.GetEnvs()
+	language := task.GetLanguage()
+	langVersion := task.GetLangVersion()
+	useMise := task.UseMise()
 
 	entryID, err := m.cron.AddFunc(task.GetSchedule(), func() {
 		defer func() {
@@ -88,13 +91,16 @@ func (m *CronManager) AddTask(task CronTask) error {
 		m.logger.Infof("[CronManager] 触发计划任务 #%s (%s)", taskID, name)
 
 		req := &ExecutionRequest{
-			TaskID:  taskID,
-			Name:    name,
-			Command: cmd,
-			Type:    TaskTypeCron,
-			Timeout: timeout,
-			WorkDir: workDir,
-			Envs:    ParseEnvVars(envs),
+			TaskID:      taskID,
+			Name:        name,
+			Command:     cmd,
+			Type:        TaskTypeCron,
+			Timeout:     timeout,
+			WorkDir:     workDir,
+			Envs:        ParseEnvVars(envs),
+			Language:    language,
+			LangVersion: langVersion,
+			UseMise:     useMise,
 		}
 
 		// 如果有关联的 Scheduler，加入队列执行
@@ -116,7 +122,12 @@ func (m *CronManager) AddTask(task CronTask) error {
 
 	// 初始触发一次下次运行时间通知
 	go func() {
-		req := &ExecutionRequest{TaskID: taskID, Name: name, Type: TaskTypeCron}
+		req := &ExecutionRequest{
+			TaskID:  taskID,
+			Name:    name,
+			Type:    TaskTypeCron,
+			UseMise: task.UseMise(),
+		}
 		m.triggerNextRunEvent(taskID, req)
 	}()
 

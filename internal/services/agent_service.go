@@ -311,14 +311,16 @@ func (s *AgentService) GetTasks(agentID uint) []models.AgentTask {
 		envVarsStr := s.buildEnvVarsString(task.Envs)
 
 		result[i] = models.AgentTask{
-			ID:       task.ID,
-			Name:     task.Name,
-			Command:  task.Command,
-			Schedule: task.Schedule,
-			Timeout:  task.Timeout,
-			WorkDir:  task.WorkDir,
-			Envs:     envVarsStr, // 传递 "KEY1=VALUE1,KEY2=VALUE2" 格式
-			Enabled:  task.Enabled,
+			ID:          task.ID,
+			Name:        task.Name,
+			Command:     task.Command,
+			Schedule:    task.Schedule,
+			Timeout:     task.Timeout,
+			WorkDir:     task.WorkDir,
+			Envs:        envVarsStr, // 传递 "KEY1=VALUE1,KEY2=VALUE2" 格式
+			Language:    task.Language,
+			LangVersion: task.LangVersion,
+			Enabled:     task.Enabled,
 		}
 	}
 

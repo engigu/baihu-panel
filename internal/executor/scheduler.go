@@ -61,15 +61,18 @@ const (
 
 // ExecutionRequest 执行请求（标准接口）
 type ExecutionRequest struct {
-	TaskID   string                 // 任务 ID
-	LogID    uint                   // 日志 ID
-	Name     string                 // 任务名称
-	Type     TaskType               // 任务类型
-	Command  string                 // 命令
-	WorkDir  string                 // 工作目录
-	Envs     []string               // 环境变量
-	Timeout  int                    // 超时时间（分钟）
-	Metadata map[string]interface{} // 额外元数据
+	TaskID      string                 // 任务 ID
+	LogID       uint                   // 日志 ID
+	Name        string                 // 任务名称
+	Type        TaskType               // 任务类型
+	Command     string                 // 命令
+	WorkDir     string                 // 工作目录
+	Envs        []string               // 环境变量
+	Timeout     int                    // 超时时间（分钟）
+	Language    string                 // 语言环境
+	LangVersion string                 // 语言版本
+	UseMise     bool                   // 是否使用 mise
+	Metadata    map[string]interface{} // 额外元数据
 }
 
 // ExecutionResult 执行结果（标准接口）
@@ -194,10 +197,13 @@ func NewScheduler(config SchedulerConfig, handler SchedulerEventHandler) *Schedu
 		executor: func(ctx context.Context, req *ExecutionRequest, stdout, stderr io.Writer) (*Result, error) {
 			hooks := &schedulerHooksAdapter{handler: handler, req: req}
 			return ExecuteWithHooks(ctx, Request{
-				Command: req.Command,
-				WorkDir: req.WorkDir,
-				Envs:    req.Envs,
-				Timeout: req.Timeout,
+				Command:     req.Command,
+				WorkDir:     req.WorkDir,
+				Envs:        req.Envs,
+				Timeout:     req.Timeout,
+				Language:    req.Language,
+				LangVersion: req.LangVersion,
+				UseMise:     req.UseMise,
 			}, stdout, stderr, hooks)
 		},
 		taskQueue:    make(chan *ExecutionRequest, config.QueueSize),
@@ -308,6 +314,12 @@ func (s *Scheduler) executeTask(req *ExecutionRequest) (*ExecutionResult, error)
 	start := time.Now()
 
 	s.logger.Infof("[Scheduler] 执行任务 %s (名称: %s, 类型: %s)", req.TaskID, req.Name, req.Type)
+
+	finalCommand := req.Command
+	if req.UseMise {
+		finalCommand = BuildLanguageCommand(req.Command, req.Language, req.LangVersion)
+	}
+	s.logger.Infof("[Scheduler] 实际执行命令: %s", finalCommand)
 
 	if s.config.Verbose {
 		workDir := req.WorkDir

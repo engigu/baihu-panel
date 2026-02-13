@@ -52,6 +52,7 @@ func RegisterControllers() *Controllers {
 		Settings:   controllers.NewSettingsController(userService, loginLogService, executorService),
 		Dependency: controllers.NewDependencyController(),
 		Agent:      controllers.NewAgentController(settingsService),
+		Mise:       controllers.NewMiseController(services.NewMiseService()),
 	}
 }
 

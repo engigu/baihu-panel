@@ -24,8 +24,9 @@ func NewDependencyController() *DependencyController {
 
 // List 获取依赖列表
 func (c *DependencyController) List(ctx *gin.Context) {
-	depType := ctx.Query("type")
-	deps, err := c.service.List(depType)
+	language := ctx.Query("language")
+	langVersion := ctx.Query("lang_version")
+	deps, err := c.service.List(language, langVersion)
 	if err != nil {
 		utils.ServerError(ctx, "获取依赖列表失败")
 		return
@@ -40,10 +41,11 @@ func (c *DependencyController) List(ctx *gin.Context) {
 // Create 添加依赖
 func (c *DependencyController) Create(ctx *gin.Context) {
 	var req struct {
-		Name    string `json:"name" binding:"required"`
-		Version string `json:"version"`
-		Type    string `json:"type" binding:"required"`
-		Remark  string `json:"remark"`
+		Name        string `json:"name" binding:"required"`
+		Version     string `json:"version"`
+		Language    string `json:"language" binding:"required"`
+		LangVersion string `json:"lang_version"`
+		Remark      string `json:"remark"`
 	}
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -51,16 +53,12 @@ func (c *DependencyController) Create(ctx *gin.Context) {
 		return
 	}
 
-	if req.Type != "py" && req.Type != "node" {
-		utils.BadRequest(ctx, "类型必须是 py 或 node")
-		return
-	}
-
 	dep := &models.Dependency{
-		Name:    req.Name,
-		Version: req.Version,
-		Type:    req.Type,
-		Remark:  req.Remark,
+		Name:        req.Name,
+		Version:     req.Version,
+		Language:    req.Language,
+		LangVersion: req.LangVersion,
+		Remark:      req.Remark,
 	}
 
 	if err := c.service.Create(dep); err != nil {
@@ -87,13 +85,13 @@ func (c *DependencyController) Delete(ctx *gin.Context) {
 	utils.SuccessMsg(ctx, "删除成功")
 }
 
-// Install 安装依赖
 func (c *DependencyController) Install(ctx *gin.Context) {
 	var req struct {
-		Name    string `json:"name" binding:"required"`
-		Version string `json:"version"`
-		Type    string `json:"type" binding:"required"`
-		Remark  string `json:"remark"`
+		Name        string `json:"name" binding:"required"`
+		Version     string `json:"version"`
+		Language    string `json:"language"`
+		LangVersion string `json:"lang_version"`
+		Remark      string `json:"remark"`
 	}
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -101,11 +99,21 @@ func (c *DependencyController) Install(ctx *gin.Context) {
 		return
 	}
 
+	language := req.Language
+	if language == "" {
+		language = ctx.Query("language")
+	}
+	langVersion := req.LangVersion
+	if langVersion == "" {
+		langVersion = ctx.Query("lang_version")
+	}
+
 	dep := &models.Dependency{
-		Name:    req.Name,
-		Version: req.Version,
-		Type:    req.Type,
-		Remark:  req.Remark,
+		Name:        req.Name,
+		Version:     req.Version,
+		Language:    language,
+		LangVersion: langVersion,
+		Remark:      req.Remark,
 	}
 
 	if err := c.service.Install(dep); err != nil {
@@ -119,6 +127,63 @@ func (c *DependencyController) Install(ctx *gin.Context) {
 	utils.SuccessMsg(ctx, "安装成功")
 }
 
+// GetInstallCommand 获取安装命令
+func (c *DependencyController) GetInstallCommand(ctx *gin.Context) {
+	var req struct {
+		Name        string `json:"name" binding:"required"`
+		Version     string `json:"version"`
+		Language    string `json:"language"`
+		LangVersion string `json:"lang_version"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(ctx, "参数错误")
+		return
+	}
+
+	language := req.Language
+	if language == "" {
+		language = ctx.Query("language")
+	}
+	langVersion := req.LangVersion
+	if langVersion == "" {
+		langVersion = ctx.Query("lang_version")
+	}
+
+	dep := &models.Dependency{
+		Name:        req.Name,
+		Version:     req.Version,
+		Language:    language,
+		LangVersion: langVersion,
+	}
+
+	cmd, err := c.service.GetInstallCommand(dep)
+	if err != nil {
+		utils.ServerError(ctx, err.Error())
+		return
+	}
+
+	utils.Success(ctx, gin.H{"command": cmd})
+}
+
+// GetReinstallAllCommand 获取全部重装命令
+func (c *DependencyController) GetReinstallAllCommand(ctx *gin.Context) {
+	language := ctx.Query("language")
+	langVersion := ctx.Query("lang_version")
+	if language == "" {
+		utils.BadRequest(ctx, "缺少 language 参数")
+		return
+	}
+
+	cmd, err := c.service.GetReinstallAllCommand(language, langVersion)
+	if err != nil {
+		utils.ServerError(ctx, err.Error())
+		return
+	}
+
+	utils.Success(ctx, gin.H{"command": cmd})
+}
+
 // Uninstall 卸载依赖
 func (c *DependencyController) Uninstall(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
@@ -128,7 +193,7 @@ func (c *DependencyController) Uninstall(ctx *gin.Context) {
 	}
 
 	// 获取依赖信息
-	deps, _ := c.service.List("")
+	deps, _ := c.service.List("", "")
 	var dep *models.Dependency
 	for _, d := range deps {
 		if d.ID == id {
@@ -162,7 +227,7 @@ func (c *DependencyController) Reinstall(ctx *gin.Context) {
 	}
 
 	// 获取依赖信息
-	deps, _ := c.service.List("")
+	deps, _ := c.service.List("", "")
 	var dep *models.Dependency
 	for _, d := range deps {
 		if d.ID == id {
@@ -186,13 +251,14 @@ func (c *DependencyController) Reinstall(ctx *gin.Context) {
 
 // ReinstallAll 重新安装所有依赖
 func (c *DependencyController) ReinstallAll(ctx *gin.Context) {
-	depType := ctx.Query("type")
-	if depType == "" {
-		utils.BadRequest(ctx, "缺少 type 参数")
+	language := ctx.Query("language")
+	langVersion := ctx.Query("lang_version")
+	if language == "" {
+		utils.BadRequest(ctx, "缺少 language 参数")
 		return
 	}
 
-	deps, err := c.service.List(depType)
+	deps, err := c.service.List(language, langVersion)
 	if err != nil {
 		utils.ServerError(ctx, "获取依赖列表失败")
 		return
@@ -215,13 +281,14 @@ func (c *DependencyController) ReinstallAll(ctx *gin.Context) {
 
 // GetInstalled 获取已安装的包
 func (c *DependencyController) GetInstalled(ctx *gin.Context) {
-	depType := ctx.Query("type")
-	if depType == "" {
-		utils.BadRequest(ctx, "缺少 type 参数")
+	language := ctx.Query("language")
+	langVersion := ctx.Query("lang_version")
+	if language == "" {
+		utils.BadRequest(ctx, "缺少 language 参数")
 		return
 	}
 
-	packages, err := c.service.GetInstalledPackages(depType)
+	packages, err := c.service.GetInstalledPackages(language, langVersion)
 	if err != nil {
 		utils.ServerError(ctx, "获取已安装包失败: "+err.Error())
 		return
