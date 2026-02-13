@@ -142,7 +142,7 @@
 | 标签 (Tag) | 基础镜像 | 说明 |
 | :--- | :--- | :--- |
 | `latest` | Debian 12 | 默认版本，集成 Python 3.13 与 Node.js 23 |
-| `latest-debian13` | Debian 13 | 尝鲜版本，不可用于生产环境 |
+| `latest-debian13` | Debian 13 | 尝鲜版本|
 
 > **提示**：下方部署示例默认使用 `latest` 标签，如需换用 Debian 13 版，只需将 `latest` 替换为 `latest-debian13` 即可。
 
