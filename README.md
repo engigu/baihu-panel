@@ -561,26 +561,27 @@ nginx -t && nginx -s reload
 ./
 ├── baihu                 # 可执行文件
 ├── data/                 # 数据目录（自动创建）
-│   ├── baihu.db             # SQLite 数据库
+│   ├── baihu.db          # SQLite 数据库
 │   └── scripts/          # 脚本文件存储
 ├── configs/
 │   └── config.ini        # 配置文件（自动创建）
-└── envs/                 # 运行环境目录（自动创建）
-    ├── python/           # Python 虚拟环境
-    └── node/             # Node.js npm 全局安装目录
+└── envs/                 # 运行环境挂载目录（自动创建）
+    └── mise/             # Mise 运行时核心目录 (包含所有语言环境及依赖)
 ```
 
 ### Docker 启动流程
 
 容器启动时 `docker-entrypoint.sh` 会执行以下操作：
 
-1. **创建必要目录**：`/app/data`、`/app/data/scripts`、`/app/configs`、`/app/envs`
-2. **初始化 Python 虚拟环境**：如果 `/app/envs/python` 不存在，自动创建并配置清华 pip 镜像源
-3. **配置 Node.js 环境**：设置 npm prefix 到 `/app/envs/node`，配置 npmmirror 镜像源
-4. **激活环境**：将 `/app/envs/python/bin` 和 `/app/envs/node/bin` 加入 PATH
-5. **启动应用**
+1. **目录就绪**：检查并创建 `/app/data`、`/app/configs`、`/app/envs` 等核心目录。
+2. **Mise 环境同步**：自动从镜像内置基础环境同步初始化文件至 `/app/envs/mise`，确保持久化挂载后运行时依然可用。
+3. **运行时激活**：
+   - 自动注入 `MISE_DATA_DIR` 等环境变量，确保运行时数据指向持久化目录。
+   - 将 `mise shims` 路径加入系统 `PATH`，实现 Python、Node.js 等多版本环境的全局无感调用。
+4. **依赖管理预设**：默认配置 Python 清华源（PIP）镜像，优化 Node.js 默认内存上限。
+5. **启动应用**：运行 `baihu` 面板主进程。
 
->  通过挂载 `./envs:/app/envs` 可以持久化 Python 和 Node.js 环境，避免每次重启容器都重新安装依赖。
+> **提示**：通过挂载 `./envs:/app/envs`，您通过面板安装的所有编程语言运行时以及通过「依赖管理」安装的所有第三方库都会永久保留，容器升级或重启后无需重新安装。
 
 ## 配置说明
 
