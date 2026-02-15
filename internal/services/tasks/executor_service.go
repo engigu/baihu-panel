@@ -152,6 +152,14 @@ func (h *ServerSchedulerHandler) OnTaskExecuting(req *executor.ExecutionRequest)
 		return nil, nil, fmt.Errorf("创建日志收集器失败: %v", err)
 	}
 
+	// 记录到内存缓冲
+	h.es.UpdateResult(executor.ExecutionResult{
+		TaskID:    req.TaskID,
+		LogID:     req.LogID,
+		Status:    constant.TaskStatusRunning,
+		StartTime: time.Now(),
+	})
+
 	// 对于本地任务，Scheduler 会通过返回的 Writer 写入日志
 	// 对于远程任务，Scheduler 不会写入任何内容（由 Agent 推送至此 TL）
 	return tl, tl, nil
@@ -234,6 +242,9 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 
 	// 处理任务完成（更新统计、清理旧日志等）
 	h.es.taskLogService.ProcessTaskCompletion(taskLog)
+
+	// 更新内存缓冲
+	h.es.UpdateResult(*result)
 }
 
 func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, err error) {
@@ -283,6 +294,16 @@ func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, er
 	}
 
 	h.es.taskLogService.ProcessTaskCompletion(taskLog)
+
+	// 更新内存缓冲
+	h.es.UpdateResult(executor.ExecutionResult{
+		TaskID:    req.TaskID,
+		LogID:     req.LogID,
+		Status:    constant.TaskStatusFailed,
+		Error:     err.Error(),
+		StartTime: time.Now(),
+		EndTime:   time.Now(),
+	})
 }
 
 func (h *ServerSchedulerHandler) OnCronNextRun(req *executor.ExecutionRequest, nextRun time.Time) {
@@ -561,11 +582,58 @@ func (es *ExecutorService) ExecuteCommandWithOptions(command string, timeout tim
 	return res
 }
 
+// UpdateResult 更新内存中的执行结果缓冲
+func (es *ExecutorService) UpdateResult(res executor.ExecutionResult) {
+	es.resultsMu.Lock()
+	defer es.resultsMu.Unlock()
+
+	// 按照用户要求，任务结束后清空 Output 以节省内存。
+	// 结束状态的任务如果需要查看完整日志，会自动从数据库/文件中读取。
+	isFinished := res.Status == constant.TaskStatusSuccess ||
+		res.Status == constant.TaskStatusFailed ||
+		res.Status == constant.TaskStatusTimeout ||
+		res.Status == constant.TaskStatusCancelled
+
+	if isFinished {
+		res.Output = ""
+	}
+
+	// 查找是否已存在（通过 LogID）
+	for i := range es.results {
+		if es.results[i].LogID == res.LogID && res.LogID != 0 {
+			es.results[i] = res
+			return
+		}
+	}
+
+	// 不存在则追加到末尾
+	if len(es.results) >= 100 {
+		// 移除最旧的一个
+		es.results = es.results[1:]
+	}
+	es.results = append(es.results, res)
+}
+
 // GetLastResults returns the last execution results
 func (es *ExecutorService) GetLastResults(count int) []executor.ExecutionResult {
 	es.resultsMu.RLock()
 	defer es.resultsMu.RUnlock()
-	return nil
+
+	total := len(es.results)
+	if count > total {
+		count = total
+	}
+
+	if count <= 0 {
+		return []executor.ExecutionResult{}
+	}
+
+	// 返回副本，按时间倒序（最新的在前）
+	res := make([]executor.ExecutionResult, 0, count)
+	for i := 0; i < count; i++ {
+		res = append(res, es.results[total-1-i])
+	}
+	return res
 }
 
 // --- 以下内容从 TaskExecutionService 合并 ---

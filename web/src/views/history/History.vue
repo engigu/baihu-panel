@@ -264,7 +264,7 @@ watch(() => route.query.task_id, (newTaskId) => {
 
     <div class="flex flex-col lg:flex-row gap-4">
       <!-- 日志列表 -->
-      <div class="flex-1 min-w-0 rounded-lg border bg-card overflow-hidden">
+      <div class="flex-1 min-w-0 rounded-lg border bg-card overflow-hidden flex flex-col">
         <!-- 小屏表头 -->
         <div
           class="flex sm:hidden items-center gap-2 px-3 py-2 border-b bg-muted/20 text-xs text-muted-foreground font-medium">
@@ -276,7 +276,7 @@ watch(() => route.query.task_id, (newTaskId) => {
         </div>
         <!-- 大屏表头 -->
         <div
-          class="hidden sm:flex items-center gap-4 px-4 py-2 border-b bg-muted/20 text-sm text-muted-foreground font-medium">
+          class="hidden sm:flex items-center gap-4 px-4 h-11 border-b bg-muted/20 text-sm text-muted-foreground font-medium">
           <span class="w-16 shrink-0">ID</span>
           <span class="w-12 shrink-0 text-center">类型</span>
           <span class="w-36 shrink-0">任务名称</span>
@@ -286,7 +286,7 @@ watch(() => route.query.task_id, (newTaskId) => {
           <span v-if="!selectedLog" class="w-40 text-right shrink-0 hidden md:block">执行时间</span>
         </div>
         <!-- 列表 -->
-        <div class="divide-y">
+        <div class="divide-y flex-1">
           <div v-if="logs.length === 0" class="text-sm text-muted-foreground text-center py-8">
             暂无日志
           </div>
@@ -329,7 +329,7 @@ watch(() => route.query.task_id, (newTaskId) => {
                 </div>
               </span>
               <span class="w-12 text-right shrink-0 text-muted-foreground text-xs">{{ formatDuration(log.duration)
-                }}</span>
+              }}</span>
             </div>
             <!-- 大屏行 -->
             <div class="hidden sm:flex items-center gap-4 px-4 py-2">
@@ -369,7 +369,7 @@ watch(() => route.query.task_id, (newTaskId) => {
                 </div>
               </span>
               <span class="w-16 text-right shrink-0 text-muted-foreground text-xs">{{ formatDuration(log.duration)
-                }}</span>
+              }}</span>
               <span v-if="!selectedLog"
                 class="w-40 text-right shrink-0 text-muted-foreground text-xs hidden md:block">{{ log.start_time ||
                   log.created_at }}</span>
@@ -382,10 +382,10 @@ watch(() => route.query.task_id, (newTaskId) => {
 
       <!-- 日志详情侧边栏 -->
       <div v-if="selectedLog"
-        class="w-full lg:w-[480px] rounded-lg border bg-card flex flex-col overflow-hidden shrink-0 max-h-[60vh] lg:max-h-[calc(100vh-180px)]">
-        <div class="flex items-center justify-between px-4 py-3 border-b">
+        class="w-full lg:w-[480px] rounded-lg border bg-card flex flex-col overflow-hidden shrink-0 max-h-[80vh] lg:max-h-none">
+        <div class="flex items-center justify-between px-4 h-11 border-b bg-muted/20">
           <div class="flex items-center gap-2">
-            <span class="text-sm font-medium">日志详情</span>
+            <span class="text-sm font-medium text-muted-foreground">日志详情</span>
             <Button v-if="selectedLog.status === TASK_STATUS.RUNNING" variant="destructive" size="sm"
               class="h-6 px-2 text-[10px]" :disabled="isStopping" @click="stopTask">
               {{ isStopping ? '停止中...' : '停止任务' }}
@@ -396,11 +396,11 @@ watch(() => route.query.task_id, (newTaskId) => {
           </Button>
         </div>
         <div class="px-4 py-3 border-b space-y-2 text-sm">
-          <div class="flex justify-between">
+          <div class="flex justify-between items-center h-6">
             <span class="text-muted-foreground">任务名称</span>
             <span class="font-medium">{{ selectedLog.task_name }}</span>
           </div>
-          <div class="flex justify-between items-center">
+          <div class="flex justify-between items-center h-8">
             <span class="text-muted-foreground">状态</span>
             <Badge variant="outline" :class="[
               'capitalize px-3 py-1 font-semibold rounded-full border shadow-sm transition-all duration-300',
@@ -418,21 +418,22 @@ watch(() => route.query.task_id, (newTaskId) => {
               </div>
             </Badge>
           </div>
-          <div class="flex justify-between">
+          <div class="flex justify-between items-center h-6">
             <span class="text-muted-foreground">耗时</span>
-            <span>{{ formatDuration(selectedLog.duration) }}</span>
+            <span class="font-medium">{{ formatDuration(selectedLog.duration) }}</span>
           </div>
-          <div class="flex justify-between">
+          <div class="flex justify-between items-center h-6">
             <span class="text-muted-foreground">开始时间</span>
-            <span>{{ selectedLog.start_time || '-' }}</span>
+            <span class="font-mono text-xs">{{ selectedLog.start_time || '-' }}</span>
           </div>
-          <div class="flex justify-between">
+          <div class="flex justify-between items-center h-6">
             <span class="text-muted-foreground">结束时间</span>
-            <span>{{ selectedLog.end_time || '-' }}</span>
+            <span class="font-mono text-xs">{{ selectedLog.end_time || '-' }}</span>
           </div>
-          <div class="pt-1">
-            <span class="text-muted-foreground">命令</span>
-            <code class="mt-1 block font-mono bg-muted/40 px-2 py-1 rounded text-xs break-all">
+          <div class="pt-1.5">
+            <span class="text-muted-foreground block mb-1">执行命令</span>
+            <code
+              class="block font-mono bg-muted/40 px-3 py-2 rounded text-xs break-all border border-muted-foreground/10">
               {{ selectedLog.command }}
             </code>
           </div>
@@ -447,14 +448,15 @@ watch(() => route.query.task_id, (newTaskId) => {
               {{ selectedLog.error }}
             </code>
           </div>
-          <div class="px-4 py-2 text-sm text-muted-foreground border-b bg-muted/20 flex items-center justify-between">
-            <span>输出</span>
+          <div class="px-4 py-2.5 text-sm text-muted-foreground border-b bg-muted/20 flex items-center justify-between">
+            <span class="font-medium">日志输出</span>
             <Button variant="ghost" size="icon" class="h-6 w-6" @click="showFullscreen = true" title="全屏查看">
               <Maximize2 class="h-3.5 w-3.5" />
             </Button>
           </div>
-          <div class="flex-1 overflow-auto">
-            <pre class="p-4 text-xs font-mono whitespace-pre-wrap break-all log-pre">{{ decompressedOutput }}</pre>
+          <div class="flex-1 overflow-auto bg-muted/5 min-h-[160px]">
+            <pre
+              class="p-4 text-xs font-mono whitespace-pre-wrap break-all log-pre leading-relaxed">{{ decompressedOutput }}</pre>
             <div v-if="isWsLoading" class="p-4 text-sm text-muted-foreground italic">连接中...</div>
           </div>
         </div>
