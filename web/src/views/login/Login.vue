@@ -120,40 +120,70 @@ onMounted(loadSiteSettings)
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-muted/30 p-4 relative">
+  <div
+    class="min-h-screen flex items-center justify-center bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-slate-50 via-slate-100 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-black p-4 relative overflow-hidden">
+    <!-- 装饰性背景 -->
+    <div
+      class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] pointer-events-none">
+    </div>
+    <div
+      class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] pointer-events-none">
+    </div>
+
     <!-- 右上角主题切换 -->
-    <div class="absolute top-4 right-4">
+    <div class="absolute top-6 right-6 z-20">
       <ThemeToggle />
     </div>
 
-    <div class="border rounded-lg bg-background shadow-sm overflow-hidden w-full max-w-[400px] lg:max-w-none lg:w-auto">
-      <div class="flex">
-        <!-- 左侧登录表单 -->
-        <div class="w-full lg:w-96 p-6 sm:p-10">
-          <div class="space-y-6 sm:space-y-8">
-            <div class="space-y-2">
-              <h1 class="text-xl sm:text-2xl font-bold tracking-tight">{{ siteTitle }}</h1>
-              <p class="text-muted-foreground text-sm sm:text-base">{{ siteSubtitle }}</p>
+    <div class="z-10 w-full max-w-[440px]">
+      <div
+        class="bg-background/80 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.12)] rounded-[2.5rem] overflow-hidden">
+        <div class="p-8 sm:p-12">
+          <!-- 头部区域 -->
+          <div class="flex flex-col items-center text-center mb-10">
+            <div class="mb-6 relative group">
+              <div
+                class="absolute inset-0 bg-primary/20 blur-2xl rounded-full scale-150 opacity-50 group-hover:opacity-80 transition-opacity">
+              </div>
+              <div v-if="siteIcon" class="relative w-16 h-16 [&>svg]:w-full [&>svg]:h-full drop-shadow-md"
+                v-html="siteIcon" />
+              <div v-else
+                class="relative w-16 h-16 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl flex items-center justify-center border border-white/50 shadow-inner">
+                <img src="/logo.svg" alt="Logo" class="w-10 h-10 object-contain opacity-90"
+                  @error="(e: any) => e.target.style.display = 'none'" />
+              </div>
             </div>
-            <form @submit.prevent="handleLogin" class="space-y-4 sm:space-y-5">
-              <div class="space-y-2">
-                <Label>用户名</Label>
-                <Input v-model="username" placeholder="请输入用户名" class="h-10 text-base" />
-              </div>
-              <div class="space-y-2">
-                <Label>密码</Label>
-                <Input v-model="password" type="password" placeholder="请输入密码" class="h-10 text-base" />
-              </div>
-              <Button type="submit" class="w-full h-10" :disabled="loading">
-                {{ loading ? '登录中...' : '登录' }}
-              </Button>
-            </form>
+
+            <h1
+              class="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/70 mb-2">
+              {{ siteTitle }}</h1>
+            <p class="text-muted-foreground/80 text-sm font-medium max-w-[260px] leading-relaxed">{{ siteSubtitle }}</p>
           </div>
-        </div>
-        <!-- 右侧 Logo 展示（大屏显示） -->
-        <div class="hidden lg:flex w-64 bg-muted/50 dark:bg-muted/30 items-center justify-center">
-          <div v-if="siteIcon" class="w-44 h-44 [&>svg]:w-full [&>svg]:h-full" v-html="siteIcon" />
-          <img v-else src="/logo.svg" alt="Logo" class="w-44 h-44" />
+
+          <!-- 登录表单 -->
+          <form @submit.prevent="handleLogin" class="space-y-6">
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <Label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 ml-1">用户名</Label>
+                <Input v-model="username" placeholder="请输入用户名"
+                  class="h-12 text-base rounded-2xl bg-background/50 border-white/50 dark:border-white/5 focus:ring-4 focus:ring-primary/10 transition-all" />
+              </div>
+              <div class="space-y-2">
+                <Label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 ml-1">密码</Label>
+                <Input v-model="password" type="password" placeholder="请输入密码"
+                  class="h-12 text-base rounded-2xl bg-background/50 border-white/50 dark:border-white/5 focus:ring-4 focus:ring-primary/10 transition-all" />
+              </div>
+            </div>
+            <Button type="submit"
+              class="w-full h-12 text-base font-bold rounded-2xl bg-gradient-to-r from-primary/90 to-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
+              :disabled="loading">
+              {{ loading ? '验证中...' : '立即登录' }}
+            </Button>
+          </form>
+
+          <p v-if="demoMode" class="mt-8 text-center text-xs text-muted-foreground/60">
+            演示模式：已为您自动填充测试账号
+          </p>
         </div>
       </div>
     </div>
