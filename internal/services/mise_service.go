@@ -46,6 +46,19 @@ func (s *MiseService) List() ([]MiseLanguage, error) {
 		return nil, err
 	}
 
+	// 如果数据库为空，尝试进行一次自动同步（延迟加载）
+	if len(models) == 0 {
+		logger.Info("[Mise] 数据库中没有语言记录，正在进行首次同步...")
+		if err := s.Sync(); err == nil {
+			// 同步成功后重新查询
+			if err := db.Order("installed_at DESC, plugin ASC").Find(&models).Error; err != nil {
+				return nil, err
+			}
+		} else {
+			logger.Warnf("[Mise] 首次自动同步失败: %v", err)
+		}
+	}
+
 	result := make([]MiseLanguage, 0, len(models))
 	for _, m := range models {
 		lang := MiseLanguage{

@@ -30,9 +30,6 @@ func (s *InitService) Initialize() *UserService {
 	// 创建管理员账号
 	s.initializeAdmin(userService)
 
-	// 初始化语言环境
-	s.initializeLanguages()
-
 	return userService
 }
 
