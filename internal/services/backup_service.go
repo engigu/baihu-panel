@@ -1,7 +1,6 @@
 package services
 
 import (
-	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,16 +13,20 @@ import (
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/systime"
+	"github.com/engigu/baihu-panel/internal/utils"
+	yeka_zip "github.com/yeka/zip"
 	"gorm.io/gorm"
 )
 
 type BackupService struct {
-	settingsService *SettingsService
+	settingsService   *SettingsService
+	fileRecordService *FileRecordService
 }
 
 func NewBackupService() *BackupService {
 	return &BackupService{
-		settingsService: NewSettingsService(),
+		settingsService:   NewSettingsService(),
+		fileRecordService: NewFileRecordService(),
 	}
 }
 
@@ -141,7 +144,7 @@ func (s *BackupService) CreateBackup() (string, error) {
 	}
 	defer zipFile.Close()
 
-	zipWriter := zip.NewWriter(zipFile)
+	zipWriter := utils.NewZipWriter(zipFile, "")
 	defer zipWriter.Close()
 
 	// 导出各表
@@ -172,18 +175,18 @@ func (s *BackupService) CreateBackup() (string, error) {
 	// 打包 scripts 文件夹
 	scriptsDir := constant.ScriptsWorkDir
 	if _, err := os.Stat(scriptsDir); err == nil {
-		if err := s.addDirToZip(zipWriter, scriptsDir, "scripts"); err != nil {
+		if err := zipWriter.AddDir(scriptsDir, "scripts"); err != nil {
 			return "", err
 		}
 	}
 
-	s.settingsService.Set(BackupSection, BackupFileKey, zipPath)
+	s.fileRecordService.SaveFileRecord(BackupSection, BackupFileKey, zipPath)
 	return zipPath, nil
 }
 
 // Restore 恢复备份
 func (s *BackupService) Restore(zipPath string) error {
-	r, err := zip.OpenReader(zipPath)
+	r, err := utils.OpenZipReader(zipPath, "")
 	if err != nil {
 		return err
 	}
@@ -191,8 +194,8 @@ func (s *BackupService) Restore(zipPath string) error {
 
 	// 构建文件名到配置的映射
 	configs := s.getTableConfigs()
-	fileMap := make(map[string]*zip.File)
-	for _, f := range r.File {
+	fileMap := make(map[string]*yeka_zip.File)
+	for _, f := range r.GetFiles() {
 		fileMap[f.Name] = f
 	}
 
@@ -227,7 +230,7 @@ func (s *BackupService) Restore(zipPath string) error {
 	})
 }
 
-func (s *BackupService) restoreFromZipFile(tx *gorm.DB, f *zip.File, filename string) error {
+func (s *BackupService) restoreFromZipFile(tx *gorm.DB, f *yeka_zip.File, filename string) error {
 	rc, err := f.Open()
 	if err != nil {
 		return err
@@ -293,10 +296,12 @@ func (s *BackupService) restoreFromZipFile(tx *gorm.DB, f *zip.File, filename st
 		if err := decoder.Decode(m); err != nil {
 			return err
 		}
-		batch = append(batch, m)
+		batch = append(batch, reflect.ValueOf(m).Elem().Interface())
 
 		if len(batch) >= batchSize {
-			if err := tx.CreateInBatches(batch, batchSize).Error; err != nil {
+			// Because batch is []any but each element is actually a concrete value (e.g. models.Task)
+			// gorm needs the correct slice type.
+			if err := insertBatchSlice(tx, batch, filename); err != nil {
 				return err
 			}
 			batch = nil
@@ -304,40 +309,86 @@ func (s *BackupService) restoreFromZipFile(tx *gorm.DB, f *zip.File, filename st
 	}
 
 	if len(batch) > 0 {
-		return tx.CreateInBatches(batch, batchSize).Error
+		return insertBatchSlice(tx, batch, filename)
 	}
 
 	return nil
 }
 
-// insertRecords, restoreFromData 方法已合并入 restoreFromZipFile，此处删除冗余方法
-
-func (s *BackupService) restoreScriptsDir(r *zip.ReadCloser) {
-	scriptsDir := constant.ScriptsWorkDir
-	for _, f := range r.File {
-		if len(f.Name) > 8 && f.Name[:8] == "scripts/" {
-			relPath := f.Name[8:]
-			if relPath == "" {
-				continue
-			}
-			fpath := filepath.Join(scriptsDir, relPath)
-			if f.FileInfo().IsDir() {
-				os.MkdirAll(fpath, 0755)
-				continue
-			}
-			os.MkdirAll(filepath.Dir(fpath), 0755)
-			if outFile, err := os.Create(fpath); err == nil {
-				if rc, err := f.Open(); err == nil {
-					io.Copy(outFile, rc)
-					rc.Close()
-				}
-				outFile.Close()
-			}
+func insertBatchSlice(tx *gorm.DB, batch []any, filename string) error {
+	switch filename {
+	case "tasks.json":
+		var s []models.Task
+		for _, v := range batch {
+			s = append(s, v.(models.Task))
 		}
+		return tx.CreateInBatches(s, len(s)).Error
+	case "task_logs.json":
+		var s []models.TaskLog
+		for _, v := range batch {
+			s = append(s, v.(models.TaskLog))
+		}
+		return tx.CreateInBatches(s, len(s)).Error
+	case "envs.json":
+		var s []models.EnvironmentVariable
+		for _, v := range batch {
+			s = append(s, v.(models.EnvironmentVariable))
+		}
+		return tx.CreateInBatches(s, len(s)).Error
+	case "scripts.json":
+		var s []models.Script
+		for _, v := range batch {
+			s = append(s, v.(models.Script))
+		}
+		return tx.CreateInBatches(s, len(s)).Error
+	case "send_stats.json":
+		var s []models.SendStats
+		for _, v := range batch {
+			s = append(s, v.(models.SendStats))
+		}
+		return tx.CreateInBatches(s, len(s)).Error
+	case "login_logs.json":
+		var s []models.LoginLog
+		for _, v := range batch {
+			s = append(s, v.(models.LoginLog))
+		}
+		return tx.CreateInBatches(s, len(s)).Error
+	case "agents.json":
+		var s []models.Agent
+		for _, v := range batch {
+			s = append(s, v.(models.Agent))
+		}
+		return tx.CreateInBatches(s, len(s)).Error
+	case "tokens.json":
+		var s []models.AgentToken
+		for _, v := range batch {
+			s = append(s, v.(models.AgentToken))
+		}
+		return tx.CreateInBatches(s, len(s)).Error
+	case "languages.json":
+		var s []models.Language
+		for _, v := range batch {
+			s = append(s, v.(models.Language))
+		}
+		return tx.CreateInBatches(s, len(s)).Error
+	case "deps.json":
+		var s []models.Dependency
+		for _, v := range batch {
+			s = append(s, v.(models.Dependency))
+		}
+		return tx.CreateInBatches(s, len(s)).Error
 	}
+	return nil
 }
 
-func (s *BackupService) readZipFile(f *zip.File) ([]byte, error) {
+// insertRecords, restoreFromData 方法已合并入 restoreFromZipFile，此处删除冗余方法
+
+func (s *BackupService) restoreScriptsDir(r *utils.ZipReadCloser) {
+	scriptsDir := constant.ScriptsWorkDir
+	r.ExtractDir("scripts/", scriptsDir)
+}
+
+func (s *BackupService) readZipFile(f *yeka_zip.File) ([]byte, error) {
 	rc, err := f.Open()
 	if err != nil {
 		return nil, err
@@ -346,50 +397,11 @@ func (s *BackupService) readZipFile(f *zip.File) ([]byte, error) {
 	return io.ReadAll(rc)
 }
 
-func (s *BackupService) addDirToZip(zipWriter *zip.Writer, srcDir, prefix string) error {
-	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		relPath, err := filepath.Rel(srcDir, path)
-		if err != nil {
-			return err
-		}
-		zipPath := filepath.ToSlash(filepath.Join(prefix, relPath))
-		if info.IsDir() {
-			if relPath != "." {
-				_, err := zipWriter.Create(zipPath + "/")
-				return err
-			}
-			return nil
-		}
-		w, err := zipWriter.Create(zipPath)
-		if err != nil {
-			return err
-		}
-		file, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		_, err = io.Copy(w, file)
-		return err
-	})
-}
-
 func (s *BackupService) GetBackupFile() string {
-	var setting models.Setting
-	if err := database.DB.Where("section = ? AND `key` = ?", BackupSection, BackupFileKey).First(&setting).Error; err != nil {
-		return ""
-	}
-	return setting.Value
+	return s.fileRecordService.GetFileRecord(BackupSection, BackupFileKey)
 }
 
 func (s *BackupService) ClearBackup() error {
-	filePath := s.GetBackupFile()
-	if filePath != "" {
-		os.Remove(filePath)
-		database.DB.Where("section = ? AND `key` = ?", BackupSection, BackupFileKey).Delete(&models.Setting{})
-	}
+	s.fileRecordService.ClearFileRecord(BackupSection, BackupFileKey)
 	return nil
 }

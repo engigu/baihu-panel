@@ -251,6 +251,32 @@ export const api = {
     plugins: () => request<string[]>('/mise/plugins'),
     versions: (plugin: string) => request<string[]>(`/mise/versions?plugin=${plugin}`),
     verifyCommand: (plugin: string, version: string) => request<{ command: string }>(`/mise/verify-cmd?plugin=${plugin}&version=${version}`)
+  },
+  exim: {
+    exportData: (data: { script_paths: string[]; env_ids: number[]; task_ids: number[]; dep_ids: number[]; password?: string }) =>
+      request<{ file_path: string }>('/exim/export', { method: 'POST', body: JSON.stringify(data) }),
+    downloadUrl: () => `${API_BASE_URL}/exim/export/download`,
+    importData: async (file: File, options: { password?: string; import_script: boolean; import_env: boolean; import_task: boolean; import_dep: boolean }) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      if (options.password) formData.append('password', options.password)
+      formData.append('import_script', String(options.import_script))
+      formData.append('import_env', String(options.import_env))
+      formData.append('import_task', String(options.import_task))
+      formData.append('import_dep', String(options.import_dep))
+
+      const res = await fetch(`${API_BASE_URL}/exim/import`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData
+      })
+      const json: ApiResponse<null> = await res.json()
+      if (json.code === 401) {
+        window.location.href = BASE_URL + '/login'
+        throw new Error('请先登录')
+      }
+      if (json.code !== 200) throw new Error(json.msg || '导入失败')
+    }
   }
 }
 

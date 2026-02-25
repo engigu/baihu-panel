@@ -46,6 +46,7 @@ const router = createRouter({
         { path: 'agents', name: 'agents', component: () => import('@/views/agents/Agents.vue') },
         { path: 'history', name: 'history', component: () => import('@/views/history/History.vue') },
         { path: 'loginlogs', name: 'loginlogs', component: () => import('@/views/loginlogs/LoginLogs.vue') },
+        { path: 'exim', name: 'exim', component: () => import('@/views/exim/Exim.vue') },
         { path: 'terminal', name: 'terminal', component: () => import('@/views/terminal/Terminal.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/views/settings/Settings.vue') }
       ]

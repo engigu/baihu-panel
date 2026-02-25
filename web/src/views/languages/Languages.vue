@@ -268,13 +268,13 @@ onMounted(loadLanguages)
                 </div>
             </div>
 
-            <div class="divide-y max-h-[600px] overflow-y-auto min-h-[200px]">
-                <div v-if="loading && languages.length === 0" class="text-center py-12 text-muted-foreground">
+            <div class="divide-y max-h-[600px] overflow-y-auto" :class="{ 'min-h-[200px] flex flex-col justify-center': (!filteredLanguages.length || loading) }">
+                <div v-if="loading && languages.length === 0" class="text-center py-8 text-muted-foreground w-full">
                     <Loader2 class="h-8 w-8 animate-spin mx-auto mb-2 opacity-20" />
                     正在扫描运行环境...
                 </div>
                 <div v-else-if="filteredLanguages.length === 0 && !loading"
-                    class="text-center py-12 text-muted-foreground">
+                    class="text-center py-8 text-muted-foreground w-full">
                     <Globe class="h-12 w-12 mx-auto mb-2 opacity-10" />
                     {{ searchQuery ? '未找到匹配的语言' : '未发现已安装的语言' }}
                 </div>

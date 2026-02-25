@@ -28,6 +28,7 @@ type Controllers struct {
 	Dependency *controllers.DependencyController
 	Agent      *controllers.AgentController
 	Mise       *controllers.MiseController
+	ExIm       *controllers.ExportImportController
 }
 
 func mustSubFS(fsys fs.FS, dir string) fs.FS {
@@ -194,6 +195,14 @@ func Setup(c *Controllers) *gin.Engine {
 				settings.GET("/backup/status", c.Settings.GetBackupStatus)
 				settings.GET("/backup/download", c.Settings.DownloadBackup)
 				settings.POST("/restore", c.Settings.RestoreBackup)
+			}
+
+			// 导出导入模块
+			exim := authorized.Group("/exim")
+			{
+				exim.POST("/export", c.ExIm.ExportData)
+				exim.GET("/export/download", c.ExIm.DownloadExport)
+				exim.POST("/import", c.ExIm.ImportData)
 			}
 
 			// Dependency routes (依赖管理)
