@@ -87,16 +87,21 @@ function handleDrop(e: DragEvent) {
       <Folder v-if="node.isDir" class="h-3 w-3 text-yellow-500 flex-shrink-0" />
       <File v-else class="h-3 w-3 text-blue-500 flex-shrink-0" />
       <span class="truncate">{{ node.name }}</span>
-      <div v-if="!node.isDir" class="opacity-0 group-hover:opacity-100 flex items-center gap-1 ml-auto shrink-0 pr-1 transition-opacity">
-        <span @click.stop="$emit('duplicate', node.path)" class="cursor-pointer text-muted-foreground hover:text-foreground" title="复制">
+      <div v-if="!node.isDir"
+        class="opacity-0 group-hover:opacity-100 flex items-center gap-1 ml-auto shrink-0 pr-1 transition-opacity">
+        <span @click.stop="$emit('duplicate', node.path)" class="cursor-pointer text-blue-500 hover:text-blue-500/80"
+          title="复制">
           <CopyIcon class="h-3 w-3" />
         </span>
-        <span @click.stop="$emit('delete', node.path)" class="cursor-pointer text-destructive hover:text-destructive/80" title="删除">
+        <span @click.stop="$emit('delete', node.path)" class="cursor-pointer text-destructive hover:text-destructive/80"
+          title="删除">
           <Trash2 class="h-3 w-3" />
         </span>
       </div>
-      <div v-else class="opacity-0 group-hover:opacity-100 flex items-center gap-1 ml-auto shrink-0 pr-1 transition-opacity">
-        <span @click.stop="$emit('delete', node.path)" class="cursor-pointer text-destructive hover:text-destructive/80" title="删除">
+      <div v-else
+        class="opacity-0 group-hover:opacity-100 flex items-center gap-1 ml-auto shrink-0 pr-1 transition-opacity">
+        <span @click.stop="$emit('delete', node.path)" class="cursor-pointer text-destructive hover:text-destructive/80"
+          title="删除">
           <Trash2 class="h-3 w-3" />
         </span>
       </div>
@@ -105,8 +110,8 @@ function handleDrop(e: DragEvent) {
       <FileTreeNode v-for="child in node.children" :key="child.path" :node="child" :expanded-dirs="expandedDirs"
         :selected-path="selectedPath" :depth="depth + 1" @select="$emit('select', $event)"
         @create="$emit('create', $event)" @move="(oldPath, newPath) => $emit('move', oldPath, newPath)"
-        @rename="$emit('rename', $event)" @delete="$emit('delete', $event)" @download-file="$emit('downloadFile', $event)" 
-        @duplicate="$emit('duplicate', $event)" />
+        @rename="$emit('rename', $event)" @delete="$emit('delete', $event)"
+        @download-file="$emit('downloadFile', $event)" @duplicate="$emit('duplicate', $event)" />
     </template>
   </div>
 </template>

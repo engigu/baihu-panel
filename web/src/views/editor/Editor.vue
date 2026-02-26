@@ -294,6 +294,30 @@ async function handleMove(oldPath: string, newPath: string, successMsg = '移动
   }
 }
 
+async function handleCopyFile(path: string) {
+  try {
+    const parts = path.split('/')
+    const filename = parts.pop() || ''
+    const dir = parts.join('/')
+
+    const dotIndex = filename.lastIndexOf('.')
+    let newFilename = ''
+    if (dotIndex !== -1 && dotIndex > 0) {
+      newFilename = filename.substring(0, dotIndex) + '-副本' + filename.substring(dotIndex)
+    } else {
+      newFilename = filename + '-副本'
+    }
+
+    const targetPath = dir ? `${dir}/${newFilename}` : newFilename
+
+    await api.files.copy(path, targetPath)
+    toast.success('已复制为 ' + newFilename)
+    await loadTree()
+  } catch (error: any) {
+    toast.error('复制失败: ' + (error.message || '未知错误'))
+  }
+}
+
 function triggerArchiveUpload(targetDir = '') {
   uploadTargetDir.value = targetDir
   archiveInputRef.value?.click()
@@ -449,7 +473,7 @@ onUnmounted(() => {
         </div>
         <FileTreeNode v-for="node in fileTree" :key="node.path" :node="node" :expanded-dirs="expandedDirs"
           :selected-path="selectedPath" @select="handleSelect" @delete="confirmDelete" @create="handleCreate"
-          @download-file="handleDownload" @move="handleMove" @rename="openRenameDialog" />
+          @download-file="handleDownload" @move="handleMove" @rename="openRenameDialog" @duplicate="handleCopyFile" />
       </div>
     </div>
 

@@ -22,11 +22,8 @@ function handleClick() {
 </script>
 
 <template>
-  <span
-    class="truncate block cursor-pointer hover:text-primary"
-    :title="text || '-'"
-    @click="handleClick"
-  >
+  <span v-bind="$attrs" class="truncate block cursor-pointer hover:text-primary" :title="text || '-'"
+    @click="handleClick">
     {{ text || '-' }}
   </span>
 

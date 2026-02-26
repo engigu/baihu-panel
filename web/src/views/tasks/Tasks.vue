@@ -246,14 +246,14 @@ watch(() => route.query.agent_id, (newVal) => {
     <div class="rounded-lg border bg-card overflow-x-auto">
       <!-- 表头 -->
       <div
-        class="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-2 sm:gap-4 px-3 sm:px-4 py-2 border-b bg-muted/20 text-xs sm:text-sm text-muted-foreground font-medium min-w-0 sm:min-w-[1000px]">
+        class="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1.5 sm:gap-4 px-3 sm:px-4 py-1.5 border-b bg-muted/20 text-xs sm:text-sm text-muted-foreground font-medium min-w-0 sm:min-w-[1000px]">
         <span class="w-10 sm:w-12 shrink-0 max-sm:order-1">ID</span>
         <span class="w-8 shrink-0 text-center max-sm:order-2">类型</span>
         <span class="flex-1 min-w-0 sm:flex-none sm:w-40 md:w-48 lg:w-56 shrink-0 max-sm:order-3">名称</span>
         <span class="w-24 sm:w-32 shrink-0 hidden md:block">执行位置</span>
         <span class="flex-1 min-w-[120px] max-sm:order-6 block sm:block max-sm:mt-1">命令/地址</span>
-        <span class="w-24 shrink-0 hidden md:block">定时规则</span>
-        <span class="w-32 shrink-0 hidden lg:block">执行时间</span>
+        <span class="w-28 shrink-0 hidden md:block">定时规则</span>
+        <span class="w-40 shrink-0 hidden lg:block">执行时间</span>
         <span class="w-8 shrink-0 text-center max-sm:order-4 max-sm:ml-auto">状态</span>
         <span class="w-28 sm:w-32 shrink-0 text-right sm:text-center max-sm:order-7 max-sm:mt-1">操作</span>
         <div class="w-full hidden max-sm:block max-sm:order-5"></div>
@@ -264,19 +264,24 @@ watch(() => route.query.agent_id, (newVal) => {
           暂无任务
         </div>
         <div v-for="task in tasks" :key="task.id"
-          class="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-2 sm:gap-4 px-3 sm:px-4 py-2 hover:bg-muted/30 transition-colors">
-          <span class="w-10 sm:w-12 shrink-0 text-muted-foreground text-xs sm:text-sm max-sm:order-1">#{{ task.id }}</span>
+          class="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1.5 sm:gap-4 px-3 sm:px-4 py-1.5 hover:bg-muted/30 transition-colors">
+          <span class="w-10 sm:w-12 shrink-0 text-muted-foreground text-xs sm:text-sm max-sm:order-1">#{{ task.id
+          }}</span>
           <span class="w-8 shrink-0 flex justify-center max-sm:order-2" :title="getTaskTypeTitle(task.type || 'task')">
             <GitBranch v-if="task.type === TASK_TYPE.REPO" class="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
             <Terminal v-else class="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
           </span>
-          <div class="flex-1 min-w-0 sm:flex-none sm:w-40 md:w-48 lg:w-56 shrink-0 flex flex-col justify-center gap-0.5 overflow-hidden max-sm:order-3">
-            <span class="font-medium truncate text-xs sm:text-sm cursor-help block w-full" :title="task.name">{{ task.name }}</span>
+          <div
+            class="flex-1 min-w-0 sm:flex-none sm:w-40 md:w-48 lg:w-56 shrink-0 flex flex-col justify-center gap-0.5 overflow-hidden max-sm:order-3">
+            <span class="font-medium truncate text-xs sm:text-sm cursor-help block w-full" :title="task.name">{{
+              task.name }}</span>
             <div v-if="task.tags" class="flex items-center gap-1 overflow-hidden" :title="task.tags">
-              <span v-for="tag in task.tags.split(',').filter(Boolean).slice(0, 3)" :key="tag" class="truncate text-[10px] leading-none px-1 py-0.5 bg-secondary text-secondary-foreground rounded border">
+              <span v-for="tag in task.tags.split(',').filter(Boolean).slice(0, 3)" :key="tag"
+                class="truncate text-[10px] leading-none px-1 py-0.5 bg-secondary text-secondary-foreground rounded border">
                 {{ tag }}
               </span>
-              <span v-if="task.tags.split(',').filter(Boolean).length > 3" class="text-[10px] text-muted-foreground">...</span>
+              <span v-if="task.tags.split(',').filter(Boolean).length > 3"
+                class="text-[10px] text-muted-foreground">...</span>
             </div>
           </div>
           <span class="w-24 sm:w-32 shrink-0 hidden md:flex items-center gap-1 text-xs" :title="getExecutorName(task)">
@@ -287,16 +292,19 @@ watch(() => route.query.agent_id, (newVal) => {
             </template>
             <span class="truncate">{{ getExecutorName(task) }}</span>
           </span>
-          
+
           <code
             class="flex-1 min-w-[120px] text-muted-foreground truncate text-xs bg-muted/40 px-2 py-1 rounded block sm:block max-sm:order-6 overflow-hidden max-sm:mt-1">
   <TextOverflow :text="task.command" :title="task.type === TASK_TYPE.REPO ? '同步地址' : '执行命令'" class="truncate" />
 </code>
-          <div class="w-24 shrink-0 hidden md:flex flex-col items-start justify-center gap-1 overflow-hidden">
-            <span v-if="task.trigger_type === TRIGGER_TYPE.BAIHU_STARTUP" class="text-[10px] leading-none bg-primary/10 text-primary px-1.5 py-1 rounded whitespace-nowrap border border-primary/20">服务启动时</span>
-            <code v-else-if="task.schedule" class="text-muted-foreground text-xs bg-muted/40 px-1.5 py-0.5 rounded truncate max-w-full" :title="task.schedule">{{ task.schedule }}</code>
+          <div class="w-28 shrink-0 hidden md:flex flex-col items-start justify-center gap-1 overflow-hidden">
+            <span v-if="task.trigger_type === TRIGGER_TYPE.BAIHU_STARTUP"
+              class="text-[10px] leading-tight bg-blue-500/10 text-blue-500 px-2 py-1 rounded-md whitespace-nowrap font-medium">服务启动时</span>
+            <code v-else-if="task.schedule"
+              class="text-muted-foreground text-xs bg-muted/40 px-1.5 py-0.5 rounded truncate max-w-full"
+              :title="task.schedule">{{ task.schedule }}</code>
           </div>
-          <div class="w-32 shrink-0 hidden lg:flex flex-col justify-center gap-0.5">
+          <div class="w-40 shrink-0 hidden lg:flex flex-col justify-center gap-0.5">
             <span class="text-[11px] text-muted-foreground truncate" :title="'上次执行: ' + (task.last_run || '-')">
               上: {{ task.last_run || '-' }}
             </span>
@@ -315,7 +323,8 @@ watch(() => route.query.agent_id, (newVal) => {
               <ZapOff class="h-3.5 w-3.5 text-muted-foreground" />
             </div>
           </span>
-          <span class="w-28 sm:w-32 shrink-0 flex justify-end sm:justify-center gap-0.5 sm:gap-1 max-sm:order-7 max-sm:mt-1">
+          <span
+            class="w-28 sm:w-32 shrink-0 flex justify-end sm:justify-center gap-0.5 sm:gap-1 max-sm:order-7 max-sm:mt-1">
             <Button variant="ghost" size="icon" class="h-6 w-6 sm:h-7 sm:w-7" @click="runTask(task.id)" title="执行"
               :disabled="executingTaskId === task.id">
               <Loader2 v-if="executingTaskId === task.id" class="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin" />
