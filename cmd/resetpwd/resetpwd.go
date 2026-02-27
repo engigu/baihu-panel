@@ -23,7 +23,7 @@ func Run(args []string) {
 	}
 
 	// 必须初始化环境与数据库才能修改密码
-	bootstrap.New()
+	bootstrap.InitBasic()
 
 	userService := services.NewUserService()
 	adminUser := userService.GetUserByUsername("admin")

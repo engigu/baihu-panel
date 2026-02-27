@@ -21,10 +21,16 @@ type App struct {
 }
 
 func New() *App {
+	app := InitBasic()
+	app.initRouter()
+	return app
+}
+
+// InitBasic 初始化基础环境（配置和数据库），不启动后台服务和路由
+func InitBasic() *App {
 	app := &App{}
 	app.initConfig()
 	app.initDatabase()
-	app.initRouter()
 	return app
 }
 
