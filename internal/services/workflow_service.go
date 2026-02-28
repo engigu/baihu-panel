@@ -32,9 +32,9 @@ func (s *WorkflowService) List(page, pageSize int, name string) ([]models.Workfl
 }
 
 // GetByID 根据 ID 获取工作流
-func (s *WorkflowService) GetByID(id uint) (*models.Workflow, error) {
+func (s *WorkflowService) GetByID(id string) (*models.Workflow, error) {
 	var workflow models.Workflow
-	err := database.DB.First(&workflow, id).Error
+	err := database.DB.Where("id = ?", id).First(&workflow).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("workflow not found")
@@ -63,11 +63,11 @@ func (s *WorkflowService) Update(workflow *models.Workflow) error {
 }
 
 // Delete 删除工作流
-func (s *WorkflowService) Delete(id uint) error {
-	return database.DB.Delete(&models.Workflow{}, id).Error
+func (s *WorkflowService) Delete(id string) error {
+	return database.DB.Delete(&models.Workflow{}, "id = ?", id).Error
 }
 
 // ToggleStatus 切换工作流状态
-func (s *WorkflowService) ToggleStatus(id uint, enabled bool) error {
+func (s *WorkflowService) ToggleStatus(id string, enabled bool) error {
 	return database.DB.Model(&models.Workflow{}).Where("id = ?", id).Update("enabled", enabled).Error
 }

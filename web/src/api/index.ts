@@ -63,12 +63,13 @@ export const api = {
       if (params?.page) query.set('page', String(params.page))
       if (params?.page_size) query.set('page_size', String(params.page_size))
       if (params?.name) query.set('name', params.name)
-      return request<{ data: Workflow[], total: number, page: number, page_size: number }>(`/workflows?${query}`)
+      return request<WorkflowListResponse>(`/workflows?${query}`)
     },
-    get: (id: number) => request<Workflow>(`/workflows/${id}`),
+    get: (id: string) => request<Workflow>(`/workflows/${id}`),
     create: (data: Partial<Workflow>) => request<Workflow>('/workflows', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<Workflow>) => request<Workflow>(`/workflows/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    delete: (id: number) => request(`/workflows/${id}`, { method: 'DELETE' })
+    update: (id: string, data: Partial<Workflow>) => request<void>(`/workflows/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request<void>(`/workflows/${id}`, { method: 'DELETE' }),
+    run: (id: string, envs?: string[]) => request<void>(`/workflows/${id}/run`, { method: 'POST', body: JSON.stringify({ envs }) })
   },
   tasks: {
     list: (params?: { page?: number; page_size?: number; name?: string; agent_id?: number; tags?: string; type?: string }) => {
@@ -111,13 +112,15 @@ export const api = {
     results: () => request('/execute/results')
   },
   logs: {
-    list: (params?: { page?: number; page_size?: number; task_id?: number; task_name?: string; status?: string }) => {
+    list: (params?: { page?: number; page_size?: number; task_id?: number; task_name?: string; status?: string; workflow_id?: string; workflow_run_id?: string }) => {
       const query = new URLSearchParams()
       if (params?.page) query.set('page', String(params.page))
       if (params?.page_size) query.set('page_size', String(params.page_size))
       if (params?.task_id) query.set('task_id', String(params.task_id))
       if (params?.task_name) query.set('task_name', params.task_name)
       if (params?.status) query.set('status', params.status)
+      if (params?.workflow_id) query.set('workflow_id', params.workflow_id)
+      if (params?.workflow_run_id) query.set('workflow_run_id', params.workflow_run_id)
       return request<LogListResponse>(`/logs?${query}`)
     },
     get: (id: number) => request<LogDetail>(`/logs/${id}`),
@@ -378,6 +381,8 @@ export interface TaskLog {
   start_time: string | null
   end_time: string | null
   created_at: string
+  workflow_id?: string
+  workflow_run_id?: string
 }
 
 export interface LogListResponse {
@@ -510,7 +515,7 @@ export interface MiseLanguage {
 }
 
 export interface Workflow {
-  id: number
+  id: string
   name: string
   description: string
   schedule: string
@@ -520,5 +525,12 @@ export interface Workflow {
   next_run: string | null
   created_at: string
   updated_at: string
+}
+
+export interface WorkflowListResponse {
+  data: Workflow[]
+  total: number
+  page: number
+  page_size: number
 }
 

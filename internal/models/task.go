@@ -106,9 +106,11 @@ func (t *Task) GetSchedule() string {
 // TaskLog 代表任务执行的日志记录
 type TaskLog struct {
 	ID        uint       `json:"id" gorm:"primaryKey"`
-	TaskID    uint       `json:"task_id" gorm:"index"`
-	AgentID   *uint      `json:"agent_id" gorm:"index"` // Agent ID，为空表示本地执行
-	Command   string     `json:"command" gorm:"type:text"`
+	TaskID        uint       `json:"task_id" gorm:"index"`
+	AgentID       *uint      `json:"agent_id" gorm:"index"` // Agent ID，为空表示本地执行
+	WorkflowID    *string    `json:"workflow_id" gorm:"type:varchar(36);index"`
+	WorkflowRunID string     `json:"workflow_run_id" gorm:"size:50;index"`
+	Command       string     `json:"command" gorm:"type:text"`
 	Output    string     `json:"-" gorm:"type:longtext"`      // gzip+base64 压缩后的日志
 	Error     string     `json:"error" gorm:"type:text"`      // 额外的系统错误信息
 	Status    string     `json:"status" gorm:"size:20;index"` // success, failed

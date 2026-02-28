@@ -22,6 +22,8 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 	taskID, _ := strconv.Atoi(c.DefaultQuery("task_id", "0"))
 	taskName := c.DefaultQuery("task_name", "")
 	status := c.DefaultQuery("status", "")
+	workflowID, _ := strconv.Atoi(c.DefaultQuery("workflow_id", "0"))
+	workflowRunID := c.DefaultQuery("workflow_run_id", "")
 
 	var logs []models.TaskLog
 	var total int64
@@ -32,6 +34,12 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 	}
 	if status != "" {
 		query = query.Where("status = ?", status)
+	}
+	if workflowID > 0 {
+		query = query.Where("workflow_id = ?", workflowID)
+	}
+	if workflowRunID != "" {
+		query = query.Where("workflow_run_id = ?", workflowRunID)
 	}
 
 	// 按任务名称过滤

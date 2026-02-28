@@ -2,12 +2,13 @@ package models
 
 import (
 	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 // Workflow 代表一个可视化任务编排工作流
 type Workflow struct {
-	ID          uint           `json:"id" gorm:"primaryKey"`
+	ID          string         `json:"id" gorm:"type:varchar(36);primaryKey"`
 	Name        string         `json:"name" gorm:"size:255;not null"`
 	Description string         `json:"description" gorm:"size:1024;default:''"`
 	Schedule    string         `json:"schedule" gorm:"size:100"`       // 整体重跑的 Cron 表达式
@@ -23,3 +24,11 @@ type Workflow struct {
 func (Workflow) TableName() string {
 	return constant.TablePrefix + "workflows"
 }
+
+func (w *Workflow) BeforeCreate(tx *gorm.DB) (err error) {
+	if w.ID == "" {
+		w.ID = uuid.New().String()
+	}
+	return
+}
+

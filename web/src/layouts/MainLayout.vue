@@ -54,8 +54,8 @@ const sentenceContent = computed(() => {
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: '数据仪表', exact: true },
   { to: '/tasks', icon: ListTodo, label: '定时任务', exact: true },
+  { to: '/workflows', icon: Workflow, label: '流程编排', exact: false },
   { to: '/agents', icon: Server, label: '远程执行', exact: true },
-  { to: '/workflows', icon: Workflow, label: '工作流编排', exact: false },
   { to: '/editor', icon: FileCode, label: '脚本编辑', exact: false },
   { to: '/history', icon: ScrollText, label: '执行历史', exact: true },
   { to: '/environments', icon: Variable, label: '环境变量', exact: true },

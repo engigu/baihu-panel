@@ -160,6 +160,7 @@ func Setup(c *Controllers) *gin.Engine {
 				workflows.GET("/:id", c.Workflow.Get)
 				workflows.PUT("/:id", c.Workflow.Update)
 				workflows.DELETE("/:id", c.Workflow.Delete)
+				workflows.POST("/:id/run", c.Workflow.Run)
 			}
 
 			// 文件管理模块

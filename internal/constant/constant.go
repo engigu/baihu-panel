@@ -79,13 +79,22 @@ const (
 	TaskStatusCancelled = "cancelled"
 	TaskStatusQueued    = "queued"
 
-	// 任务类型
-	TaskTypeNormal = "task"
-	TaskTypeRepo   = "repo"
+	// 工作流触发条件
+	WorkflowConditionSuccess   = "success"
+	WorkflowConditionOnSuccess = "on_success"
+	WorkflowConditionFailed    = "failed"
+	WorkflowConditionOnError   = "on_error"
+	WorkflowConditionError     = "error"
+	WorkflowConditionAlways    = "always"
 
-	// 触发类型
+	TaskTypeNormal  = "task"
+	TaskTypeRepo    = "repo"
+	TaskTypeControl = "control" // 虚拟控制节点，不执行真实任务只处理流程逻辑
+
 	TriggerTypeCron         = "cron"
 	TriggerTypeBaihuStartup = "baihu_startup"
+	TriggerTypeManual       = "manual"
+	TriggerTypeWorkflow     = "workflow" // 代表此任务是由另一个工作流节点触发的
 
 	// Agent 状态
 	AgentStatusOnline  = "online"

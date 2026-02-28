@@ -55,7 +55,7 @@ func RegisterControllers() *Controllers {
 		Dependency: controllers.NewDependencyController(),
 		Agent:      controllers.NewAgentController(settingsService),
 		Mise:       controllers.NewMiseController(services.NewMiseService()),
-		Workflow:   controllers.NewWorkflowController(workflowService),
+		Workflow:   controllers.NewWorkflowController(workflowService, executorService),
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
@@ -35,13 +36,15 @@ type CleanConfig struct {
 }
 
 // CreateEmptyLog 创建一个空的日志记录（任务开始时调用）
-func (s *TaskLogService) CreateEmptyLog(taskID uint, command string) (*models.TaskLog, error) {
+func (s *TaskLogService) CreateEmptyLog(taskID uint, command string, wfID *string, wfRunId string) (*models.TaskLog, error) {
 	startTime := models.Now()
 	taskLog := &models.TaskLog{
-		TaskID:    taskID,
-		Command:   command,
-		Status:    "running",
-		StartTime: &startTime,
+		TaskID:        taskID,
+		Command:       command,
+		Status:        constant.TaskStatusRunning,
+		StartTime:     &startTime,
+		WorkflowID:    wfID,
+		WorkflowRunID: wfRunId,
 	}
 	if err := database.DB.Create(taskLog).Error; err != nil {
 		return nil, err

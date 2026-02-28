@@ -93,10 +93,12 @@ type TaskLogVO struct {
 	Status    string            `json:"status"`
 	Duration  int64             `json:"duration"`
 	ExitCode  int               `json:"exit_code"`
-	StartTime *models.LocalTime `json:"start_time"`
-	EndTime   *models.LocalTime `json:"end_time"`
-	CreatedAt models.LocalTime  `json:"created_at"`
-	Output    string            `json:"output,omitempty"`
+	StartTime     *models.LocalTime `json:"start_time"`
+	EndTime       *models.LocalTime `json:"end_time"`
+	CreatedAt     models.LocalTime  `json:"created_at"`
+	WorkflowID    *string           `json:"workflow_id"`
+	WorkflowRunID string            `json:"workflow_run_id"`
+	Output        string            `json:"output,omitempty"`
 }
 
 // ToTaskLogVO 将 TaskLog 模型转换为 TaskLogVO
@@ -115,10 +117,12 @@ func ToTaskLogVO(log *models.TaskLog) *TaskLogVO {
 		Status:    log.Status,
 		Duration:  log.Duration,
 		ExitCode:  log.ExitCode,
-		StartTime: log.StartTime,
-		EndTime:   log.EndTime,
-		CreatedAt: log.CreatedAt,
-		Output:    log.Output,
+		StartTime:     log.StartTime,
+		EndTime:       log.EndTime,
+		CreatedAt:     log.CreatedAt,
+		WorkflowID:    log.WorkflowID,
+		WorkflowRunID: log.WorkflowRunID,
+		Output:        log.Output,
 	}
 }
 

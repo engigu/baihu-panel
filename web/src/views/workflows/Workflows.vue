@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
-import { Plus, Pencil, Trash2, Search, Network, CheckCircle2, Clock } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Search, Network, CheckCircle2, Clock, Play } from 'lucide-vue-next'
 import { api, type Workflow } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
@@ -19,7 +19,7 @@ const showDialog = ref(false)
 const editingWorkflow = ref<Partial<Workflow>>({})
 const isEdit = ref(false)
 const showDeleteDialog = ref(false)
-const deleteId = ref<number | null>(null)
+const deleteId = ref<string | null>(null)
 
 const filterName = ref('')
 const currentPage = ref(1)
@@ -63,7 +63,7 @@ function openEdit(workflow: Workflow) {
   showDialog.value = true
 }
 
-function confirmDelete(id: number) {
+function confirmDelete(id: string) {
   deleteId.value = id
   showDeleteDialog.value = true
 }
@@ -87,8 +87,18 @@ async function toggleWorkflow(workflow: Workflow, enabled: boolean) {
   } catch { toast.error('操作失败') }
 }
 
-function editBoard(id: number) {
+function editBoard(id: string) {
   router.push(`/workflows/${id}`)
+}
+
+async function runWorkflow(id: string) {
+  try {
+    await api.workflows.run(id)
+    toast.success('工作流已触发后台运行')
+    loadWorkflows()
+  } catch(err: any) { 
+    toast.error('触发工作流失败: ' + (err.message || ''))
+  }
 }
 
 onMounted(() => {
@@ -165,6 +175,9 @@ onMounted(() => {
             </label>
           </div>
           <div class="flex gap-0.5">
+             <Button variant="ghost" size="icon" class="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50" @click="runWorkflow(workflow.id)" title="立即运行 (触发起始节点)">
+              <Play class="h-4 w-4" />
+            </Button>
              <Button variant="ghost" size="icon" class="h-8 w-8 text-primary" @click="editBoard(workflow.id)" title="绘制面板">
               <Network class="h-4 w-4" />
             </Button>

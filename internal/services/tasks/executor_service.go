@@ -124,8 +124,21 @@ func (h *ServerSchedulerHandler) OnTaskExecuting(req *executor.ExecutionRequest)
 		return nil, nil, nil
 	}
 
+	var workflowID *string
+	var workflowRunID string
+
+	for _, env := range req.Envs {
+		if strings.HasPrefix(env, "BAIHU_WF_ID=") {
+			id := strings.TrimPrefix(env, "BAIHU_WF_ID=")
+			workflowID = &id
+		}
+		if strings.HasPrefix(env, "BAIHU_WF_RUN_ID=") {
+			workflowRunID = strings.TrimPrefix(env, "BAIHU_WF_RUN_ID=")
+		}
+	}
+
 	// 1. 创建初始日志记录
-	taskLog, err := h.es.taskLogService.CreateEmptyLog(task.ID, req.Command)
+	taskLog, err := h.es.taskLogService.CreateEmptyLog(task.ID, req.Command, workflowID, workflowRunID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("创建初始日志失败: %v", err)
 	}
