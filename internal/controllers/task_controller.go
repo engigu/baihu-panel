@@ -63,8 +63,10 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		CleanConfig string              `json:"clean_config"`
 		Envs        string              `json:"envs"`
 		Languages   []map[string]string `json:"languages"`
-		AgentID     *uint               `json:"agent_id"`
-		TriggerType string              `json:"trigger_type"`
+		AgentID       *uint               `json:"agent_id"`
+		TriggerType   string              `json:"trigger_type"`
+		RetryCount    int                 `json:"retry_count"`
+		RetryInterval int                 `json:"retry_interval"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -91,7 +93,7 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		workDir = resolveWorkDir(req.WorkDir)
 	}
 
-	task := tc.taskService.CreateTask(req.Name, req.Command, req.Schedule, req.Timeout, workDir, req.CleanConfig, req.Envs, req.Type, req.Config, req.AgentID, req.Languages, req.TriggerType, req.Tags)
+	task := tc.taskService.CreateTask(req.Name, req.Command, req.Schedule, req.Timeout, workDir, req.CleanConfig, req.Envs, req.Type, req.Config, req.AgentID, req.Languages, req.TriggerType, req.Tags, req.RetryCount, req.RetryInterval)
 
 	// 如果是 Agent 任务，通知 Agent；否则添加到本地 cron
 	if task.AgentID != nil && *task.AgentID > 0 {
@@ -166,8 +168,10 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		Envs        string              `json:"envs"`
 		Enabled     bool                `json:"enabled"`
 		Languages   []map[string]string `json:"languages"`
-		AgentID     *uint               `json:"agent_id"`
-		TriggerType string              `json:"trigger_type"`
+		AgentID       *uint               `json:"agent_id"`
+		TriggerType   string              `json:"trigger_type"`
+		RetryCount    int                 `json:"retry_count"`
+		RetryInterval int                 `json:"retry_interval"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -188,7 +192,7 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		workDir = resolveWorkDir(req.WorkDir)
 	}
 
-	task := tc.taskService.UpdateTask(id, req.Name, req.Command, req.Schedule, req.Timeout, workDir, req.CleanConfig, req.Envs, req.Enabled, req.Type, req.Config, req.AgentID, req.Languages, req.TriggerType, req.Tags)
+	task := tc.taskService.UpdateTask(id, req.Name, req.Command, req.Schedule, req.Timeout, workDir, req.CleanConfig, req.Envs, req.Enabled, req.Type, req.Config, req.AgentID, req.Languages, req.TriggerType, req.Tags, req.RetryCount, req.RetryInterval)
 	if task == nil {
 		utils.NotFound(c, "任务不存在")
 		return

@@ -5,6 +5,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 type SettingsService struct{}
@@ -26,6 +27,25 @@ func (s *SettingsService) InitSettings() error {
 			}
 		}
 	}
+	// 初始化或获取 JWT Secret 密码
+	var secCount int64
+	database.DB.Model(&models.Setting{}).Where("section = ? AND `key` = ?", constant.SectionSecurity, constant.KeySecret).Count(&secCount)
+	var secretValue string
+	if secCount == 0 {
+		// 先尝试从配置文件读取遗留下来的旧设
+		if Config != nil && Config.Security.Secret != "" {
+			secretValue = Config.Security.Secret
+		} else {
+			secretValue = utils.RandomString(32)
+		}
+		if err := database.DB.Create(&models.Setting{Section: constant.SectionSecurity, Key: constant.KeySecret, Value: secretValue}).Error; err != nil {
+			return err
+		}
+	} else {
+		secretValue = s.Get(constant.SectionSecurity, constant.KeySecret)
+	}
+	constant.Secret = secretValue
+
 	cache.LoadSiteCache()
 	return nil
 }

@@ -42,6 +42,7 @@ type tableConfig struct {
 
 func (s *BackupService) getTableConfigs() []tableConfig {
 	return []tableConfig{
+		{"users.json", s.exportTable(&[]models.User{}, true), s.restoreTable(&[]models.User{}, true)},
 		{"tasks.json", s.exportTable(&[]models.Task{}, true), s.restoreTable(&[]models.Task{}, true)},
 		{"task_logs.json", s.exportTable(&[]models.TaskLog{}, false), s.restoreTable(&[]models.TaskLog{}, false)},
 		{"envs.json", s.exportTable(&[]models.EnvironmentVariable{}, true), s.restoreTable(&[]models.EnvironmentVariable{}, true)},
@@ -199,6 +200,7 @@ func (s *BackupService) Restore(zipPath string) error {
 	// 开启全局事务
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 		// 1. 清空现有数据（物理删除）
+		tx.Unscoped().Where("1=1").Delete(&models.User{})
 		tx.Unscoped().Where("1=1").Delete(&models.Task{})
 		tx.Unscoped().Where("1=1").Delete(&models.TaskLog{})
 		tx.Unscoped().Where("1=1").Delete(&models.EnvironmentVariable{})
@@ -281,6 +283,8 @@ func (s *BackupService) restoreFromZipFile(tx *gorm.DB, f *zip.File, filename st
 	}
 
 	switch filename {
+	case "users.json":
+		return restoreStreamBatch[models.User](tx, decoder)
 	case "tasks.json":
 		return restoreStreamBatch[models.Task](tx, decoder)
 	case "task_logs.json":

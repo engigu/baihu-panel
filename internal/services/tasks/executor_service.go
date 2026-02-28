@@ -141,10 +141,7 @@ func (h *ServerSchedulerHandler) OnTaskExecuting(req *executor.ExecutionRequest)
 		return nil, nil, fmt.Errorf("任务并发限制: %v", err)
 	}
 
-	if req.Metadata == nil {
-		req.Metadata = make(map[string]interface{})
-	}
-	req.Metadata["goid"] = goid
+	req.Metadata.GoID = goid
 
 	// 3. 创建 TinyLog 实时日志收集器
 	tl, err := NewTinyLog(taskLog.ID)
@@ -160,6 +157,10 @@ func (h *ServerSchedulerHandler) OnTaskExecuting(req *executor.ExecutionRequest)
 		Status:    constant.TaskStatusRunning,
 		StartTime: time.Now(),
 	})
+
+	if req.Metadata.RetryIndex > 0 {
+		tl.Write([]byte(fmt.Sprintf("\n[System] 此为任务失败后的第 %d 次重试执行...\n\n", req.Metadata.RetryIndex)))
+	}
 
 	// 对于本地任务，Scheduler 会通过返回的 Writer 写入日志
 	// 对于远程任务，Scheduler 不会写入任何内容（由 Agent 推送至此 TL）
@@ -235,10 +236,8 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 	}
 
 	// 移除运行记录
-	if req.Metadata != nil {
-		if goid, ok := req.Metadata["goid"].(int64); ok {
-			h.es.RemoveRunningGo(task.ID, goid)
-		}
+	if req.Metadata.GoID != 0 {
+		h.es.RemoveRunningGo(task.ID, req.Metadata.GoID)
 	}
 
 	// 处理任务完成（更新统计、清理旧日志等）
@@ -249,6 +248,9 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 
 	// 更新内存缓冲
 	h.es.UpdateResult(*result)
+
+	// ======= 重试逻辑 =======
+	h.es.HandleTaskRetry(task, req, result.Success, result.Status, result.ExitCode)
 }
 
 func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, err error) {
@@ -260,10 +262,8 @@ func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, er
 	fmt.Sscanf(req.TaskID, "%d", &taskID)
 
 	// 移除运行记录
-	if req.Metadata != nil {
-		if goid, ok := req.Metadata["goid"].(int64); ok {
-			h.es.RemoveRunningGo(taskID, goid)
-		}
+	if req.Metadata.GoID != 0 {
+		h.es.RemoveRunningGo(taskID, req.Metadata.GoID)
 	}
 
 	// 构造错误日志
@@ -311,6 +311,48 @@ func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, er
 		StartTime: time.Now(),
 		EndTime:   time.Now(),
 	})
+
+	// ======= 重试逻辑 =======
+	h.es.HandleTaskRetry(task, req, false, constant.TaskStatusFailed, 1)
+}
+
+// HandleTaskRetry 处理任务失败重试逻辑
+func (es *ExecutorService) HandleTaskRetry(task *models.Task, req *executor.ExecutionRequest, isSuccess bool, status string, exitCode int) {
+	if task == nil {
+		return
+	}
+	
+	if !isSuccess || status == constant.TaskStatusFailed || status == constant.TaskStatusTimeout || exitCode != 0 {
+		retryIndex := req.Metadata.RetryIndex
+
+		if retryIndex < task.RetryCount {
+			retryIndex++
+			logger.Infof("[Executor] 任务 #%d 执行失败/出错，将在 %d 秒后进行第 %d/%d 次重试...", task.ID, task.RetryInterval, retryIndex, task.RetryCount)
+			
+			es.scheduler.EnqueueDelayed(time.Duration(task.RetryInterval)*time.Second, func() *executor.ExecutionRequest {
+				latestTask := es.taskService.GetTaskByID(int(task.ID))
+				if latestTask == nil || !latestTask.Enabled {
+					return nil
+				}
+
+				newEnvs := es.loadEnvVars(latestTask.Envs)
+				return &executor.ExecutionRequest{
+					TaskID:    req.TaskID,
+					Name:      latestTask.Name,
+					Command:   latestTask.Command,
+					WorkDir:   latestTask.WorkDir,
+					Envs:      newEnvs,
+					Timeout:   latestTask.Timeout,
+					Languages: latestTask.Languages,
+					UseMise:   latestTask.UseMise(),
+					Type:      executor.TaskTypeManual,
+					Metadata: executor.ExecutionMetadata{
+						RetryIndex: retryIndex,
+					},
+				}
+			})
+		}
+	}
 }
 
 func (h *ServerSchedulerHandler) OnCronNextRun(req *executor.ExecutionRequest, nextRun time.Time) {

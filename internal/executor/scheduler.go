@@ -72,7 +72,13 @@ type ExecutionRequest struct {
 	Timeout   int                    // 超时时间（分钟）
 	Languages []map[string]string    // 语言环境配置
 	UseMise   bool                   // 是否使用 mise
-	Metadata  map[string]interface{} // 额外元数据
+	Metadata  ExecutionMetadata      // 额外元数据
+}
+
+// ExecutionMetadata 执行额外元数据
+type ExecutionMetadata struct {
+	GoID       int64 // 关联的 goroutine ID
+	RetryIndex int   // 当前重试索引
 }
 
 // ExecutionResult 执行结果（标准接口）
@@ -273,6 +279,21 @@ func (s *Scheduler) EnqueueOrExecute(req *ExecutionRequest) {
 		s.logger.Warnf("[Scheduler] 任务队列已满，直接执行任务 %s", req.TaskID)
 		go s.executeTask(req)
 	}
+}
+
+// EnqueueDelayed 延迟将任务加入队列执行
+func (s *Scheduler) EnqueueDelayed(delay time.Duration, reqBuilder func() *ExecutionRequest) {
+	go func() {
+		select {
+		case <-time.After(delay):
+			if req := reqBuilder(); req != nil {
+				s.EnqueueOrExecute(req)
+			}
+		case <-s.stopCh:
+			// 调度器停止时取消延迟投递
+			return
+		}
+	}()
 }
 
 // ExecuteSync 同步执行任务（不经过队列）

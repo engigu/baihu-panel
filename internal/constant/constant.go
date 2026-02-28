@@ -33,6 +33,7 @@ const (
 	SectionSite      = "site"
 	SectionSystem    = "system"
 	SectionScheduler = "scheduler"
+	SectionSecurity  = "security"
 
 	// Site Settings Key 常量
 	KeyTitle      = "title"
@@ -41,6 +42,9 @@ const (
 	KeyPageSize       = "page_size"
 	KeyCookieDays     = "cookie_days"
 	KeyApiToken       = "api_token"
+
+	// Security Settings Key 常量
+	KeySecret = "secret"
 
 	// System Settings Key 常量
 	KeyInitialized = "initialized"
@@ -91,7 +95,7 @@ const (
 // TablePrefix 表前缀，从配置文件读取
 var TablePrefix string
 
-// Secret JWT和密码salt密钥，从配置文件读取
+// Secret JWT和密码salt密钥，运行中自动从数据库加载
 var Secret string
 
 // DemoMode 演示模式，从环境变量读取

@@ -102,8 +102,8 @@ func LoadConfig(path string) (*AppConfig, error) {
 	// 设置表前缀到 constant 包
 	constant.TablePrefix = Config.Database.TablePrefix
 
-	// 设置 Secret 到 constant 包
-	constant.Secret = Config.Security.Secret
+	// 暂存旧的 Secret，不再直接给 constant 赋值（改为到 settings 初始化时判断）
+	// constant.Secret = Config.Security.Secret
 
 	// 设置演示模式
 	if v := os.Getenv("BH_DEMO_MODE"); v == "true" || v == "1" {

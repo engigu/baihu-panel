@@ -641,7 +641,6 @@ table_prefix = baihu_
 | `BH_DB_NAME` | database.dbname | 数据库名称 | ql_panel |
 | `BH_DB_PATH` | database.path | SQLite 文件路径 | ./data/baihu.db |
 | `BH_DB_TABLE_PREFIX` | database.table_prefix | 表前缀 | baihu_ |
-| `BH_SECRET` | security.secret | JWT 密钥 | 手动指定 |
 
 ### URL 前缀配置
 

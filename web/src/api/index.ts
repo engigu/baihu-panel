@@ -297,6 +297,8 @@ export interface Task {
   work_dir: string
   clean_config: string
   envs: string
+  retry_count: number
+  retry_interval: number
   languages: { name: string; version: string }[]
   agent_id: number | null
   enabled: boolean

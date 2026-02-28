@@ -47,14 +47,16 @@ type Task struct {
 	CleanConfig string              `json:"clean_config" gorm:"size:255;default:''"`    // 清理配置 JSON
 	Envs        string              `json:"envs" gorm:"size:255;default:''"`            // 环境变量ID列表，逗号分隔
 	Languages   []map[string]string `json:"languages" gorm:"serializer:json;type:text"` // 针对本地任务的语言配置列表
-	AgentID     *uint               `json:"agent_id" gorm:"index"`                      // Agent ID，为空表示本地执行
-	Enabled     bool                `json:"enabled" gorm:"default:true"`
-	RunningGo   string              `json:"running_go" gorm:"type:text"` // 正在运行的 go routine id 数组 (JSON)
-	LastRun     *LocalTime          `json:"last_run"`
-	NextRun     *LocalTime          `json:"next_run"`
-	CreatedAt   LocalTime           `json:"created_at"`
-	UpdatedAt   LocalTime           `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt      `json:"-" gorm:"index"`
+	AgentID       *uint               `json:"agent_id" gorm:"index"`                      // Agent ID，为空表示本地执行
+	RetryCount    int                 `json:"retry_count" gorm:"default:0"`               // 失败重试次数
+	RetryInterval int                 `json:"retry_interval" gorm:"default:0"`            // 失败重试间隔(秒)
+	Enabled       bool                `json:"enabled" gorm:"default:true"`
+	RunningGo     string              `json:"running_go" gorm:"type:text"` // 正在运行的 go routine id 数组 (JSON)
+	LastRun       *LocalTime          `json:"last_run"`
+	NextRun       *LocalTime          `json:"next_run"`
+	CreatedAt     LocalTime           `json:"created_at"`
+	UpdatedAt     LocalTime           `json:"updated_at"`
+	DeletedAt     gorm.DeletedAt      `json:"-" gorm:"index"`
 }
 
 func (Task) TableName() string {

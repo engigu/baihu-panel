@@ -349,6 +349,20 @@ async function save() {
             </div>
           </div>
         </div>
+        <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-3">
+          <Label class="sm:text-right text-sm">失败重试</Label>
+          <div class="sm:col-span-3 flex items-center gap-2">
+            <div class="flex items-center gap-1.5">
+              <Input v-model.number="form.retry_count" type="number" placeholder="0" class="w-16 h-9 text-sm" />
+              <span class="text-sm text-muted-foreground whitespace-nowrap">次</span>
+            </div>
+            <div class="flex items-center gap-1.5 ml-2" v-if="form.retry_count && form.retry_count > 0">
+              <span class="text-sm text-muted-foreground whitespace-nowrap">间隔</span>
+              <Input v-model.number="form.retry_interval" type="number" placeholder="0" class="w-16 h-9 text-sm" />
+              <span class="text-sm text-muted-foreground whitespace-nowrap">秒</span>
+            </div>
+          </div>
+        </div>
       </div>
       <DialogFooter class="shrink-0 p-6 pt-3 border-t">
         <Button variant="outline" size="sm" @click="emit('update:open', false)">取消</Button>
