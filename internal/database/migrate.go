@@ -24,6 +24,7 @@ func Migrate() error {
 		&models.Agent{},
 		&models.AgentToken{},
 		&models.Language{},
+		&models.Workflow{},
 	)
 }
 

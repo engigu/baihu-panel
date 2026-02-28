@@ -28,6 +28,7 @@ type Controllers struct {
 	Dependency *controllers.DependencyController
 	Agent      *controllers.AgentController
 	Mise       *controllers.MiseController
+	Workflow   *controllers.WorkflowController
 }
 
 func mustSubFS(fsys fs.FS, dir string) fs.FS {
@@ -149,7 +150,16 @@ func Setup(c *Controllers) *gin.Engine {
 				scripts.GET("", c.Script.GetScripts)
 				scripts.GET("/:id", c.Script.GetScript)
 				scripts.PUT("/:id", c.Script.UpdateScript)
-				scripts.DELETE("/:id", c.Script.DeleteScript)
+			}
+
+			// 工作流管理模块
+			workflows := authorized.Group("/workflows")
+			{
+				workflows.GET("", c.Workflow.List)
+				workflows.POST("", c.Workflow.Create)
+				workflows.GET("/:id", c.Workflow.Get)
+				workflows.PUT("/:id", c.Workflow.Update)
+				workflows.DELETE("/:id", c.Workflow.Delete)
 			}
 
 			// 文件管理模块

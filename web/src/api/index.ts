@@ -57,6 +57,19 @@ export const api = {
     register: (data: { username: string; password: string; email: string }) =>
       request('/auth/register', { method: 'POST', body: JSON.stringify(data) })
   },
+  workflows: {
+    list: (params?: { page?: number; page_size?: number; name?: string; }) => {
+      const query = new URLSearchParams()
+      if (params?.page) query.set('page', String(params.page))
+      if (params?.page_size) query.set('page_size', String(params.page_size))
+      if (params?.name) query.set('name', params.name)
+      return request<{ data: Workflow[], total: number, page: number, page_size: number }>(`/workflows?${query}`)
+    },
+    get: (id: number) => request<Workflow>(`/workflows/${id}`),
+    create: (data: Partial<Workflow>) => request<Workflow>('/workflows', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<Workflow>) => request<Workflow>(`/workflows/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number) => request(`/workflows/${id}`, { method: 'DELETE' })
+  },
   tasks: {
     list: (params?: { page?: number; page_size?: number; name?: string; agent_id?: number; tags?: string; type?: string }) => {
       const query = new URLSearchParams()
@@ -493,3 +506,17 @@ export interface MiseLanguage {
   install_path?: string
   installed_at?: string  // 安装日期
 }
+
+export interface Workflow {
+  id: number
+  name: string
+  description: string
+  schedule: string
+  enabled: boolean
+  flow_data: string
+  last_run: string | null
+  next_run: string | null
+  created_at: string
+  updated_at: string
+}
+

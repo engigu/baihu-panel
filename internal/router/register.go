@@ -25,6 +25,8 @@ func RegisterControllers() *Controllers {
 	agentWSManager := services.GetAgentWSManager()
 
 	taskLogService := tasks.NewTaskLogService(sendStatsService)
+	workflowService := services.NewWorkflowService()
+
 	// 创建任务执行服务（需要依赖注入）
 
 	// 清理 task 运行状态的任务可以直接由 executorService 承担或在此处通过 Database 直接清理
@@ -53,6 +55,7 @@ func RegisterControllers() *Controllers {
 		Dependency: controllers.NewDependencyController(),
 		Agent:      controllers.NewAgentController(settingsService),
 		Mise:       controllers.NewMiseController(services.NewMiseService()),
+		Workflow:   controllers.NewWorkflowController(workflowService),
 	}
 }
 
