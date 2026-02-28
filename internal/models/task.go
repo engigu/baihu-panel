@@ -5,6 +5,7 @@ import (
 
 	"github.com/engigu/baihu-panel/internal/constant"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -35,6 +36,7 @@ type TaskConfig struct {
 // Task 代表一个计划任务
 type Task struct {
 	ID          uint                `json:"id" gorm:"primaryKey"`
+	UUID        string              `json:"uuid" gorm:"size:36;uniqueIndex;not null"`
 	Name        string              `json:"name" gorm:"size:255;not null"`
 	Command     string              `json:"command" gorm:"type:text"`                   // 普通任务的命令
 	Tags        string              `json:"tags" gorm:"size:255;default:''"`            // 标签，逗号分隔
@@ -47,7 +49,7 @@ type Task struct {
 	CleanConfig string              `json:"clean_config" gorm:"size:255;default:''"`    // 清理配置 JSON
 	Envs        string              `json:"envs" gorm:"size:255;default:''"`            // 环境变量ID列表，逗号分隔
 	Languages   []map[string]string `json:"languages" gorm:"serializer:json;type:text"` // 针对本地任务的语言配置列表
-	AgentID       *uint               `json:"agent_id" gorm:"index"`                      // Agent ID，为空表示本地执行
+	AgentID       *string             `json:"agent_id" gorm:"index"`                      // Agent UUID，为空表示本地执行
 	RetryCount    int                 `json:"retry_count" gorm:"default:0"`               // 失败重试次数
 	RetryInterval int                 `json:"retry_interval" gorm:"default:0"`            // 失败重试间隔(秒)
 	Enabled       bool                `json:"enabled" gorm:"default:true"`
@@ -61,6 +63,13 @@ type Task struct {
 
 func (Task) TableName() string {
 	return constant.TablePrefix + "tasks"
+}
+
+func (t *Task) BeforeCreate(tx *gorm.DB) (err error) {
+	if t.UUID == "" {
+		t.UUID = uuid.New().String()
+	}
+	return
 }
 
 func (t *Task) GetID() string {
@@ -106,8 +115,9 @@ func (t *Task) GetSchedule() string {
 // TaskLog 代表任务执行的日志记录
 type TaskLog struct {
 	ID        uint       `json:"id" gorm:"primaryKey"`
-	TaskID    uint       `json:"task_id" gorm:"index"`
-	AgentID   *uint      `json:"agent_id" gorm:"index"` // Agent ID，为空表示本地执行
+	UUID      string     `json:"uuid" gorm:"size:36;uniqueIndex;not null"`
+	TaskID    string     `json:"task_id" gorm:"index"`
+	AgentID   *string    `json:"agent_id" gorm:"index"` // Agent UUID，为空表示本地执行
 	Command   string     `json:"command" gorm:"type:text"`
 	Output    string     `json:"-" gorm:"type:longtext"`      // gzip+base64 压缩后的日志
 	Error     string     `json:"error" gorm:"type:text"`      // 额外的系统错误信息
@@ -121,4 +131,11 @@ type TaskLog struct {
 
 func (TaskLog) TableName() string {
 	return constant.TablePrefix + "task_logs"
+}
+
+func (tl *TaskLog) BeforeCreate(tx *gorm.DB) (err error) {
+	if tl.UUID == "" {
+		tl.UUID = uuid.New().String()
+	}
+	return
 }

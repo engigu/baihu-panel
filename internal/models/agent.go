@@ -3,12 +3,14 @@ package models
 import (
 	"github.com/engigu/baihu-panel/internal/constant"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 // Agent 远程执行代理
 type Agent struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
+	UUID        string         `json:"uuid" gorm:"size:36;uniqueIndex;not null"`
 	Name        string         `json:"name" gorm:"size:100;not null"`                 // Agent 名称
 	Token       string         `json:"token" gorm:"size:64;index"`                    // 认证 Token（可重复使用）
 	MachineID   string         `json:"machine_id" gorm:"size:64;uniqueIndex"`         // 机器识别码（唯一）
@@ -32,9 +34,17 @@ func (Agent) TableName() string {
 	return constant.TablePrefix + "agents"
 }
 
+func (a *Agent) BeforeCreate(tx *gorm.DB) (err error) {
+	if a.UUID == "" {
+		a.UUID = uuid.New().String()
+	}
+	return
+}
+
 // AgentToken Agent 令牌
 type AgentToken struct {
 	ID        uint           `json:"id" gorm:"primaryKey"`
+	UUID      string         `json:"uuid" gorm:"size:36;uniqueIndex;not null"`
 	Token     string         `json:"token" gorm:"size:64;uniqueIndex;not null"` // 令牌
 	Remark    string         `json:"remark" gorm:"size:255"`                    // 备注
 	MaxUses   int            `json:"max_uses" gorm:"default:0"`                 // 最大使用次数，0 表示无限制
@@ -50,9 +60,16 @@ func (AgentToken) TableName() string {
 	return constant.TablePrefix + "tokens"
 }
 
+func (at *AgentToken) BeforeCreate(tx *gorm.DB) (err error) {
+	if at.UUID == "" {
+		at.UUID = uuid.New().String()
+	}
+	return
+}
+
 // AgentTask Agent 任务配置（用于下发给 Agent）
 type AgentTask struct {
-	ID        uint                `json:"id"`
+	ID        string              `json:"id"`
 	Name      string              `json:"name"`
 	Command   string              `json:"command"`
 	Schedule  string              `json:"schedule"`
@@ -65,8 +82,8 @@ type AgentTask struct {
 
 // AgentTaskResult Agent 上报的任务执行结果
 type AgentTaskResult struct {
-	TaskID    uint   `json:"task_id"`
-	LogID     uint   `json:"log_id"`
+	TaskID    string `json:"task_id"`
+	LogID     string `json:"log_id"`
 	AgentID   uint   `json:"agent_id"`
 	Command   string `json:"command"`
 	Output    string `json:"output"`

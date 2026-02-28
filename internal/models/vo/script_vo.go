@@ -7,6 +7,7 @@ import (
 // ScriptVO 脚本视图对象
 type ScriptVO struct {
 	ID        uint             `json:"id"`
+	UUID      string           `json:"uuid"`
 	Name      string           `json:"name"`
 	Content   string           `json:"content,omitempty"` // 仅在拉取详情时返回
 	CreatedAt models.LocalTime `json:"created_at"`
@@ -20,6 +21,7 @@ func ToScriptVO(script *models.Script) *ScriptVO {
 	}
 	return &ScriptVO{
 		ID:        script.ID,
+		UUID:      script.UUID,
 		Name:      script.Name,
 		Content:   script.Content,
 		CreatedAt: script.CreatedAt,

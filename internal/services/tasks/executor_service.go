@@ -24,9 +24,9 @@ import (
 
 // AgentWSManager 接口定义（避免循环依赖）
 type AgentWSManager interface {
-	RegisterRemoteWaiter(logID uint) chan *models.AgentTaskResult
-	UnregisterRemoteWaiter(logID uint)
-	SendToAgent(agentID uint, msgType string, data interface{}) error
+	RegisterRemoteWaiter(logID string) chan *models.AgentTaskResult
+	UnregisterRemoteWaiter(logID string)
+	SendToAgent(agentUUID string, msgType string, data interface{}) error
 }
 
 // SettingsService 接口定义（避免循环依赖）
@@ -115,24 +115,21 @@ func (h *ServerSchedulerHandler) OnTaskScheduled(req *executor.ExecutionRequest)
 }
 
 func (h *ServerSchedulerHandler) OnTaskExecuting(req *executor.ExecutionRequest) (io.Writer, io.Writer, error) {
-	var taskID uint
-	fmt.Sscanf(req.TaskID, "%d", &taskID)
-
-	task := h.es.taskService.GetTaskByID(int(taskID))
+	task := es.taskService.GetTaskByUUID(req.TaskID)
 	// 系统任务（无 taskID）不记录数据库日志，直接返回空写入器
 	if task == nil {
 		return nil, nil, nil
 	}
 
 	// 1. 创建初始日志记录
-	taskLog, err := h.es.taskLogService.CreateEmptyLog(task.ID, req.Command)
+	taskLog, err := h.es.taskLogService.CreateEmptyLog(task.UUID, req.Command)
 	if err != nil {
 		return nil, nil, fmt.Errorf("创建初始日志失败: %v", err)
 	}
-	req.LogID = taskLog.ID // 设置 LogID 供后续环节使用
+	req.LogID = taskLog.UUID // 使用 UUID 关联日志
 
 	// 2. 检查并记录运行状态（并发控制）
-	goid, err := h.es.AddRunningGo(task.ID)
+	goid, err := h.es.AddRunningGo(task.UUID)
 	if err != nil {
 		// 并发限制，更新日志状态为失败
 		taskLog.Status = constant.TaskStatusFailed
@@ -146,7 +143,7 @@ func (h *ServerSchedulerHandler) OnTaskExecuting(req *executor.ExecutionRequest)
 	// 3. 创建 TinyLog 实时日志收集器
 	tl, err := NewTinyLog(taskLog.ID)
 	if err != nil {
-		h.es.RemoveRunningGo(task.ID, goid) // 回滚运行状态
+		h.es.RemoveRunningGo(task.UUID, goid) // 回滚运行状态
 		return nil, nil, fmt.Errorf("创建日志收集器失败: %v", err)
 	}
 
@@ -168,7 +165,7 @@ func (h *ServerSchedulerHandler) OnTaskExecuting(req *executor.ExecutionRequest)
 }
 
 func (h *ServerSchedulerHandler) OnTaskHeartbeat(req *executor.ExecutionRequest, duration int64) {
-	if req.LogID > 0 {
+	if req.LogID != "" {
 		h.es.taskLogService.UpdateTaskDuration(req.LogID, duration)
 	}
 
@@ -184,14 +181,11 @@ func (h *ServerSchedulerHandler) OnTaskStarted(req *executor.ExecutionRequest) {
 }
 
 func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest, result *executor.ExecutionResult) {
-	if req.LogID == 0 {
+	if req.LogID == "" {
 		return
 	}
 
-	var taskID uint
-	fmt.Sscanf(req.TaskID, "%d", &taskID)
-
-	task := h.es.taskService.GetTaskByID(int(taskID))
+	task := h.es.taskService.GetTaskByUUID(req.TaskID)
 	if task == nil {
 		return
 	}
@@ -217,8 +211,8 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 	endTime := models.LocalTime(result.EndTime)
 
 	taskLog := &models.TaskLog{
-		ID:        req.LogID,
-		TaskID:    task.ID,
+		UUID:      req.LogID,
+		TaskID:    task.UUID,
 		Command:   req.Command,
 		Output:    output,
 		Error:     result.Error,
@@ -230,14 +224,14 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 	}
 
 	// 如果有 AgentID，也记录下来
-	if task.AgentID != nil && *task.AgentID > 0 {
-		agentID := *task.AgentID
-		taskLog.AgentID = &agentID
+	if task.AgentID != nil && *task.AgentID != "" {
+		agentUUID := *task.AgentID
+		taskLog.AgentID = &agentUUID
 	}
 
 	// 移除运行记录
 	if req.Metadata.GoID != 0 {
-		h.es.RemoveRunningGo(task.ID, req.Metadata.GoID)
+		h.es.RemoveRunningGo(task.UUID, req.Metadata.GoID)
 	}
 
 	// 处理任务完成（更新统计、清理旧日志等）
@@ -251,16 +245,13 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 }
 
 func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, err error) {
-	if req.LogID == 0 {
+	if req.LogID == "" {
 		return
 	}
 
-	var taskID uint
-	fmt.Sscanf(req.TaskID, "%d", &taskID)
-
 	// 移除运行记录
 	if req.Metadata.GoID != 0 {
-		h.es.RemoveRunningGo(taskID, req.Metadata.GoID)
+		h.es.RemoveRunningGo(req.TaskID, req.Metadata.GoID)
 	}
 
 	// 构造错误日志
@@ -275,8 +266,8 @@ func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, er
 
 	now := models.LocalTime(time.Now())
 	taskLog := &models.TaskLog{
-		ID:        req.LogID,
-		TaskID:    taskID,
+		UUID:      req.LogID,
+		TaskID:    req.TaskID,
 		Command:   req.Command,
 		Output:    output,
 		Error:     err.Error(),
@@ -288,10 +279,10 @@ func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, er
 	}
 
 	// 补充 AgentID
-	task := h.es.taskService.GetTaskByID(int(taskID))
-	if task != nil && task.AgentID != nil && *task.AgentID > 0 {
-		agentID := *task.AgentID
-		taskLog.AgentID = &agentID
+	task := h.es.taskService.GetTaskByUUID(req.TaskID)
+	if task != nil && task.AgentID != nil && *task.AgentID != "" {
+		agentUUID := *task.AgentID
+		taskLog.AgentID = &agentUUID
 	}
 
 	h.es.taskLogService.ProcessTaskCompletion(taskLog)
@@ -321,10 +312,10 @@ func (es *ExecutorService) HandleTaskRetry(task *models.Task, req *executor.Exec
 
 		if retryIndex < task.RetryCount {
 			retryIndex++
-			logger.Infof("[Executor] 任务 #%d 执行失败/出错，将在 %d 秒后进行第 %d/%d 次重试...", task.ID, task.RetryInterval, retryIndex, task.RetryCount)
+			logger.Infof("[Executor] 任务 %s 执行失败/出错，将在 %d 秒后进行第 %d/%d 次重试...", task.UUID, task.RetryInterval, retryIndex, task.RetryCount)
 			
 			es.scheduler.EnqueueDelayed(time.Duration(task.RetryInterval)*time.Second, func() *executor.ExecutionRequest {
-				latestTask := es.taskService.GetTaskByID(int(task.ID))
+				latestTask := es.taskService.GetTaskByUUID(task.UUID)
 				if latestTask == nil || !latestTask.Enabled {
 					return nil
 				}
@@ -350,28 +341,26 @@ func (es *ExecutorService) HandleTaskRetry(task *models.Task, req *executor.Exec
 }
 
 func (h *ServerSchedulerHandler) OnCronNextRun(req *executor.ExecutionRequest, nextRun time.Time) {
-	var taskID uint
-	fmt.Sscanf(req.TaskID, "%d", &taskID)
 	// 更新数据库中的下次运行时间
-	database.DB.Model(&models.Task{}).Where("id = ?", taskID).Update("next_run", nextRun)
+	database.DB.Model(&models.Task{}).Where("uuid = ?", req.TaskID).Update("next_run", nextRun)
 }
 
 // LocalTaskHooks 本地任务钩子适配器
 type LocalTaskHooks struct {
 	es    *ExecutorService
-	logID uint
+	logID string
 }
 
-func (h *LocalTaskHooks) PreExecute(ctx context.Context, req executor.Request) (uint, error) {
+func (h *LocalTaskHooks) PreExecute(ctx context.Context, req executor.Request) (string, error) {
 	return h.logID, nil
 }
 
-func (h *LocalTaskHooks) PostExecute(ctx context.Context, logID uint, result *executor.Result) error {
+func (h *LocalTaskHooks) PostExecute(ctx context.Context, logID string, result *executor.Result) error {
 	return nil
 }
 
-func (h *LocalTaskHooks) OnHeartbeat(ctx context.Context, logID uint, duration int64) error {
-	if logID > 0 {
+func (h *LocalTaskHooks) OnHeartbeat(ctx context.Context, logID string, duration int64) error {
+	if logID != "" {
 		return h.es.taskLogService.UpdateTaskDuration(logID, duration)
 	}
 	return nil
@@ -379,10 +368,7 @@ func (h *LocalTaskHooks) OnHeartbeat(ctx context.Context, logID uint, duration i
 
 // ExecuteDispatcher 实现任务分发逻辑
 func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.ExecutionRequest, stdout, stderr io.Writer) (*executor.Result, error) {
-	var taskID uint
-	fmt.Sscanf(req.TaskID, "%d", &taskID)
-
-	task := es.taskService.GetTaskByID(int(taskID))
+	task := es.taskService.GetTaskByUUID(req.TaskID)
 	// 系统任务（无 taskID）直接本地执行
 	if task == nil {
 		return executor.Execute(ctx, executor.Request{
@@ -409,7 +395,7 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 	}
 
 	// 远程任务
-	if task.AgentID != nil && *task.AgentID > 0 {
+	if task.AgentID != nil && *task.AgentID != "" {
 		return es.ExecuteRemoteForScheduler(task, req.LogID)
 	}
 
@@ -466,9 +452,7 @@ func (es *ExecutorService) AddCronTask(task *models.Task) error {
 	return es.cronManager.AddTask(task)
 }
 
-// RemoveCronTask 移除计划任务
-func (es *ExecutorService) RemoveCronTask(taskID uint) {
-	es.cronManager.RemoveTask(fmt.Sprintf("%d", taskID))
+	es.cronManager.RemoveTask(taskUUID)
 }
 
 // ValidateCron 验证 Cron 表达式
@@ -495,9 +479,9 @@ func (es *ExecutorService) loadCronTasks() {
 				// 延迟一点时间再触发，确保系统完全启动
 				time.Sleep(3 * time.Second)
 				logger.Infof("[Executor] 触发开机服务启动任务 #%d: %s", t.ID, t.Name)
-				es.ExecuteTask(int(t.ID), nil)
+				es.ExecuteTaskByUUID(t.UUID, nil)
 			}(task)
-		} else if task.TriggerType == constant.TriggerTypeCron && task.Schedule != "" && (task.AgentID == nil || *task.AgentID == 0) {
+		} else if task.TriggerType == constant.TriggerTypeCron && task.Schedule != "" && (task.AgentID == nil || *task.AgentID == "") {
 			// 只调度本地任务（agent_id 为空或 0）的定时任务
 			err := es.cronManager.AddTask(&task)
 			if err != nil {
@@ -518,12 +502,11 @@ func (es *ExecutorService) Reload() {
 	es.initScheduler()
 }
 
-// ExecuteTask executes a task by ID（同步执行，供 API 调用）
-func (es *ExecutorService) ExecuteTask(taskID int, extraEnvs []string) *executor.ExecutionResult {
-	task := es.taskService.GetTaskByID(taskID)
+func (es *ExecutorService) ExecuteTaskByUUID(taskUUID string, extraEnvs []string) *executor.ExecutionResult {
+	task := es.taskService.GetTaskByUUID(taskUUID)
 	if task == nil {
 		return &executor.ExecutionResult{
-			TaskID:    fmt.Sprintf("%d", taskID),
+			TaskID:    taskUUID,
 			Success:   false,
 			Error:     "任务不存在",
 			StartTime: time.Now(),
@@ -532,9 +515,9 @@ func (es *ExecutorService) ExecuteTask(taskID int, extraEnvs []string) *executor
 	}
 
 	// 1. 检查并发
-	if err := es.CheckConcurrency(uint(taskID)); err != nil {
+	if err := es.CheckConcurrency(task.UUID); err != nil {
 		return &executor.ExecutionResult{
-			TaskID:    fmt.Sprintf("%d", taskID),
+			TaskID:    task.UUID,
 			Success:   false,
 			Error:     err.Error(), // 这里会返回 "任务正在运行中，拒绝并行执行"
 			StartTime: time.Now(),
@@ -548,7 +531,7 @@ func (es *ExecutorService) ExecuteTask(taskID int, extraEnvs []string) *executor
 	}
 
 	req := &executor.ExecutionRequest{
-		TaskID:    fmt.Sprintf("%d", task.ID),
+		TaskID:    task.UUID,
 		Name:      task.Name,
 		Command:   task.Command,
 		WorkDir:   task.WorkDir,
@@ -562,17 +545,16 @@ func (es *ExecutorService) ExecuteTask(taskID int, extraEnvs []string) *executor
 	es.scheduler.EnqueueOrExecute(req)
 
 	return &executor.ExecutionResult{
-		TaskID:    fmt.Sprintf("%d", task.ID),
+		TaskID:    task.UUID,
 		Success:   true,
 		Status:    constant.TaskStatusQueued,
 		StartTime: time.Now(),
 	}
 }
 
-// StopTaskExecution stops a running task execution by LogID
-func (es *ExecutorService) StopTaskExecution(logID uint) error {
+func (es *ExecutorService) StopTaskExecution(logUUID string) error {
 	var taskLog models.TaskLog
-	if err := database.DB.First(&taskLog, logID).Error; err != nil {
+	if err := database.DB.Where("uuid = ?", logUUID).First(&taskLog).Error; err != nil {
 		return fmt.Errorf("日志不存在")
 	}
 
@@ -580,22 +562,22 @@ func (es *ExecutorService) StopTaskExecution(logID uint) error {
 		return fmt.Errorf("任务已结束")
 	}
 
-	task := es.taskService.GetTaskByID(int(taskLog.TaskID))
+	task := es.taskService.GetTaskByUUID(taskLog.TaskID)
 	if task == nil {
 		return fmt.Errorf("任务不存在")
 	}
 
 	// 远程任务：发送停止指令到 Agent
-	if task.AgentID != nil && *task.AgentID > 0 {
-		logger.Infof("[Executor] 请求停止远程任务 #%d (Agent #%d, LogID: %d)", task.ID, *task.AgentID, logID)
+	if task.AgentID != nil && *task.AgentID != "" {
+		logger.Infof("[Executor] 请求停止远程任务 #%s (Agent #%s, Log: %s)", task.UUID, *task.AgentID, logUUID)
 		return es.agentWSManager.SendToAgent(*task.AgentID, constant.WSTypeStop, map[string]interface{}{
-			"log_id": logID,
+			"log_id": logUUID,
 		})
 	}
 
 	// 本地任务：直接停止调度器中的执行实例
-	logger.Infof("[Executor] 请求停止本地任务 #%d (LogID: %d)", task.ID, logID)
-	if es.scheduler.StopLog(logID) {
+	logger.Infof("[Executor] 请求停止本地任务 #%s (Log: %s)", task.UUID, logUUID)
+	if es.scheduler.StopLogByUUID(logUUID) { // 此处可能需要更新调度器方法名
 		return nil
 	}
 
@@ -702,10 +684,9 @@ func (es *ExecutorService) CleanupRunningTasks() error {
 	return database.DB.Model(&models.Task{}).Where("1=1").Update("running_go", "[]").Error
 }
 
-// CheckConcurrency 检查任务并发限制（只读检查）
-func (es *ExecutorService) CheckConcurrency(taskID uint) error {
+func (es *ExecutorService) CheckConcurrency(taskUUID string) error {
 	var task models.Task
-	if err := database.DB.Select("config, running_go").First(&task, taskID).Error; err != nil {
+	if err := database.DB.Select("config, running_go").Where("uuid = ?", taskUUID).First(&task).Error; err != nil {
 		return err
 	}
 	var goids []int64
@@ -724,12 +705,11 @@ func (es *ExecutorService) CheckConcurrency(taskID uint) error {
 	return nil
 }
 
-// AddRunningGo 添加当前 goroutine ID 到任务的 running_go 字段
-func (es *ExecutorService) AddRunningGo(taskID uint) (int64, error) {
+func (es *ExecutorService) AddRunningGo(taskUUID string) (int64, error) {
 	goid := utils.GetGoroutineID()
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		var task models.Task
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&task, taskID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("uuid = ?", taskUUID).First(&task).Error; err != nil {
 			return err
 		}
 		var goids []int64
@@ -755,11 +735,10 @@ func (es *ExecutorService) AddRunningGo(taskID uint) (int64, error) {
 	return goid, err
 }
 
-// RemoveRunningGo 从任务的 running_go 字段移除指定 goroutine ID
-func (es *ExecutorService) RemoveRunningGo(taskID uint, goid int64) {
+func (es *ExecutorService) RemoveRunningGo(taskUUID string, goid int64) {
 	database.DB.Transaction(func(tx *gorm.DB) error {
 		var task models.Task
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&task, taskID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("uuid = ?", taskUUID).First(&task).Error; err != nil {
 			return err
 		}
 		var goids []int64
@@ -777,15 +756,14 @@ func (es *ExecutorService) RemoveRunningGo(taskID uint, goid int64) {
 	})
 }
 
-// ExecuteRemoteForScheduler 供 Scheduler 调用，执行远程任务并等待结果
-func (es *ExecutorService) ExecuteRemoteForScheduler(task *models.Task, logID uint) (*executor.Result, error) {
-	agentID := *task.AgentID
-	logger.Infof("[Executor] 远程执行任务 #%d: %s (Agent #%d, LogID: %d)", task.ID, task.Name, agentID, logID)
+func (es *ExecutorService) ExecuteRemoteForScheduler(task *models.Task, logUUID string) (*executor.Result, error) {
+	agentUUID := *task.AgentID
+	logger.Infof("[Executor] 远程执行任务 #%s: %s (Agent #%s, Log: %s)", task.UUID, task.Name, agentUUID, logUUID)
 
 	// 1. 检查 Agent 状态
 	var agent models.Agent
-	if err := database.DB.First(&agent, agentID).Error; err != nil {
-		return nil, fmt.Errorf("Agent #%d 不存在", agentID)
+	if err := database.DB.Where("uuid = ?", agentUUID).First(&agent).Error; err != nil {
+		return nil, fmt.Errorf("Agent %s 不存在", agentUUID)
 	}
 	if !agent.Enabled {
 		return nil, fmt.Errorf("Agent #%d 已禁用", agentID)
@@ -795,13 +773,13 @@ func (es *ExecutorService) ExecuteRemoteForScheduler(task *models.Task, logID ui
 	}
 
 	// 2. 注册结果等待者
-	resultChan := es.agentWSManager.RegisterRemoteWaiter(logID)
-	defer es.agentWSManager.UnregisterRemoteWaiter(logID)
+	resultChan := es.agentWSManager.RegisterRemoteWaiter(logUUID)
+	defer es.agentWSManager.UnregisterRemoteWaiter(logUUID)
 
 	// 3. 发送指令
-	err := es.agentWSManager.SendToAgent(agentID, constant.WSTypeExecute, map[string]interface{}{
-		"task_id": task.ID,
-		"log_id":  logID,
+	err := es.agentWSManager.SendToAgent(agentUUID, constant.WSTypeExecute, map[string]interface{}{
+		"task_id": task.UUID,
+		"log_id":  logUUID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("发送执行命令失败: %v", err)

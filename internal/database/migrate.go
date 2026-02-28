@@ -11,7 +11,7 @@ func Migrate() error {
 		logger.Warnf("[Database] 自定义迁移警告: %v", err)
 	}
 
-	return AutoMigrate(
+	if err := AutoMigrate(
 		&models.User{},
 		&models.Task{},
 		&models.TaskLog{},
@@ -24,7 +24,16 @@ func Migrate() error {
 		&models.Agent{},
 		&models.AgentToken{},
 		&models.Language{},
-	)
+	); err != nil {
+		return err
+	}
+
+	// UUID 关联迁移
+	if err := UUIDMigration(DB); err != nil {
+		logger.Errorf("[Database] UUID 迁移失败: %v", err)
+	}
+
+	return nil
 }
 
 // customMigrations 自定义迁移（处理 AutoMigrate 无法自动完成的变更）

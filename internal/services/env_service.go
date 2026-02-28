@@ -14,20 +14,20 @@ func NewEnvService() *EnvService {
 	return &EnvService{}
 }
 
-func (es *EnvService) CreateEnvVar(name, value, remark string, hidden bool, userID int) *models.EnvironmentVariable {
+func (es *EnvService) CreateEnvVar(name, value, remark string, hidden bool, userUUID string) *models.EnvironmentVariable {
 	env := &models.EnvironmentVariable{
 		Name:   name,
 		Value:  value,
 		Remark: remark,
 		Hidden: hidden,
-		UserID: uint(userID),
+		UserID: userUUID,
 	}
 	data := map[string]interface{}{
 		"name":    name,
 		"value":   value,
 		"remark":  remark,
 		"hidden":  hidden,
-		"user_id": userID,
+		"user_id": userUUID,
 	}
 	database.DB.Model(&models.EnvironmentVariable{}).Create(data)
 
@@ -38,22 +38,22 @@ func (es *EnvService) CreateEnvVar(name, value, remark string, hidden bool, user
 		env.ID = uint(id)
 	} else {
 		// 如果 ID 没有自动回填到 map，尝试通过刚才的数据查出来
-		database.DB.Where("name = ? AND user_id = ?", name, userID).Order("id DESC").First(env)
+		database.DB.Where("name = ? AND user_id = ?", name, userUUID).Order("id DESC").First(env)
 	}
 	return env
 }
 
-func (es *EnvService) GetEnvVarsByUserID(userID int) []models.EnvironmentVariable {
+func (es *EnvService) GetEnvVarsByUserID(userUUID string) []models.EnvironmentVariable {
 	var envs []models.EnvironmentVariable
-	database.DB.Where("user_id = ?", userID).Find(&envs)
+	database.DB.Where("user_id = ?", userUUID).Find(&envs)
 	return envs
 }
 
-func (es *EnvService) GetEnvVarsWithPagination(userID int, name string, page, pageSize int) ([]models.EnvironmentVariable, int64) {
+func (es *EnvService) GetEnvVarsWithPagination(userUUID string, name string, page, pageSize int) ([]models.EnvironmentVariable, int64) {
 	var envs []models.EnvironmentVariable
 	var total int64
 
-	query := database.DB.Model(&models.EnvironmentVariable{}).Where("user_id = ?", userID)
+	query := database.DB.Model(&models.EnvironmentVariable{}).Where("user_id = ?", userUUID)
 	if name != "" {
 		query = query.Where("name LIKE ?", "%"+name+"%")
 	}

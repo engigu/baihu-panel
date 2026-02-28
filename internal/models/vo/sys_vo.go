@@ -7,6 +7,7 @@ import (
 // UserVO 用户视图对象
 type UserVO struct {
 	ID        uint             `json:"id"`
+	UUID      string           `json:"uuid"`
 	Username  string           `json:"username"`
 	Email     string           `json:"email"`
 	Role      string           `json:"role"`
@@ -21,6 +22,7 @@ func ToUserVO(user *models.User) *UserVO {
 	}
 	return &UserVO{
 		ID:        user.ID,
+		UUID:      user.UUID,
 		Username:  user.Username,
 		Email:     user.Email,
 		Role:      user.Role,
@@ -32,6 +34,7 @@ func ToUserVO(user *models.User) *UserVO {
 // EnvVO 环境变量视图对象
 type EnvVO struct {
 	ID        uint             `json:"id"`
+	UUID      string           `json:"uuid"`
 	Name      string           `json:"name"`
 	Value     string           `json:"value"`
 	Remark    string           `json:"remark"`
@@ -47,6 +50,7 @@ func ToEnvVO(env *models.EnvironmentVariable) *EnvVO {
 	}
 	return &EnvVO{
 		ID:        env.ID,
+		UUID:      env.UUID,
 		Name:      env.Name,
 		Value:     env.Value,
 		Remark:    env.Remark,

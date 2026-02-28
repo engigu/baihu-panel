@@ -15,11 +15,11 @@ import (
 
 // AgentWSManager WebSocket 连接管理器
 type AgentWSManager struct {
-	connections   map[uint]*AgentConnection             // Agent ID -> 连接对象
+	connections   map[string]*AgentConnection           // Agent UUID -> 连接对象
 	ipConnections map[string]int                        // IP -> 连接数
 	ipLastAttempt map[string]time.Time                  // IP -> 最后连接尝试时间
 	ipFailCount   map[string]int                        // IP -> 连续失败次数
-	remoteWaiters map[uint]chan *models.AgentTaskResult // 日志 ID -> 结果通道
+	remoteWaiters map[string]chan *models.AgentTaskResult // 日志 UUID -> 结果通道
 	mu            sync.RWMutex
 }
 
@@ -33,7 +33,7 @@ const (
 
 // AgentConnection Agent WebSocket 连接
 type AgentConnection struct {
-	AgentID  uint
+	AgentUUID string
 	IP       string
 	Conn     *websocket.Conn
 	Send     chan []byte
@@ -72,11 +72,11 @@ var agentWSOnce sync.Once
 func GetAgentWSManager() *AgentWSManager {
 	agentWSOnce.Do(func() {
 		agentWSManager = &AgentWSManager{
-			connections:   make(map[uint]*AgentConnection),
+			connections:   make(map[string]*AgentConnection),
 			ipConnections: make(map[string]int),
 			ipLastAttempt: make(map[string]time.Time),
 			ipFailCount:   make(map[string]int),
-			remoteWaiters: make(map[uint]chan *models.AgentTaskResult),
+			remoteWaiters: make(map[string]chan *models.AgentTaskResult),
 		}
 		go agentWSManager.cleanupLoop()
 	})
@@ -137,12 +137,12 @@ func (m *AgentWSManager) RecordConnectSuccess(ip string) {
 }
 
 // Register 注册连接
-func (m *AgentWSManager) Register(agentID uint, conn *websocket.Conn, ip string) *AgentConnection {
+func (m *AgentWSManager) Register(agentUUID string, conn *websocket.Conn, ip string) *AgentConnection {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// 关闭旧连接
-	if old, exists := m.connections[agentID]; exists {
+	if old, exists := m.connections[agentUUID]; exists {
 		// 减少旧 IP 的连接计数
 		if old.IP != "" {
 			if count, ok := m.ipConnections[old.IP]; ok && count > 0 {
@@ -153,28 +153,28 @@ func (m *AgentWSManager) Register(agentID uint, conn *websocket.Conn, ip string)
 	}
 
 	ac := &AgentConnection{
-		AgentID:  agentID,
+		AgentUUID: agentUUID,
 		IP:       ip,
 		Conn:     conn,
 		Send:     make(chan []byte, 256),
 		LastPing: time.Now(),
 	}
-	m.connections[agentID] = ac
+	m.connections[agentUUID] = ac
 
 	// 增加 IP 连接计数
 	m.ipConnections[ip]++
 
-	logger.Infof("[AgentWS] Agent #%d 已连接 (%s)", agentID, ip)
+	logger.Infof("[AgentWS] Agent %s 已连接 (%s)", agentUUID, ip)
 	return ac
 }
 
 // Unregister 注销连接（只注销指定的连接实例）
-func (m *AgentWSManager) Unregister(agentID uint, ac *AgentConnection) {
+func (m *AgentWSManager) Unregister(agentUUID string, ac *AgentConnection) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// 只有当前连接和 map 中的连接是同一个实例时才删除
-	if conn, exists := m.connections[agentID]; exists && conn == ac {
+	if conn, exists := m.connections[agentUUID]; exists && conn == ac {
 		// 减少 IP 连接计数
 		if conn.IP != "" {
 			if count, ok := m.ipConnections[conn.IP]; ok && count > 0 {
@@ -183,20 +183,20 @@ func (m *AgentWSManager) Unregister(agentID uint, ac *AgentConnection) {
 		}
 		conn.Close()
 		delete(m.connections, agentID)
-		logger.Infof("[AgentWS] Agent #%d 已断开", agentID)
+		logger.Infof("[AgentWS] Agent %s 已断开", agentUUID)
 	}
 }
 
 // GetConnection 获取连接
-func (m *AgentWSManager) GetConnection(agentID uint) *AgentConnection {
+func (m *AgentWSManager) GetConnection(agentUUID string) *AgentConnection {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.connections[agentID]
+	return m.connections[agentUUID]
 }
 
 // SendToAgent 发送消息给指定 Agent
-func (m *AgentWSManager) SendToAgent(agentID uint, msgType string, data interface{}) error {
-	conn := m.GetConnection(agentID)
+func (m *AgentWSManager) SendToAgent(agentUUID string, msgType string, data interface{}) error {
+	conn := m.GetConnection(agentUUID)
 	if conn == nil {
 		return nil // Agent 不在线
 	}
@@ -214,16 +214,16 @@ func (m *AgentWSManager) SendToAgent(agentID uint, msgType string, data interfac
 }
 
 // BroadcastTasks 广播任务更新给指定 Agent
-func (m *AgentWSManager) BroadcastTasks(agentID uint) {
+func (m *AgentWSManager) BroadcastTasks(agentUUID string) {
 	agentService := NewAgentService()
-	tasks := agentService.GetTasks(agentID)
-	m.SendToAgent(agentID, WSTypeTasks, map[string]interface{}{
+	tasks := agentService.GetTasks(agentUUID)
+	m.SendToAgent(agentUUID, WSTypeTasks, map[string]interface{}{
 		"tasks": tasks,
 	})
 }
 
 // RegisterRemoteWaiter 注册远程任务结果等待者
-func (m *AgentWSManager) RegisterRemoteWaiter(logID uint) chan *models.AgentTaskResult {
+func (m *AgentWSManager) RegisterRemoteWaiter(logID string) chan *models.AgentTaskResult {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	ch := make(chan *models.AgentTaskResult, 1)
@@ -232,7 +232,7 @@ func (m *AgentWSManager) RegisterRemoteWaiter(logID uint) chan *models.AgentTask
 }
 
 // UnregisterRemoteWaiter 注销远程任务结果等待者
-func (m *AgentWSManager) UnregisterRemoteWaiter(logID uint) {
+func (m *AgentWSManager) UnregisterRemoteWaiter(logID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.remoteWaiters, logID)
@@ -281,7 +281,7 @@ func (m *AgentWSManager) cleanupLoop() {
 			now := time.Now()
 
 			// 清理超时连接
-			for agentID, conn := range m.connections {
+			for agentUUID, conn := range m.connections {
 				if now.Sub(conn.LastPing) > 2*time.Minute {
 					// 减少 IP 连接计数
 					if conn.IP != "" {
@@ -290,10 +290,10 @@ func (m *AgentWSManager) cleanupLoop() {
 						}
 					}
 					conn.Close()
-					delete(m.connections, agentID)
+					delete(m.connections, agentUUID)
 					// 更新数据库状态
-					database.DB.Model(&models.Agent{}).Where("id = ?", agentID).Update("status", constant.AgentStatusOffline)
-					logger.Infof("[AgentWS] Agent #%d 心跳超时，已断开", agentID)
+					database.DB.Model(&models.Agent{}).Where("uuid = ?", agentUUID).Update("status", constant.AgentStatusOffline)
+					logger.Infof("[AgentWS] Agent %s 心跳超时，已断开", agentUUID)
 				}
 			}
 

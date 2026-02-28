@@ -3,6 +3,8 @@ package controllers
 import (
 	"strconv"
 
+	"github.com/engigu/baihu-panel/internal/database"
+	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/utils"
@@ -19,7 +21,9 @@ func NewScriptController(scriptService *services.ScriptService) *ScriptControlle
 }
 
 func (sc *ScriptController) CreateScript(c *gin.Context) {
-	userID := 1
+	var user models.User
+	database.DB.First(&user)
+	userUUID := user.UUID
 
 	var req struct {
 		Name    string `json:"name" binding:"required"`
@@ -31,13 +35,15 @@ func (sc *ScriptController) CreateScript(c *gin.Context) {
 		return
 	}
 
-	script := sc.scriptService.CreateScript(req.Name, req.Content, userID)
+	script := sc.scriptService.CreateScript(req.Name, req.Content, userUUID)
 	utils.Success(c, vo.ToScriptVO(script))
 }
 
 func (sc *ScriptController) GetScripts(c *gin.Context) {
-	userID := 1
-	scripts := sc.scriptService.GetScriptsByUserID(userID)
+	var user models.User
+	database.DB.First(&user)
+	userUUID := user.UUID
+	scripts := sc.scriptService.GetScriptsByUserID(userUUID)
 	vos := vo.ToScriptVOListFromModels(scripts)
 	for i := range vos {
 		vos[i].Content = "" // 列表不返回内容

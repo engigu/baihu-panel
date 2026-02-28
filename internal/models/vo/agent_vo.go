@@ -7,6 +7,7 @@ import (
 // AgentVO 代理视图对象
 type AgentVO struct {
 	ID          uint              `json:"id"`
+	UUID        string            `json:"uuid"`
 	Name        string            `json:"name"`
 	Description string            `json:"description"`
 	Status      string            `json:"status"`
@@ -31,6 +32,7 @@ func ToAgentVO(agent *models.Agent) *AgentVO {
 	}
 	return &AgentVO{
 		ID:          agent.ID,
+		UUID:        agent.UUID,
 		Name:        agent.Name,
 		Description: agent.Description,
 		Status:      agent.Status,
@@ -72,6 +74,7 @@ func ToAgentVOListFromModels(agents []models.Agent) []*AgentVO {
 // AgentTokenVO 代理令牌视图对象
 type AgentTokenVO struct {
 	ID        uint              `json:"id"`
+	UUID      string            `json:"uuid"`
 	Token     string            `json:"token"`
 	Remark    string            `json:"remark"`
 	MaxUses   int               `json:"max_uses"`
@@ -88,6 +91,7 @@ func ToAgentTokenVO(token *models.AgentToken) *AgentTokenVO {
 	}
 	return &AgentTokenVO{
 		ID:        token.ID,
+		UUID:      token.UUID,
 		Token:     token.Token,
 		Remark:    token.Remark,
 		MaxUses:   token.MaxUses,

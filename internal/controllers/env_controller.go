@@ -3,6 +3,8 @@ package controllers
 import (
 	"strconv"
 
+	"github.com/engigu/baihu-panel/internal/database"
+	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/utils"
@@ -19,7 +21,9 @@ func NewEnvController(envService *services.EnvService) *EnvController {
 }
 
 func (ec *EnvController) CreateEnvVar(c *gin.Context) {
-	userID := 1
+	var user models.User
+	database.DB.First(&user)
+	userUUID := user.UUID
 
 	var req struct {
 		Name   string `json:"name" binding:"required"`
@@ -38,21 +42,25 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 		hidden = *req.Hidden
 	}
 
-	envVar := ec.envService.CreateEnvVar(req.Name, req.Value, req.Remark, hidden, userID)
+	envVar := ec.envService.CreateEnvVar(req.Name, req.Value, req.Remark, hidden, userUUID)
 	utils.Success(c, vo.ToEnvVO(envVar))
 }
 
 func (ec *EnvController) GetEnvVars(c *gin.Context) {
-	userID := 1
+	var user models.User
+	database.DB.First(&user)
+	userUUID := user.UUID
 	p := utils.ParsePagination(c)
 	name := c.DefaultQuery("name", "")
-	envVars, total := ec.envService.GetEnvVarsWithPagination(userID, name, p.Page, p.PageSize)
+	envVars, total := ec.envService.GetEnvVarsWithPagination(userUUID, name, p.Page, p.PageSize)
 	utils.PaginatedResponse(c, vo.ToEnvVOListFromModels(envVars), total, p)
 }
 
 func (ec *EnvController) GetAllEnvVars(c *gin.Context) {
-	userID := 1
-	envVars := ec.envService.GetEnvVarsByUserID(userID)
+	var user models.User
+	database.DB.First(&user)
+	userUUID := user.UUID
+	envVars := ec.envService.GetEnvVarsByUserID(userUUID)
 	utils.Success(c, vo.ToEnvVOListFromModels(envVars))
 }
 

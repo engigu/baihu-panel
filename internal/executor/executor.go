@@ -58,13 +58,13 @@ type Result struct {
 // Hooks 执行钩子接口
 type Hooks interface {
 	// PreExecute 执行前钩子，返回日志ID和错误
-	PreExecute(ctx context.Context, req Request) (logID uint, err error)
+	PreExecute(ctx context.Context, req Request) (logID string, err error)
 
 	// PostExecute 执行后钩子，处理日志压缩和记录更新
-	PostExecute(ctx context.Context, logID uint, result *Result) error
+	PostExecute(ctx context.Context, logID string, result *Result) error
 
 	// OnHeartbeat 执行中心跳钩子，用于更新实时状态
-	OnHeartbeat(ctx context.Context, logID uint, duration int64) error
+	OnHeartbeat(ctx context.Context, logID string, duration int64) error
 }
 
 // Execute 执行命令（基础版本，不带钩子）
@@ -84,7 +84,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		}
 
 		// 仍然触发 PreExecute 以便流程完整
-		var logID uint
+		var logID string
 		if hooks != nil {
 			logID, _ = hooks.PreExecute(ctx, req)
 		}
@@ -117,7 +117,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	}
 
 	// 1. 执行前钩子
-	var logID uint
+	var logID string
 	if hooks != nil {
 		id, err := hooks.PreExecute(ctx, req)
 		if err != nil {
@@ -170,7 +170,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		)
 		f, ptyErr := pty.Start(cmd)
 		if ptyErr == nil {
-			logger.Infof("[Executor] 任务 #%d 启动于 PTY 模式", logID)
+			logger.Infof("[Executor] 任务 %s 启动于 PTY 模式", logID)
 			ptyFile = f
 			started = true
 			copyDone = make(chan struct{})
@@ -181,7 +181,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 				f.Close()
 			}()
 		} else {
-			logger.Errorf("[Executor] 任务 #%d PTY 启动失败: %v", logID, ptyErr)
+			logger.Errorf("[Executor] 任务 %s PTY 启动失败: %v", logID, ptyErr)
 		}
 	}
 
@@ -189,9 +189,9 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		// 如果 stdout 和 stderr 指针不一致，但在逻辑上我们知道它们是同一个 MultiWriter，
 		// 这里会显示为 Pipe 模式。
 		if stdout != stderr && stdout != io.Discard {
-			logger.Debugf("[Executor] 任务 #%d stdout (%p) 和 stderr (%p) 不同，回退到 Pipe 模式。", logID, stdout, stderr)
+			logger.Debugf("[Executor] 任务 %s stdout (%p) 和 stderr (%p) 不同，回退到 Pipe 模式。", logID, stdout, stderr)
 		}
-		logger.Infof("[Executor] 任务 #%d 启动于 Pipe 模式", logID)
+		logger.Infof("[Executor] 任务 %s 启动于 Pipe 模式", logID)
 		if stdout != nil && stdout == stderr {
 			pr, pw, err := os.Pipe()
 			if err == nil {

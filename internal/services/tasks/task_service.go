@@ -12,7 +12,7 @@ func NewTaskService() *TaskService {
 	return &TaskService{}
 }
 
-func (ts *TaskService) CreateTask(name, command, schedule string, timeout int, workDir, cleanConfig, envs, taskType, config string, agentID *uint, languages []map[string]string, triggerType string, tags string, retryCount int, retryInterval int) *models.Task {
+func (ts *TaskService) CreateTask(name, command, schedule string, timeout int, workDir, cleanConfig, envs, taskType, config string, agentID *string, languages []map[string]string, triggerType string, tags string, retryCount int, retryInterval int) *models.Task {
 	if taskType == "" {
 		taskType = "task"
 	}
@@ -51,7 +51,7 @@ func (ts *TaskService) GetTasks() []models.Task {
 }
 
 // GetTasksWithPagination 分页获取任务列表
-func (ts *TaskService) GetTasksWithPagination(page, pageSize int, name string, agentID *uint, tags string, taskType string) ([]models.Task, int64) {
+func (ts *TaskService) GetTasksWithPagination(page, pageSize int, name string, agentID *string, tags string, taskType string) ([]models.Task, int64) {
 	var tasks []models.Task
 	var total int64
 
@@ -83,7 +83,15 @@ func (ts *TaskService) GetTaskByID(id int) *models.Task {
 	return &task
 }
 
-func (ts *TaskService) UpdateTask(id int, name, command, schedule string, timeout int, workDir, cleanConfig, envs string, enabled bool, taskType, config string, agentID *uint, languages []map[string]string, triggerType string, tags string, retryCount int, retryInterval int) *models.Task {
+func (ts *TaskService) GetTaskByUUID(uuid string) *models.Task {
+	var task models.Task
+	if err := database.DB.Where("uuid = ?", uuid).First(&task).Error; err != nil {
+		return nil
+	}
+	return &task
+}
+
+func (ts *TaskService) UpdateTask(id int, name, command, schedule string, timeout int, workDir, cleanConfig, envs string, enabled bool, taskType, config string, agentID *string, languages []map[string]string, triggerType string, tags string, retryCount int, retryInterval int) *models.Task {
 	var task models.Task
 	if err := database.DB.First(&task, id).Error; err != nil {
 		return nil

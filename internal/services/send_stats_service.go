@@ -15,7 +15,7 @@ func NewSendStatsService() *SendStatsService {
 }
 
 // IncrementStats 增加任务执行统计
-func (s *SendStatsService) IncrementStats(taskID uint, status string) error {
+func (s *SendStatsService) IncrementStats(taskID string, status string) error {
 	day := systime.FormatDate(time.Now())
 
 	var stats models.SendStats
@@ -37,7 +37,7 @@ func (s *SendStatsService) IncrementStats(taskID uint, status string) error {
 }
 
 // GetStatsByTaskID 获取任务的统计数据
-func (s *SendStatsService) GetStatsByTaskID(taskID uint) []models.SendStats {
+func (s *SendStatsService) GetStatsByTaskID(taskID string) []models.SendStats {
 	var stats []models.SendStats
 	database.DB.Where("task_id = ?", taskID).Order("day DESC").Find(&stats)
 	return stats

@@ -11,19 +11,19 @@ func NewScriptService() *ScriptService {
 	return &ScriptService{}
 }
 
-func (ss *ScriptService) CreateScript(name, content string, userID int) *models.Script {
+func (ss *ScriptService) CreateScript(name, content, userUUID string) *models.Script {
 	script := &models.Script{
 		Name:    name,
 		Content: content,
-		UserID:  uint(userID),
+		UserID:  userUUID,
 	}
 	database.DB.Create(script)
 	return script
 }
 
-func (ss *ScriptService) GetScriptsByUserID(userID int) []models.Script {
+func (ss *ScriptService) GetScriptsByUserID(userUUID string) []models.Script {
 	var scripts []models.Script
-	database.DB.Where("user_id = ?", userID).Find(&scripts)
+	database.DB.Where("user_id = ?", userUUID).Find(&scripts)
 	return scripts
 }
 

@@ -195,7 +195,11 @@ func (s *AgentService) Register(req *models.AgentRegisterRequest, ip string) (*m
 
 // Update 更新 Agent
 func (s *AgentService) Update(id uint, name, description string, enabled bool) error {
-	return database.DB.Model(&models.Agent{}).Where("id = ?", id).Updates(map[string]interface{}{
+	var agent models.Agent
+	if err := database.DB.First(&agent, id).Error; err != nil {
+		return err
+	}
+	return database.DB.Model(&agent).Updates(map[string]interface{}{
 		"name":        name,
 		"description": description,
 		"enabled":     enabled,
@@ -204,9 +208,13 @@ func (s *AgentService) Update(id uint, name, description string, enabled bool) e
 
 // Delete 删除 Agent（物理删除）
 func (s *AgentService) Delete(id uint) error {
+	var agent models.Agent
+	if err := database.DB.First(&agent, id).Error; err != nil {
+		return err
+	}
 	// 检查是否有关联任务
 	var count int64
-	database.DB.Model(&models.Task{}).Where("agent_id = ?", id).Count(&count)
+	database.DB.Model(&models.Task{}).Where("agent_id = ?", agent.UUID).Count(&count)
 	if count > 0 {
 		return &ServiceError{Message: "该 Agent 下还有关联任务，无法删除"}
 	}
@@ -218,6 +226,14 @@ func (s *AgentService) Delete(id uint) error {
 func (s *AgentService) GetByID(id uint) *models.Agent {
 	var agent models.Agent
 	if err := database.DB.First(&agent, id).Error; err != nil {
+		return nil
+	}
+	return &agent
+}
+
+func (s *AgentService) GetByUUID(uuid string) *models.Agent {
+	var agent models.Agent
+	if err := database.DB.Where("uuid = ?", uuid).First(&agent).Error; err != nil {
 		return nil
 	}
 	return &agent
@@ -286,7 +302,7 @@ func (s *AgentService) Heartbeat(token, ip, version, buildTime, hostname, osType
 		updates["arch"] = arch
 	}
 
-	database.DB.Model(&models.Agent{}).Where("id = ?", agent.ID).Updates(updates)
+	database.DB.Model(&models.Agent{}).Where("uuid = ?", agent.UUID).Updates(updates)
 
 	agent.Status = constant.AgentStatusOnline
 	agent.LastSeen = &now
@@ -301,9 +317,9 @@ func (s *AgentService) Heartbeat(token, ip, version, buildTime, hostname, osType
 }
 
 // GetTasks 获取 Agent 的任务列表
-func (s *AgentService) GetTasks(agentID uint) []models.AgentTask {
+func (s *AgentService) GetTasks(agentUUID string) []models.AgentTask {
 	var tasks []models.Task
-	database.DB.Where("agent_id = ? AND enabled = ?", agentID, true).Find(&tasks)
+	database.DB.Where("agent_id = ? AND enabled = ?", agentUUID, true).Find(&tasks)
 
 	result := make([]models.AgentTask, len(tasks))
 	for i, task := range tasks {
@@ -311,7 +327,7 @@ func (s *AgentService) GetTasks(agentID uint) []models.AgentTask {
 		envVarsStr := s.buildEnvVarsString(task.Envs)
 
 		result[i] = models.AgentTask{
-			ID:        task.ID,
+			ID:        task.UUID,
 			Name:      task.Name,
 			Command:   task.Command,
 			Schedule:  task.Schedule,
@@ -503,13 +519,13 @@ func (s *AgentService) GetAgentBinary(osType, arch string) ([]byte, string, erro
 }
 
 // SetForceUpdate 设置强制更新标志
-func (s *AgentService) SetForceUpdate(id uint) error {
-	return database.DB.Model(&models.Agent{}).Where("id = ?", id).Update("force_update", true).Error
+func (s *AgentService) SetForceUpdate(agentUUID string) error {
+	return database.DB.Model(&models.Agent{}).Where("uuid = ?", agentUUID).Update("force_update", true).Error
 }
 
 // ClearForceUpdate 清除强制更新标志
-func (s *AgentService) ClearForceUpdate(id uint) error {
-	return database.DB.Model(&models.Agent{}).Where("id = ?", id).Update("force_update", false).Error
+func (s *AgentService) ClearForceUpdate(agentUUID string) error {
+	return database.DB.Model(&models.Agent{}).Where("uuid = ?", agentUUID).Update("force_update", false).Error
 }
 
 // ServiceError 服务错误

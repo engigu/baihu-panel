@@ -63,7 +63,7 @@ const (
 // ExecutionRequest 执行请求（标准接口）
 type ExecutionRequest struct {
 	TaskID    string                 // 任务 ID
-	LogID     uint                   // 日志 ID
+	LogID     string                 // 日志 ID (UUID)
 	Name      string                 // 任务名称
 	Type      TaskType               // 任务类型
 	Command   string                 // 命令
@@ -84,7 +84,7 @@ type ExecutionMetadata struct {
 // ExecutionResult 执行结果（标准接口）
 type ExecutionResult struct {
 	TaskID    string    // 任务 ID
-	LogID     uint      // 日志 ID
+	LogID     string    // 日志 ID (UUID)
 	Success   bool      // 是否成功
 	Output    string    // 输出内容
 	Error     string    // 错误信息
@@ -151,15 +151,15 @@ type schedulerHooksAdapter struct {
 	req     *ExecutionRequest
 }
 
-func (h *schedulerHooksAdapter) PreExecute(ctx context.Context, req Request) (uint, error) {
+func (h *schedulerHooksAdapter) PreExecute(ctx context.Context, req Request) (string, error) {
 	return h.req.LogID, nil
 }
 
-func (h *schedulerHooksAdapter) PostExecute(ctx context.Context, logID uint, result *Result) error {
+func (h *schedulerHooksAdapter) PostExecute(ctx context.Context, logID string, result *Result) error {
 	return nil
 }
 
-func (h *schedulerHooksAdapter) OnHeartbeat(ctx context.Context, logID uint, duration int64) error {
+func (h *schedulerHooksAdapter) OnHeartbeat(ctx context.Context, logID string, duration int64) error {
 	if h.handler != nil {
 		h.handler.OnTaskHeartbeat(h.req, duration)
 	}
@@ -181,8 +181,8 @@ type Scheduler struct {
 	wg           sync.WaitGroup
 	mu           sync.RWMutex
 	logger       SchedulerLogger
-	runningTasks map[string]context.CancelFunc // 记录运行中的任务，用于停止 (TaskID -> CancelFunc)
-	runningExecs map[uint]context.CancelFunc   // 记录运行中的执行，用于停止 (LogID -> CancelFunc)
+	runningTasks map[string]context.CancelFunc // 记录运行中的任务，用于停止 (TaskUUID -> CancelFunc)
+	runningExecs map[string]context.CancelFunc // 记录运行中的执行，用于停止 (LogUUID -> CancelFunc)
 }
 
 // NewScheduler 创建调度器
@@ -216,7 +216,7 @@ func NewScheduler(config SchedulerConfig, handler SchedulerEventHandler) *Schedu
 		stopCh:       make(chan struct{}),
 		logger:       &DefaultLogger{},
 		runningTasks: make(map[string]context.CancelFunc),
-		runningExecs: make(map[uint]context.CancelFunc),
+		runningExecs: make(map[string]context.CancelFunc),
 	}
 
 	return s
@@ -443,7 +443,7 @@ func (s *Scheduler) executeTask(req *ExecutionRequest) (*ExecutionResult, error)
 	// 注册到运行中任务
 	s.mu.Lock()
 	s.runningTasks[req.TaskID] = cancel
-	if req.LogID > 0 {
+	if req.LogID != "" {
 		s.runningExecs[req.LogID] = cancel
 	}
 	s.mu.Unlock()
@@ -451,7 +451,7 @@ func (s *Scheduler) executeTask(req *ExecutionRequest) (*ExecutionResult, error)
 	defer func() {
 		s.mu.Lock()
 		delete(s.runningTasks, req.TaskID)
-		if req.LogID > 0 {
+		if req.LogID != "" {
 			delete(s.runningExecs, req.LogID)
 		}
 		s.mu.Unlock()
@@ -526,8 +526,8 @@ func (s *Scheduler) StopTask(taskID string) bool {
 	return false
 }
 
-// StopLog 停止正在运行的任务（通过 LogID，精确停止单个执行副本）
-func (s *Scheduler) StopLog(logID uint) bool {
+// StopLog 停止正在运行的任务（通过 LogUUID，精确停止单个执行副本）
+func (s *Scheduler) StopLog(logID string) bool {
 	s.mu.RLock()
 	cancel, exists := s.runningExecs[logID]
 	s.mu.RUnlock()
