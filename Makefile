@@ -79,7 +79,7 @@ dev:
 	@command -v concurrently > /dev/null 2>&1 || npm install -g concurrently
 	concurrently --kill-others \
 		"go tool air" \
-		"cd web && npm run dev"
+		"cd web && npm ci && npm run dev"
 
 # Run agent with hot reload
 agent-dev:
