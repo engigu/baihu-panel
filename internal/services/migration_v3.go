@@ -122,12 +122,23 @@ func RunMigrationV3() error {
 	}
 
 	mappings := make(map[string]map[uint]string)
-	err := db.Transaction(func(tx *gorm.DB) error {
-		return performHardMigration(tx, mappings)
-	})
-
-	if err != nil {
-		return err
+	// 根据数据库类型决定是否使用事务：
+	// - PostgreSQL: DDL 完全支持事务，使用事务保证原子性
+	// - MySQL: DDL 会隐式提交事务，包裹事务无意义
+	// - SQLite: DDL+DML 混合在 GORM 事务中会导致数据丢失
+	dbType := db.Dialector.Name()
+	if dbType == "postgres" {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			return performHardMigration(tx, mappings)
+		})
+		if err != nil {
+			return err
+		}
+	} else {
+		// SQLite / MySQL: 不使用事务包裹
+		if err := performHardMigration(db, mappings); err != nil {
+			return err
+		}
 	}
 
 	// 3. 标记成功
@@ -153,33 +164,36 @@ func markMigrationSuccess(db *gorm.DB) error {
 	return db.Model(&flag).Update("value", "true").Error
 }
 
-func performHardMigration(tx *gorm.DB, mappings map[string]map[uint]string) error {
+func performHardMigration(db *gorm.DB, mappings map[string]map[uint]string) error {
 	allTables := getMigrationTables()
 
 	// ---------------------------------------------------------
 	// 第一阶段：全量构建 ID 映射映射表 (Pass 1)
 	// ---------------------------------------------------------
 	for _, t := range allTables {
-		actualName := getTableName(tx, t.Model)
-		if actualName == "" || !tx.Migrator().HasTable(actualName) {
+		actualName := getTableName(db, t.Model)
+		if actualName == "" || !db.Migrator().HasTable(actualName) {
 			continue
 		}
 		mappings[t.EntityName] = make(map[uint]string)
 		oldTableName := actualName + "_v2_bak"
 
 		// 如果还没有备份表，说明这是第一次处理该表，先重命名
-		if !tx.Migrator().HasTable(oldTableName) {
-			if isTableStringID(tx, t.Model) {
+		if !db.Migrator().HasTable(oldTableName) {
+			if isTableStringID(db, t.Model) {
 				continue // 已经是字符串 ID 且无备份，跳过
 			}
-			if err := tx.Migrator().RenameTable(actualName, oldTableName); err != nil {
+			if err := db.Migrator().RenameTable(actualName, oldTableName); err != nil {
 				return fmt.Errorf("重命名表 %s 失败: %v", actualName, err)
 			}
+			// SQLite 重命名表后，索引名称不变，会导致 AutoMigrate 创建新表时索引冲突
+			// 需要先删除备份表上的旧索引
+			dropOldIndexes(db, oldTableName)
 		}
 
 		// 预先为该表所有记录生成新的 xid
 		var rows []map[string]interface{}
-		tx.Table(oldTableName).Select("id").Find(&rows)
+		db.Table(oldTableName).Select("id").Find(&rows)
 		for _, row := range rows {
 			if val, ok := getValFromMap(row, "id"); ok {
 				uid := parseUint(val)
@@ -195,27 +209,27 @@ func performHardMigration(tx *gorm.DB, mappings map[string]map[uint]string) erro
 	// 第二、三阶段：正式转换数据并处理关联字段 (Pass 2 & 3)
 	// ---------------------------------------------------------
 	for _, t := range allTables {
-		actualName := getTableName(tx, t.Model)
+		actualName := getTableName(db, t.Model)
 		oldTableName := actualName + "_v2_bak"
 
-		if !tx.Migrator().HasTable(oldTableName) {
+		if !db.Migrator().HasTable(oldTableName) {
 			// 虽然可能已经改过格式，但为了安全还是 AutoMigrate 一下
-			tx.AutoMigrate(t.Model)
+			db.AutoMigrate(t.Model)
 			continue
 		}
 
 		logger.Infof("[MigrationV3] Pass 2&3: 正在转换数据并修复关联: %s", actualName)
-		tx.AutoMigrate(t.Model)
+		db.AutoMigrate(t.Model)
 
 		// 获取新表的有效列名（小写）
-		columnTypes, _ := tx.Migrator().ColumnTypes(t.Model)
+		columnTypes, _ := db.Migrator().ColumnTypes(t.Model)
 		validColumns := make(map[string]bool)
 		for _, ct := range columnTypes {
 			validColumns[strings.ToLower(ct.Name())] = true
 		}
 
 		var oldData []map[string]interface{}
-		if err := tx.Table(oldTableName).Find(&oldData).Error; err != nil {
+		if err := db.Table(oldTableName).Find(&oldData).Error; err != nil {
 			return err
 		}
 
@@ -264,13 +278,13 @@ func performHardMigration(tx *gorm.DB, mappings map[string]map[uint]string) erro
 					filteredRow[k] = v
 				}
 			}
-			if err := tx.Table(actualName).Create(filteredRow).Error; err != nil {
+			if err := db.Table(actualName).Create(filteredRow).Error; err != nil {
 				return err
 			}
 		}
 
 		// 迁移完成，清理备份表
-		tx.Migrator().DropTable(oldTableName)
+		db.Migrator().DropTable(oldTableName)
 	}
 	return nil
 }
@@ -323,4 +337,53 @@ func transformMultiIDs(oldStr string, parentEntity string, mappings map[string]m
 		}
 	}
 	return strings.Join(result, ",")
+}
+
+// dropOldIndexes 删除备份表上的旧索引，防止 AutoMigrate 创建新表时索引名冲突
+// SQLite 重命名表后索引名不变，MySQL/PostgreSQL 也可能存在类似问题
+func dropOldIndexes(db *gorm.DB, tableName string) {
+	dbType := db.Dialector.Name()
+	var indexNames []string
+
+	switch dbType {
+	case "sqlite":
+		var indexes []struct{ Name string }
+		db.Raw("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=? AND name NOT LIKE 'sqlite_%'", tableName).Scan(&indexes)
+		for _, idx := range indexes {
+			indexNames = append(indexNames, idx.Name)
+		}
+	case "mysql":
+		var indexes []struct{ KeyName string `gorm:"column:Key_name"` }
+		db.Raw("SHOW INDEX FROM `" + tableName + "`").Scan(&indexes)
+		seen := make(map[string]bool)
+		for _, idx := range indexes {
+			if idx.KeyName != "PRIMARY" && !seen[idx.KeyName] {
+				indexNames = append(indexNames, idx.KeyName)
+				seen[idx.KeyName] = true
+			}
+		}
+	case "postgres":
+		var indexes []struct{ IndexName string `gorm:"column:indexname"` }
+		db.Raw("SELECT indexname FROM pg_indexes WHERE tablename=?", tableName).Scan(&indexes)
+		for _, idx := range indexes {
+			if !strings.HasSuffix(idx.IndexName, "_pkey") {
+				indexNames = append(indexNames, idx.IndexName)
+			}
+		}
+	}
+
+	for _, name := range indexNames {
+		var dropSQL string
+		switch dbType {
+		case "mysql":
+			dropSQL = fmt.Sprintf("DROP INDEX `%s` ON `%s`", name, tableName)
+		default:
+			dropSQL = fmt.Sprintf("DROP INDEX IF EXISTS \"%s\"", name)
+		}
+		if err := db.Exec(dropSQL).Error; err != nil {
+			logger.Warnf("[MigrationV3] 删除旧索引 %s 失败 (可忽略): %v", name, err)
+		} else {
+			logger.Infof("[MigrationV3] 已删除备份表旧索引: %s", name)
+		}
+	}
 }
