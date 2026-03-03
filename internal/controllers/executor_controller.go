@@ -19,8 +19,8 @@ func NewExecutorController(executorService *tasks.ExecutorService) *ExecutorCont
 }
 
 func (ec *ExecutorController) ExecuteTask(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	id := c.Param("id")
+	if id == "" {
 		utils.BadRequest(c, "无效的任务ID")
 		return
 	}

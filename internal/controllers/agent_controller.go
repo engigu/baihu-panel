@@ -49,8 +49,8 @@ func (c *AgentController) List(ctx *gin.Context) {
 
 // Update 更新 Agent
 func (c *AgentController) Update(ctx *gin.Context) {
-	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
-	if err != nil {
+	id := ctx.Param("id")
+	if id == "" {
 		utils.BadRequest(ctx, "无效的 ID")
 		return
 	}
@@ -67,14 +67,14 @@ func (c *AgentController) Update(ctx *gin.Context) {
 	}
 
 	// 获取旧状态
-	oldAgent := c.agentService.GetByID(uint(id))
+	oldAgent := c.agentService.GetByID(id)
 	if oldAgent == nil {
 		utils.NotFound(ctx, "Agent 不存在")
 		return
 	}
 	wasEnabled := oldAgent.Enabled
 
-	if err := c.agentService.Update(uint(id), req.Name, req.Description, req.Enabled); err != nil {
+	if err := c.agentService.Update(id, req.Name, req.Description, req.Enabled); err != nil {
 		utils.ServerError(ctx, err.Error())
 		return
 	}
@@ -83,14 +83,14 @@ func (c *AgentController) Update(ctx *gin.Context) {
 	if wasEnabled != req.Enabled {
 		if req.Enabled {
 			// 启用：发送任务列表
-			c.wsManager.SendToAgent(uint(id), services.WSTypeEnabled, map[string]interface{}{
+			c.wsManager.SendToAgent(id, services.WSTypeEnabled, map[string]interface{}{
 				"message": "Agent 已启用",
 			})
 			// 发送任务列表
-			c.wsManager.BroadcastTasks(uint(id))
+			c.wsManager.BroadcastTasks(id)
 		} else {
 			// 禁用：发送禁用消息，Agent 收到后清空任务
-			c.wsManager.SendToAgent(uint(id), services.WSTypeDisabled, map[string]interface{}{
+			c.wsManager.SendToAgent(id, services.WSTypeDisabled, map[string]interface{}{
 				"message": "Agent 已禁用",
 			})
 		}
@@ -101,13 +101,13 @@ func (c *AgentController) Update(ctx *gin.Context) {
 
 // Delete 删除 Agent
 func (c *AgentController) Delete(ctx *gin.Context) {
-	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
-	if err != nil {
+	id := ctx.Param("id")
+	if id == "" {
 		utils.BadRequest(ctx, "无效的 ID")
 		return
 	}
 
-	if err := c.agentService.Delete(uint(id)); err != nil {
+	if err := c.agentService.Delete(id); err != nil {
 		utils.BadRequest(ctx, err.Error())
 		return
 	}
@@ -117,13 +117,13 @@ func (c *AgentController) Delete(ctx *gin.Context) {
 
 // RegenerateToken 重新生成 Token
 func (c *AgentController) RegenerateToken(ctx *gin.Context) {
-	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
-	if err != nil {
+	id := ctx.Param("id")
+	if id == "" {
 		utils.BadRequest(ctx, "无效的 ID")
 		return
 	}
 
-	token, err := c.agentService.RegenerateToken(uint(id))
+	token, err := c.agentService.RegenerateToken(id)
 	if err != nil {
 		utils.ServerError(ctx, err.Error())
 		return
@@ -324,13 +324,13 @@ func (c *AgentController) GetVersion(ctx *gin.Context) {
 
 // ForceUpdate 强制更新指定 Agent
 func (c *AgentController) ForceUpdate(ctx *gin.Context) {
-	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
-	if err != nil {
+	id := ctx.Param("id")
+	if id == "" {
 		utils.BadRequest(ctx, "无效的 ID")
 		return
 	}
 
-	if err := c.agentService.SetForceUpdate(uint(id)); err != nil {
+	if err := c.agentService.SetForceUpdate(id); err != nil {
 		utils.ServerError(ctx, err.Error())
 		return
 	}
@@ -390,20 +390,20 @@ func (c *AgentController) WSConnect(ctx *gin.Context) {
 			ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			return
 		}
-		logger.Infof("[AgentWS] 注册成功: Agent #%d, isNew=%v", agent.ID, isNewAgent)
+		logger.Infof("[AgentWS] 注册成功: Agent #%s, isNew=%v", agent.ID, isNewAgent)
 	}
 
 	if !agent.Enabled {
 		c.wsManager.RecordConnectFail(ip)
-		logger.Warnf("[AgentWS] Agent #%d 已禁用, IP=%s", agent.ID, ip)
+		logger.Warnf("[AgentWS] Agent #%s 已禁用, IP=%s", agent.ID, ip)
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "Agent 已禁用"})
 		return
 	}
 
-	logger.Infof("[AgentWS] 准备升级连接: Agent #%d, IP=%s", agent.ID, ip)
+	logger.Infof("[AgentWS] 准备升级连接: Agent #%s, IP=%s", agent.ID, ip)
 	conn, err := agentUpgrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
-		logger.Errorf("[AgentWS] 升级连接失败: %v, Agent #%d, IP=%s", err, agent.ID, ip)
+		logger.Errorf("[AgentWS] 升级连接失败: %v, Agent #%s, IP=%s", err, agent.ID, ip)
 		return
 	}
 
@@ -434,7 +434,7 @@ func (c *AgentController) WSConnect(ctx *gin.Context) {
 		},
 	})
 
-	logger.Infof("[AgentWS] Agent #%d 连接成功 (配置: workers=%d, queue=%d, rate=%d)",
+	logger.Infof("[AgentWS] Agent #%s 连接成功 (配置: workers=%d, queue=%d, rate=%d)",
 		agent.ID, workerCount, queueSize, rateInterval)
 
 	// 启动读写协程
@@ -449,9 +449,9 @@ func (c *AgentController) WSConnect(ctx *gin.Context) {
 func (c *AgentController) wsReadPump(ac *services.AgentConnection, agent *models.Agent) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Errorf("[AgentWS] Agent #%d wsReadPump panic: %v", agent.ID, r)
+			logger.Errorf("[AgentWS] Agent #%s wsReadPump panic: %v", agent.ID, r)
 		}
-		logger.Infof("[AgentWS] Agent #%d wsReadPump 退出", agent.ID)
+		logger.Infof("[AgentWS] Agent #%s wsReadPump 退出", agent.ID)
 		c.wsManager.Unregister(agent.ID, ac)
 	}()
 
@@ -471,7 +471,7 @@ func (c *AgentController) wsReadPump(ac *services.AgentConnection, agent *models
 	for {
 		_, message, err := ac.ReadMessage()
 		if err != nil {
-			logger.Warnf("[AgentWS] Agent #%d 读取错误: %v", agent.ID, err)
+			logger.Warnf("[AgentWS] Agent #%s 读取错误: %v", agent.ID, err)
 			break
 		}
 
@@ -488,9 +488,9 @@ func (c *AgentController) wsReadPump(ac *services.AgentConnection, agent *models
 func (c *AgentController) wsWritePump(ac *services.AgentConnection) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Errorf("[AgentWS] Agent #%d wsWritePump panic: %v", ac.AgentID, r)
+			logger.Errorf("[AgentWS] Agent #%s wsWritePump panic: %v", ac.AgentID, r)
 		}
-		logger.Infof("[AgentWS] Agent #%d wsWritePump 退出", ac.AgentID)
+		logger.Infof("[AgentWS] Agent #%s wsWritePump 退出", ac.AgentID)
 	}()
 
 	ticker := time.NewTicker(30 * time.Second)
@@ -500,15 +500,15 @@ func (c *AgentController) wsWritePump(ac *services.AgentConnection) {
 		select {
 		case message, ok := <-ac.Send:
 			if !ok {
-				logger.Warnf("[AgentWS] Agent #%d Send channel 已关闭", ac.AgentID)
+				logger.Warnf("[AgentWS] Agent #%s Send channel 已关闭", ac.AgentID)
 				return
 			}
 			if ac.IsClosed() {
-				logger.Warnf("[AgentWS] Agent #%d 连接已关闭(write)", ac.AgentID)
+				logger.Warnf("[AgentWS] Agent #%s 连接已关闭(write)", ac.AgentID)
 				return
 			}
 			if err := ac.WriteMessage(message); err != nil {
-				logger.Warnf("[AgentWS] Agent #%d 写入消息失败: %v", ac.AgentID, err)
+				logger.Warnf("[AgentWS] Agent #%s 写入消息失败: %v", ac.AgentID, err)
 				return
 			}
 		case <-ticker.C:
@@ -516,7 +516,7 @@ func (c *AgentController) wsWritePump(ac *services.AgentConnection) {
 				return
 			}
 			if err := ac.WritePing(); err != nil {
-				logger.Warnf("[AgentWS] Agent #%d 发送 Ping 失败: %v", ac.AgentID, err)
+				logger.Warnf("[AgentWS] Agent #%s 发送 Ping 失败: %v", ac.AgentID, err)
 				return
 			}
 		}
@@ -546,15 +546,15 @@ func (c *AgentController) handleWSMessage(ac *services.AgentConnection, agent *m
 // handleTaskHeartbeat 处理任务心跳
 func (c *AgentController) handleTaskHeartbeat(agent *models.Agent, data json.RawMessage) {
 	var req struct {
-		LogID    uint  `json:"log_id"`
-		Duration int64 `json:"duration"`
+		LogID    string `json:"log_id"`
+		Duration int64  `json:"duration"`
 	}
 	if err := json.Unmarshal(data, &req); err != nil {
 		logger.Errorf("[AgentWS] 解析心跳消息失败: %v", err)
 		return
 	}
-	if req.LogID > 0 {
-		logger.Infof("[AgentWS] 收到任务心跳: LogID=%d, Duration=%dms", req.LogID, req.Duration)
+	if req.LogID != "" {
+		logger.Infof("[AgentWS] 收到任务心跳: LogID=%s, Duration=%dms", req.LogID, req.Duration)
 		c.agentService.UpdateTaskDuration(req.LogID, req.Duration)
 	}
 }
@@ -565,7 +565,7 @@ func (c *AgentController) handleFetchTasks(agent *models.Agent) {
 	c.wsManager.SendToAgent(agent.ID, services.WSTypeTasks, map[string]interface{}{
 		"tasks": tasks,
 	})
-	logger.Infof("[AgentWS] Agent #%d 请求任务列表，返回 %d 个任务", agent.ID, len(tasks))
+	logger.Infof("[AgentWS] Agent #%s 请求任务列表，返回 %d 个任务", agent.ID, len(tasks))
 }
 
 // handleHeartbeat 处理心跳
@@ -619,7 +619,7 @@ func (c *AgentController) handleTaskResult(agent *models.Agent, data json.RawMes
 // handleTaskLog 处理 Agent 发送的实时日志
 func (c *AgentController) handleTaskLog(agent *models.Agent, data json.RawMessage) {
 	var logMsg struct {
-		LogID   uint   `json:"log_id"`
+		LogID   string `json:"log_id"`
 		Content string `json:"content"`
 	}
 	if err := json.Unmarshal(data, &logMsg); err != nil {
@@ -631,12 +631,12 @@ func (c *AgentController) handleTaskLog(agent *models.Agent, data json.RawMessag
 	if tl != nil {
 		tl.Write([]byte(logMsg.Content))
 	} else {
-		logger.Warnf("[AgentWS] 收到任务日志但未找到活跃 TinyLog: LogID=%d, ContentSize=%d", logMsg.LogID, len(logMsg.Content))
+		logger.Warnf("[AgentWS] 收到任务日志 but could not find active TinyLog: LogID=%s, ContentSize=%d", logMsg.LogID, len(logMsg.Content))
 	}
 }
 
 // NotifyTaskUpdate 通知 Agent 任务更新
-func (c *AgentController) NotifyTaskUpdate(agentID uint) {
+func (c *AgentController) NotifyTaskUpdate(agentID string) {
 	c.wsManager.BroadcastTasks(agentID)
 }
 
@@ -682,13 +682,13 @@ func (c *AgentController) CreateToken(ctx *gin.Context) {
 
 // DeleteToken 删除令牌
 func (c *AgentController) DeleteToken(ctx *gin.Context) {
-	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
-	if err != nil {
+	id := ctx.Param("id")
+	if id == "" {
 		utils.BadRequest(ctx, "无效的 ID")
 		return
 	}
 
-	if err := c.agentService.DeleteToken(uint(id)); err != nil {
+	if err := c.agentService.DeleteToken(id); err != nil {
 		utils.ServerError(ctx, err.Error())
 		return
 	}

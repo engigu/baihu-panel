@@ -170,7 +170,7 @@ async function save() {
 
     form.value.config = JSON.stringify(configToSave)
     form.value.command = `[${repoConfig.value.source_type}] ${repoConfig.value.source_url}`
-    form.value.agent_id = selectedAgentId.value === 'local' ? null : Number(selectedAgentId.value)
+    form.value.agent_id = selectedAgentId.value === 'local' ? null : selectedAgentId.value
     if (props.isEdit && form.value.id) {
       await api.tasks.update(form.value.id, form.value)
       toast.success('同步任务已更新')

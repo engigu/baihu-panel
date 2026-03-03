@@ -6,6 +6,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/services/deps"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 type DependencyService struct{}
@@ -36,12 +37,15 @@ func (s *DependencyService) Create(dep *models.Dependency) error {
 	if err == nil {
 		return errors.New("依赖已存在")
 	}
+	if dep.ID == "" {
+		dep.ID = utils.GenerateID()
+	}
 	return database.DB.Create(dep).Error
 }
 
 // Delete 删除依赖记录
-func (s *DependencyService) Delete(id int) error {
-	return database.DB.Delete(&models.Dependency{}, id).Error
+func (s *DependencyService) Delete(id string) error {
+	return database.DB.Where("id = ?", id).Delete(&models.Dependency{}).Error
 }
 
 // Install 安装依赖

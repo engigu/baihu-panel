@@ -3,6 +3,7 @@ package services
 import (
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 type ScriptService struct{}
@@ -11,33 +12,34 @@ func NewScriptService() *ScriptService {
 	return &ScriptService{}
 }
 
-func (ss *ScriptService) CreateScript(name, content string, userID int) *models.Script {
+func (ss *ScriptService) CreateScript(name, content string, userID string) *models.Script {
 	script := &models.Script{
+		ID:      utils.GenerateID(),
 		Name:    name,
 		Content: content,
-		UserID:  uint(userID),
+		UserID:  userID,
 	}
 	database.DB.Create(script)
 	return script
 }
 
-func (ss *ScriptService) GetScriptsByUserID(userID int) []models.Script {
+func (ss *ScriptService) GetScriptsByUserID(userID string) []models.Script {
 	var scripts []models.Script
 	database.DB.Where("user_id = ?", userID).Find(&scripts)
 	return scripts
 }
 
-func (ss *ScriptService) GetScriptByID(id int) *models.Script {
+func (ss *ScriptService) GetScriptByID(id string) *models.Script {
 	var script models.Script
-	if err := database.DB.First(&script, id).Error; err != nil {
+	if err := database.DB.Where("id = ?", id).First(&script).Error; err != nil {
 		return nil
 	}
 	return &script
 }
 
-func (ss *ScriptService) UpdateScript(id int, name, content string) *models.Script {
+func (ss *ScriptService) UpdateScript(id string, name, content string) *models.Script {
 	var script models.Script
-	if err := database.DB.First(&script, id).Error; err != nil {
+	if err := database.DB.Where("id = ?", id).First(&script).Error; err != nil {
 		return nil
 	}
 	script.Name = name
@@ -46,7 +48,7 @@ func (ss *ScriptService) UpdateScript(id int, name, content string) *models.Scri
 	return &script
 }
 
-func (ss *ScriptService) DeleteScript(id int) bool {
-	result := database.DB.Delete(&models.Script{}, id)
+func (ss *ScriptService) DeleteScript(id string) bool {
+	result := database.DB.Where("id = ?", id).Delete(&models.Script{})
 	return result.RowsAffected > 0
 }

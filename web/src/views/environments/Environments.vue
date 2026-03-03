@@ -20,9 +20,9 @@ const envVars = ref<EnvVar[]>([])
 const showDialog = ref(false)
 const editingEnv = ref<Partial<EnvVar>>({})
 const isEdit = ref(false)
-const showValues = ref<Record<number, boolean>>({})
+const showValues = ref<Record<string, boolean>>({})
 const showDeleteDialog = ref(false)
-const deleteEnvId = ref<number | null>(null)
+const deleteEnvId = ref<string | null>(null)
 
 const filterName = ref('')
 const currentPage = ref(1)
@@ -84,7 +84,7 @@ async function saveEnv() {
   } catch { toast.error('保存失败') }
 }
 
-function confirmDelete(id: number) {
+function confirmDelete(id: string) {
   deleteEnvId.value = id
   showDeleteDialog.value = true
 }
@@ -100,7 +100,7 @@ async function deleteEnv() {
   deleteEnvId.value = null
 }
 
-function toggleShow(id: number) {
+function toggleShow(id: string) {
   showValues.value[id] = !showValues.value[id]
 }
 

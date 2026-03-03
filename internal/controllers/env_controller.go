@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"strconv"
 
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
@@ -19,7 +18,7 @@ func NewEnvController(envService *services.EnvService) *EnvController {
 }
 
 func (ec *EnvController) CreateEnvVar(c *gin.Context) {
-	userID := 1
+	userID := c.GetString("userID")
 
 	var req struct {
 		Name   string `json:"name" binding:"required"`
@@ -43,7 +42,7 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 }
 
 func (ec *EnvController) GetEnvVars(c *gin.Context) {
-	userID := 1
+	userID := c.GetString("userID")
 	p := utils.ParsePagination(c)
 	name := c.DefaultQuery("name", "")
 	envVars, total := ec.envService.GetEnvVarsWithPagination(userID, name, p.Page, p.PageSize)
@@ -51,14 +50,14 @@ func (ec *EnvController) GetEnvVars(c *gin.Context) {
 }
 
 func (ec *EnvController) GetAllEnvVars(c *gin.Context) {
-	userID := 1
+	userID := c.GetString("userID")
 	envVars := ec.envService.GetEnvVarsByUserID(userID)
 	utils.Success(c, vo.ToEnvVOListFromModels(envVars))
 }
 
 func (ec *EnvController) GetEnvVar(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	id := c.Param("id")
+	if id == "" {
 		utils.BadRequest(c, "无效的环境变量ID")
 		return
 	}
@@ -73,8 +72,8 @@ func (ec *EnvController) GetEnvVar(c *gin.Context) {
 }
 
 func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	id := c.Param("id")
+	if id == "" {
 		utils.BadRequest(c, "无效的环境变量ID")
 		return
 	}
@@ -112,8 +111,8 @@ func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
 }
 
 func (ec *EnvController) DeleteEnvVar(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	id := c.Param("id")
+	if id == "" {
 		utils.BadRequest(c, "无效的环境变量ID")
 		return
 	}

@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"path/filepath"
-	"strconv"
 
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/models/vo"
@@ -63,7 +62,7 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		CleanConfig string              `json:"clean_config"`
 		Envs        string              `json:"envs"`
 		Languages   []map[string]string `json:"languages"`
-		AgentID       *uint               `json:"agent_id"`
+		AgentID       *string             `json:"agent_id"`
 		TriggerType   string              `json:"trigger_type"`
 		RetryCount    int                 `json:"retry_count"`
 		RetryInterval int                 `json:"retry_interval"`
@@ -90,14 +89,14 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 
 	// 转换为绝对路径（Agent 任务保持原样）
 	workDir := req.WorkDir
-	if req.AgentID == nil || *req.AgentID == 0 {
+	if req.AgentID == nil || *req.AgentID == "" {
 		workDir = resolveWorkDir(req.WorkDir)
 	}
 
 	task := tc.taskService.CreateTask(req.Name, req.Command, req.Schedule, req.Timeout, workDir, req.CleanConfig, req.Envs, req.Type, req.Config, req.AgentID, req.Languages, req.TriggerType, req.Tags, req.RetryCount, req.RetryInterval, req.RandomRange)
 
 	// 如果是 Agent 任务，通知 Agent；否则添加到本地 cron
-	if task.AgentID != nil && *task.AgentID > 0 {
+	if task.AgentID != nil && *task.AgentID != "" {
 		tc.agentWSManager.BroadcastTasks(*task.AgentID)
 	} else {
 		tc.executorService.AddCronTask(task)
@@ -114,12 +113,9 @@ func (tc *TaskController) GetTasks(c *gin.Context) {
 	tags := c.DefaultQuery("tags", "")
 	taskType := c.DefaultQuery("type", "")
 
-	var agentID *uint
+	var agentID *string
 	if agentIDStr != "" {
-		if id, err := strconv.ParseUint(agentIDStr, 10, 32); err == nil {
-			uid := uint(id)
-			agentID = &uid
-		}
+		agentID = &agentIDStr
 	}
 
 	tasks, total := tc.taskService.GetTasksWithPagination(p.Page, p.PageSize, name, agentID, tags, taskType)
@@ -127,8 +123,8 @@ func (tc *TaskController) GetTasks(c *gin.Context) {
 }
 
 func (tc *TaskController) GetTask(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	id := c.Param("id")
+	if id == "" {
 		utils.BadRequest(c, "无效的任务ID")
 		return
 	}
@@ -143,15 +139,15 @@ func (tc *TaskController) GetTask(c *gin.Context) {
 }
 
 func (tc *TaskController) UpdateTask(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	id := c.Param("id")
+	if id == "" {
 		utils.BadRequest(c, "无效的任务ID")
 		return
 	}
 
 	// 获取旧任务信息（用于判断 agent 变更）
 	oldTask := tc.taskService.GetTaskByID(id)
-	var oldAgentID *uint
+	var oldAgentID *string
 	if oldTask != nil {
 		oldAgentID = oldTask.AgentID
 	}
@@ -169,7 +165,7 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		Envs        string              `json:"envs"`
 		Enabled     bool                `json:"enabled"`
 		Languages   []map[string]string `json:"languages"`
-		AgentID       *uint               `json:"agent_id"`
+		AgentID       *string             `json:"agent_id"`
 		TriggerType   string              `json:"trigger_type"`
 		RetryCount    int                 `json:"retry_count"`
 		RetryInterval int                 `json:"retry_interval"`
@@ -190,7 +186,7 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 
 	// 转换为绝对路径（Agent 任务保持原样）
 	workDir := req.WorkDir
-	if req.AgentID == nil || *req.AgentID == 0 {
+	if req.AgentID == nil || *req.AgentID == "" {
 		workDir = resolveWorkDir(req.WorkDir)
 	}
 
@@ -201,12 +197,12 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 	}
 
 	// 处理任务调度
-	if task.AgentID != nil && *task.AgentID > 0 {
+	if task.AgentID != nil && *task.AgentID != "" {
 		// Agent 任务：从本地 cron 移除，通知 Agent
 		tc.executorService.RemoveCronTask(task.ID)
 		tc.agentWSManager.BroadcastTasks(*task.AgentID)
 		// 如果 agent 变更了，也通知旧 agent
-		if oldAgentID != nil && *oldAgentID > 0 && *oldAgentID != *task.AgentID {
+		if oldAgentID != nil && *oldAgentID != "" && *oldAgentID != *task.AgentID {
 			tc.agentWSManager.BroadcastTasks(*oldAgentID)
 		}
 	} else {
@@ -217,7 +213,7 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 			tc.executorService.RemoveCronTask(task.ID)
 		}
 		// 如果之前是 agent 任务，通知旧 agent 移除
-		if oldAgentID != nil && *oldAgentID > 0 {
+		if oldAgentID != nil && *oldAgentID != "" {
 			tc.agentWSManager.BroadcastTasks(*oldAgentID)
 		}
 	}
@@ -226,20 +222,20 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 }
 
 func (tc *TaskController) DeleteTask(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	id := c.Param("id")
+	if id == "" {
 		utils.BadRequest(c, "无效的任务ID")
 		return
 	}
 
 	// 获取任务信息（用于通知 agent）
 	task := tc.taskService.GetTaskByID(id)
-	var agentID *uint
+	var agentID *string
 	if task != nil {
 		agentID = task.AgentID
 	}
 
-	tc.executorService.RemoveCronTask(uint(id))
+	tc.executorService.RemoveCronTask(id)
 
 	success := tc.taskService.DeleteTask(id)
 	if !success {
@@ -248,7 +244,7 @@ func (tc *TaskController) DeleteTask(c *gin.Context) {
 	}
 
 	// 如果是 agent 任务，通知 agent
-	if agentID != nil && *agentID > 0 {
+	if agentID != nil && *agentID != "" {
 		tc.agentWSManager.BroadcastTasks(*agentID)
 	}
 
@@ -256,13 +252,13 @@ func (tc *TaskController) DeleteTask(c *gin.Context) {
 }
 
 func (tc *TaskController) StopTask(c *gin.Context) {
-	logID, err := strconv.ParseUint(c.Param("logID"), 10, 32)
-	if err != nil {
+	logID := c.Param("logID")
+	if logID == "" {
 		utils.BadRequest(c, "无效的日志ID")
 		return
 	}
 
-	err = tc.executorService.StopTaskExecution(uint(logID))
+	err := tc.executorService.StopTaskExecution(logID)
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return

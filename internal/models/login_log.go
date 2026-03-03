@@ -6,7 +6,7 @@ import (
 
 // LoginLog 登录日志
 type LoginLog struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
+	ID        string    `json:"id" gorm:"primaryKey;size:20"`
 	Username  string    `json:"username" gorm:"size:100;index;not null"`
 	IP        string    `json:"ip" gorm:"size:50"`
 	UserAgent string    `json:"user_agent" gorm:"size:500"`

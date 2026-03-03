@@ -7,7 +7,7 @@ import (
 
 // TaskVO 任务视图对象
 type TaskVO struct {
-	ID          uint                `json:"id"`
+	ID          string              `json:"id"`
 	Name        string              `json:"name"`
 	Command     string              `json:"command"`
 	Tags        string              `json:"tags"`
@@ -20,7 +20,7 @@ type TaskVO struct {
 	CleanConfig string              `json:"clean_config"`
 	Envs        string              `json:"envs"`
 	Languages   []map[string]string `json:"languages"`
-	AgentID     *uint               `json:"agent_id"`
+	AgentID     *string             `json:"agent_id"`
 	Enabled       bool                `json:"enabled"`
 	RetryCount    int                 `json:"retry_count"`
 	RetryInterval int                 `json:"retry_interval"`
@@ -85,11 +85,11 @@ func ToTaskVOListFromModels(tasks []models.Task) []*TaskVO {
 
 // TaskLogVO 任务历史视图对象
 type TaskLogVO struct {
-	ID        uint              `json:"id"`
-	TaskID    uint              `json:"task_id"`
+	ID        string            `json:"id"`
+	TaskID    string            `json:"task_id"`
 	TaskName  string            `json:"task_name"`
 	TaskType  string            `json:"task_type"`
-	AgentID   *uint             `json:"agent_id"`
+	AgentID   *string           `json:"agent_id"`
 	Command   string            `json:"command"`
 	Error     string            `json:"error"`
 	Status    string            `json:"status"`
@@ -148,7 +148,7 @@ func ToTaskLogVOListFromModels(logs []models.TaskLog) []*TaskLogVO {
 // ExecutionResultVO 任务执行结果视图对象
 type ExecutionResultVO struct {
 	TaskID    string `json:"task_id"`
-	LogID     uint   `json:"log_id,omitempty"`
+	LogID     string `json:"log_id,omitempty"`
 	Success   bool   `json:"success"`
 	Status    string `json:"status"`
 	Output    string `json:"output,omitempty"`

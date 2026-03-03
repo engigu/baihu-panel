@@ -33,7 +33,7 @@ const { pageSize } = useSiteSettings()
 const logs = ref<TaskLog[]>([])
 const selectedLog = ref<TaskLog | null>(null)
 const filterKeyword = ref('')
-const filterTaskId = ref<number | undefined>(undefined)
+const filterTaskId = ref<string | undefined>(undefined)
 const filterStatus = ref<string | undefined>(undefined)
 const currentPage = ref(1)
 const total = ref(0)
@@ -49,7 +49,7 @@ const showClearDialog = ref(false)
 
 // 删除单条日志弹窗
 const showDeleteDialog = ref(false)
-const deleteLogId = ref<number | null>(null)
+const deleteLogId = ref<string | null>(null)
 
 const wsContent = ref('')
 const isWsLoading = ref(false)
@@ -62,7 +62,7 @@ const decompressedOutput = computed(() => {
 
 async function loadLogs() {
   try {
-    const params: { page: number; page_size: number; task_id?: number; task_name?: string; status?: string } = {
+    const params: { page: number; page_size: number; task_id?: string; task_name?: string; status?: string } = {
       page: currentPage.value,
       page_size: pageSize.value
     }
@@ -241,7 +241,7 @@ async function handleClearLogs() {
   }
 }
 
-function confirmDeleteLog(id: number) {
+function confirmDeleteLog(id: string) {
   deleteLogId.value = id
   showDeleteDialog.value = true
 }
@@ -291,7 +291,7 @@ onMounted(() => {
   // 从 URL 读取参数
   const taskIdParam = route.query.task_id
   if (taskIdParam) {
-    filterTaskId.value = Number(taskIdParam)
+    filterTaskId.value = String(taskIdParam)
   }
   const statusParam = route.query.status
   if (statusParam) {
@@ -302,7 +302,7 @@ onMounted(() => {
 
 // 监听路由变化
 watch(() => route.query, (newQuery) => {
-  filterTaskId.value = newQuery.task_id ? Number(newQuery.task_id) : undefined
+  filterTaskId.value = newQuery.task_id ? String(newQuery.task_id) : undefined
   filterStatus.value = newQuery.status ? String(newQuery.status) : undefined
   currentPage.value = 1
   loadLogs()
@@ -352,7 +352,7 @@ watch(() => route.query, (newQuery) => {
         <!-- 小屏表头 -->
         <div
           class="flex sm:hidden items-center gap-2 px-3 py-2 border-b bg-muted/20 text-xs text-muted-foreground font-medium">
-          <span class="w-14 shrink-0">ID</span>
+          <span class="w-14 shrink-0">序号</span>
           <span class="w-10 shrink-0 text-center">类型</span>
           <span class="flex-1 min-w-0">任务名称</span>
           <span class="w-8 shrink-0 text-center">状态</span>
@@ -362,7 +362,7 @@ watch(() => route.query, (newQuery) => {
         <!-- 大屏表头 -->
         <div
           class="hidden sm:flex items-center gap-4 px-4 h-11 border-b bg-muted/20 text-sm text-muted-foreground font-medium">
-          <span class="w-16 shrink-0">ID</span>
+          <span class="w-16 shrink-0">序号</span>
           <span class="w-12 shrink-0 text-center">类型</span>
           <span class="w-36 shrink-0">任务名称</span>
           <span class="flex-1 min-w-0">命令</span>
@@ -376,13 +376,13 @@ watch(() => route.query, (newQuery) => {
           <div v-if="logs.length === 0" class="text-sm text-muted-foreground text-center py-8">
             暂无日志
           </div>
-          <div v-for="log in logs" :key="log.id" :class="[
+          <div v-for="(log, index) in logs" :key="log.id" :class="[
             'cursor-pointer hover:bg-muted/30 transition-colors group',
             selectedLog?.id === log.id && 'bg-accent/50'
           ]" @click="selectLog(log)">
             <!-- 小屏行 -->
             <div class="flex sm:hidden items-center gap-2 px-3 py-2">
-              <span class="w-14 shrink-0 text-muted-foreground text-xs">#{{ log.id }}</span>
+              <span class="w-14 shrink-0 text-muted-foreground text-xs">#{{ total - (currentPage - 1) * pageSize - index }}</span>
               <span class="w-6 shrink-0 flex justify-center" :title="getTaskTypeTitle(log.task_type || 'task')">
                 <GitBranch v-if="log.task_type === TASK_TYPE.REPO" class="h-3.5 w-3.5 text-primary" />
                 <Terminal v-else class="h-3.5 w-3.5 text-primary" />
@@ -424,7 +424,7 @@ watch(() => route.query, (newQuery) => {
             </div>
             <!-- 大屏行 -->
             <div class="hidden sm:flex items-center gap-4 px-4 py-2">
-              <span class="w-16 shrink-0 text-muted-foreground text-sm">#{{ log.id }}</span>
+              <span class="w-16 shrink-0 text-muted-foreground text-sm">#{{ total - (currentPage - 1) * pageSize - index }}</span>
               <span class="w-10 shrink-0 flex justify-center" :title="getTaskTypeTitle(log.task_type || 'task')">
                 <GitBranch v-if="log.task_type === TASK_TYPE.REPO" class="h-4 w-4 text-primary" />
                 <Terminal v-else class="h-4 w-4 text-primary" />

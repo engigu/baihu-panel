@@ -8,12 +8,12 @@ import (
 
 // EnvironmentVariable represents an environment variable
 type EnvironmentVariable struct {
-	ID        uint           `json:"id" gorm:"primaryKey"`
+	ID        string         `json:"id" gorm:"primaryKey;size:20"`
 	Name      string         `json:"name" gorm:"size:255;not null"`
 	Value     string         `json:"value" gorm:"type:text"`
 	Remark    string         `json:"remark" gorm:"size:500"`
 	Hidden    bool           `json:"hidden" gorm:"default:true"`
-	UserID    uint           `json:"user_id" gorm:"index"`
+	UserID    string         `json:"user_id" gorm:"size:20;index"`
 	CreatedAt LocalTime      `json:"created_at"`
 	UpdatedAt LocalTime      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
@@ -25,10 +25,10 @@ func (EnvironmentVariable) TableName() string {
 
 // Script represents a script file
 type Script struct {
-	ID        uint           `json:"id" gorm:"primaryKey"`
+	ID        string         `json:"id" gorm:"primaryKey;size:20"`
 	Name      string         `json:"name" gorm:"size:255;not null"`
 	Content   string         `json:"content" gorm:"type:text"`
-	UserID    uint           `json:"user_id" gorm:"index"`
+	UserID    string         `json:"user_id" gorm:"size:20;index"`
 	CreatedAt LocalTime      `json:"created_at"`
 	UpdatedAt LocalTime      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`

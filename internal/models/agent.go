@@ -1,8 +1,6 @@
 package models
 
 import (
-	"strconv"
-
 	"github.com/engigu/baihu-panel/internal/constant"
 
 	"gorm.io/gorm"
@@ -10,7 +8,7 @@ import (
 
 // Agent 远程执行代理
 type Agent struct {
-	ID          uint           `json:"id" gorm:"primaryKey"`
+	ID          string         `json:"id" gorm:"primaryKey;size:20"`
 	Name        string         `json:"name" gorm:"size:100;not null"`                 // Agent 名称
 	Token       string         `json:"token" gorm:"size:64;index"`                    // 认证 Token（可重复使用）
 	MachineID   string         `json:"machine_id" gorm:"size:64;uniqueIndex"`         // 机器识别码（唯一）
@@ -36,7 +34,7 @@ func (Agent) TableName() string {
 
 // AgentToken Agent 令牌
 type AgentToken struct {
-	ID        uint           `json:"id" gorm:"primaryKey"`
+	ID        string         `json:"id" gorm:"primaryKey;size:20"`
 	Token     string         `json:"token" gorm:"size:64;uniqueIndex;not null"` // 令牌
 	Remark    string         `json:"remark" gorm:"size:255"`                    // 备注
 	MaxUses   int            `json:"max_uses" gorm:"default:0"`                 // 最大使用次数，0 表示无限制
@@ -54,7 +52,7 @@ func (AgentToken) TableName() string {
 
 // AgentTask Agent 任务配置（用于下发给 Agent）
 type AgentTask struct {
-	ID        uint                `json:"id"`
+	ID        string              `json:"id"`
 	Name      string              `json:"name"`
 	Command   string              `json:"command"`
 	Schedule  string              `json:"schedule"`
@@ -67,7 +65,7 @@ type AgentTask struct {
 }
 
 func (t AgentTask) GetID() string {
-	return strconv.FormatUint(uint64(t.ID), 10)
+	return t.ID
 }
 
 func (t AgentTask) GetName() string {
@@ -88,9 +86,9 @@ func (t AgentTask) GetRandomRange() int {
 
 // AgentTaskResult Agent 上报的任务执行结果
 type AgentTaskResult struct {
-	TaskID    uint   `json:"task_id"`
-	LogID     uint   `json:"log_id"`
-	AgentID   uint   `json:"agent_id"`
+	TaskID    string `json:"task_id"`
+	LogID     string `json:"log_id"`
+	AgentID   string `json:"agent_id"`
 	Command   string `json:"command"`
 	Output    string `json:"output"`
 	Error     string `json:"error"`    // 额外的系统错误信息

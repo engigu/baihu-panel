@@ -16,13 +16,13 @@ import (
 var (
 	// globalTinyLogManager 跟踪所有活跃的 TinyLog 实例
 	globalTinyLogManager = &TinyLogManager{
-		logs: make(map[uint]*TinyLog),
+		logs: make(map[string]*TinyLog),
 	}
 )
 
 type TinyLogManager struct {
 	mu   sync.RWMutex
-	logs map[uint]*TinyLog
+	logs map[string]*TinyLog
 }
 
 func (m *TinyLogManager) Register(log *TinyLog) {
@@ -31,26 +31,26 @@ func (m *TinyLogManager) Register(log *TinyLog) {
 	m.logs[log.LogID] = log
 }
 
-func (m *TinyLogManager) Unregister(logID uint) {
+func (m *TinyLogManager) Unregister(logID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.logs, logID)
 }
 
-func (m *TinyLogManager) Get(logID uint) *TinyLog {
+func (m *TinyLogManager) Get(logID string) *TinyLog {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.logs[logID]
 }
 
 // GetActiveLog 通过 ID 获取活跃的 TinyLog 实例
-func GetActiveLog(logID uint) *TinyLog {
+func GetActiveLog(logID string) *TinyLog {
 	return globalTinyLogManager.Get(logID)
 }
 
 // TinyLog 是一个高性能、低内存占用的日志收集器
 type TinyLog struct {
-	LogID       uint
+	LogID       string
 	mu          sync.RWMutex
 	file        *os.File
 	path        string
@@ -61,7 +61,7 @@ type TinyLog struct {
 }
 
 // NewTinyLog 创建一个新的 TinyLog 实例（基于临时文件存储）并注册它
-func NewTinyLog(logID uint) (*TinyLog, error) {
+func NewTinyLog(logID string) (*TinyLog, error) {
 	f, err := os.CreateTemp("", "task_log_*.log")
 	if err != nil {
 		return nil, err

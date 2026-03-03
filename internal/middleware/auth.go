@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/database"
+	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/utils"
 
@@ -35,9 +37,19 @@ func AuthRequired() gin.HandlerFunc {
 			return
 		}
 
-		// 将用户信息存入上下文
-		c.Set("userID", userID)
-		c.Set("username", username)
+		// 安全增强：校验数据库中该用户的 ID 是否与 Token 一致
+		// 防止迁移后旧 Token 中的数字 ID 污染新数据
+		var user models.User
+		if err := database.DB.Where("username = ?", username).First(&user).Error; err != nil || user.ID != userID {
+			utils.Unauthorized(c, "会话失效，请重新登录")
+			ClearAuthCookie(c)
+			c.Abort()
+			return
+		}
+
+		// 将用户信息存入上下文 (必须使用数据库中的最新 ID)
+		c.Set("userID", user.ID)
+		c.Set("username", user.Username)
 		c.Next()
 	}
 }
@@ -79,8 +91,16 @@ func checkApiToken(c *gin.Context, settingsSvc *services.SettingsService) bool {
 		}
 	}
 
-	c.Set("userID", uint(1)) // 模拟 Admin 角色
-	c.Set("username", "api_token_user")
+	// 模拟 Admin 角色，必须通过实际存在的 admin 用户 ID 来关联
+	var adminUser models.User
+	if err := database.DB.Where("role = ?", "admin").First(&adminUser).Error; err != nil {
+		utils.Unauthorized(c, "未找到管理员账户，API Token 校验失败")
+		c.Abort()
+		return true // 返回 true 表示中间件已处理并截断了请求
+	}
+	
+	c.Set("userID", adminUser.ID)
+	c.Set("username", adminUser.Username)
 	c.Next()
 	return true
 }

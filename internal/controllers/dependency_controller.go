@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/models"
@@ -71,8 +70,8 @@ func (c *DependencyController) Create(ctx *gin.Context) {
 
 // Delete 删除依赖
 func (c *DependencyController) Delete(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
+	id := ctx.Param("id")
+	if id == "" {
 		utils.BadRequest(ctx, "无效的 ID")
 		return
 	}
@@ -186,8 +185,8 @@ func (c *DependencyController) GetReinstallAllCommand(ctx *gin.Context) {
 
 // Uninstall 卸载依赖
 func (c *DependencyController) Uninstall(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
+	id := ctx.Param("id")
+	if id == "" {
 		utils.BadRequest(ctx, "无效的 ID")
 		return
 	}
@@ -220,8 +219,8 @@ func (c *DependencyController) Uninstall(ctx *gin.Context) {
 
 // Reinstall 重新安装依赖
 func (c *DependencyController) Reinstall(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
+	id := ctx.Param("id")
+	if id == "" {
 		utils.BadRequest(ctx, "无效的 ID")
 		return
 	}

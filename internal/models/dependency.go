@@ -8,7 +8,7 @@ import (
 
 // Dependency 依赖包模型
 type Dependency struct {
-	ID          int       `json:"id" gorm:"primaryKey"`
+	ID          string    `json:"id" gorm:"primaryKey;size:20"`
 	Name        string    `json:"name" gorm:"size:100;not null"`
 	Version     string    `json:"version" gorm:"size:50"`
 	Language    string    `json:"language" gorm:"size:100;index"`     // 关联语言 (node, python...)

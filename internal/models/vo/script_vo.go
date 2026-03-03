@@ -6,7 +6,7 @@ import (
 
 // ScriptVO 脚本视图对象
 type ScriptVO struct {
-	ID        uint             `json:"id"`
+	ID        string           `json:"id"`
 	Name      string           `json:"name"`
 	Content   string           `json:"content,omitempty"` // 仅在拉取详情时返回
 	CreatedAt models.LocalTime `json:"created_at"`

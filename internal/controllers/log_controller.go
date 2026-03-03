@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"strconv"
 
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
@@ -19,7 +18,7 @@ func NewLogController() *LogController {
 
 func (lc *LogController) GetLogs(c *gin.Context) {
 	p := utils.ParsePagination(c)
-	taskID, _ := strconv.Atoi(c.DefaultQuery("task_id", "0"))
+	taskID := c.DefaultQuery("task_id", "")
 	taskName := c.DefaultQuery("task_name", "")
 	status := c.DefaultQuery("status", "")
 
@@ -27,7 +26,7 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 	var total int64
 
 	query := database.DB.Model(&models.TaskLog{})
-	if taskID > 0 {
+	if taskID != "" {
 		query = query.Where("task_id = ?", taskID)
 	}
 	if status != "" {
@@ -36,7 +35,7 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 
 	// 按任务名称过滤
 	if taskName != "" {
-		var taskIDs []uint
+		var taskIDs []string
 		database.DB.Model(&models.Task{}).Where("name LIKE ?", "%"+taskName+"%").Pluck("id", &taskIDs)
 		if len(taskIDs) > 0 {
 			query = query.Where("task_id IN ?", taskIDs)
@@ -49,14 +48,14 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 	query.Count(&total)
 	query.Order("id DESC").Offset(p.Offset()).Limit(p.PageSize).Find(&logs)
 
-	taskIDList := make([]uint, 0)
+	taskIDList := make([]string, 0)
 	for _, log := range logs {
 		taskIDList = append(taskIDList, log.TaskID)
 	}
 
 	var tasks []models.Task
 	database.DB.Where("id IN ?", taskIDList).Find(&tasks)
-	taskMap := make(map[uint]models.Task)
+	taskMap := make(map[string]models.Task)
 	for _, t := range tasks {
 		taskMap[t.ID] = t
 	}
@@ -87,14 +86,14 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 }
 
 func (lc *LogController) GetLogDetail(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	id := c.Param("id")
+	if id == "" {
 		utils.BadRequest(c, "无效的日志ID")
 		return
 	}
 
 	var log models.TaskLog
-	if err := database.DB.First(&log, id).Error; err != nil {
+	if err := database.DB.Where("id = ?", id).First(&log).Error; err != nil {
 		utils.NotFound(c, "日志不存在")
 		return
 	}
@@ -104,7 +103,7 @@ func (lc *LogController) GetLogDetail(c *gin.Context) {
 
 func (lc *LogController) ClearLogs(c *gin.Context) {
 	var req struct {
-		TaskID *int `json:"task_id"`
+		TaskID *string `json:"task_id"`
 	}
 	
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -113,7 +112,7 @@ func (lc *LogController) ClearLogs(c *gin.Context) {
 	}
 
 	query := database.DB.Model(&models.TaskLog{})
-	if req.TaskID != nil && *req.TaskID > 0 {
+	if req.TaskID != nil && *req.TaskID != "" {
 		query = query.Where("task_id = ?", *req.TaskID)
 	} else {
 		query = query.Where("1 = 1") // Allow delete all without GORM safety block
@@ -128,13 +127,13 @@ func (lc *LogController) ClearLogs(c *gin.Context) {
 }
 
 func (lc *LogController) DeleteLog(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	id := c.Param("id")
+	if id == "" {
 		utils.BadRequest(c, "无效的日志ID")
 		return
 	}
 
-	if err := database.DB.Delete(&models.TaskLog{}, id).Error; err != nil {
+	if err := database.DB.Where("id = ?", id).Delete(&models.TaskLog{}).Error; err != nil {
 		utils.ServerError(c, "删除日志失败")
 		return
 	}

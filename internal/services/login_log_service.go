@@ -3,6 +3,7 @@ package services
 import (
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 type LoginLogService struct{}
@@ -14,6 +15,7 @@ func NewLoginLogService() *LoginLogService {
 // Create 创建登录日志
 func (s *LoginLogService) Create(username, ip, userAgent, status, message string) error {
 	log := &models.LoginLog{
+		ID:        utils.GenerateID(),
 		Username:  username,
 		IP:        ip,
 		UserAgent: userAgent,

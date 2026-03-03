@@ -6,7 +6,7 @@ import (
 )
 
 func Migrate() error {
-	// 先执行自定义迁移
+	// 执行自定义迁移
 	if err := customMigrations(); err != nil {
 		logger.Warnf("[Database] 自定义迁移警告: %v", err)
 	}

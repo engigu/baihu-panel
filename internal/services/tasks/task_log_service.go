@@ -13,7 +13,7 @@ import (
 
 // SendStatsService 接口定义（避免循环依赖）
 type SendStatsService interface {
-	IncrementStats(taskID uint, status string) error
+	IncrementStats(taskID string, status string) error
 }
 
 // TaskLogService 任务日志服务
@@ -35,9 +35,10 @@ type CleanConfig struct {
 }
 
 // CreateEmptyLog 创建一个空的日志记录（任务开始时调用）
-func (s *TaskLogService) CreateEmptyLog(taskID uint, command string) (*models.TaskLog, error) {
+func (s *TaskLogService) CreateEmptyLog(taskID string, command string) (*models.TaskLog, error) {
 	startTime := models.Now()
 	taskLog := &models.TaskLog{
+		ID:        utils.GenerateID(),
 		TaskID:    taskID,
 		Command:   command,
 		Status:    "running",
@@ -52,9 +53,10 @@ func (s *TaskLogService) CreateEmptyLog(taskID uint, command string) (*models.Ta
 // SaveTaskLog 保存或更新任务日志
 func (s *TaskLogService) SaveTaskLog(taskLog *models.TaskLog) error {
 	var err error
-	if taskLog.ID > 0 {
-		err = database.DB.Model(taskLog).Updates(taskLog).Error
+	if taskLog.ID != "" {
+		err = database.DB.Model(taskLog).Where("id = ?", taskLog.ID).Updates(taskLog).Error
 	} else {
+		taskLog.ID = utils.GenerateID()
 		err = database.DB.Create(taskLog).Error
 	}
 
@@ -69,12 +71,12 @@ func (s *TaskLogService) SaveTaskLog(taskLog *models.TaskLog) error {
 }
 
 // UpdateTaskDuration 更新任务耗时（心跳）
-func (s *TaskLogService) UpdateTaskDuration(logID uint, duration int64) error {
+func (s *TaskLogService) UpdateTaskDuration(logID string, duration int64) error {
 	return database.DB.Model(&models.TaskLog{}).Where("id = ?", logID).Update("duration", duration).Error
 }
 
 // UpdateTaskStats 更新任务统计
-func (s *TaskLogService) UpdateTaskStats(taskID uint, status string) {
+func (s *TaskLogService) UpdateTaskStats(taskID string, status string) {
 	if s.sendStatsService == nil {
 		logger.Error("[TaskLog] SendStatsService 未初始化")
 		return
@@ -87,9 +89,9 @@ func (s *TaskLogService) UpdateTaskStats(taskID uint, status string) {
 }
 
 // CleanTaskLogs 清理任务日志
-func (s *TaskLogService) CleanTaskLogs(taskID uint) {
+func (s *TaskLogService) CleanTaskLogs(taskID string) {
 	var task models.Task
-	if err := database.DB.First(&task, taskID).Error; err != nil {
+	if err := database.DB.Where("id = ?", taskID).First(&task).Error; err != nil {
 		return
 	}
 
@@ -123,7 +125,7 @@ func (s *TaskLogService) CleanTaskLogs(taskID uint) {
 	}
 
 	if deleted > 0 {
-		logger.Infof("[TaskLog] 清理任务 #%d 的 %d 条日志", taskID, deleted)
+		logger.Infof("[TaskLog] 清理任务 #%s 的 %d 条日志", taskID, deleted)
 	}
 }
 
@@ -153,6 +155,7 @@ func (s *TaskLogService) CreateTaskLogFromAgentResult(result *models.AgentTaskRe
 	}
 
 	taskLog := &models.TaskLog{
+		ID:       utils.GenerateID(),
 		TaskID:   result.TaskID,
 		AgentID:  &result.AgentID,
 		Command:  result.Command,
@@ -177,7 +180,7 @@ func (s *TaskLogService) CreateTaskLogFromAgentResult(result *models.AgentTaskRe
 }
 
 // CreateTaskLogFromLocalExecution 从本地执行结果创建任务日志
-func (s *TaskLogService) CreateTaskLogFromLocalExecution(taskID uint, command, output, systemErr, status string, duration int64, exitCode int, start, end time.Time, isCompressed bool) (*models.TaskLog, error) {
+func (s *TaskLogService) CreateTaskLogFromLocalExecution(taskID string, command, output, systemErr, status string, duration int64, exitCode int, start, end time.Time, isCompressed bool) (*models.TaskLog, error) {
 	var compressed string
 	var err error
 
@@ -196,6 +199,7 @@ func (s *TaskLogService) CreateTaskLogFromLocalExecution(taskID uint, command, o
 	endTime := models.LocalTime(end)
 
 	taskLog := &models.TaskLog{
+		ID:        utils.GenerateID(),
 		TaskID:    taskID,
 		Command:   command,
 		Output:    compressed,

@@ -21,7 +21,7 @@ const activeTab = ref('python')
 const deps = ref<Dependency[]>([])
 const loading = ref(false)
 const installing = ref(false)
-const reinstalling = ref<number | null>(null)
+const reinstalling = ref<string | null>(null)
 const reinstallingAll = ref(false)
 const installedLangs = ref<string[]>([])
 

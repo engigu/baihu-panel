@@ -6,7 +6,7 @@ import (
 
 // AgentVO 代理视图对象
 type AgentVO struct {
-	ID          uint              `json:"id"`
+	ID          string            `json:"id"`
 	Name        string            `json:"name"`
 	Description string            `json:"description"`
 	Status      string            `json:"status"`
@@ -71,7 +71,7 @@ func ToAgentVOListFromModels(agents []models.Agent) []*AgentVO {
 
 // AgentTokenVO 代理令牌视图对象
 type AgentTokenVO struct {
-	ID        uint              `json:"id"`
+	ID        string            `json:"id"`
 	Token     string            `json:"token"`
 	Remark    string            `json:"remark"`
 	MaxUses   int               `json:"max_uses"`

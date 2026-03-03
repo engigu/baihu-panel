@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"strconv"
 
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
@@ -19,7 +18,7 @@ func NewScriptController(scriptService *services.ScriptService) *ScriptControlle
 }
 
 func (sc *ScriptController) CreateScript(c *gin.Context) {
-	userID := 1
+	userID := c.GetString("userID")
 
 	var req struct {
 		Name    string `json:"name" binding:"required"`
@@ -36,7 +35,7 @@ func (sc *ScriptController) CreateScript(c *gin.Context) {
 }
 
 func (sc *ScriptController) GetScripts(c *gin.Context) {
-	userID := 1
+	userID := c.GetString("userID")
 	scripts := sc.scriptService.GetScriptsByUserID(userID)
 	vos := vo.ToScriptVOListFromModels(scripts)
 	for i := range vos {
@@ -46,8 +45,8 @@ func (sc *ScriptController) GetScripts(c *gin.Context) {
 }
 
 func (sc *ScriptController) GetScript(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	id := c.Param("id")
+	if id == "" {
 		utils.BadRequest(c, "无效的脚本ID")
 		return
 	}
@@ -62,8 +61,8 @@ func (sc *ScriptController) GetScript(c *gin.Context) {
 }
 
 func (sc *ScriptController) UpdateScript(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	id := c.Param("id")
+	if id == "" {
 		utils.BadRequest(c, "无效的脚本ID")
 		return
 	}
@@ -88,8 +87,8 @@ func (sc *ScriptController) UpdateScript(c *gin.Context) {
 }
 
 func (sc *ScriptController) DeleteScript(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	id := c.Param("id")
+	if id == "" {
 		utils.BadRequest(c, "无效的脚本ID")
 		return
 	}

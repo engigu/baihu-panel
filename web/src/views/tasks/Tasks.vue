@@ -26,19 +26,19 @@ const showRepoDialog = ref(false)
 const editingTask = ref<Partial<Task>>({})
 const isEdit = ref(false)
 const showDeleteDialog = ref(false)
-const deleteTaskId = ref<number | null>(null)
+const deleteTaskId = ref<string | null>(null)
 
 const filterName = ref('')
 const filterTags = ref('')
 const filterType = ref('all')
-const filterAgentId = ref<number | null>(null)
+const filterAgentId = ref<string | null>(null)
 const currentPage = ref(1)
 const total = ref(0)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 // 创建 agent 映射表
 const agentMap = computed(() => {
-  const map: Record<number, Agent> = {}
+  const map: Record<string, Agent> = {}
   agents.value.forEach(a => { map[a.id] = a })
   return map
 })
@@ -147,7 +147,7 @@ function duplicateTask(task: Task) {
   }
 }
 
-function confirmDelete(id: number) {
+function confirmDelete(id: string) {
   deleteTaskId.value = id
   showDeleteDialog.value = true
 }
@@ -163,9 +163,9 @@ async function deleteTask() {
   deleteTaskId.value = null
 }
 
-const executingTaskId = ref<number | null>(null)
+const executingTaskId = ref<string | null>(null)
 
-async function runTask(id: number) {
+async function runTask(id: string) {
   executingTaskId.value = id
   toast.message('正在执行...', { id: 'executing' })
   try {
@@ -189,8 +189,8 @@ async function toggleTask(task: Task, enabled: boolean) {
   } catch { toast.error('操作失败') }
 }
 
-function viewLogs(taskId: number) {
-  router.push({ path: '/history', query: { task_id: String(taskId) } })
+function viewLogs(taskId: string) {
+  router.push({ path: '/history', query: { task_id: taskId } })
 }
 
 function getTaskTypeTitle(type: string) {
@@ -204,7 +204,7 @@ onMounted(async () => {
   // 从 URL 参数读取 agent_id
   const agentIdParam = route.query.agent_id
   if (agentIdParam) {
-    filterAgentId.value = Number(agentIdParam)
+    filterAgentId.value = String(agentIdParam)
   }
 
   loadTasks()
@@ -212,7 +212,7 @@ onMounted(async () => {
 
 // 监听路由参数变化
 watch(() => route.query.agent_id, (newVal) => {
-  filterAgentId.value = newVal ? Number(newVal) : null
+  filterAgentId.value = newVal ? String(newVal) : null
   currentPage.value = 1
   loadTasks()
 })
@@ -282,7 +282,7 @@ watch(() => route.query.agent_id, (newVal) => {
       <!-- 表头 -->
       <div
         class="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-2 sm:gap-4 px-3 sm:px-4 py-2 sm:py-1.5 border-b bg-muted/20 text-xs sm:text-sm text-muted-foreground font-medium min-w-0 sm:min-w-[1000px]">
-        <span class="w-10 sm:w-12 shrink-0 max-sm:order-1">ID</span>
+        <span class="w-10 sm:w-12 shrink-0 max-sm:order-1">序号</span>
         <span class="w-8 shrink-0 text-center max-sm:order-2">类型</span>
         <span class="flex-1 min-w-0 sm:flex-none sm:w-40 md:w-48 lg:w-56 shrink-0 max-sm:order-3">名称</span>
         <span class="w-24 sm:w-32 shrink-0 hidden md:block">执行位置</span>
@@ -300,10 +300,9 @@ watch(() => route.query.agent_id, (newVal) => {
         <div v-if="tasks.length === 0" class="text-sm text-muted-foreground text-center py-8">
           暂无任务
         </div>
-        <div v-for="task in tasks" :key="task.id"
+        <div v-for="(task, index) in tasks" :key="task.id"
           class="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-2 sm:gap-4 px-3 sm:px-4 py-2.5 sm:py-1.5 hover:bg-muted/30 transition-colors">
-          <span class="w-10 sm:w-12 shrink-0 text-muted-foreground text-xs sm:text-sm max-sm:order-1">#{{ task.id
-          }}</span>
+          <span class="w-10 sm:w-12 shrink-0 text-muted-foreground text-xs sm:text-sm max-sm:order-1">#{{ total - (currentPage - 1) * pageSize - index }}</span>
           <span class="w-8 shrink-0 flex justify-center max-sm:order-2" :title="getTaskTypeTitle(task.type || 'task')">
             <GitBranch v-if="task.type === TASK_TYPE.REPO" class="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
             <Terminal v-else class="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />

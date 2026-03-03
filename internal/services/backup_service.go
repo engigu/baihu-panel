@@ -158,7 +158,7 @@ func (s *BackupService) CreateBackup() (string, error) {
 
 	// 写入元数据信息
 	sysInfo := map[string]interface{}{
-		"version": "v2",
+		"version": "v3",
 		"ts":      time.Now().Format("2006-01-02 15:04:05"),
 	}
 	sysFile, err := zipWriter.Create("__sys__.json")
@@ -195,6 +195,24 @@ func (s *BackupService) Restore(zipPath string) error {
 	fileMap := make(map[string]*zip.File)
 	for _, f := range r.File {
 		fileMap[f.Name] = f
+	}
+
+	// 校验版本
+	if f, ok := fileMap["__sys__.json"]; ok {
+		rc, err := f.Open()
+		if err == nil {
+			var sysInfo map[string]interface{}
+			json.NewDecoder(rc).Decode(&sysInfo)
+			rc.Close()
+			if v, ok := sysInfo["version"]; ok {
+				vs, _ := v.(string)
+				if vs < "v3" {
+					return fmt.Errorf("只能数据随版本升级上来，当前备份版本为 %s，限制 v3 以下的不能导入", vs)
+				}
+			}
+		}
+	// } else {
+	// 	return fmt.Errorf("非法备份包：缺失版本标记")
 	}
 
 	// 开启全局事务

@@ -21,7 +21,12 @@ func (s *SettingsService) InitSettings() error {
 			var count int64
 			database.DB.Model(&models.Setting{}).Where("section = ? AND `key` = ?", section, key).Count(&count)
 			if count == 0 {
-				if err := database.DB.Create(&models.Setting{Section: section, Key: key, Value: value}).Error; err != nil {
+				if err := database.DB.Create(&models.Setting{
+					ID:      utils.GenerateID(),
+					Section: section,
+					Key:     key,
+					Value:   value,
+				}).Error; err != nil {
 					return err
 				}
 			}
@@ -38,7 +43,12 @@ func (s *SettingsService) InitSettings() error {
 		} else {
 			secretValue = utils.RandomString(32)
 		}
-		if err := database.DB.Create(&models.Setting{Section: constant.SectionSecurity, Key: constant.KeySecret, Value: secretValue}).Error; err != nil {
+		if err := database.DB.Create(&models.Setting{
+			ID:      utils.GenerateID(),
+			Section: constant.SectionSecurity,
+			Key:     constant.KeySecret,
+			Value:   secretValue,
+		}).Error; err != nil {
 			return err
 		}
 	} else {
@@ -69,7 +79,12 @@ func (s *SettingsService) Get(section, key string) string {
 func (s *SettingsService) Set(section, key, value string) error {
 	var setting models.Setting
 	if database.DB.Where("section = ? AND `key` = ?", section, key).First(&setting).Error != nil {
-		return database.DB.Create(&models.Setting{Section: section, Key: key, Value: value}).Error
+		return database.DB.Create(&models.Setting{
+			ID:      utils.GenerateID(),
+			Section: section,
+			Key:     key,
+			Value:   value,
+		}).Error
 	}
 	return database.DB.Model(&setting).Update("value", value).Error
 }

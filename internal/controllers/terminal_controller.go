@@ -85,11 +85,9 @@ func (tc *TerminalController) HandleWebSocket(c *gin.Context) {
 	}
 
 	// Windows 使用 pipe 模式，Unix 使用 PTY 模式
-	userID := 1
-	if v, exists := c.Get("userID"); exists {
-		if id, ok := v.(uint); ok {
-			userID = int(id)
-		}
+	userID := c.GetString("userID")
+	if userID == "" {
+		userID = "1" // 兜底
 	}
 
 	if runtime.GOOS == "windows" {
@@ -100,7 +98,7 @@ func (tc *TerminalController) HandleWebSocket(c *gin.Context) {
 }
 
 // handlePtyMode 使用 PTY 处理终端（Unix/macOS）
-func (tc *TerminalController) handlePtyMode(conn *websocket.Conn, userID int) {
+func (tc *TerminalController) handlePtyMode(conn *websocket.Conn, userID string) {
 	// 发送 PTY 模式标识
 	conn.WriteMessage(websocket.TextMessage, []byte("__PTY_MODE__"))
 
@@ -174,7 +172,7 @@ func (tc *TerminalController) handlePtyMode(conn *websocket.Conn, userID int) {
 }
 
 // handlePipeMode 使用 pipe 处理终端（Windows）
-func (tc *TerminalController) handlePipeMode(conn *websocket.Conn, userID int) {
+func (tc *TerminalController) handlePipeMode(conn *websocket.Conn, userID string) {
 	// 发送 pipe 模式标识
 	conn.WriteMessage(websocket.TextMessage, []byte("__PIPE_MODE__"))
 

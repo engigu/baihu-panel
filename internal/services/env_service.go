@@ -1,11 +1,11 @@
 package services
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 type EnvService struct{}
@@ -14,42 +14,26 @@ func NewEnvService() *EnvService {
 	return &EnvService{}
 }
 
-func (es *EnvService) CreateEnvVar(name, value, remark string, hidden bool, userID int) *models.EnvironmentVariable {
+func (es *EnvService) CreateEnvVar(name, value, remark string, hidden bool, userID string) *models.EnvironmentVariable {
 	env := &models.EnvironmentVariable{
+		ID:     utils.GenerateID(),
 		Name:   name,
 		Value:  value,
 		Remark: remark,
 		Hidden: hidden,
-		UserID: uint(userID),
+		UserID: userID,
 	}
-	data := map[string]interface{}{
-		"name":    name,
-		"value":   value,
-		"remark":  remark,
-		"hidden":  hidden,
-		"user_id": userID,
-	}
-	database.DB.Model(&models.EnvironmentVariable{}).Create(data)
-
-	// 将自动生成的 ID 赋值回对象以便返回
-	if id, ok := data["id"].(uint); ok {
-		env.ID = id
-	} else if id, ok := data["id"].(int64); ok {
-		env.ID = uint(id)
-	} else {
-		// 如果 ID 没有自动回填到 map，尝试通过刚才的数据查出来
-		database.DB.Where("name = ? AND user_id = ?", name, userID).Order("id DESC").First(env)
-	}
+	database.DB.Create(env)
 	return env
 }
 
-func (es *EnvService) GetEnvVarsByUserID(userID int) []models.EnvironmentVariable {
+func (es *EnvService) GetEnvVarsByUserID(userID string) []models.EnvironmentVariable {
 	var envs []models.EnvironmentVariable
 	database.DB.Where("user_id = ?", userID).Find(&envs)
 	return envs
 }
 
-func (es *EnvService) GetEnvVarsWithPagination(userID int, name string, page, pageSize int) ([]models.EnvironmentVariable, int64) {
+func (es *EnvService) GetEnvVarsWithPagination(userID string, name string, page, pageSize int) ([]models.EnvironmentVariable, int64) {
 	var envs []models.EnvironmentVariable
 	var total int64
 
@@ -63,17 +47,17 @@ func (es *EnvService) GetEnvVarsWithPagination(userID int, name string, page, pa
 	return envs, total
 }
 
-func (es *EnvService) GetEnvVarByID(id int) *models.EnvironmentVariable {
+func (es *EnvService) GetEnvVarByID(id string) *models.EnvironmentVariable {
 	var env models.EnvironmentVariable
-	if err := database.DB.First(&env, id).Error; err != nil {
+	if err := database.DB.Where("id = ?", id).First(&env).Error; err != nil {
 		return nil
 	}
 	return &env
 }
 
-func (es *EnvService) UpdateEnvVar(id int, name, value, remark string, hidden bool) *models.EnvironmentVariable {
+func (es *EnvService) UpdateEnvVar(id string, name, value, remark string, hidden bool) *models.EnvironmentVariable {
 	var env models.EnvironmentVariable
-	if err := database.DB.First(&env, id).Error; err != nil {
+	if err := database.DB.Where("id = ?", id).First(&env).Error; err != nil {
 		return nil
 	}
 	env.Name = name
@@ -84,8 +68,8 @@ func (es *EnvService) UpdateEnvVar(id int, name, value, remark string, hidden bo
 	return &env
 }
 
-func (es *EnvService) DeleteEnvVar(id int) bool {
-	result := database.DB.Delete(&models.EnvironmentVariable{}, id)
+func (es *EnvService) DeleteEnvVar(id string) bool {
+	result := database.DB.Where("id = ?", id).Delete(&models.EnvironmentVariable{})
 	return result.RowsAffected > 0
 }
 
@@ -107,12 +91,12 @@ func (es *EnvService) GetEnvVarsByIDs(envIDs string) []string {
 }
 
 // splitEnvIDs 解析逗号分隔的ID字符串
-func splitEnvIDs(envIDs string) []int {
-	var ids []int
+func splitEnvIDs(envIDs string) []string {
+	var ids []string
 	for _, s := range strings.Split(envIDs, ",") {
 		s = strings.TrimSpace(s)
-		if id, err := strconv.Atoi(s); err == nil {
-			ids = append(ids, id)
+		if s != "" {
+			ids = append(ids, s)
 		}
 	}
 	return ids

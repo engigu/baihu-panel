@@ -8,7 +8,7 @@ import (
 
 // DependencyVO 依赖包视图对象
 type DependencyVO struct {
-	ID          int       `json:"id"`
+	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Version     string    `json:"version"`
 	Language    string    `json:"language"`

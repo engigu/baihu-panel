@@ -19,7 +19,7 @@ import {
 const { pageSize } = useSiteSettings()
 
 interface LoginLog {
-  id: number
+  id: string
   username: string
   ip: string
   user_agent: string

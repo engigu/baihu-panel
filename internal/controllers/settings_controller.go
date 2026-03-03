@@ -59,9 +59,9 @@ func (sc *SettingsController) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	// 暂时使用固定用户名 admin
-	user := sc.userService.GetUserByUsername("admin")
-	if user == nil {
+	userID := c.GetString("userID")
+	var user *models.User
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
 		utils.NotFound(c, "用户不存在")
 		return
 	}

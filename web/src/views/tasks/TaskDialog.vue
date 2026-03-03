@@ -44,7 +44,7 @@ const cleanType = ref('none')
 const cleanKeep = ref(30)
 const allEnvVars = ref<EnvVar[]>([])
 const allAgents = ref<Agent[]>([])
-const selectedEnvIds = ref<number[]>([])
+const selectedEnvIds = ref<string[]>([])
 const selectedAgentId = ref<string>('local')
 const selectedTriggerType = ref<string>('cron')
 const envSearchQuery = ref('')
@@ -256,7 +256,7 @@ watch(() => props.open, async (val) => {
     }
     // 解析环境变量
     if (props.task?.envs) {
-      selectedEnvIds.value = props.task.envs.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
+      selectedEnvIds.value = props.task.envs.split(',').map(s => s.trim()).filter(Boolean)
     } else {
       selectedEnvIds.value = []
     }
@@ -303,14 +303,14 @@ async function loadData() {
   } catch { /* ignore */ }
 }
 
-function addEnv(id: number) {
+function addEnv(id: string) {
   if (!selectedEnvIds.value.includes(id)) {
     selectedEnvIds.value.push(id)
   }
   envSearchQuery.value = ''
 }
 
-function removeEnv(id: number) {
+function removeEnv(id: string) {
   selectedEnvIds.value = selectedEnvIds.value.filter(envId => envId !== id)
 }
 
@@ -320,7 +320,7 @@ async function save() {
     form.value.envs = selectedEnvIds.value.join(',')
     form.value.type = 'task'
     form.value.trigger_type = selectedTriggerType.value
-    form.value.agent_id = selectedAgentId.value === 'local' ? null : Number(selectedAgentId.value)
+    form.value.agent_id = selectedAgentId.value === 'local' ? null : selectedAgentId.value
 
     // 保存语言环境配置
     form.value.languages = selectedLangs.value.map(l => ({

@@ -1,8 +1,6 @@
 package models
 
 import (
-	"fmt"
-
 	"github.com/engigu/baihu-panel/internal/constant"
 
 	"gorm.io/gorm"
@@ -34,7 +32,7 @@ type TaskConfig struct {
 
 // Task 代表一个计划任务
 type Task struct {
-	ID          uint                `json:"id" gorm:"primaryKey"`
+	ID          string              `json:"id" gorm:"primaryKey;size:20"`
 	Name        string              `json:"name" gorm:"size:255;not null"`
 	Command     string              `json:"command" gorm:"type:text"`                   // 普通任务的命令
 	Tags        string              `json:"tags" gorm:"size:255;default:''"`            // 标签，逗号分隔
@@ -45,9 +43,9 @@ type Task struct {
 	Timeout     int                 `json:"timeout" gorm:"default:30"`                  // 超时时间（分钟），默认30分钟
 	WorkDir     string              `json:"work_dir" gorm:"size:255;default:''"`        // 工作目录，为空则使用 scripts 目录
 	CleanConfig string              `json:"clean_config" gorm:"size:255;default:''"`    // 清理配置 JSON
-	Envs        string              `json:"envs" gorm:"size:255;default:''"`            // 环境变量ID列表，逗号分隔
+	Envs        string              `json:"envs" gorm:"type:text"`            // 环境变量ID列表，逗号分隔
 	Languages   []map[string]string `json:"languages" gorm:"serializer:json;type:text"` // 针对本地任务的语言配置列表
-	AgentID       *uint               `json:"agent_id" gorm:"index"`                      // Agent ID，为空表示本地执行
+	AgentID       *string             `json:"agent_id" gorm:"size:20;index"`               // Agent ID，为空表示本地执行
 	RetryCount    int                 `json:"retry_count" gorm:"default:0"`               // 失败重试次数
 	RetryInterval int                 `json:"retry_interval" gorm:"default:0"`            // 失败重试间隔(秒)
 	RandomRange   int                 `json:"random_range" gorm:"default:0"`             // 随机延迟范围(秒)
@@ -65,7 +63,7 @@ func (Task) TableName() string {
 }
 
 func (t *Task) GetID() string {
-	return fmt.Sprintf("%d", t.ID)
+	return t.ID
 }
 
 func (t *Task) GetName() string {
@@ -93,7 +91,7 @@ func (t *Task) GetLanguages() []map[string]string {
 }
 
 func (t *Task) GetUseMise() bool {
-	return t.AgentID == nil || *t.AgentID == 0
+	return t.AgentID == nil || *t.AgentID == ""
 }
 
 func (t *Task) UseMise() bool {
@@ -110,9 +108,9 @@ func (t *Task) GetRandomRange() int {
 
 // TaskLog 代表任务执行的日志记录
 type TaskLog struct {
-	ID        uint       `json:"id" gorm:"primaryKey"`
-	TaskID    uint       `json:"task_id" gorm:"index"`
-	AgentID   *uint      `json:"agent_id" gorm:"index"` // Agent ID，为空表示本地执行
+	ID        string     `json:"id" gorm:"primaryKey;size:20"`
+	TaskID    string     `json:"task_id" gorm:"size:20;index"`
+	AgentID   *string    `json:"agent_id" gorm:"size:20;index"` // Agent ID，为空表示本地执行
 	Command   string     `json:"command" gorm:"type:text"`
 	Output    string     `json:"-" gorm:"type:longtext"`      // gzip+base64 压缩后的日志
 	Error     string     `json:"error" gorm:"type:text"`      // 额外的系统错误信息

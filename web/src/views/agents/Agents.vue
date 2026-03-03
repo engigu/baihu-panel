@@ -155,7 +155,7 @@ async function createToken() {
   }
 }
 
-async function deleteToken(id: number) {
+async function deleteToken(id: string) {
   try {
     await api.agents.deleteToken(id)
     await loadAgents()
@@ -230,7 +230,7 @@ onUnmounted(() => {
             <!-- 大屏表头 -->
             <div
               class="hidden sm:flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 border-b bg-muted/50 text-xs sm:text-sm text-muted-foreground font-medium">
-            <span class="w-10 sm:w-12 shrink-0">ID</span>
+            <span class="w-10 sm:w-12 shrink-0">序号</span>
             <span class="w-6 shrink-0"></span>
             <span class="w-24 sm:w-32 shrink-0">名称</span>
             <span class="w-24 sm:w-28 shrink-0">IP</span>
@@ -246,11 +246,11 @@ onUnmounted(() => {
               {{ searchQuery ? '无匹配结果' : '暂无 Agent' }}
             </div>
             <!-- 小屏布局 -->
-            <div v-for="agent in filteredAgents" :key="agent.id"
+            <div v-for="(agent, index) in filteredAgents" :key="agent.id"
               class="sm:hidden p-3 hover:bg-muted/50 transition-colors">
               <div class="flex items-start justify-between mb-2">
                 <div class="flex items-center gap-2 flex-1 min-w-0">
-                  <span class="text-xs text-muted-foreground shrink-0">#{{ agent.id }}</span>
+                  <span class="text-xs text-muted-foreground shrink-0">#{{ filteredAgents.length - index }}</span>
                   <span class="flex items-center shrink-0" :title="isOnline(agent) ? '在线' : '离线'">
                     <div v-if="isOnline(agent)"
                       class="h-5 w-5 rounded-full bg-green-500/10 flex items-center justify-center">
@@ -310,9 +310,9 @@ onUnmounted(() => {
               </div>
             </div>
             <!-- 大屏布局 -->
-            <div v-for="agent in filteredAgents" :key="`desktop-${agent.id}`"
+            <div v-for="(agent, index) in filteredAgents" :key="`desktop-${agent.id}`"
               class="hidden sm:flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 hover:bg-muted/50 transition-colors">
-              <span class="w-10 sm:w-12 shrink-0 text-muted-foreground text-xs sm:text-sm">#{{ agent.id }}</span>
+              <span class="w-10 sm:w-12 shrink-0 text-muted-foreground text-xs sm:text-sm">#{{ filteredAgents.length - index }}</span>
               <span class="w-6 shrink-0 flex justify-center">
                 <span class="flex justify-center shrink-0" :title="isOnline(agent) ? '在线' : '离线'">
                   <div v-if="isOnline(agent)"

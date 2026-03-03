@@ -6,7 +6,7 @@ import (
 
 // UserVO 用户视图对象
 type UserVO struct {
-	ID        uint             `json:"id"`
+	ID        string           `json:"id"`
 	Username  string           `json:"username"`
 	Email     string           `json:"email"`
 	Role      string           `json:"role"`
@@ -31,7 +31,7 @@ func ToUserVO(user *models.User) *UserVO {
 
 // EnvVO 环境变量视图对象
 type EnvVO struct {
-	ID        uint             `json:"id"`
+	ID        string           `json:"id"`
 	Name      string           `json:"name"`
 	Value     string           `json:"value"`
 	Remark    string           `json:"remark"`
@@ -79,7 +79,7 @@ func ToEnvVOListFromModels(envs []models.EnvironmentVariable) []*EnvVO {
 
 // LoginLogVO 登录日志视图对象
 type LoginLogVO struct {
-	ID        uint             `json:"id"`
+	ID        string           `json:"id"`
 	Username  string           `json:"username"`
 	IP        string           `json:"ip"`
 	UserAgent string           `json:"user_agent"`

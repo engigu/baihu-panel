@@ -14,6 +14,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/services/tasks"
+	"github.com/engigu/baihu-panel/internal/utils"
 
 	"gorm.io/gorm"
 )
@@ -46,6 +47,7 @@ func (s *AgentService) CreateToken(remark string, maxUses int, expiresAt *time.T
 	token := generateToken()
 
 	agentToken := &models.AgentToken{
+		ID:        utils.GenerateID(),
 		Token:     token,
 		Remark:    remark,
 		MaxUses:   maxUses,
@@ -69,8 +71,8 @@ func (s *AgentService) ListTokens() []models.AgentToken {
 }
 
 // DeleteToken 删除令牌
-func (s *AgentService) DeleteToken(id uint) error {
-	return database.DB.Delete(&models.AgentToken{}, id).Error
+func (s *AgentService) DeleteToken(id string) error {
+	return database.DB.Where("id = ?", id).Delete(&models.AgentToken{}).Error
 }
 
 // ValidateToken 验证令牌
@@ -98,7 +100,7 @@ func (s *AgentService) ValidateToken(token string) (*models.AgentToken, error) {
 }
 
 // UseToken 使用令牌（增加使用计数）
-func (s *AgentService) UseToken(id uint) {
+func (s *AgentService) UseToken(id string) {
 	database.DB.Model(&models.AgentToken{}).Where("id = ?", id).UpdateColumn("used_count", gorm.Expr("used_count + 1"))
 }
 
@@ -126,7 +128,7 @@ func (s *AgentService) RegisterByToken(token string, machineID string, ip string
 				"last_seen": now,
 			})
 			s.UseToken(agentToken.ID)
-			logger.Infof("[Agent] Agent #%d 通过 machine_id 复用 (%s)", existing.ID, machineID[:8]+"...")
+			logger.Infof("[Agent] Agent #%s 通过 machine_id 复用 (%s)", existing.ID, machineID[:8]+"...")
 			return &existing, false, nil
 		}
 	}
@@ -134,6 +136,7 @@ func (s *AgentService) RegisterByToken(token string, machineID string, ip string
 	// 创建 Agent，使用令牌作为认证 Token
 	now := models.LocalTime(time.Now())
 	agent := &models.Agent{
+		ID:        utils.GenerateID(),
 		Name:      fmt.Sprintf("agent-%d", time.Now().Unix()),
 		Token:     token,
 		MachineID: machineID,
@@ -148,7 +151,7 @@ func (s *AgentService) RegisterByToken(token string, machineID string, ip string
 	}
 
 	s.UseToken(agentToken.ID)
-	logger.Infof("[Agent] Agent 通过令牌注册: #%d (%s)", agent.ID, ip)
+	logger.Infof("[Agent] Agent 通过令牌注册: #%s (%s)", agent.ID, ip)
 	return agent, true, nil
 }
 
@@ -173,6 +176,7 @@ func (s *AgentService) Register(req *models.AgentRegisterRequest, ip string) (*m
 	// 创建新 Agent，使用令牌作为认证 Token
 	now := models.LocalTime(time.Now())
 	agent := &models.Agent{
+		ID:        utils.GenerateID(),
 		Name:      req.Name,
 		Token:     req.Token,
 		Hostname:  req.Hostname,
@@ -194,7 +198,7 @@ func (s *AgentService) Register(req *models.AgentRegisterRequest, ip string) (*m
 }
 
 // Update 更新 Agent
-func (s *AgentService) Update(id uint, name, description string, enabled bool) error {
+func (s *AgentService) Update(id string, name, description string, enabled bool) error {
 	return database.DB.Model(&models.Agent{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"name":        name,
 		"description": description,
@@ -203,7 +207,7 @@ func (s *AgentService) Update(id uint, name, description string, enabled bool) e
 }
 
 // Delete 删除 Agent（物理删除）
-func (s *AgentService) Delete(id uint) error {
+func (s *AgentService) Delete(id string) error {
 	// 检查是否有关联任务
 	var count int64
 	database.DB.Model(&models.Task{}).Where("agent_id = ?", id).Count(&count)
@@ -211,13 +215,13 @@ func (s *AgentService) Delete(id uint) error {
 		return &ServiceError{Message: "该 Agent 下还有关联任务，无法删除"}
 	}
 
-	return database.DB.Unscoped().Delete(&models.Agent{}, id).Error
+	return database.DB.Unscoped().Where("id = ?", id).Delete(&models.Agent{}).Error
 }
 
 // GetByID 根据 ID 获取 Agent
-func (s *AgentService) GetByID(id uint) *models.Agent {
+func (s *AgentService) GetByID(id string) *models.Agent {
 	var agent models.Agent
-	if err := database.DB.First(&agent, id).Error; err != nil {
+	if err := database.DB.Where("id = ?", id).First(&agent).Error; err != nil {
 		return nil
 	}
 	return &agent
@@ -249,7 +253,7 @@ func (s *AgentService) List() []models.Agent {
 }
 
 // RegenerateToken 重新生成 Token - 已废弃，保留空实现避免路由错误
-func (s *AgentService) RegenerateToken(id uint) (string, error) {
+func (s *AgentService) RegenerateToken(id string) (string, error) {
 	return "", &ServiceError{Message: "此功能已禁用"}
 }
 
@@ -301,7 +305,7 @@ func (s *AgentService) Heartbeat(token, ip, version, buildTime, hostname, osType
 }
 
 // GetTasks 获取 Agent 的任务列表
-func (s *AgentService) GetTasks(agentID uint) []models.AgentTask {
+func (s *AgentService) GetTasks(agentID string) []models.AgentTask {
 	var tasks []models.Task
 	database.DB.Where("agent_id = ? AND enabled = ?", agentID, true).Find(&tasks)
 
@@ -359,13 +363,13 @@ func (s *AgentService) ReportResult(result *models.AgentTaskResult) error {
 
 	// 先尝试通知正在等待的 goroutine
 	if agentWSManager.NotifyRemoteResult(result) {
-		logger.Infof("[Agent] 已通知正在等待任务 #%d 结果的 goroutine", result.TaskID)
+		logger.Infof("[Agent] 已通知正在等待任务 #%s 结果的 goroutine", result.TaskID)
 		return nil
 	}
 
 	// 如果没有人在等待（例如服务重启后），则由本协程负责处理结果入库
 	// 如果没有人在等待（例如服务重启后），则由本协程负责处理结果入库（记录日志并清理）
-	logger.Infof("[Agent] 没有找到等待任务 #%d 结果的 goroutine，直接处理结果", result.TaskID)
+	logger.Infof("[Agent] 没有找到等待任务 #%s 结果的 goroutine，直接处理结果", result.TaskID)
 	sendStatsService := NewSendStatsService()
 	taskLogService := tasks.NewTaskLogService(sendStatsService)
 
@@ -379,7 +383,7 @@ func (s *AgentService) ReportResult(result *models.AgentTaskResult) error {
 }
 
 // UpdateTaskDuration 更新任务耗时（心跳）
-func (s *AgentService) UpdateTaskDuration(logID uint, duration int64) error {
+func (s *AgentService) UpdateTaskDuration(logID string, duration int64) error {
 	taskLogService := tasks.NewTaskLogService(nil)
 	return taskLogService.UpdateTaskDuration(logID, duration)
 }
@@ -504,12 +508,12 @@ func (s *AgentService) GetAgentBinary(osType, arch string) ([]byte, string, erro
 }
 
 // SetForceUpdate 设置强制更新标志
-func (s *AgentService) SetForceUpdate(id uint) error {
+func (s *AgentService) SetForceUpdate(id string) error {
 	return database.DB.Model(&models.Agent{}).Where("id = ?", id).Update("force_update", true).Error
 }
 
 // ClearForceUpdate 清除强制更新标志
-func (s *AgentService) ClearForceUpdate(id uint) error {
+func (s *AgentService) ClearForceUpdate(id string) error {
 	return database.DB.Model(&models.Agent{}).Where("id = ?", id).Update("force_update", false).Error
 }
 

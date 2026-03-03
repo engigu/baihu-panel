@@ -6,6 +6,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/systime"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 type SendStatsService struct{}
@@ -15,7 +16,7 @@ func NewSendStatsService() *SendStatsService {
 }
 
 // IncrementStats 增加任务执行统计
-func (s *SendStatsService) IncrementStats(taskID uint, status string) error {
+func (s *SendStatsService) IncrementStats(taskID string, status string) error {
 	day := systime.FormatDate(time.Now())
 
 	var stats models.SendStats
@@ -24,6 +25,7 @@ func (s *SendStatsService) IncrementStats(taskID uint, status string) error {
 	if result.Error != nil {
 		// 不存在则创建
 		stats = models.SendStats{
+			ID:     utils.GenerateID(),
 			TaskID: taskID,
 			Day:    day,
 			Status: status,
@@ -37,7 +39,7 @@ func (s *SendStatsService) IncrementStats(taskID uint, status string) error {
 }
 
 // GetStatsByTaskID 获取任务的统计数据
-func (s *SendStatsService) GetStatsByTaskID(taskID uint) []models.SendStats {
+func (s *SendStatsService) GetStatsByTaskID(taskID string) []models.SendStats {
 	var stats []models.SendStats
 	database.DB.Where("task_id = ?", taskID).Order("day DESC").Find(&stats)
 	return stats
