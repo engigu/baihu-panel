@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/models"
@@ -32,9 +31,6 @@ func (c *DependencyController) List(ctx *gin.Context) {
 		return
 	}
 	vos := vo.ToDependencyVOListFromModels(deps)
-	for i := range vos {
-		vos[i].Log = "" // 列表不返回日志
-	}
 	utils.Success(ctx, vos)
 }
 
@@ -71,8 +67,8 @@ func (c *DependencyController) Create(ctx *gin.Context) {
 
 // Delete 删除依赖
 func (c *DependencyController) Delete(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
+	id := ctx.Param("id")
+	if id == "" {
 		utils.BadRequest(ctx, "无效的 ID")
 		return
 	}
@@ -116,14 +112,14 @@ func (c *DependencyController) Install(ctx *gin.Context) {
 		Remark:      req.Remark,
 	}
 
-	if err := c.service.Install(dep); err != nil {
+	err := c.service.Install(dep)
+	// 无论成功失败，都同步记录日志
+	c.service.Create(dep)
+
+	if err != nil {
 		utils.ServerError(ctx, err.Error())
 		return
 	}
-
-	// 安装成功后保存到数据库
-	c.service.Create(dep)
-
 	utils.SuccessMsg(ctx, "安装成功")
 }
 
@@ -186,8 +182,8 @@ func (c *DependencyController) GetReinstallAllCommand(ctx *gin.Context) {
 
 // Uninstall 卸载依赖
 func (c *DependencyController) Uninstall(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
+	id := ctx.Param("id")
+	if id == "" {
 		utils.BadRequest(ctx, "无效的 ID")
 		return
 	}
@@ -195,9 +191,9 @@ func (c *DependencyController) Uninstall(ctx *gin.Context) {
 	// 获取依赖信息
 	deps, _ := c.service.List("", "")
 	var dep *models.Dependency
-	for _, d := range deps {
-		if d.ID == id {
-			dep = &d
+	for i := range deps {
+		if deps[i].ID == id {
+			dep = &deps[i]
 			break
 		}
 	}
@@ -220,8 +216,8 @@ func (c *DependencyController) Uninstall(ctx *gin.Context) {
 
 // Reinstall 重新安装依赖
 func (c *DependencyController) Reinstall(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
+	id := ctx.Param("id")
+	if id == "" {
 		utils.BadRequest(ctx, "无效的 ID")
 		return
 	}
@@ -229,9 +225,9 @@ func (c *DependencyController) Reinstall(ctx *gin.Context) {
 	// 获取依赖信息
 	deps, _ := c.service.List("", "")
 	var dep *models.Dependency
-	for _, d := range deps {
-		if d.ID == id {
-			dep = &d
+	for i := range deps {
+		if deps[i].ID == id {
+			dep = &deps[i]
 			break
 		}
 	}
@@ -241,11 +237,14 @@ func (c *DependencyController) Reinstall(ctx *gin.Context) {
 		return
 	}
 
-	if err := c.service.Install(dep); err != nil {
+	err := c.service.Install(dep)
+	// 无论成功失败，都同步记录日志
+	c.service.Create(dep)
+
+	if err != nil {
 		utils.ServerError(ctx, err.Error())
 		return
 	}
-
 	utils.SuccessMsg(ctx, "重新安装成功")
 }
 
@@ -265,10 +264,14 @@ func (c *DependencyController) ReinstallAll(ctx *gin.Context) {
 	}
 
 	var failed []string
-	for _, d := range deps {
-		if err := c.service.Install(&d); err != nil {
+	for i := range deps {
+		d := &deps[i]
+		err := c.service.Install(d)
+		if err != nil {
 			failed = append(failed, d.Name)
 		}
+		// 无论成功失败，都同步记录日志到数据库
+		c.service.Create(d)
 	}
 
 	if len(failed) > 0 {

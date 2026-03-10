@@ -4,11 +4,11 @@ tmp_dir = "bin"
 
 [build]
   args_bin = []
-  bin = "./bin/baihu"
+  entrypoint = "./bin/baihu"
   cmd = ":"
   full_bin = "go run main.go server"
   delay = 1000
-  exclude_dir = ["assets", "tmp", "vendor", "testdata", "web", "data", "envs", "configs", "bin"]
+  exclude_dir = ["internal/static/dist", "assets", "tmp", "vendor", "testdata", "web", "data", "envs", "configs", "bin"]
   exclude_file = []
   exclude_regex = ["_test.go"]
   exclude_unchanged = false

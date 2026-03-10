@@ -29,14 +29,22 @@ jobs:
       - name: Build Web
         run: make build-web
 
+      - name: Generate Swagger
+        run: make swag
+
       - name: Build Binaries
         run: |
           VERSION=${{ github.ref_name }}
           BUILD_TIME=$(TZ='Asia/Shanghai' date '+%Y/%m/%d %H:%M:%S')
           LDFLAGS="-s -w -X 'github.com/engigu/baihu-panel/internal/constant.Version=$VERSION' -X 'github.com/engigu/baihu-panel/internal/constant.BuildTime=$BUILD_TIME'"
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o baihu-linux-amd64 main.go
+          
+          # Prepare static assets for embedding
+          rm -rf internal/static/dist
+          cp -r web/dist internal/static/dist
+          
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags web -ldflags="$LDFLAGS" -o baihu-linux-amd64 main.go
           tar -czvf baihu-linux-amd64.tar.gz baihu-linux-amd64
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="$LDFLAGS" -o baihu-linux-arm64 main.go
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags web -ldflags="$LDFLAGS" -o baihu-linux-arm64 main.go
           tar -czvf baihu-linux-arm64.tar.gz baihu-linux-arm64
 
       - name: Build Agent Binaries
@@ -246,13 +254,25 @@ jobs:
           name: baihu-binaries
           path: .
 
+      - name: Prepare Release Notes
+        if: matrix.base_type == 'debian'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view ${{ github.ref_name }} > /dev/null 2>&1; then
+            echo "$(cat CHANGELOG.md)" > FINAL_CHANGELOG.md
+            echo -e "\n\n" >> FINAL_CHANGELOG.md
+            gh release view ${{ github.ref_name }} --json body -q .body >> FINAL_CHANGELOG.md
+          else
+            cp CHANGELOG.md FINAL_CHANGELOG.md
+          fi
+
       - name: Create GitHub Release
         if: matrix.base_type == 'debian'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          body_path: CHANGELOG.md
-          append_body: true  # 追加模式：保留已有说明，在后面添加 CHANGELOG.md
+          body_path: FINAL_CHANGELOG.md
           files: |
             baihu-linux-amd64.tar.gz
             baihu-linux-arm64.tar.gz

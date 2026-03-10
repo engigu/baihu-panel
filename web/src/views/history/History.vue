@@ -33,7 +33,7 @@ const { pageSize } = useSiteSettings()
 const logs = ref<TaskLog[]>([])
 const selectedLog = ref<TaskLog | null>(null)
 const filterKeyword = ref('')
-const filterTaskId = ref<number | undefined>(undefined)
+const filterTaskId = ref<string | undefined>(undefined)
 const filterStatus = ref<string | undefined>(undefined)
 const currentPage = ref(1)
 const total = ref(0)
@@ -49,7 +49,7 @@ const showClearDialog = ref(false)
 
 // 删除单条日志弹窗
 const showDeleteDialog = ref(false)
-const deleteLogId = ref<number | null>(null)
+const deleteLogId = ref<string | null>(null)
 
 const wsContent = ref('')
 const isWsLoading = ref(false)
@@ -62,7 +62,7 @@ const decompressedOutput = computed(() => {
 
 async function loadLogs() {
   try {
-    const params: { page: number; page_size: number; task_id?: number; task_name?: string; status?: string } = {
+    const params: { page: number; page_size: number; task_id?: string; task_name?: string; status?: string } = {
       page: currentPage.value,
       page_size: pageSize.value
     }
@@ -241,7 +241,7 @@ async function handleClearLogs() {
   }
 }
 
-function confirmDeleteLog(id: number) {
+function confirmDeleteLog(id: string) {
   deleteLogId.value = id
   showDeleteDialog.value = true
 }
@@ -251,12 +251,12 @@ async function handleDeleteLog() {
   try {
     await api.logs.delete(deleteLogId.value)
     toast.success('该日志已删除')
-    
+
     // 如果当前选中的是这条日志，关闭详情页
     if (selectedLog.value?.id === deleteLogId.value) {
       closeDetail()
     }
-    
+
     showDeleteDialog.value = false
     loadLogs()
   } catch (err: any) {
@@ -291,7 +291,7 @@ onMounted(() => {
   // 从 URL 读取参数
   const taskIdParam = route.query.task_id
   if (taskIdParam) {
-    filterTaskId.value = Number(taskIdParam)
+    filterTaskId.value = String(taskIdParam)
   }
   const statusParam = route.query.status
   if (statusParam) {
@@ -302,7 +302,7 @@ onMounted(() => {
 
 // 监听路由变化
 watch(() => route.query, (newQuery) => {
-  filterTaskId.value = newQuery.task_id ? Number(newQuery.task_id) : undefined
+  filterTaskId.value = newQuery.task_id ? String(newQuery.task_id) : undefined
   filterStatus.value = newQuery.status ? String(newQuery.status) : undefined
   currentPage.value = 1
   loadLogs()
@@ -340,7 +340,9 @@ watch(() => route.query, (newQuery) => {
         <Button variant="outline" size="icon" class="h-9 w-9 shrink-0" @click="loadLogs" title="刷新">
           <RefreshCw class="h-4 w-4" />
         </Button>
-        <Button variant="outline" class="h-9 px-4 shrink-0 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20" @click="showClearDialog = true">
+        <Button variant="outline"
+          class="h-9 px-4 shrink-0 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20"
+          @click="showClearDialog = true">
           <Trash2 class="h-4 w-4 sm:mr-2" /> <span class="hidden sm:inline" style="padding-left: 2px;">清空日志</span>
         </Button>
       </div>
@@ -352,7 +354,7 @@ watch(() => route.query, (newQuery) => {
         <!-- 小屏表头 -->
         <div
           class="flex sm:hidden items-center gap-2 px-3 py-2 border-b bg-muted/20 text-xs text-muted-foreground font-medium">
-          <span class="w-14 shrink-0">ID</span>
+          <span class="w-14 shrink-0">序号</span>
           <span class="w-10 shrink-0 text-center">类型</span>
           <span class="flex-1 min-w-0">任务名称</span>
           <span class="w-8 shrink-0 text-center">状态</span>
@@ -362,7 +364,7 @@ watch(() => route.query, (newQuery) => {
         <!-- 大屏表头 -->
         <div
           class="hidden sm:flex items-center gap-4 px-4 h-11 border-b bg-muted/20 text-sm text-muted-foreground font-medium">
-          <span class="w-16 shrink-0">ID</span>
+          <span class="w-16 shrink-0">序号</span>
           <span class="w-12 shrink-0 text-center">类型</span>
           <span class="w-36 shrink-0">任务名称</span>
           <span class="flex-1 min-w-0">命令</span>
@@ -376,13 +378,14 @@ watch(() => route.query, (newQuery) => {
           <div v-if="logs.length === 0" class="text-sm text-muted-foreground text-center py-8">
             暂无日志
           </div>
-          <div v-for="log in logs" :key="log.id" :class="[
+          <div v-for="(log, index) in logs" :key="log.id" :class="[
             'cursor-pointer hover:bg-muted/30 transition-colors group',
             selectedLog?.id === log.id && 'bg-accent/50'
           ]" @click="selectLog(log)">
             <!-- 小屏行 -->
             <div class="flex sm:hidden items-center gap-2 px-3 py-2">
-              <span class="w-14 shrink-0 text-muted-foreground text-xs">#{{ log.id }}</span>
+              <span class="w-14 shrink-0 text-muted-foreground text-xs">#{{ total - (currentPage - 1) * pageSize - index
+              }}</span>
               <span class="w-6 shrink-0 flex justify-center" :title="getTaskTypeTitle(log.task_type || 'task')">
                 <GitBranch v-if="log.task_type === TASK_TYPE.REPO" class="h-3.5 w-3.5 text-primary" />
                 <Terminal v-else class="h-3.5 w-3.5 text-primary" />
@@ -417,14 +420,17 @@ watch(() => route.query, (newQuery) => {
               <span class="w-12 text-right shrink-0 text-muted-foreground text-xs">{{ formatDuration(log.duration)
               }}</span>
               <span class="w-8 shrink-0 flex justify-center opacity-100">
-                <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0" @click.stop="confirmDeleteLog(log.id)" title="删除该日志">
+                <Button variant="ghost" size="icon"
+                  class="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                  @click.stop="confirmDeleteLog(log.id)" title="删除该日志">
                   <Trash2 class="h-3.5 w-3.5" />
                 </Button>
               </span>
             </div>
             <!-- 大屏行 -->
             <div class="hidden sm:flex items-center gap-4 px-4 py-2">
-              <span class="w-16 shrink-0 text-muted-foreground text-sm">#{{ log.id }}</span>
+              <span class="w-16 shrink-0 text-muted-foreground text-sm">#{{ total - (currentPage - 1) * pageSize - index
+              }}</span>
               <span class="w-10 shrink-0 flex justify-center" :title="getTaskTypeTitle(log.task_type || 'task')">
                 <GitBranch v-if="log.task_type === TASK_TYPE.REPO" class="h-4 w-4 text-primary" />
                 <Terminal v-else class="h-4 w-4 text-primary" />
@@ -465,7 +471,9 @@ watch(() => route.query, (newQuery) => {
                 class="w-40 text-right shrink-0 text-muted-foreground text-xs hidden md:block">{{ log.start_time ||
                   log.created_at }}</span>
               <span class="w-10 shrink-0 flex justify-center opacity-100">
-                <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0" @click.stop="confirmDeleteLog(log.id)" title="删除该日志">
+                <Button variant="ghost" size="icon"
+                  class="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                  @click.stop="confirmDeleteLog(log.id)" title="删除该日志">
                   <Trash2 class="h-3.5 w-3.5" />
                 </Button>
               </span>
@@ -488,7 +496,8 @@ watch(() => route.query, (newQuery) => {
             </Button>
           </div>
           <div class="flex items-center gap-1">
-            <Button variant="ghost" size="icon" class="h-7 w-7 text-muted-foreground hover:text-destructive" title="删除该日志" @click="confirmDeleteLog(selectedLog.id)">
+            <Button variant="ghost" size="icon" class="h-7 w-7 text-muted-foreground hover:text-destructive"
+              title="删除该日志" @click="confirmDeleteLog(selectedLog.id)">
               <Trash2 class="h-3.5 w-3.5" />
             </Button>
             <Button variant="ghost" size="icon" class="h-7 w-7" @click="closeDetail" title="关闭">
@@ -567,7 +576,7 @@ watch(() => route.query, (newQuery) => {
     <!-- 全屏查看日志 -->
     <LogViewer v-model:open="showFullscreen" :title="`日志输出 - ${selectedLog?.task_name || ''}`"
       :content="decompressedOutput" :status="selectedLog?.status" />
-      
+
     <!-- 清空日志确认弹窗 -->
     <AlertDialog :open="showClearDialog" @update:open="showClearDialog = $event">
       <AlertDialogContent>
@@ -579,7 +588,7 @@ watch(() => route.query, (newQuery) => {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>取消</AlertDialogCancel>
-          <AlertDialogAction @click="handleClearLogs" class="bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:text-white dark:hover:bg-red-700">
+          <AlertDialogAction @click="handleClearLogs" variant="destructive">
             清空
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -597,7 +606,7 @@ watch(() => route.query, (newQuery) => {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>取消</AlertDialogCancel>
-          <AlertDialogAction @click="handleDeleteLog" class="bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:text-white dark:hover:bg-red-700">
+          <AlertDialogAction @click="handleDeleteLog" variant="destructive">
             删除
           </AlertDialogAction>
         </AlertDialogFooter>

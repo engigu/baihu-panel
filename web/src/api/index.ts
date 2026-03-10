@@ -72,27 +72,27 @@ export const api = {
     run: (id: string, envs?: string[]) => request<void>(`/workflows/${id}/run`, { method: 'POST', body: JSON.stringify({ envs }) })
   },
   tasks: {
-    list: (params?: { page?: number; page_size?: number; name?: string; agent_id?: number; tags?: string; type?: string }) => {
+    list: (params?: { page?: number; page_size?: number; name?: string; agent_id?: string; tags?: string; type?: string }) => {
       const query = new URLSearchParams()
       if (params?.page) query.set('page', String(params.page))
       if (params?.page_size) query.set('page_size', String(params.page_size))
       if (params?.name) query.set('name', params.name)
       if (params?.tags) query.set('tags', params.tags)
-      if (params?.agent_id) query.set('agent_id', String(params.agent_id))
+      if (params?.agent_id) query.set('agent_id', params.agent_id)
       if (params?.type) query.set('type', params.type)
       return request<TaskListResponse>(`/tasks?${query}`)
     },
     create: (data: Partial<Task>) => request<Task>('/tasks', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<Task>) => request<Task>(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    delete: (id: number) => request(`/tasks/${id}`, { method: 'DELETE' }),
-    execute: (id: number) => request<ExecutionResult>(`/execute/task/${id}`, { method: 'POST' }),
-    stop: (logID: number) => request(`/tasks/stop/${logID}`, { method: 'POST' })
+    update: (id: string, data: Partial<Task>) => request<Task>(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request(`/tasks/${id}`, { method: 'DELETE' }),
+    execute: (id: string) => request<ExecutionResult>(`/execute/task/${id}`, { method: 'POST' }),
+    stop: (logID: string) => request(`/tasks/stop/${logID}`, { method: 'POST' })
   },
   scripts: {
     list: () => request<Script[]>('/scripts'),
     create: (data: Partial<Script>) => request<Script>('/scripts', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<Script>) => request<Script>(`/scripts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    delete: (id: number) => request(`/scripts/${id}`, { method: 'DELETE' })
+    update: (id: string, data: Partial<Script>) => request<Script>(`/scripts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request(`/scripts/${id}`, { method: 'DELETE' })
   },
   env: {
     list: (params?: { page?: number; page_size?: number; name?: string }) => {
@@ -103,30 +103,37 @@ export const api = {
       return request<EnvListResponse>(`/env?${query}`)
     },
     all: () => request<EnvVar[]>('/env/all'),
+    tasks: (id: string) => request<Task[]>(`/env/${id}/tasks`),
     create: (data: Partial<EnvVar>) => request<EnvVar>('/env', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<EnvVar>) => request<EnvVar>(`/env/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    delete: (id: number) => request(`/env/${id}`, { method: 'DELETE' })
+    update: (id: string, data: Partial<EnvVar>) => request<EnvVar>(`/env/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string, force?: boolean) => {
+      const query = force ? '?force=true' : ''
+      return fetch(`${API_BASE_URL}/env/${id}${query}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      }).then(res => res.json() as Promise<ApiResponse<any>>)
+    }
   },
   execute: {
     command: (command: string) => request('/execute/command', { method: 'POST', body: JSON.stringify({ command }) }),
     results: () => request('/execute/results')
   },
   logs: {
-    list: (params?: { page?: number; page_size?: number; task_id?: number; task_name?: string; status?: string; workflow_id?: string; workflow_run_id?: string }) => {
+    list: (params?: { page?: number; page_size?: number; task_id?: string; task_name?: string; status?: string; workflow_id?: string; workflow_run_id?: string }) => {
       const query = new URLSearchParams()
       if (params?.page) query.set('page', String(params.page))
       if (params?.page_size) query.set('page_size', String(params.page_size))
-      if (params?.task_id) query.set('task_id', String(params.task_id))
+      if (params?.task_id) query.set('task_id', params.task_id)
       if (params?.task_name) query.set('task_name', params.task_name)
       if (params?.status) query.set('status', params.status)
       if (params?.workflow_id) query.set('workflow_id', params.workflow_id)
       if (params?.workflow_run_id) query.set('workflow_run_id', params.workflow_run_id)
       return request<LogListResponse>(`/logs?${query}`)
     },
-    get: (id: number) => request<LogDetail>(`/logs/${id}`),
-    detail: (id: number) => request<LogDetail>(`/logs/${id}`),
-    delete: (id: number) => request(`/logs/${id}`, { method: 'DELETE' }),
-    clear: (taskId?: number) => request('/logs/clear', { method: 'POST', body: JSON.stringify({ task_id: taskId }) })
+    get: (id: string) => request<LogDetail>(`/logs/${id}`),
+    detail: (id: string) => request<LogDetail>(`/logs/${id}`),
+    delete: (id: string) => request(`/logs/${id}`, { method: 'DELETE' }),
+    clear: (taskId?: string) => request('/logs/clear', { method: 'POST', body: JSON.stringify({ task_id: taskId }) })
   },
   dashboard: {
     stats: () => request<Stats>('/stats'),
@@ -141,12 +148,15 @@ export const api = {
     getPublicSite: () => request<{ title: string; subtitle: string; icon: string; demo_mode: boolean }>('/settings/public'),
     updateSite: (data: SiteSettings) =>
       request('/settings/site', { method: 'PUT', body: JSON.stringify(data) }),
-    generateApiToken: () => request<{ token: string }>('/settings/site/api-token/generate', { method: 'POST' }),
+    generateOpenapiToken: () => request<{ token: string }>('/settings/site/openapi-token/generate', { method: 'POST' }),
     getScheduler: () => request<SchedulerSettings>('/settings/scheduler'),
     updateScheduler: (data: SchedulerSettings) =>
       request('/settings/scheduler', { method: 'PUT', body: JSON.stringify(data) }),
     getPaths: () => request<{ scripts_dir: string }>('/settings/paths'),
     getAbout: () => request<AboutInfo>('/settings/about'),
+    get: (section: string, key: string) => request<string>(`/settings/${section}/${key}`),
+    generateToken: (section: string, key: string) =>
+      request<string>(`/settings/${section}/${key}/generate`, { method: 'POST' }),
     getLoginLogs: (params?: { page?: number; page_size?: number; username?: string }) => {
       const query = new URLSearchParams()
       if (params?.page) query.set('page', String(params.page))
@@ -233,11 +243,11 @@ export const api = {
     },
     create: (data: { name: string; version?: string; language: string; lang_version?: string; remark?: string }) =>
       request<Dependency>('/deps', { method: 'POST', body: JSON.stringify(data) }),
-    delete: (id: number) => request(`/deps/${id}`, { method: 'DELETE' }),
+    delete: (id: string) => request(`/deps/${id}`, { method: 'DELETE' }),
     install: (data: any) => request<any>('/deps/install', { method: 'POST', body: JSON.stringify(data) }),
     getInstallCmd: (data: any) => request<{ command: string }>('/deps/install-cmd', { method: 'POST', body: JSON.stringify(data) }),
-    uninstall: (id: number) => request<any>(`/deps/uninstall/${id}`, { method: 'POST' }),
-    reinstall: (id: number) => request(`/deps/reinstall/${id}`, { method: 'POST' }),
+    uninstall: (id: string) => request<any>(`/deps/uninstall/${id}`, { method: 'POST' }),
+    reinstall: (id: string) => request(`/deps/reinstall/${id}`, { method: 'POST' }),
     reinstallAll: (language: string, lang_version?: string) => {
       const query = new URLSearchParams({ language })
       if (lang_version) query.set('lang_version', lang_version)
@@ -257,16 +267,16 @@ export const api = {
   agents: {
     list: () => request<Agent[]>('/agents'),
     getVersion: () => request<{ version: string; platforms: { os: string; arch: string; filename: string }[] }>('/agents/version'),
-    update: (id: number, data: { name: string; description?: string; enabled: boolean }) =>
+    update: (id: string, data: { name: string; description?: string; enabled: boolean }) =>
       request('/agents/' + id, { method: 'PUT', body: JSON.stringify(data) }),
-    delete: (id: number) => request('/agents/' + id, { method: 'DELETE' }),
-    forceUpdate: (id: number) => request('/agents/' + id + '/update', { method: 'POST' }),
+    delete: (id: string) => request('/agents/' + id, { method: 'DELETE' }),
+    forceUpdate: (id: string) => request('/agents/' + id + '/update', { method: 'POST' }),
     downloadUrl: (os: string, arch: string) => `${API_BASE_URL}/agent/download?os=${os}&arch=${arch}`,
     // 令牌管理
     listTokens: () => request<AgentToken[]>('/agents/tokens'),
     createToken: (data: { remark?: string; max_uses?: number; expires_at?: string }) =>
       request<AgentToken>('/agents/tokens', { method: 'POST', body: JSON.stringify(data) }),
-    deleteToken: (id: number) => request('/agents/tokens/' + id, { method: 'DELETE' })
+    deleteToken: (id: string) => request('/agents/tokens/' + id, { method: 'DELETE' })
   },
   mise: {
     list: () => request<MiseLanguage[]>('/mise/ls'),
@@ -277,6 +287,36 @@ export const api = {
   },
   terminal: {
     cmds: () => request<{ name: string, description: string }[]>('/terminal/cmds')
+  },
+  notify: {
+    getTypes: () => request<{ channel_types: ChannelType[]; event_types: EventType[] }>('/notify/types'),
+    getChannels: () => request<NotifyChannel[]>('/notify/channels'),
+    saveChannel: (data: Partial<NotifyChannel>) =>
+      request('/notify/channels', { method: 'POST', body: JSON.stringify(data) }),
+    deleteChannel: (id: string) => request('/notify/channels/' + id, { method: 'DELETE' }),
+    testChannel: (data: Partial<NotifyChannel>) =>
+      request<NotifyResult>('/notify/channels/test', { method: 'POST', body: JSON.stringify(data) }),
+
+    getBindings: () => request<NotifyBinding[]>('/notify/bindings'),
+    saveBinding: (data: Partial<NotifyBinding>) =>
+      request<NotifyBinding>('/notify/bindings', { method: 'POST', body: JSON.stringify(data) }),
+    deleteBinding: (id: string) => request('/notify/bindings/' + id, { method: 'DELETE' }),
+    send: (data: { channel_id: string; title: string; text: string }) =>
+      request<NotifyResult>('/notify/send', { method: 'POST', body: JSON.stringify(data) })
+  },
+  appLogs: {
+    list: (params?: { page?: number; page_size?: number; category?: string; status?: string; level?: string; keyword?: string }) => {
+      const query = new URLSearchParams()
+      if (params?.page) query.set('page', String(params.page))
+      if (params?.page_size) query.set('page_size', String(params.page_size))
+      if (params?.category) query.set('category', params.category)
+      if (params?.status) query.set('status', params.status)
+      if (params?.level) query.set('level', params.level)
+      if (params?.keyword) query.set('keyword', params.keyword)
+      return request<AppLogListResponse>(`/app-logs?${query}`)
+    },
+    markAsRead: (data: { id?: string; category?: string }) => request('/app-logs/read', { method: 'POST', body: JSON.stringify(data) }),
+    clear: (category: string) => request('/app-logs/clear', { method: 'POST', body: JSON.stringify({ category }) })
   }
 }
 
@@ -288,7 +328,7 @@ export interface FileNode {
 }
 
 export interface Task {
-  id: number
+  id: string
   name: string
   command: string
   tags: string
@@ -302,11 +342,14 @@ export interface Task {
   envs: string
   retry_count: number
   retry_interval: number
+  random_range: number
   languages: { name: string; version: string }[]
-  agent_id: number | null
+  agent_id: string | null
   enabled: boolean
   last_run: string
   next_run: string
+  created_at?: string
+  updated_at?: string
 }
 
 export interface RepoConfig {
@@ -323,7 +366,7 @@ export interface RepoConfig {
 }
 
 export interface ExecutionResult {
-  TaskID: number
+  TaskID: string
   Success: boolean
   Output: string
   Error: string
@@ -339,13 +382,13 @@ export interface TaskListResponse {
 }
 
 export interface Script {
-  id: number
+  id: string
   name: string
   content: string
 }
 
 export interface EnvVar {
-  id: number
+  id: string
   name: string
   value: string
   remark: string
@@ -370,8 +413,8 @@ export interface Stats {
 
 
 export interface TaskLog {
-  id: number
-  task_id: number
+  id: string
+  task_id: string
   task_name: string
   task_type: string
   command: string
@@ -393,8 +436,8 @@ export interface LogListResponse {
 }
 
 export interface LogDetail {
-  id: number
-  task_id: number
+  id: string
+  task_id: string
   command: string
   output: string
   error: string | null
@@ -422,8 +465,15 @@ export interface SiteSettings {
   icon: string
   page_size: string
   cookie_days: string
-  api_token?: string
-  api_token_expire?: string
+  openapi_enabled?: boolean
+  openapi_token?: string
+  openapi_token_expire?: string
+  system_notice_days?: string
+  system_notice_max_count?: string
+  push_log_days?: string
+  push_log_max_count?: string
+  login_log_days?: string
+  login_log_max_count?: string
 }
 
 export interface SchedulerSettings {
@@ -434,7 +484,7 @@ export interface SchedulerSettings {
 
 
 export interface LoginLog {
-  id: number
+  id: string
   username: string
   ip: string
   user_agent: string
@@ -458,13 +508,13 @@ export interface DailyStats {
 }
 
 export interface TaskStatsItem {
-  task_id: number
+  task_id: string
   task_name: string
   count: number
 }
 
 export interface Dependency {
-  id: number
+  id: string
   name: string
   version: string
   language: string
@@ -476,7 +526,7 @@ export interface Dependency {
 }
 
 export interface Agent {
-  id: number
+  id: string
   name: string
   token: string
   machine_id: string
@@ -495,7 +545,7 @@ export interface Agent {
 }
 
 export interface AgentToken {
-  id: number
+  id: string
   token: string
   remark: string
   max_uses: number
@@ -534,3 +584,75 @@ export interface WorkflowListResponse {
   page_size: number
 }
 
+export interface ChannelType {
+  type: string
+  label: string
+}
+
+export interface EventType {
+  type: string
+  label: string
+  binding_type?: string
+}
+
+export interface NotifyChannel {
+  id: string
+  name: string
+  type: string
+  enabled: boolean
+  created_at?: string
+  config: Record<string, string>
+}
+
+export interface NotifyBinding {
+  id: string
+  type: string
+  event: string
+  way_id: string
+  data_id: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface NotifyResult {
+  success: boolean
+  error?: string
+}
+
+export interface AppLog {
+  id: string
+  category: string
+  title: string
+  content: string
+  level: string
+  status: string
+  ref_id: string
+  channel_name?: string
+  error_msg: string
+  created_at: string
+  read_at: string | null
+}
+
+export interface AppLogListResponse {
+  data: AppLog[]
+  total: number
+}
+
+export const LOG_CATEGORY = {
+  SYSTEM_NOTICE: 'system_notice',
+  PUSH_LOG: 'push_log',
+  LOGIN_LOG: 'login_log'
+} as const
+
+export const LOG_LEVEL = {
+  INFO: 'info',
+  WARNING: 'warning',
+  ERROR: 'error'
+} as const
+
+export const LOG_STATUS = {
+  UNREAD: 'unread',
+  READ: 'read',
+  SUCCESS: 'success',
+  FAILED: 'failed'
+} as const

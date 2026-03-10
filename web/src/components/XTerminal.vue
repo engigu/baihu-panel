@@ -190,7 +190,7 @@ function connectWebSocket() {
     }
     terminal?.write(event.data)
 
-    // 检测安装结果标识
+    // 检测结果标识（保持简单的单次消息检测，不使用持久缓冲区，避免重复触发通知）
     if (typeof event.data === 'string') {
       if (event.data.includes('__INSTALL_SUCCESS__')) {
         emit('success')

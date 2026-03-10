@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -85,11 +84,9 @@ func (tc *TerminalController) HandleWebSocket(c *gin.Context) {
 	}
 
 	// Windows 使用 pipe 模式，Unix 使用 PTY 模式
-	userID := 1
-	if v, exists := c.Get("userID"); exists {
-		if id, ok := v.(uint); ok {
-			userID = int(id)
-		}
+	userID := c.GetString("userID")
+	if userID == "" {
+		userID = "1" // 兜底
 	}
 
 	if runtime.GOOS == "windows" {
@@ -100,7 +97,7 @@ func (tc *TerminalController) HandleWebSocket(c *gin.Context) {
 }
 
 // handlePtyMode 使用 PTY 处理终端（Unix/macOS）
-func (tc *TerminalController) handlePtyMode(conn *websocket.Conn, userID int) {
+func (tc *TerminalController) handlePtyMode(conn *websocket.Conn, userID string) {
 	// 发送 PTY 模式标识
 	conn.WriteMessage(websocket.TextMessage, []byte("__PTY_MODE__"))
 
@@ -118,11 +115,9 @@ func (tc *TerminalController) handlePtyMode(conn *websocket.Conn, userID int) {
 		cmd.Env = append(cmd.Env, "PATH="+pathStr)
 	}
 
-	// 注入环境变量
-	envVars := tc.envService.GetEnvVarsByUserID(userID)
-	for _, env := range envVars {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", env.Name, env.Value))
-	}
+	// 注入环境变量（支持同名合并）
+	envVars := tc.envService.GetFormattedEnvVarsByUserID(userID)
+	cmd.Env = append(cmd.Env, envVars...)
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
@@ -174,7 +169,7 @@ func (tc *TerminalController) handlePtyMode(conn *websocket.Conn, userID int) {
 }
 
 // handlePipeMode 使用 pipe 处理终端（Windows）
-func (tc *TerminalController) handlePipeMode(conn *websocket.Conn, userID int) {
+func (tc *TerminalController) handlePipeMode(conn *websocket.Conn, userID string) {
 	// 发送 pipe 模式标识
 	conn.WriteMessage(websocket.TextMessage, []byte("__PIPE_MODE__"))
 
@@ -193,10 +188,9 @@ func (tc *TerminalController) handlePipeMode(conn *websocket.Conn, userID int) {
 		cmd.Env = append(cmd.Env, "PATH="+pathStr)
 	}
 
-	envVars := tc.envService.GetEnvVarsByUserID(userID)
-	for _, env := range envVars {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", env.Name, env.Value))
-	}
+	// 注入环境变量（支持同名合并）
+	envVars := tc.envService.GetFormattedEnvVarsByUserID(userID)
+	cmd.Env = append(cmd.Env, envVars...)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -268,6 +262,12 @@ func (tc *TerminalController) handlePipeMode(conn *websocket.Conn, userID int) {
 
 // ExecuteShellCommand 执行单个命令并返回结果
 func (tc *TerminalController) ExecuteShellCommand(c *gin.Context) {
+	// 演示模式下禁止执行命令
+	if constant.DemoMode {
+		utils.BadRequest(c, "演示模式下不能执行命令")
+		return
+	}
+
 	var req struct {
 		Command string `json:"command" binding:"required"`
 	}

@@ -31,7 +31,7 @@ func LoadSiteCache() {
 	var settings []models.Setting
 	database.DB.Where("section = ?", constant.SectionSite).Find(&settings)
 	for _, setting := range settings {
-		siteCache[setting.Key] = setting.Value
+		siteCache[setting.Key] = string(setting.Value)
 	}
 	siteCacheInit = true
 }

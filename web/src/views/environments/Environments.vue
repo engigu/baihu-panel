@@ -2,12 +2,12 @@
 import { ref, onMounted, watch } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import Pagination from '@/components/Pagination.vue'
-import { Plus, Pencil, Trash2, Eye, EyeOff, Search } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Eye, EyeOff, Search, AlertTriangle, Terminal } from 'lucide-vue-next'
 import TextOverflow from '@/components/TextOverflow.vue'
 import { api, type EnvVar } from '@/api'
 import { toast } from 'vue-sonner'
@@ -20,9 +20,11 @@ const envVars = ref<EnvVar[]>([])
 const showDialog = ref(false)
 const editingEnv = ref<Partial<EnvVar>>({})
 const isEdit = ref(false)
-const showValues = ref<Record<number, boolean>>({})
+const showValues = ref<Record<string, boolean>>({})
 const showDeleteDialog = ref(false)
-const deleteEnvId = ref<number | null>(null)
+const deleteEnvId = ref<string | null>(null)
+const associatedTasks = ref<any[]>([])
+const isDeleting = ref(false)
 
 const filterName = ref('')
 const currentPage = ref(1)
@@ -84,23 +86,50 @@ async function saveEnv() {
   } catch { toast.error('保存失败') }
 }
 
-function confirmDelete(id: number) {
+async function confirmDelete(id: string) {
   deleteEnvId.value = id
-  showDeleteDialog.value = true
+  try {
+    const res = await api.env.tasks(id)
+    associatedTasks.value = res || []
+    showDeleteDialog.value = true
+  } catch {
+    toast.error('检查变量引用失败')
+  }
 }
 
-async function deleteEnv() {
+async function deleteEnv(force = false) {
   if (!deleteEnvId.value) return
+  isDeleting.value = true
   try {
-    await api.env.delete(deleteEnvId.value)
+    const res = await api.env.delete(deleteEnvId.value, force)
+    if (res.code === 409) {
+      associatedTasks.value = res.data || []
+      isDeleting.value = false
+      return
+    }
+    if (res.code !== 200) {
+      toast.error(res.msg || '删除失败')
+      isDeleting.value = false
+      return
+    }
     toast.success('变量已删除')
     loadEnvVars()
-  } catch { toast.error('删除失败') }
-  showDeleteDialog.value = false
-  deleteEnvId.value = null
+    showDeleteDialog.value = false
+  } catch {
+    toast.error('网络错误，删除失败')
+  } finally {
+    isDeleting.value = false
+  }
 }
 
-function toggleShow(id: number) {
+watch(showDeleteDialog, (val) => {
+  if (!val) {
+    associatedTasks.value = []
+    deleteEnvId.value = null
+  }
+})
+
+function toggleShow(id: string) {
   showValues.value[id] = !showValues.value[id]
 }
 
@@ -208,12 +237,56 @@ onMounted(loadEnvVars)
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>确认删除</AlertDialogTitle>
-          <AlertDialogDescription>确定要删除此环境变量吗？此操作无法撤销。</AlertDialogDescription>
+          <AlertDialogDescription>
+            <div v-if="associatedTasks.length > 0" class="space-y-4 pt-1">
+              <div class="flex items-start gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                <AlertTriangle class="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <div class="space-y-1">
+                  <p class="text-sm font-bold text-destructive">环境变量正在使用中</p>
+                  <p class="text-xs text-muted-foreground leading-relaxed">
+                    该变量已被以下任务引用，直接删除可能导致任务运行失败。建议先移除引用或选择“强制删除”。
+                  </p>
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <div class="flex items-center justify-between px-1">
+                  <p class="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">关联任务 ({{
+                    associatedTasks.length }})</p>
+                </div>
+                <div class="bg-muted/30 rounded-lg p-1.5 max-h-40 overflow-y-auto space-y-1 border border-border/40">
+                  <div v-for="task in associatedTasks" :key="task.id"
+                    class="text-xs flex items-center justify-between bg-background/50 p-2 rounded-md border border-border/50 hover:bg-background transition-colors">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <Terminal class="h-3 w-3 text-primary/70" />
+                      <span class="font-medium truncate">{{ task.name }}</span>
+                    </div>
+                    <code
+                      class="text-[10px] text-muted-foreground/70 font-mono bg-muted/50 px-1.5 py-0.5 rounded">{{ task.id }}</code>
+                  </div>
+                </div>
+              </div>
+
+              <div class="p-3 rounded-lg bg-secondary/30 border border-border/20">
+                <p class="text-xs text-muted-foreground leading-relaxed">
+                  <span class="font-bold text-foreground/80">提示：</span>选择强制删除将自动解除以上任务对该变量的绑定并执行物理删除。
+                </p>
+              </div>
+            </div>
+            <p v-else class="py-2">确定要删除此环境变量吗？此操作无法撤销，请谨慎操作。</p>
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>取消</AlertDialogCancel>
-          <AlertDialogAction class="bg-destructive text-white hover:bg-destructive/90" @click="deleteEnv">删除
-          </AlertDialogAction>
+          <AlertDialogCancel :disabled="isDeleting">取消</AlertDialogCancel>
+          <Button v-if="associatedTasks.length > 0" variant="destructive" @click="deleteEnv(true)"
+            :disabled="isDeleting">
+            <template v-if="isDeleting">删除中...</template>
+            <template v-else>强制删除</template>
+          </Button>
+          <Button v-else variant="destructive" @click="deleteEnv(false)" :disabled="isDeleting">
+            <template v-if="isDeleting">删除中...</template>
+            <template v-else>确认删除</template>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

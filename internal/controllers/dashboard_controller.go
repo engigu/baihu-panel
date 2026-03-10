@@ -139,7 +139,7 @@ func (dc *DashboardController) GetSendStats(c *gin.Context) {
 
 // TaskStats 任务执行统计
 type TaskStats struct {
-	TaskID   uint   `json:"task_id"`
+	TaskID   string `json:"task_id"`
 	TaskName string `json:"task_name"`
 	Count    int    `json:"count"`
 }
@@ -159,7 +159,7 @@ func (dc *DashboardController) GetTaskStats(c *gin.Context) {
 
 	// 按 task_id 聚合统计
 	var results []struct {
-		TaskID uint
+		TaskID string
 		Total  int
 	}
 	database.DB.Model(&models.SendStats{}).
@@ -170,7 +170,7 @@ func (dc *DashboardController) GetTaskStats(c *gin.Context) {
 		Find(&results)
 
 	// 获取任务名称
-	taskIDs := make([]uint, 0, len(results))
+	taskIDs := make([]string, 0, len(results))
 	for _, r := range results {
 		taskIDs = append(taskIDs, r.TaskID)
 	}
@@ -179,7 +179,7 @@ func (dc *DashboardController) GetTaskStats(c *gin.Context) {
 	if len(taskIDs) > 0 {
 		database.DB.Where("id IN ?", taskIDs).Find(&tasks)
 	}
-	taskNameMap := make(map[uint]string)
+	taskNameMap := make(map[string]string)
 	for _, t := range tasks {
 		taskNameMap[t.ID] = t.Name
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 type UserService struct{}
@@ -22,6 +23,7 @@ func (us *UserService) hashPassword(password string) string {
 
 func (us *UserService) CreateUser(username, password, email, role string) *models.User {
 	user := &models.User{
+		ID:       utils.GenerateID(),
 		Username: username,
 		Password: us.hashPassword(password),
 		Email:    email,
@@ -59,6 +61,6 @@ func (us *UserService) AuthenticateUser(username, password string) bool {
 	return us.ValidatePassword(user, password)
 }
 
-func (us *UserService) UpdatePassword(userID uint, newPassword string) error {
+func (us *UserService) UpdatePassword(userID string, newPassword string) error {
 	return database.DB.Model(&models.User{}).Where("id = ?", userID).Update("password", us.hashPassword(newPassword)).Error
 }

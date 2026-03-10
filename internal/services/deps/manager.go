@@ -49,7 +49,7 @@ func (m *BaseManager) Install(dep *models.Dependency) error {
 
 	logger.Infof("Installing %s package: %s", m.Language, packageSpec)
 	output, err := m.runMiseCommand(dep.LangVersion, args)
-	dep.Log = string(output)
+	dep.Log = models.BigText(output)
 
 	if err != nil {
 		logger.Errorf("Install failed: %v, output: %s", err, string(output))

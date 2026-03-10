@@ -57,11 +57,14 @@ COPY . .
 # Copy frontend dist (needed for embedding)
 COPY --from=frontend-builder /app/web/dist ./internal/static/dist
 
+# Generate Swagger
+RUN go run github.com/swaggo/swag/cmd/swag@latest init -g main.go -o ./openapi_docs
+
 # Build Go binary
 RUN VERSION_VAL=$(cat /build-info/version.txt) && \
     BUILD_TIME_VAL=$(cat /build-info/build_time.txt) && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -ldflags="-s -w -X github.com/engigu/baihu-panel/internal/constant.Version=${VERSION_VAL} -X 'github.com/engigu/baihu-panel/internal/constant.BuildTime=${BUILD_TIME_VAL}'" \
+    go build -tags web -ldflags="-s -w -X github.com/engigu/baihu-panel/internal/constant.Version=${VERSION_VAL} -X 'github.com/engigu/baihu-panel/internal/constant.BuildTime=${BUILD_TIME_VAL}'" \
     -o baihu .
 
 # ================================

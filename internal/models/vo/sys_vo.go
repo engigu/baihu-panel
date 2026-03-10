@@ -6,7 +6,7 @@ import (
 
 // UserVO 用户视图对象
 type UserVO struct {
-	ID        uint             `json:"id"`
+	ID        string           `json:"id"`
 	Username  string           `json:"username"`
 	Email     string           `json:"email"`
 	Role      string           `json:"role"`
@@ -31,7 +31,7 @@ func ToUserVO(user *models.User) *UserVO {
 
 // EnvVO 环境变量视图对象
 type EnvVO struct {
-	ID        uint             `json:"id"`
+	ID        string           `json:"id"`
 	Name      string           `json:"name"`
 	Value     string           `json:"value"`
 	Remark    string           `json:"remark"`
@@ -48,7 +48,7 @@ func ToEnvVO(env *models.EnvironmentVariable) *EnvVO {
 	return &EnvVO{
 		ID:        env.ID,
 		Name:      env.Name,
-		Value:     env.Value,
+		Value:     string(env.Value),
 		Remark:    env.Remark,
 		Hidden:    env.Hidden,
 		CreatedAt: env.CreatedAt,
@@ -79,7 +79,7 @@ func ToEnvVOListFromModels(envs []models.EnvironmentVariable) []*EnvVO {
 
 // LoginLogVO 登录日志视图对象
 type LoginLogVO struct {
-	ID        uint             `json:"id"`
+	ID        string           `json:"id"`
 	Username  string           `json:"username"`
 	IP        string           `json:"ip"`
 	UserAgent string           `json:"user_agent"`
@@ -88,39 +88,9 @@ type LoginLogVO struct {
 	CreatedAt models.LocalTime `json:"created_at"`
 }
 
-// ToLoginLogVO 将 LoginLog 模型转换为 LoginLogVO
-func ToLoginLogVO(log *models.LoginLog) *LoginLogVO {
-	if log == nil {
-		return nil
-	}
-	return &LoginLogVO{
-		ID:        log.ID,
-		Username:  log.Username,
-		IP:        log.IP,
-		UserAgent: log.UserAgent,
-		Status:    log.Status,
-		Message:   log.Message,
-		CreatedAt: log.CreatedAt,
-	}
-}
-
-// ToLoginLogVOList 将 LoginLog 模型列表转换为 LoginLogVO 列表
-func ToLoginLogVOList(logs []*models.LoginLog) []*LoginLogVO {
-	if logs == nil {
-		return nil
-	}
-	vos := make([]*LoginLogVO, len(logs))
-	for i, l := range logs {
-		vos[i] = ToLoginLogVO(l)
-	}
-	return vos
-}
-
-// ToLoginLogVOListFromModels 将 LoginLog 模型列表转换为 LoginLogVO 列表
-func ToLoginLogVOListFromModels(logs []models.LoginLog) []*LoginLogVO {
-	vos := make([]*LoginLogVO, len(logs))
-	for i := range logs {
-		vos[i] = ToLoginLogVO(&logs[i])
-	}
-	return vos
+// TokenConfig Token 配置结构体
+type TokenConfig struct {
+	Enabled  bool   `json:"enabled"`
+	Token    string `json:"token"`
+	ExpireAt string `json:"expire_at"`
 }

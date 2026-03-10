@@ -84,6 +84,11 @@ func (a *App) initDatabase() {
 		logger.Fatalf("Failed to init database: %v", err)
 	}
 
+	// 执行 V3 迁移（ID 变更迁移）
+	if err := services.RunMigrationV3(); err != nil {
+		logger.Fatalf("Failed to run V3 migration: %v", err)
+	}
+
 	if err := database.Migrate(); err != nil {
 		logger.Fatalf("Failed to migrate database: %v", err)
 	}

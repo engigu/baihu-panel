@@ -13,6 +13,7 @@ import (
 
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
+	"github.com/engigu/baihu-panel/internal/eventbus"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
@@ -59,9 +60,9 @@ func (sc *SettingsController) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	// 暂时使用固定用户名 admin
-	user := sc.userService.GetUserByUsername("admin")
-	if user == nil {
+	userID := c.GetString("userID")
+	var user *models.User
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
 		utils.NotFound(c, "用户不存在")
 		return
 	}
@@ -76,6 +77,13 @@ func (sc *SettingsController) ChangePassword(c *gin.Context) {
 		return
 	}
 
+	eventbus.DefaultBus.Publish(eventbus.Event{
+		Type: constant.EventPasswordChanged,
+		Payload: map[string]interface{}{
+			"username": user.Username,
+		},
+	})
+
 	utils.SuccessMsg(c, "密码修改成功")
 }
 
@@ -84,16 +92,29 @@ func (sc *SettingsController) ChangePassword(c *gin.Context) {
 // GetSiteSettings 获取站点设置
 func (sc *SettingsController) GetSiteSettings(c *gin.Context) {
 	settings := sc.settingsService.GetSection(constant.SectionSite)
-	
-	// 解析 JSON 格式的 API Token
-	if tokenJson, ok := settings[constant.KeyApiToken]; ok && tokenJson != "" {
-		var tokenData map[string]string
-		if err := json.Unmarshal([]byte(tokenJson), &tokenData); err == nil {
-			settings["api_token"] = tokenData["token"]
-			settings["api_token_expire"] = tokenData["expire_at"]
+
+	// 解析 JSON 格式的 OpenAPI Token
+	if tokenJson, ok := settings[constant.KeyOpenapiToken]; ok && tokenJson != "" {
+		var tokenConfig vo.TokenConfig
+		if err := json.Unmarshal([]byte(tokenJson), &tokenConfig); err == nil {
+			settings["openapi_token"] = tokenConfig.Token
+			settings["openapi_token_expire"] = tokenConfig.ExpireAt
+			if tokenConfig.Enabled {
+				settings["openapi_enabled"] = "true"
+			} else {
+				settings["openapi_enabled"] = "false"
+			}
 		}
 	}
-	
+
+	// 获取日志清理配置
+	settings["system_notice_days"] = sc.settingsService.Get(constant.SectionSystem, constant.KeySystemNoticeDays)
+	settings["system_notice_max_count"] = sc.settingsService.Get(constant.SectionSystem, constant.KeySystemNoticeMaxCount)
+	settings["push_log_days"] = sc.settingsService.Get(constant.SectionSystem, constant.KeyPushLogDays)
+	settings["push_log_max_count"] = sc.settingsService.Get(constant.SectionSystem, constant.KeyPushLogMaxCount)
+	settings["login_log_days"] = sc.settingsService.Get(constant.SectionSystem, constant.KeyLoginLogDays)
+	settings["login_log_max_count"] = sc.settingsService.Get(constant.SectionSystem, constant.KeyLoginLogMaxCount)
+
 	utils.Success(c, settings)
 }
 
@@ -112,13 +133,20 @@ func (sc *SettingsController) GetPublicSiteSettings(c *gin.Context) {
 // UpdateSiteSettings 更新站点设置
 func (sc *SettingsController) UpdateSiteSettings(c *gin.Context) {
 	var req struct {
-		Title          string `json:"title"`
-		Subtitle       string `json:"subtitle"`
-		Icon           string `json:"icon"`
-		PageSize       string `json:"page_size"`
-		CookieDays     string `json:"cookie_days"`
-		ApiToken       string `json:"api_token"`
-		ApiTokenExpire string `json:"api_token_expire"`
+		Title                string `json:"title"`
+		Subtitle             string `json:"subtitle"`
+		Icon                 string `json:"icon"`
+		PageSize             string `json:"page_size"`
+		CookieDays           string `json:"cookie_days"`
+		OpenapiEnabled       bool   `json:"openapi_enabled"`
+		OpenapiToken         string `json:"openapi_token"`
+		OpenapiTokenExpire   string `json:"openapi_token_expire"`
+		SystemNoticeDays     string `json:"system_notice_days"`
+		SystemNoticeMaxCount string `json:"system_notice_max_count"`
+		PushLogDays          string `json:"push_log_days"`
+		PushLogMaxCount      string `json:"push_log_max_count"`
+		LoginLogDays         string `json:"login_log_days"`
+		LoginLogMaxCount     string `json:"login_log_max_count"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -126,24 +154,25 @@ func (sc *SettingsController) UpdateSiteSettings(c *gin.Context) {
 		return
 	}
 
-	apiTokenJson := ""
-	if req.ApiToken != "" || req.ApiTokenExpire != "" {
-		tokenData := map[string]string{
-			"token":     req.ApiToken,
-			"expire_at": req.ApiTokenExpire,
+	openapiTokenJson := ""
+	if req.OpenapiToken != "" || req.OpenapiTokenExpire != "" || req.OpenapiEnabled {
+		tokenConfig := vo.TokenConfig{
+			Enabled:  req.OpenapiEnabled,
+			Token:    req.OpenapiToken,
+			ExpireAt: req.OpenapiTokenExpire,
 		}
-		if b, err := json.Marshal(tokenData); err == nil {
-			apiTokenJson = string(b)
+		if b, err := json.Marshal(tokenConfig); err == nil {
+			openapiTokenJson = string(b)
 		}
 	}
 
 	values := map[string]string{
-		constant.KeyTitle:      req.Title,
-		constant.KeySubtitle:   req.Subtitle,
-		constant.KeyIcon:       req.Icon,
-		constant.KeyPageSize:   req.PageSize,
-		constant.KeyCookieDays: req.CookieDays,
-		constant.KeyApiToken:   apiTokenJson,
+		constant.KeyTitle:        req.Title,
+		constant.KeySubtitle:     req.Subtitle,
+		constant.KeyIcon:         req.Icon,
+		constant.KeyPageSize:     req.PageSize,
+		constant.KeyCookieDays:   req.CookieDays,
+		constant.KeyOpenapiToken: openapiTokenJson,
 	}
 
 	if err := sc.settingsService.SetSection(constant.SectionSite, values); err != nil {
@@ -151,11 +180,19 @@ func (sc *SettingsController) UpdateSiteSettings(c *gin.Context) {
 		return
 	}
 
+	// 保存日志清理配置
+	sc.settingsService.Set(constant.SectionSystem, constant.KeySystemNoticeDays, req.SystemNoticeDays)
+	sc.settingsService.Set(constant.SectionSystem, constant.KeySystemNoticeMaxCount, req.SystemNoticeMaxCount)
+	sc.settingsService.Set(constant.SectionSystem, constant.KeyPushLogDays, req.PushLogDays)
+	sc.settingsService.Set(constant.SectionSystem, constant.KeyPushLogMaxCount, req.PushLogMaxCount)
+	sc.settingsService.Set(constant.SectionSystem, constant.KeyLoginLogDays, req.LoginLogDays)
+	sc.settingsService.Set(constant.SectionSystem, constant.KeyLoginLogMaxCount, req.LoginLogMaxCount)
+
 	utils.SuccessMsg(c, "保存成功")
 }
 
-// GenerateApiToken 随机生成API Token
-func (sc *SettingsController) GenerateApiToken(c *gin.Context) {
+// GenerateOpenapiToken 随机生成OpenAPI Token
+func (sc *SettingsController) GenerateOpenapiToken(c *gin.Context) {
 	utils.Success(c, gin.H{
 		"token": strings.ToLower(utils.RandomString(32)),
 	})
@@ -289,11 +326,25 @@ func (sc *SettingsController) GetLoginLogs(c *gin.Context) {
 		return
 	}
 
-	utils.Success(c, gin.H{
-		"data":      vo.ToLoginLogVOListFromModels(logs),
-		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
+	// 将 AppLog 转换为 LoginLogVO 返回，保持前端兼容性
+	vos := make([]*vo.LoginLogVO, len(logs))
+	for i, log := range logs {
+		vos[i] = &vo.LoginLogVO{
+			ID:        log.ID,
+			Username:  log.Title,
+			IP:        log.RefID,
+			UserAgent: string(log.Content),
+			Status:    log.Status,
+			Message:   string(log.ErrorMsg),
+			CreatedAt: log.CreatedAt,
+		}
+	}
+
+	utils.Success(c, utils.PaginationData{
+		Data:     vos,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
 	})
 }
 
@@ -372,4 +423,40 @@ func (sc *SettingsController) RestoreBackup(c *gin.Context) {
 	}
 
 	utils.SuccessMsg(c, "恢复成功")
+}
+
+// GetSetting 获取单个设置值
+func (sc *SettingsController) GetSetting(c *gin.Context) {
+	section := c.Param("section")
+	key := c.Param("key")
+
+	if section == "" || key == "" {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+
+	value := sc.settingsService.Get(section, key)
+	utils.Success(c, value)
+}
+
+// GenerateSettingToken 为指定设置生成随机token
+func (sc *SettingsController) GenerateSettingToken(c *gin.Context) {
+	section := c.Param("section")
+	key := c.Param("key")
+
+	if section == "" || key == "" {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+
+	// 生成32位随机token
+	token := strings.ToLower(utils.RandomString(32))
+
+	// 保存到数据库
+	if err := sc.settingsService.Set(section, key, token); err != nil {
+		utils.ServerError(c, "保存失败")
+		return
+	}
+
+	utils.Success(c, token)
 }

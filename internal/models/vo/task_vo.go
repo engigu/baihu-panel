@@ -7,7 +7,7 @@ import (
 
 // TaskVO 任务视图对象
 type TaskVO struct {
-	ID          uint                `json:"id"`
+	ID          string              `json:"id"`
 	Name        string              `json:"name"`
 	Command     string              `json:"command"`
 	Tags        string              `json:"tags"`
@@ -20,10 +20,11 @@ type TaskVO struct {
 	CleanConfig string              `json:"clean_config"`
 	Envs        string              `json:"envs"`
 	Languages   []map[string]string `json:"languages"`
-	AgentID     *uint               `json:"agent_id"`
+	AgentID     *string             `json:"agent_id"`
 	Enabled       bool                `json:"enabled"`
 	RetryCount    int                 `json:"retry_count"`
 	RetryInterval int                 `json:"retry_interval"`
+	RandomRange   int                 `json:"random_range"`
 	LastRun       *models.LocalTime   `json:"last_run"`
 	NextRun     *models.LocalTime   `json:"next_run"`
 	CreatedAt   models.LocalTime    `json:"created_at"`
@@ -38,21 +39,22 @@ func ToTaskVO(task *models.Task) *TaskVO {
 	return &TaskVO{
 		ID:          task.ID,
 		Name:        task.Name,
-		Command:     task.Command,
+		Command:     string(task.Command),
 		Tags:        task.Tags,
 		Type:        task.Type,
 		TriggerType: task.TriggerType,
-		Config:      task.Config,
+		Config:      string(task.Config),
 		Schedule:    task.Schedule,
 		Timeout:     task.Timeout,
 		WorkDir:     task.WorkDir,
 		CleanConfig: task.CleanConfig,
-		Envs:        task.Envs,
+		Envs:        string(task.Envs),
 		Languages:   task.Languages,
 		AgentID:       task.AgentID,
 		Enabled:       task.Enabled,
 		RetryCount:    task.RetryCount,
 		RetryInterval: task.RetryInterval,
+		RandomRange:   task.RandomRange,
 		LastRun:       task.LastRun,
 		NextRun:     task.NextRun,
 		CreatedAt:   task.CreatedAt,
@@ -83,11 +85,11 @@ func ToTaskVOListFromModels(tasks []models.Task) []*TaskVO {
 
 // TaskLogVO 任务历史视图对象
 type TaskLogVO struct {
-	ID        uint              `json:"id"`
-	TaskID    uint              `json:"task_id"`
+	ID        string            `json:"id"`
+	TaskID    string            `json:"task_id"`
 	TaskName  string            `json:"task_name"`
 	TaskType  string            `json:"task_type"`
-	AgentID   *uint             `json:"agent_id"`
+	AgentID   *string           `json:"agent_id"`
 	Command   string            `json:"command"`
 	Error     string            `json:"error"`
 	Status    string            `json:"status"`
@@ -112,8 +114,8 @@ func ToTaskLogVO(log *models.TaskLog) *TaskLogVO {
 		ID:        log.ID,
 		TaskID:    log.TaskID,
 		AgentID:   log.AgentID,
-		Command:   log.Command,
-		Error:     log.Error,
+		Command:   string(log.Command),
+		Error:     string(log.Error),
 		Status:    log.Status,
 		Duration:  log.Duration,
 		ExitCode:  log.ExitCode,
@@ -122,7 +124,7 @@ func ToTaskLogVO(log *models.TaskLog) *TaskLogVO {
 		CreatedAt:     log.CreatedAt,
 		WorkflowID:    log.WorkflowID,
 		WorkflowRunID: log.WorkflowRunID,
-		Output:        log.Output,
+		Output:        string(log.Output),
 	}
 }
 
@@ -150,7 +152,7 @@ func ToTaskLogVOListFromModels(logs []models.TaskLog) []*TaskLogVO {
 // ExecutionResultVO 任务执行结果视图对象
 type ExecutionResultVO struct {
 	TaskID    string `json:"task_id"`
-	LogID     uint   `json:"log_id,omitempty"`
+	LogID     string `json:"log_id,omitempty"`
 	Success   bool   `json:"success"`
 	Status    string `json:"status"`
 	Output    string `json:"output,omitempty"`

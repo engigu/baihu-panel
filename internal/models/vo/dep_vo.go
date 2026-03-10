@@ -8,7 +8,7 @@ import (
 
 // DependencyVO 依赖包视图对象
 type DependencyVO struct {
-	ID          int       `json:"id"`
+	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Version     string    `json:"version"`
 	Language    string    `json:"language"`
@@ -31,7 +31,7 @@ func ToDependencyVO(dep *models.Dependency) *DependencyVO {
 		Language:    dep.Language,
 		LangVersion: dep.LangVersion,
 		Remark:      dep.Remark,
-		Log:         dep.Log,
+		Log:         string(dep.Log),
 		CreatedAt:   dep.CreatedAt,
 		UpdatedAt:   dep.UpdatedAt,
 	}

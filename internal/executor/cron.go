@@ -1,7 +1,9 @@
 package executor
 
 import (
+	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/engigu/baihu-panel/internal/systime"
 
@@ -87,27 +89,45 @@ func (m *CronManager) AddTask(task CronTask) error {
 				m.logger.Errorf("[CronManager] 任务 #%s 执行过程中发生 Panic: %v", taskID, r)
 			}
 		}()
-		m.logger.Infof("[CronManager] 触发计划任务 #%s (%s)", taskID, name)
 
-		req := &ExecutionRequest{
-			TaskID:    taskID,
-			Name:      name,
-			Command:   cmd,
-			Type:      TaskTypeCron,
-			Timeout:   timeout,
-			WorkDir:   workDir,
-			Envs:      ParseEnvVars(envs),
-			Languages: languages,
-			UseMise:   useMise,
+		// 构造执行请求的 Builder
+		reqBuilder := func() *ExecutionRequest {
+			return &ExecutionRequest{
+				TaskID:    taskID,
+				Name:      name,
+				Command:   cmd,
+				Type:      TaskTypeCron,
+				Timeout:   timeout,
+				WorkDir:   workDir,
+				Envs:      func() []string {
+					if vars := task.GetEnvVars(); len(vars) > 0 {
+						return vars
+					}
+					return ParseEnvVars(envs)
+				}(),
+				Languages: languages,
+				UseMise:   useMise,
+			}
 		}
 
-		// 如果有关联的 Scheduler，加入队列执行
-		if m.scheduler != nil {
-			m.scheduler.EnqueueOrExecute(req)
+		randomRange := task.GetRandomRange()
+		if randomRange > 0 && m.scheduler != nil {
+			// 生成 0 到 randomRange 之间的随机秒数
+			delaySeconds := rand.Intn(randomRange)
+			delay := time.Duration(delaySeconds) * time.Second
+			m.logger.Infof("[CronManager] 任务 #%s 将随机延迟 %v (范围: %ds) 后入队执行", taskID, delay, randomRange)
+
+			// 使用调度器的延时投递功能，不阻塞当前 Cron 协程
+			m.scheduler.EnqueueDelayed(delay, reqBuilder)
+		} else {
+			m.logger.Infof("[CronManager] 触发计划任务 #%s (%s)", taskID, name)
+			if m.scheduler != nil {
+				m.scheduler.EnqueueOrExecute(reqBuilder())
+			}
 		}
 
 		// 触发下次运行时间更新事件
-		m.triggerNextRunEvent(taskID, req)
+		m.triggerNextRunEvent(taskID, &ExecutionRequest{TaskID: taskID})
 	})
 
 	if err != nil {

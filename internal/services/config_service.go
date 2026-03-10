@@ -141,6 +141,7 @@ func applyEnvOverrides() {
 
 	// Security
 	getEnvStr("BH_SECRET", &Config.Security.Secret)
+
 }
 
 func GetConfig() *AppConfig {

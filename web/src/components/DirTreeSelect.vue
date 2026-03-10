@@ -114,7 +114,7 @@ const displayValue = computed(() => {
 <template>
   <Popover v-model:open="open">
     <PopoverTrigger as-child>
-      <Button variant="outline" class="w-full justify-start font-mono text-sm h-9">
+      <Button variant="outline" class="w-full justify-start text-sm h-9">
         <Folder class="h-4 w-4 mr-2 text-yellow-500 shrink-0" />
         <span class="truncate">{{ displayValue }}</span>
       </Button>

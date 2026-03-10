@@ -7,10 +7,9 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Trash2, Package, Search, RefreshCw, Loader2, Download, FileText, RotateCw, ChevronLeft, Terminal as TerminalIcon, X } from 'lucide-vue-next'
+import { Trash2, Package, Search, RefreshCw, Loader2, Download, FileText, RotateCw, ChevronLeft } from 'lucide-vue-next'
 import { api, type Dependency } from '@/api'
 import TextOverflow from '@/components/TextOverflow.vue'
-import XTerminal from '@/components/XTerminal.vue'
 import { toast } from 'vue-sonner'
 
 const route = useRoute()
@@ -21,7 +20,7 @@ const activeTab = ref('python')
 const deps = ref<Dependency[]>([])
 const loading = ref(false)
 const installing = ref(false)
-const reinstalling = ref<number | null>(null)
+const reinstalling = ref<string | null>(null)
 const reinstallingAll = ref(false)
 const installedLangs = ref<string[]>([])
 
@@ -35,17 +34,9 @@ const newPkgRemark = ref('')
 const showDeleteDialog = ref(false)
 const depToDelete = ref<Dependency | null>(null)
 
-// 日志对话框
 const showLogDialog = ref(false)
 const logContent = ref('')
 const logPkgName = ref('')
-
-// 终端状态
-const showTerminalDialog = ref(false)
-const terminalCommand = ref('')
-const terminalTitle = ref('依赖安装')
-const isInstallSuccess = ref(false)
-const pendingInstall = ref<{ name: string; version?: string; language: string; lang_version?: string; remark?: string } | null>(null)
 
 // 搜索
 const searchQuery = ref('')
@@ -110,39 +101,17 @@ async function installPackage() {
   }
 
   installing.value = true
-  isInstallSuccess.value = false // 重置状态
   try {
-    const { command } = await api.deps.getInstallCmd(pkgData)
-    terminalCommand.value = command
-    terminalTitle.value = `安装: ${pkgData.name}`
-    pendingInstall.value = pkgData
+    await api.deps.install(pkgData)
+    toast.success('指令已发送，详情请查看日志')
     showInstallDialog.value = false
-    showTerminalDialog.value = true
-  } catch (e: unknown) {
-    toast.error((e as Error).message || '获取安装命令失败')
+  } catch (e: any) {
+    toast.error('安装过程出错: ' + e.message)
+    showInstallDialog.value = false
   } finally {
     installing.value = false
+    await loadDeps()
   }
-}
-
-async function handleTerminalClose() {
-  if (pendingInstall.value && isInstallSuccess.value) {
-    try {
-      // 终端关闭后，仅在成功时尝试在数据库中记录
-      await api.deps.create(pendingInstall.value)
-      toast.success('依赖记录已更新')
-    } catch (e: any) {
-      if (e.message !== '依赖已存在') {
-        toast.error('记录依赖失败: ' + e.message)
-      }
-    }
-  } else if (pendingInstall.value && !isInstallSuccess.value) {
-    toast.error('安装未成功，记录未保存')
-  }
-
-  pendingInstall.value = null
-  isInstallSuccess.value = false
-  loadDeps()
 }
 
 function confirmDelete(dep: Dependency) {
@@ -173,20 +142,13 @@ function showLog(dep: Dependency) {
 async function reinstallPackage(dep: Dependency) {
   reinstalling.value = dep.id
   try {
-    const { command } = await api.deps.getInstallCmd({
-      name: dep.name,
-      version: dep.version,
-      language: dep.language,
-      lang_version: dep.lang_version
-    })
-    terminalCommand.value = command
-    terminalTitle.value = `重装: ${dep.name}`
-    pendingInstall.value = null // 重新安装不需要再次记录
-    showTerminalDialog.value = true
-  } catch (e: unknown) {
-    toast.error((e as Error).message || '获取命令失败')
+    await api.deps.reinstall(dep.id)
+    toast.success(`重装指令已发送`)
+  } catch (e: any) {
+    toast.error('重装错误: ' + e.message)
   } finally {
     reinstalling.value = null
+    await loadDeps()
   }
 }
 
@@ -195,16 +157,13 @@ async function reinstallAll() {
   try {
     const lang = language.value || activeTab.value
     const ver = langVersion.value
-    const { command } = await api.deps.getReinstallAllCmd(lang, ver)
-
-    terminalCommand.value = command
-    terminalTitle.value = `全部重装: ${getTypeLabel(lang)}`
-    pendingInstall.value = null // 全部重装不需要记录新条目
-    showTerminalDialog.value = true
-  } catch (e: unknown) {
-    toast.error((e as Error).message || '获取命令失败')
+    await api.deps.reinstallAll(lang, ver)
+    toast.success('全部重装指令执行完毕')
+  } catch (e: any) {
+    toast.error('全部重装错误: ' + e.message)
   } finally {
     reinstallingAll.value = false
+    await loadDeps()
   }
 }
 
@@ -297,7 +256,7 @@ onMounted(async () => {
           <span class="flex-1">包名</span>
           <span class="w-32">版本</span>
           <span class="w-48 hidden md:block">备注</span>
-          <span class="w-24 text-center">操作</span>
+          <span class="w-32 text-center">操作</span>
         </div>
 
         <!-- 列表 -->
@@ -319,15 +278,19 @@ onMounted(async () => {
             <span class="w-48 text-sm text-muted-foreground truncate hidden md:block">
               <TextOverflow :text="dep.remark || '-'" title="备注" />
             </span>
-            <span class="w-24 flex justify-center gap-1">
-              <Button v-if="dep.log" variant="ghost" size="icon" class="h-7 w-7" @click="showLog(dep)">
+            <span class="w-32 flex justify-center gap-1">
+              <Button v-if="dep.log || dep.id" variant="ghost" size="icon"
+                class="h-7 w-7 text-blue-500 hover:text-blue-600 hover:bg-blue-50/10" @click="showLog(dep)"
+                title="查看安装日志">
                 <FileText class="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" class="h-7 w-7" @click="reinstallPackage(dep)"
-                :disabled="reinstalling === dep.id">
+              <Button variant="ghost" size="icon"
+                class="h-7 w-7 text-amber-500 hover:text-amber-600 hover:bg-amber-50/10" @click="reinstallPackage(dep)"
+                :disabled="reinstalling === dep.id" title="重新安装">
                 <RotateCw class="h-4 w-4" :class="{ 'animate-spin': reinstalling === dep.id }" />
               </Button>
-              <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive" @click="confirmDelete(dep)">
+              <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive hover:bg-destructive/10"
+                @click="confirmDelete(dep)" title="卸载并删除记录">
                 <Trash2 class="h-4 w-4" />
               </Button>
             </span>
@@ -399,32 +362,6 @@ onMounted(async () => {
           <DialogFooter>
             <Button variant="outline" @click="showLogDialog = false">关闭</Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <!-- 终端对话框 -->
-      <Dialog v-model:open="showTerminalDialog" @update:open="(val) => !val && handleTerminalClose()">
-        <DialogContent class="max-w-4xl h-[600px] p-0 overflow-hidden bg-[#1e1e1e] border-none shadow-2xl">
-          <DialogHeader class="sr-only">
-            <DialogTitle>{{ terminalTitle }}</DialogTitle>
-            <DialogDescription>正在执行依赖安装指令</DialogDescription>
-          </DialogHeader>
-          <div class="flex flex-col h-full">
-            <div class="flex items-center justify-between px-4 py-2 bg-[#252526] border-b border-[#3c3c3c]">
-              <div class="flex items-center gap-2">
-                <TerminalIcon class="h-4 w-4 text-primary" />
-                <span class="text-xs font-medium text-gray-300">正在执行: {{ terminalCommand }}</span>
-              </div>
-              <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white"
-                @click="showTerminalDialog = false">
-                <X class="h-4 w-4" />
-              </Button>
-            </div>
-            <div class="flex-1">
-              <XTerminal v-if="showTerminalDialog" :font-size="13" :initial-command="terminalCommand"
-                @success="isInstallSuccess = true" @failed="isInstallSuccess = false" />
-            </div>
-          </div>
         </DialogContent>
       </Dialog>
     </div>

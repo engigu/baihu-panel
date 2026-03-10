@@ -2,78 +2,125 @@
 import { ref, onMounted, computed, onUnmounted, nextTick, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import FileTreeNode from '@/components/FileTreeNode.vue'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 import XTerminal from '@/components/XTerminal.vue'
-import { Plus, Save, Play, RefreshCw, Upload, FolderUp, Pencil, Eye, X, Download, Trash2, Edit3 } from 'lucide-vue-next'
-import { api, type FileNode } from '@/api'
+import { Save, Play, Pencil, Eye, X, Download } from 'lucide-vue-next'
+import { api, type FileNode, type MiseLanguage } from '@/api'
 import { toast } from 'vue-sonner'
 import { PATHS, FILE_RUNNERS } from '@/constants'
+
+// New component imports
+import FileSidebar from './components/FileSidebar.vue'
+import RunConfigDialog from './components/RunConfigDialog.vue'
+import FileActionDialogs from './components/FileActionDialogs.vue'
 
 const route = useRoute()
 const router = useRouter()
 
+// State for FileSidebar
 const fileTree = ref<FileNode[]>([])
 const expandedDirs = ref<Set<string>>(new Set())
-const selectedFile = ref<string | null>(null)
 const selectedPath = ref<string | null>(null)
+
+// State for Editor
+const selectedFile = ref<string | null>(null)
 const fileContent = ref('')
 const originalContent = ref('')
 const isLoading = ref(false)
-
-const showCreateDialog = ref(false)
-const newItemName = ref('')
-const newItemType = ref<'file' | 'dir'>('file')
-const createInDir = ref('')
-
-const showDeleteDialog = ref(false)
-const deleteTargetPath = ref('')
-
-const archiveInputRef = ref<HTMLInputElement | null>(null)
-const filesInputRef = ref<HTMLInputElement | null>(null)
-const uploadTargetDir = ref('')
-
-const showRenameDialog = ref(false)
-const renamePath = ref('')
-const newName = ref('')
-
 const isEditMode = ref(false)
 const hasChanges = computed(() => fileContent.value !== originalContent.value)
 
-// 终端弹窗相关
-const showTerminalDialog = ref(false)
+// Component Refs
+const dialogsRef = ref<InstanceType<typeof FileActionDialogs> | null>(null)
 const terminalRef = ref<InstanceType<typeof XTerminal> | null>(null)
+
+// State for RunConfig
+const showRunDialog = ref(false)
+const selectedEnvs = ref<{ plugin: string; version: string }[]>([])
+const installedLangs = ref<MiseLanguage[]>([])
+
+const langGroups = computed(() => {
+  const groups: Record<string, string[]> = {}
+  installedLangs.value.forEach(lang => {
+    const plugin = lang?.plugin
+    if (plugin) {
+      if (!groups[plugin]) groups[plugin] = []
+      groups[plugin]!.push(lang.version)
+    }
+  })
+  return groups
+})
+
+// State for Terminal
+const showTerminalDialog = ref(false)
 const runCommand = ref('')
 const scriptsDir = ref('')
+
+async function fetchInstalledLangs() {
+  try {
+    installedLangs.value = await api.mise.list()
+  } catch {
+    installedLangs.value = []
+  }
+}
+
+function getLangIcon(plugin: string) {
+  const name = plugin.toLowerCase().trim()
+  const mapping: Record<string, string> = {
+    'python': 'python/python-original.svg',
+    'node': 'nodejs/nodejs-original.svg',
+    'nodejs': 'nodejs/nodejs-original.svg',
+    'go': 'go/go-original.svg',
+    'rust': 'rust/rust-original.svg',
+    'ruby': 'ruby/ruby-plain.svg',
+    'php': 'php/php-plain.svg',
+    'java': 'java/java-plain.svg',
+    'deno': 'deno/deno-plain.svg',
+    'bun': 'bun/bun-plain.svg',
+    'zig': 'zig/zig-original.svg',
+    'dotnet': 'dot-net/dot-net-original.svg',
+    '.net': 'dot-net/dot-net-original.svg',
+    'elixir': 'elixir/elixir-original.svg',
+    'erlang': 'erlang/erlang-original.svg',
+    'crystal': 'crystal/crystal-original.svg',
+    'lua': 'lua/lua-original.svg',
+    'julia': 'julia/julia-original.svg',
+    'nim': 'nim/nim-original.svg',
+    'perl': 'perl/perl-original.svg',
+    'scala': 'scala/scala-original.svg',
+    'kotlin': 'kotlin/kotlin-original.svg',
+    'clojure': 'clojure/clojure-line.svg',
+    'dart': 'dart/dart-original.svg',
+    'flutter': 'flutter/flutter-original.svg',
+    'terraform': 'terraform/terraform-original.svg',
+    'docker': 'docker/docker-original.svg',
+    'kubernetes': 'kubernetes/kubernetes-plain.svg',
+    'ansible': 'ansible/ansible-original.svg',
+  }
+  return mapping[name] ? `https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${mapping[name]}` : ''
+}
 
 async function fetchPaths() {
   try {
     const res = await api.settings.getPaths()
-    scriptsDir.value = res.scripts_dir
+    if (res?.scripts_dir) {
+      scriptsDir.value = res.scripts_dir
+    } else {
+      scriptsDir.value = PATHS.SCRIPTS_DIR
+    }
   } catch {
     scriptsDir.value = PATHS.SCRIPTS_DIR
   }
 }
 
-// Monaco Editor 实例引用
 const editorRef = shallowRef()
-
-// 响应式字体大小
 const isSmallScreen = ref(window.innerWidth < 1024)
 const editorFontSize = computed(() => isSmallScreen.value ? 12 : 13)
 
-// 编辑器挂载时的回调
 function handleEditorMount(editor: any) {
   editorRef.value = editor
-  // 强制设置换行符为 LF
   const model = editor.getModel()
-  if (model) {
-    model.setEOL(0) // 0 = LF, 1 = CRLF
-  }
+  if (model) model.setEOL(0)
 }
 
 function handleResize() {
@@ -90,16 +137,16 @@ async function loadTree() {
 
 async function handleSelect(node: FileNode) {
   selectedPath.value = node.path
-  // 更新 URL 使用 query 参数
   router.replace({ name: 'editor', query: { file: node.path } })
 
   if (node.isDir) {
-    if (expandedDirs.value.has(node.path)) {
+    if (expandedDirs.value && expandedDirs.value.has(node.path)) {
       expandedDirs.value.delete(node.path)
     } else {
       expandedDirs.value.add(node.path)
     }
     expandedDirs.value = new Set(expandedDirs.value)
+    selectedFile.value = null
   } else {
     if (hasChanges.value && !confirm('当前文件有未保存的更改，是否放弃？')) return
     await loadFile(node.path)
@@ -111,11 +158,14 @@ async function loadFile(path: string) {
   isEditMode.value = false
   try {
     const res = await api.files.getContent(path)
-    selectedFile.value = path
-    fileContent.value = res.content
-    originalContent.value = res.content
+    if (res) {
+      selectedFile.value = path
+      fileContent.value = res.content
+      originalContent.value = res.content
+    }
   } catch {
     toast.error('加载文件失败')
+    selectedFile.value = null
   } finally {
     isLoading.value = false
   }
@@ -132,154 +182,62 @@ async function saveFile() {
   }
 }
 
-function openCreateDialog(parentDir = '') {
-  newItemName.value = ''
-  newItemType.value = 'file'
-  createInDir.value = parentDir
-  showCreateDialog.value = true
-}
-
-function handleCreate(parentDir: string) {
-  openCreateDialog(parentDir)
-}
-
-async function createItem() {
-  if (!newItemName.value.trim()) {
-    toast.error('请输入名称')
-    return
-  }
+async function createItem(name: string, type: 'file' | 'dir', parent: string) {
+  if (!name.trim()) { toast.error('请输入名称'); return }
   try {
-    const fullPath = createInDir.value ? `${createInDir.value}/${newItemName.value}` : newItemName.value
-    await api.files.create(fullPath, newItemType.value === 'dir')
+    const fullPath = parent ? `${parent}/${name}` : name
+    await api.files.create(fullPath, type === 'dir')
     toast.success('创建成功')
-    showCreateDialog.value = false
-    // 展开父目录
-    if (createInDir.value) {
-      expandedDirs.value.add(createInDir.value)
+    if (dialogsRef.value) dialogsRef.value.closeCreate()
+    if (parent) {
+      expandedDirs.value.add(parent)
       expandedDirs.value = new Set(expandedDirs.value)
     }
     await loadTree()
-    if (newItemType.value === 'file') {
-      await loadFile(fullPath)
-    }
+    if (type === 'file') await loadFile(fullPath)
   } catch {
     toast.error('创建失败')
   }
 }
 
-function confirmDelete(path: string) {
-  deleteTargetPath.value = path
-  showDeleteDialog.value = true
-}
-
-async function deleteItem() {
+async function deleteItem(path: string) {
   try {
-    await api.files.delete(deleteTargetPath.value)
+    await api.files.delete(path)
     toast.success('删除成功')
-    if (selectedFile.value === deleteTargetPath.value) {
+    if (selectedFile.value === path) {
       selectedFile.value = null
       fileContent.value = ''
       originalContent.value = ''
     }
+    if (selectedPath.value === path) selectedPath.value = null
     await loadTree()
   } catch {
     toast.error('删除失败')
   }
-  showDeleteDialog.value = false
+  if (dialogsRef.value) dialogsRef.value.closeDelete()
 }
 
-function openRenameDialog(path: string) {
-  renamePath.value = path
-  newName.value = path.split('/').pop() || ''
-  showRenameDialog.value = true
-}
-
-async function renameItem() {
-  if (!newName.value.trim()) {
-    toast.error('请输入名称')
-    return
-  }
-  if (newName.value.includes('/')) {
-    toast.error('名称不能包含路径分隔符 /')
-    return
-  }
-  const parts = renamePath.value.split('/')
-  parts[parts.length - 1] = newName.value
+async function renameItem(oldPath: string, name: string) {
+  if (!name.trim()) { toast.error('请输入名称'); return }
+  if (name.includes('/')) { toast.error('不可包含 /'); return }
+  const parts = oldPath.split('/')
+  parts[parts.length - 1] = name
   const newPath = parts.join('/')
-
-  if (newPath === renamePath.value) {
-    showRenameDialog.value = false
+  if (newPath === oldPath) {
+    if (dialogsRef.value) dialogsRef.value.closeRename()
     return
   }
-
   try {
-    await handleMove(renamePath.value, newPath, '重命名成功', true)
-    showRenameDialog.value = false
-  } catch {
-    // Error handled in handleMove
-  }
+    await handleMove(oldPath, newPath, '重命名成功', true)
+    if (dialogsRef.value) dialogsRef.value.closeRename()
+  } catch {}
 }
 
-async function runScript() {
-  if (!selectedFile.value) return
-
-  // 获取文件所在目录和文件名
-  const parts = selectedFile.value.split('/')
-  const fileName = parts.pop() || selectedFile.value
-  const dirPath = parts.length > 0 ? parts.join('/') : ''
-
-  // 根据文件扩展名确定运行命令
-  const ext = fileName.split('.').pop()?.toLowerCase() || ''
-  const runner = FILE_RUNNERS[ext]
-  const cmd = runner ? `${runner} ${fileName}` : `./${fileName}`
-
-  // 构建完整命令
-  const baseDir = scriptsDir.value || PATHS.SCRIPTS_DIR
-  if (dirPath) {
-    runCommand.value = `cd ${baseDir}/${dirPath} && ${cmd}`
-  } else {
-    runCommand.value = `cd ${baseDir} && ${cmd}`
-  }
-
-  showTerminalDialog.value = true
-  // 等待 DOM 更新后初始化终端，增加延迟确保 Dialog 完全渲染
-  await nextTick()
-  setTimeout(() => {
-    terminalRef.value?.initTerminal(true)
-  }, 100)
-}
-
-function closeTerminal() {
-  showTerminalDialog.value = false
-  // 延迟清理，确保 Dialog 关闭动画完成
-  setTimeout(() => {
-    terminalRef.value?.dispose()
-  }, 300)
-}
-
-async function handleDownload(path: string) {
+async function handleMove(oldPath: string, newPath: string, msg = '移动成功', isRename = false) {
   try {
-    const url = api.files.download(path)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = path.split('/').pop() || 'file'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    toast.success('已发起下载')
-  } catch (error: any) {
-    toast.error('下载出错: ' + (error.message || '未知错误'))
-  }
-}
-
-async function handleMove(oldPath: string, newPath: string, successMsg = '移动成功', isRename = false) {
-  try {
-    if (isRename) {
-      await api.files.rename(oldPath, newPath)
-    } else {
-      await api.files.move(oldPath, newPath)
-    }
-    toast.success(successMsg)
+    if (isRename) await api.files.rename(oldPath, newPath)
+    else await api.files.move(oldPath, newPath)
+    toast.success(msg)
     if (selectedFile.value === oldPath) {
       selectedFile.value = newPath
       selectedPath.value = newPath
@@ -290,8 +248,17 @@ async function handleMove(oldPath: string, newPath: string, successMsg = '移动
     }
     await loadTree()
   } catch (err: any) {
-    toast.error(err.message || '移动失败')
+    toast.error(err.message || '操作失败')
   }
+}
+
+async function handleDownload(path: string) {
+  const url = api.files.download(path)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = path.split('/').pop() || 'file'
+  a.click()
+  toast.success('下载中')
 }
 
 async function handleCopyFile(path: string) {
@@ -299,140 +266,148 @@ async function handleCopyFile(path: string) {
     const parts = path.split('/')
     const filename = parts.pop() || ''
     const dir = parts.join('/')
-
     const dotIndex = filename.lastIndexOf('.')
-    let newFilename = ''
-    if (dotIndex !== -1 && dotIndex > 0) {
-      newFilename = filename.substring(0, dotIndex) + '-副本' + filename.substring(dotIndex)
-    } else {
-      newFilename = filename + '-副本'
-    }
-
-    const targetPath = dir ? `${dir}/${newFilename}` : newFilename
-
-    await api.files.copy(path, targetPath)
-    toast.success('已复制为 ' + newFilename)
+    const newName = (dotIndex > 0 ? filename.substring(0, dotIndex) + '-副本' + filename.substring(dotIndex) : filename + '-副本')
+    const target = dir ? `${dir}/${newName}` : newName
+    await api.files.copy(path, target)
+    toast.success('已复制')
     await loadTree()
-  } catch (error: any) {
-    toast.error('复制失败: ' + (error.message || '未知错误'))
+  } catch (err: any) {
+    toast.error('复制失败: ' + err.message)
   }
 }
 
-function triggerArchiveUpload(targetDir = '') {
-  uploadTargetDir.value = targetDir
-  archiveInputRef.value?.click()
-}
-
-function triggerFilesUpload(targetDir = '') {
-  uploadTargetDir.value = targetDir
-  filesInputRef.value?.click()
-}
-
-async function handleArchiveUpload(e: Event) {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-
+async function handleArchiveUpload(file: File, target: string) {
   const ext = file.name.split('.').pop()?.toLowerCase()
   if (!['zip', 'tar', 'gz', 'tgz'].includes(ext || '')) {
-    toast.error('仅支持 zip、tar、gz、tgz 格式')
-    input.value = ''
+    toast.error('仅支持 zip/tar/gz/tgz')
     return
   }
-
   try {
-    await api.files.uploadArchive(file, uploadTargetDir.value)
+    await api.files.uploadArchive(file, target)
     toast.success('导入成功')
-    if (uploadTargetDir.value) {
-      expandedDirs.value.add(uploadTargetDir.value)
+    if (target) {
+      expandedDirs.value.add(target)
       expandedDirs.value = new Set(expandedDirs.value)
     }
     await loadTree()
   } catch (err: any) {
     toast.error(err.message || '导入失败')
   }
-  input.value = ''
 }
 
-async function handleFilesUpload(e: Event) {
-  const input = e.target as HTMLInputElement
-  const files = input.files
-  if (!files || files.length === 0) return
-
+async function handleFilesUpload(files: FileList, paths: string[], target: string) {
   try {
-    // 获取相对路径（用于保持文件夹结构）
-    const paths: string[] = []
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i] as any
-      // webkitRelativePath 用于文件夹上传时保持结构
-      paths.push(file.webkitRelativePath || file.name)
-    }
-
-    await api.files.uploadFiles(files, paths, uploadTargetDir.value)
+    await api.files.uploadFiles(files, paths, target)
     toast.success('上传成功')
-    if (uploadTargetDir.value) {
-      expandedDirs.value.add(uploadTargetDir.value)
+    if (target) {
+      expandedDirs.value.add(target)
       expandedDirs.value = new Set(expandedDirs.value)
     }
     await loadTree()
   } catch (err: any) {
     toast.error(err.message || '上传失败')
   }
-  input.value = ''
+}
+
+async function runScript() {
+  if (!selectedFile.value) return
+  const ext = selectedFile.value.split('.').pop()?.toLowerCase() || ''
+  const extToLang: Record<string, string> = { 'py': 'python', 'js': 'node', 'ts': 'node', 'go': 'go' }
+  const inferred = extToLang[ext]
+  selectedEnvs.value = []
+  if (inferred) {
+    const firstV = installedLangs.value.find(l => l.plugin === inferred)?.version
+    if (firstV) selectedEnvs.value.push({ plugin: inferred, version: firstV })
+  }
+  showRunDialog.value = true
+}
+
+async function startExecution() {
+  if (!selectedFile.value) return
+  const parts = selectedFile.value.split('/')
+  const fileName = parts.pop() || selectedFile.value
+  const dirPath = parts.join('/')
+  const ext = fileName.split('.').pop()?.toLowerCase() || ''
+  let runner = FILE_RUNNERS[ext] || ''
+
+  const validEnvs = selectedEnvs.value.filter(e => e.plugin && e.version)
+  let cmd = ''
+    if (validEnvs.length > 0) {
+    const specs = validEnvs.map(e => `${e.plugin}@${e.version}`).join(' ')
+    if (!runner && !['sh', 'bash'].includes(ext)) {
+       const first = validEnvs[0]!.plugin
+       runner = (first === 'node' ? 'node' : first)
+    }
+    cmd = `mise exec ${specs} -- ${runner ? `${runner} ${fileName}` : `./${fileName}`}`
+  } else {
+    cmd = runner ? `${runner} ${fileName}` : `./${fileName}`
+  }
+
+  const base = scriptsDir.value || PATHS.SCRIPTS_DIR
+  runCommand.value = `cd ${base}${dirPath ? '/' + dirPath : ''} && ${cmd}`
+  showRunDialog.value = false
+  showTerminalDialog.value = true
+  await nextTick()
+  setTimeout(() => {
+    if (terminalRef.value) {
+      terminalRef.value.initTerminal(true)
+    }
+  }, 100)
+}
+
+function closeTerminal() {
+  showTerminalDialog.value = false
+  setTimeout(() => {
+    if (terminalRef.value) {
+      terminalRef.value.dispose()
+    }
+  }, 300)
 }
 
 function getLanguage(path: string): string {
   const ext = path.split('.').pop()?.toLowerCase()
   const langMap: Record<string, string> = {
-    sh: 'shell', bash: 'shell', zsh: 'shell',
-    js: 'javascript', ts: 'typescript',
-    py: 'python', json: 'json', yaml: 'yaml', yml: 'yaml',
-    md: 'markdown', sql: 'sql', xml: 'xml', html: 'html', css: 'css'
+    sh: 'shell', js: 'javascript', ts: 'typescript', py: 'python', json: 'json', yaml: 'yaml', md: 'markdown'
   }
   return langMap[ext || ''] || 'plaintext'
 }
 
-// 展开路径上的所有父目录
 function expandParentDirs(path: string) {
   const parts = path.split('/')
-  for (let i = 1; i < parts.length; i++) {
-    expandedDirs.value.add(parts.slice(0, i).join('/'))
+  if (expandedDirs.value) {
+    for (let i = 1; i < parts.length; i++) {
+        expandedDirs.value.add(parts.slice(0, i).join('/'))
+    }
+    expandedDirs.value = new Set(expandedDirs.value)
   }
-  expandedDirs.value = new Set(expandedDirs.value)
 }
 
-// 从 URL 初始化选中状态
 async function initFromUrl() {
   await loadTree()
-  const urlPath = route.query.file as string
-  if (urlPath) {
-    selectedPath.value = urlPath
-    expandParentDirs(urlPath)
-    // 尝试加载文件内容（如果是文件）
+  const q = route.query.file as string
+  if (q) {
+    selectedPath.value = q
+    expandParentDirs(q)
     try {
-      const res = await api.files.getContent(urlPath)
-      selectedFile.value = urlPath
-      fileContent.value = res.content
-      originalContent.value = res.content
-      isEditMode.value = false
-    } catch {
-      // 可能是文件夹，忽略错误
-    }
+      const res = await api.files.getContent(q)
+      if (res) {
+        selectedFile.value = q
+        fileContent.value = res.content
+        originalContent.value = res.content
+      }
+    } catch {}
   }
 }
 
 function handleGlobalKeydown(e: KeyboardEvent) {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-    if (isEditMode.value && selectedFile.value) {
-      e.preventDefault()
-      saveFile()
-    }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && isEditMode.value && selectedFile.value) {
+    e.preventDefault(); saveFile()
   }
 }
 
 onMounted(() => {
-  initFromUrl()
-  fetchPaths()
+  initFromUrl(); fetchPaths(); fetchInstalledLangs()
   window.addEventListener('resize', handleResize)
   window.addEventListener('keydown', handleGlobalKeydown)
 })
@@ -445,39 +420,22 @@ onUnmounted(() => {
 
 <template>
   <div class="flex flex-col lg:flex-row h-[calc(100vh-100px)] gap-2">
-    <!-- 文件树 -->
-    <div class="w-full lg:w-56 h-48 lg:h-auto flex-shrink-0 border rounded-md flex flex-col">
-      <div class="flex items-center justify-between p-2 border-b">
-        <span class="text-xs font-medium">脚本文件</span>
-        <div class="flex gap-1">
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="loadTree" title="刷新">
-            <RefreshCw class="h-3 w-3" />
-          </Button>
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="triggerFilesUpload('')" title="上传文件/文件夹(放在根目录)">
-            <FolderUp class="h-3 w-3" />
-          </Button>
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="triggerArchiveUpload('')" title="导入压缩包(放在根目录)">
-            <Upload class="h-3 w-3" />
-          </Button>
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="openCreateDialog('')" title="新建">
-            <Plus class="h-3 w-3" />
-          </Button>
-        </div>
-        <input ref="archiveInputRef" type="file" accept=".zip,.tar,.gz,.tgz" class="hidden"
-          @change="handleArchiveUpload" />
-        <input ref="filesInputRef" type="file" multiple class="hidden" @change="handleFilesUpload" />
-      </div>
-      <div class="flex-1 overflow-auto p-1">
-        <div v-if="fileTree.length === 0" class="text-xs text-muted-foreground text-center py-4">
-          暂无文件
-        </div>
-        <FileTreeNode v-for="node in fileTree" :key="node.path" :node="node" :expanded-dirs="expandedDirs"
-          :selected-path="selectedPath" @select="handleSelect" @delete="confirmDelete" @create="handleCreate"
-          @download-file="handleDownload" @move="handleMove" @rename="openRenameDialog" @duplicate="handleCopyFile" />
-      </div>
-    </div>
+    <FileSidebar
+      :file-tree="fileTree"
+      :expanded-dirs="expandedDirs"
+      :selected-path="selectedPath"
+      @refresh="loadTree"
+      @select="handleSelect"
+      @delete="confirm => dialogsRef?.openDelete(confirm)"
+      @create="parent => dialogsRef?.openCreate(parent)"
+      @download="handleDownload"
+      @move="handleMove"
+      @rename="path => dialogsRef?.openRename(path)"
+      @duplicate="handleCopyFile"
+      @upload-archive="handleArchiveUpload"
+      @upload-files="handleFilesUpload"
+    />
 
-    <!-- 编辑器 -->
     <div class="flex-1 min-h-[300px] border rounded-md flex flex-col overflow-hidden">
       <div class="flex items-center justify-between p-2 border-b gap-2">
         <span class="text-xs font-medium truncate flex-1 min-w-0">
@@ -485,28 +443,25 @@ onUnmounted(() => {
           <span v-if="hasChanges" class="text-orange-500 ml-1">●</span>
         </span>
         <div v-if="selectedPath" class="flex gap-1 shrink-0">
-          <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="openRenameDialog(selectedPath)">
-            <Edit3 class="h-3 w-3" /> <span class="hidden sm:inline">重命名</span>
+          <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="dialogsRef?.openRename(selectedPath)">
+            <Pencil class="h-3 w-3" /> <span class="hidden sm:inline">重命名</span>
           </Button>
-          <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="confirmDelete(selectedPath)">
-            <Trash2 class="h-3 w-3 text-destructive" /> <span class="hidden sm:inline">删除</span>
+          <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="dialogsRef?.openDelete(selectedPath)">
+            <X class="h-3 w-3 text-destructive" /> <span class="hidden sm:inline">删除</span>
           </Button>
 
           <template v-if="selectedFile">
             <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="handleDownload(selectedFile)">
               <Download class="h-3 w-3" /> <span class="hidden sm:inline">下载</span>
             </Button>
-            <Button v-if="!isEditMode" variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2"
-              @click="isEditMode = true">
+            <Button v-if="!isEditMode" variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="isEditMode = true">
               <Pencil class="h-3 w-3" /> <span class="hidden sm:inline">编辑</span>
             </Button>
             <template v-else>
-              <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2"
-                @click="isEditMode = false; fileContent = originalContent">
+              <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="isEditMode = false; fileContent = originalContent">
                 <Eye class="h-3 w-3" /> <span class="hidden sm:inline">查看</span>
               </Button>
-              <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" :disabled="!hasChanges"
-                @click="saveFile">
+              <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" :disabled="!hasChanges" @click="saveFile">
                 <Save class="h-3 w-3" /> <span class="hidden sm:inline">保存</span>
               </Button>
             </template>
@@ -523,15 +478,6 @@ onUnmounted(() => {
             fontSize: editorFontSize,
             lineNumbers: 'on',
             scrollBeyondLastLine: false,
-            quickSuggestions: isEditMode,
-            suggestOnTriggerCharacters: isEditMode,
-            wordBasedSuggestions: isEditMode ? 'currentDocument' : 'off',
-            parameterHints: { enabled: isEditMode },
-            autoClosingBrackets: 'always',
-            autoClosingQuotes: 'always',
-            formatOnPaste: true,
-            tabSize: 4,
-            insertSpaces: true,
             readOnly: !isEditMode,
             domReadOnly: !isEditMode
           }" @mount="handleEditorMount" />
@@ -542,96 +488,33 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <FileActionDialogs
+      ref="dialogsRef"
+      @create="createItem"
+      @delete="deleteItem"
+      @rename="renameItem"
+    />
 
+    <RunConfigDialog
+      v-model:open="showRunDialog"
+      v-model:selected-envs="selectedEnvs"
+      :lang-groups="langGroups"
+      :get-lang-icon="getLangIcon"
+      @confirm="startExecution"
+    />
 
-    <!-- 新建对话框 -->
-    <Dialog v-model:open="showCreateDialog">
-      <DialogContent class="max-w-xs" @openAutoFocus.prevent>
-        <DialogHeader>
-          <DialogTitle class="text-sm">新建</DialogTitle>
-        </DialogHeader>
-        <div class="space-y-3 py-2">
-          <div class="text-xs text-muted-foreground">
-            位置: {{ createInDir || '根目录' }}
-          </div>
-          <RadioGroup v-model="newItemType" class="flex gap-4">
-            <div class="flex items-center gap-2">
-              <RadioGroupItem value="file" id="file" />
-              <Label for="file" class="text-xs">文件</Label>
-            </div>
-            <div class="flex items-center gap-2">
-              <RadioGroupItem value="dir" id="dir" />
-              <Label for="dir" class="text-xs">文件夹</Label>
-            </div>
-          </RadioGroup>
-          <div class="space-y-1">
-            <Label class="text-xs">名称</Label>
-            <Input v-model="newItemName" class="h-8 text-xs" placeholder="script.sh" @keyup.enter="createItem" />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" size="sm" class="h-7 text-xs" @click="showCreateDialog = false">取消</Button>
-          <Button size="sm" class="h-7 text-xs" @click="createItem">创建</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    <!-- 删除确认 -->
-    <AlertDialog v-model:open="showDeleteDialog">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle class="text-sm">确认删除</AlertDialogTitle>
-          <AlertDialogDescription class="text-xs">确定要删除 {{ deleteTargetPath }} 吗？</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel class="h-7 text-xs">取消</AlertDialogCancel>
-          <AlertDialogAction class="h-7 text-xs bg-destructive text-white hover:bg-destructive/90" @click="deleteItem">
-            删除
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-
-    <!-- 重命名对话框 -->
-    <Dialog v-model:open="showRenameDialog">
-      <DialogContent class="max-w-xs" @openAutoFocus.prevent>
-        <DialogHeader>
-          <DialogTitle class="text-sm">重命名</DialogTitle>
-        </DialogHeader>
-        <div class="space-y-3 py-2">
-          <div class="space-y-1">
-            <Label class="text-xs">新名称</Label>
-            <Input v-model="newName" class="h-8 text-xs" placeholder="new_name.sh" @keyup.enter="renameItem" />
-            <p class="text-[10px] text-muted-foreground">注：仅支持修改名称，不可包含路径分隔符 /</p>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" size="sm" class="h-7 text-xs" @click="showRenameDialog = false">取消</Button>
-          <Button size="sm" class="h-7 text-xs" @click="renameItem">确定</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    <!-- 终端弹窗 -->
     <Dialog v-model:open="showTerminalDialog">
-      <DialogContent
-        class="w-[calc(100%-2rem)] sm:max-w-3xl h-[60vh] sm:h-[70vh] flex flex-col p-0 overflow-hidden !bg-[#1e1e1e] border-[#3c3c3c]"
-        :show-close-button="false" @openAutoFocus.prevent>
-        <div class="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-[#3c3c3c]">
+      <DialogContent class="w-[calc(100%-1rem)] sm:max-w-[90vw] lg:max-w-4xl h-[60vh] sm:h-[80vh] flex flex-col p-0 overflow-hidden bg-[#1e1e1e] border-none shadow-2xl [&>button]:hidden">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-[#3c3c3c]">
           <span class="text-xs sm:text-sm font-medium text-gray-300">运行脚本</span>
-          <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/10"
-            @click="closeTerminal">
+          <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white" @click="closeTerminal">
             <X class="h-4 w-4" />
           </Button>
         </div>
         <div class="flex-1 overflow-hidden">
-          <XTerminal v-if="showTerminalDialog" ref="terminalRef" :font-size="isSmallScreen ? 12 : 13"
-            :initial-command="runCommand" :auto-connect="false" />
+          <XTerminal v-if="showTerminalDialog" ref="terminalRef" :font-size="isSmallScreen ? 12 : 13" :initial-command="runCommand" :auto-connect="false" />
         </div>
       </DialogContent>
     </Dialog>
   </div>
 </template>
-
-
-<style scoped></style>

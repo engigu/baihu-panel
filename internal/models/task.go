@@ -1,8 +1,6 @@
 package models
 
 import (
-	"fmt"
-
 	"github.com/engigu/baihu-panel/internal/constant"
 
 	"gorm.io/gorm"
@@ -29,29 +27,32 @@ type RepoConfig struct {
 
 // TaskConfig  任务配置  RepoConfig+TaskConfig=task.config
 type TaskConfig struct {
-	Concurrency int `json:"$task_concurrency"` // 0: disable concurrency, 1: enable concurrency
+	Concurrency int  `json:"$task_concurrency"` // 0: disable concurrency, 1: enable concurrency
+	AllEnvs     bool `json:"$task_all_envs"`    // 开启则注入全部环境变量
 }
 
 // Task 代表一个计划任务
 type Task struct {
-	ID          uint                `json:"id" gorm:"primaryKey"`
-	Name        string              `json:"name" gorm:"size:255;not null"`
-	Command     string              `json:"command" gorm:"type:text"`                   // 普通任务的命令
-	Tags        string              `json:"tags" gorm:"size:255;default:''"`            // 标签，逗号分隔
-	Type        string              `json:"type" gorm:"size:20;default:'task'"`         // 任务类型: constant.TaskTypeNormal, constant.TaskTypeRepo
-	TriggerType string              `json:"trigger_type" gorm:"size:25;default:'cron'"` // 触发类型: constant.TriggerTypeCron, constant.TriggerTypeBaihuStartup
-	Config      string              `json:"config" gorm:"type:text"`                    // 配置 JSON（仓库同步配置等）
-	Schedule    string              `json:"schedule" gorm:"size:100"`                   // cron 表达式
-	Timeout     int                 `json:"timeout" gorm:"default:30"`                  // 超时时间（分钟），默认30分钟
-	WorkDir     string              `json:"work_dir" gorm:"size:255;default:''"`        // 工作目录，为空则使用 scripts 目录
-	CleanConfig string              `json:"clean_config" gorm:"size:255;default:''"`    // 清理配置 JSON
-	Envs        string              `json:"envs" gorm:"size:255;default:''"`            // 环境变量ID列表，逗号分隔
-	Languages   []map[string]string `json:"languages" gorm:"serializer:json;type:text"` // 针对本地任务的语言配置列表
-	AgentID       *uint               `json:"agent_id" gorm:"index"`                      // Agent ID，为空表示本地执行
+	ID            string              `json:"id" gorm:"primaryKey;size:20"`
+	Name          string              `json:"name" gorm:"size:255;not null"`
+	Command       BigText             `json:"command"`                   // 普通任务的命令
+	Tags          string              `json:"tags" gorm:"size:255;default:''"`            // 标签，逗号分隔
+	Type          string              `json:"type" gorm:"size:20;default:'task'"`         // 任务类型: constant.TaskTypeNormal, constant.TaskTypeRepo
+	TriggerType   string              `json:"trigger_type" gorm:"size:25;default:'cron'"` // 触发类型: constant.TriggerTypeCron, constant.TriggerTypeBaihuStartup
+	Config        BigText             `json:"config"`                    // 配置 JSON（仓库同步配置等）
+	Schedule      string              `json:"schedule" gorm:"size:100"`                   // cron 表达式
+	Timeout       int                 `json:"timeout" gorm:"default:30"`                  // 超时时间（分钟），默认30分钟
+	WorkDir       string              `json:"work_dir" gorm:"size:255;default:''"`        // 工作目录，为空则使用 scripts 目录
+	CleanConfig   string              `json:"clean_config" gorm:"size:255;default:''"`    // 清理配置 JSON
+	Envs          BigText             `json:"envs"`                      // 环境变量ID列表，逗号分隔
+	Languages     []map[string]string `json:"languages" gorm:"serializer:json"` // 针对本地任务的语言配置列表
+	AgentID       *string             `json:"agent_id" gorm:"size:20;index"`              // Agent ID，为空表示本地执行
 	RetryCount    int                 `json:"retry_count" gorm:"default:0"`               // 失败重试次数
 	RetryInterval int                 `json:"retry_interval" gorm:"default:0"`            // 失败重试间隔(秒)
+	RandomRange   int                 `json:"random_range" gorm:"default:0"`              // 随机延迟范围(秒)
 	Enabled       bool                `json:"enabled" gorm:"default:true"`
-	RunningGo     string              `json:"running_go" gorm:"type:text"` // 正在运行的 go routine id 数组 (JSON)
+	RunningGo     BigText             `json:"running_go"` // 正在运行的 go routine id 数组 (JSON)
+	RuntimeEnvs   []string            `json:"-" gorm:"-"`                  // 运行时环境变量（非持久化）
 	LastRun       *LocalTime          `json:"last_run"`
 	NextRun       *LocalTime          `json:"next_run"`
 	CreatedAt     LocalTime           `json:"created_at"`
@@ -64,7 +65,7 @@ func (Task) TableName() string {
 }
 
 func (t *Task) GetID() string {
-	return fmt.Sprintf("%d", t.ID)
+	return t.ID
 }
 
 func (t *Task) GetName() string {
@@ -72,7 +73,7 @@ func (t *Task) GetName() string {
 }
 
 func (t *Task) GetCommand() string {
-	return t.Command
+	return string(t.Command)
 }
 
 func (t *Task) GetTimeout() int {
@@ -84,15 +85,19 @@ func (t *Task) GetWorkDir() string {
 }
 
 func (t *Task) GetEnvs() string {
-	return t.Envs
+	return string(t.Envs)
 }
 
 func (t *Task) GetLanguages() []map[string]string {
 	return t.Languages
 }
 
+func (t *Task) GetEnvVars() []string {
+	return t.RuntimeEnvs
+}
+
 func (t *Task) GetUseMise() bool {
-	return t.AgentID == nil || *t.AgentID == 0
+	return t.AgentID == nil || *t.AgentID == ""
 }
 
 func (t *Task) UseMise() bool {
@@ -103,16 +108,20 @@ func (t *Task) GetSchedule() string {
 	return t.Schedule
 }
 
+func (t *Task) GetRandomRange() int {
+	return t.RandomRange
+}
+
 // TaskLog 代表任务执行的日志记录
 type TaskLog struct {
-	ID        uint       `json:"id" gorm:"primaryKey"`
-	TaskID        uint       `json:"task_id" gorm:"index"`
-	AgentID       *uint      `json:"agent_id" gorm:"index"` // Agent ID，为空表示本地执行
+	ID            string     `json:"id" gorm:"primaryKey;size:20"`
+	TaskID        string     `json:"task_id" gorm:"size:20;index"`
+	AgentID       *string    `json:"agent_id" gorm:"size:20;index"` // Agent ID，为空表示本地执行
 	WorkflowID    *string    `json:"workflow_id" gorm:"type:varchar(36);index"`
 	WorkflowRunID string     `json:"workflow_run_id" gorm:"size:50;index"`
-	Command       string     `json:"command" gorm:"type:text"`
-	Output    string     `json:"-" gorm:"type:longtext"`      // gzip+base64 压缩后的日志
-	Error     string     `json:"error" gorm:"type:text"`      // 额外的系统错误信息
+	Command       BigText    `json:"command"`
+	Output        BigText    `json:"-"`          // gzip+base64 压缩后的日志
+	Error         BigText    `json:"error"`      // 额外的系统错误信息
 	Status    string     `json:"status" gorm:"size:20;index"` // success, failed
 	Duration  int64      `json:"duration"`                    // 执行耗时（毫秒）
 	ExitCode  int        `json:"exit_code"`

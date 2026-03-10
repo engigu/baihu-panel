@@ -28,6 +28,8 @@ func RegisterControllers() *Controllers {
 	workflowService := services.NewWorkflowService()
 
 	// 创建任务执行服务（需要依赖注入）
+	notifyService := services.NewNotificationService()
+	appLogService := services.NewAppLogService()
 
 	// 清理 task 运行状态的任务可以直接由 executorService 承担或在此处通过 Database 直接清理
 	// 简单期间，我们使用一个新方法 tasks.CleanupRunningTasks() 或者让 executorService 启动时清理
@@ -39,23 +41,29 @@ func RegisterControllers() *Controllers {
 	// 启动计划任务
 	executorService.StartCron()
 
+	// 初始化所有关注系统总线的服务
+	setupEventHandlers(appLogService, notifyService, loginLogService)
+	go startAppLogCleanup(appLogService)
+
 	// 初始化并返回控制器
 	return &Controllers{
-		Task:       controllers.NewTaskController(taskService, executorService),
-		Auth:       controllers.NewAuthController(userService, settingsService, loginLogService),
-		Env:        controllers.NewEnvController(envService),
-		Script:     controllers.NewScriptController(scriptService),
-		Executor:   controllers.NewExecutorController(executorService),
-		File:       controllers.NewFileController(constant.ScriptsWorkDir),
-		Dashboard:  controllers.NewDashboardController(executorService),
-		Log:        controllers.NewLogController(),
-		LogWS:      controllers.NewLogWSController(),
-		Terminal:   controllers.NewTerminalController(envService),
-		Settings:   controllers.NewSettingsController(userService, loginLogService, executorService),
-		Dependency: controllers.NewDependencyController(),
-		Agent:      controllers.NewAgentController(settingsService),
-		Mise:       controllers.NewMiseController(services.NewMiseService()),
-		Workflow:   controllers.NewWorkflowController(workflowService, executorService),
+		Task:         controllers.NewTaskController(taskService, executorService),
+		Auth:         controllers.NewAuthController(userService, settingsService, loginLogService),
+		Env:          controllers.NewEnvController(envService),
+		Script:       controllers.NewScriptController(scriptService),
+		Executor:     controllers.NewExecutorController(executorService),
+		File:         controllers.NewFileController(constant.ScriptsWorkDir),
+		Dashboard:    controllers.NewDashboardController(executorService),
+		Log:          controllers.NewLogController(),
+		LogWS:        controllers.NewLogWSController(),
+		Terminal:     controllers.NewTerminalController(envService),
+		Settings:     controllers.NewSettingsController(userService, loginLogService, executorService),
+		Dependency:   controllers.NewDependencyController(),
+		Agent:        controllers.NewAgentController(settingsService),
+		Mise:         controllers.NewMiseController(services.NewMiseService()),
+		Workflow:     controllers.NewWorkflowController(workflowService, executorService),
+		Notification: controllers.NewNotificationController(),
+		AppLog:       controllers.NewAppLogController(),
 	}
 }
 

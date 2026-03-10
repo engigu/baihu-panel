@@ -283,7 +283,7 @@ func (s *MiseService) syncToDB(languages []MiseLanguage) {
 		return
 	}
 
-	var currentIds []uint
+	var currentIds []string
 	for _, lang := range languages {
 		var model models.Language
 		// 以 plugin 和 version 作为联合唯一标识（业务逻辑上）
@@ -308,6 +308,7 @@ func (s *MiseService) syncToDB(languages []MiseLanguage) {
 		if err != nil {
 			// 如果不存在，则创建
 			newLang := models.Language{
+				ID:          utils.GenerateID(),
 				Plugin:      lang.Plugin,
 				Version:     lang.Version,
 				InstallPath: lang.InstallPath,

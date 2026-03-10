@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
@@ -25,10 +24,7 @@ func (lc *LogWSController) StreamLog(c *gin.Context) {
 		return
 	}
 
-	logID, err := strconv.ParseUint(logIDStr, 10, 32)
-	if err != nil {
-		return
-	}
+	logID := logIDStr
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -38,10 +34,10 @@ func (lc *LogWSController) StreamLog(c *gin.Context) {
 
 	// 1. 检查数据库中是否已结束
 	var taskLog models.TaskLog
-	if err := database.DB.First(&taskLog, uint(logID)).Error; err == nil {
+	if err := database.DB.Where("id = ?", logID).First(&taskLog).Error; err == nil {
 		if taskLog.Status != "running" {
 			// 已结束，读取库内日志
-			content, err := utils.DecompressFromBase64(taskLog.Output)
+			content, err := utils.DecompressFromBase64(string(taskLog.Output))
 			if err != nil {
 				conn.WriteMessage(websocket.TextMessage, []byte("解压日志失败: "+err.Error()))
 				return
@@ -52,14 +48,14 @@ func (lc *LogWSController) StreamLog(c *gin.Context) {
 	}
 
 	// 2. 未结束或未找到记录，尝试从 TinyLogManager 获取
-	tl := tasks.GetActiveLog(uint(logID))
+	tl := tasks.GetActiveLog(logID)
 	if tl == nil {
 		conn.WriteMessage(websocket.TextMessage, []byte("未找到正在运行的任务日志"))
 		return
 	}
 
 	// 发送系统提示
-	conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("[System] 连接成功，正在监听日志... (LogID: %d)\n", logID)))
+	conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("[System] 连接成功，正在监听日志... (LogID: %s)\n", logID)))
 
 	// 发送最后 100 行
 	lastLines, err := tl.ReadLastLines(100)
@@ -78,8 +74,8 @@ func (lc *LogWSController) StreamLog(c *gin.Context) {
 			if !ok {
 				// 任务结束，尝试刷新最后一次库内完整内容
 				var finalLog models.TaskLog
-				if err := database.DB.First(&finalLog, uint(logID)).Error; err == nil {
-					content, _ := utils.DecompressFromBase64(finalLog.Output)
+				if err := database.DB.Where("id = ?", logID).First(&finalLog).Error; err == nil {
+					content, _ := utils.DecompressFromBase64(string(finalLog.Output))
 					if content != "" {
 						conn.WriteMessage(websocket.TextMessage, []byte("\n--- 任务已结束 ---\n"))
 						// 这里可以选择性再推一次完整版，或直接退出

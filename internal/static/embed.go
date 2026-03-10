@@ -1,28 +1,20 @@
+//go:build web
+
 package static
 
 import (
 	"embed"
 	"io/fs"
-	"net/http"
 )
 
 //go:embed dist/*
 var distFS embed.FS
 
-// GetFileSystem 返回嵌入的静态文件系统
-func GetFileSystem() http.FileSystem {
-	subFS, err := fs.Sub(distFS, "dist")
-	if err != nil {
-		panic(err)
-	}
-	return http.FS(subFS)
-}
-
 // GetFS 返回嵌入的 fs.FS
 func GetFS() fs.FS {
 	subFS, err := fs.Sub(distFS, "dist")
 	if err != nil {
-		panic(err)
+		return nil
 	}
 	return subFS
 }

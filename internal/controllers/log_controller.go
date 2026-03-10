@@ -17,9 +17,23 @@ func NewLogController() *LogController {
 	return &LogController{}
 }
 
+// GetLogs 获取任务日志列表
+// @Summary 获取任务日志列表
+// @Description 分页获取任务日志列表，支持按任务 ID、任务名称、状态筛选
+// @Tags 日志管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param task_id query string false "任务 ID"
+// @Param task_name query string false "任务名称"
+// @Param status query string false "状态"
+// @Param page query int false "页码"
+// @Param page_size query int false "每页数量"
+// @Success 200 {object} utils.Response{data=utils.PaginationData{data=[]vo.TaskLogVO}}
+// @Router /logs [get]
 func (lc *LogController) GetLogs(c *gin.Context) {
 	p := utils.ParsePagination(c)
-	taskID, _ := strconv.Atoi(c.DefaultQuery("task_id", "0"))
+	taskID := c.DefaultQuery("task_id", "")
 	taskName := c.DefaultQuery("task_name", "")
 	status := c.DefaultQuery("status", "")
 	workflowID, _ := strconv.Atoi(c.DefaultQuery("workflow_id", "0"))
@@ -29,7 +43,7 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 	var total int64
 
 	query := database.DB.Model(&models.TaskLog{})
-	if taskID > 0 {
+	if taskID != "" {
 		query = query.Where("task_id = ?", taskID)
 	}
 	if status != "" {
@@ -44,7 +58,7 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 
 	// 按任务名称过滤
 	if taskName != "" {
-		var taskIDs []uint
+		var taskIDs []string
 		database.DB.Model(&models.Task{}).Where("name LIKE ?", "%"+taskName+"%").Pluck("id", &taskIDs)
 		if len(taskIDs) > 0 {
 			query = query.Where("task_id IN ?", taskIDs)
@@ -57,14 +71,14 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 	query.Count(&total)
 	query.Order("id DESC").Offset(p.Offset()).Limit(p.PageSize).Find(&logs)
 
-	taskIDList := make([]uint, 0)
+	taskIDList := make([]string, 0)
 	for _, log := range logs {
 		taskIDList = append(taskIDList, log.TaskID)
 	}
 
 	var tasks []models.Task
 	database.DB.Where("id IN ?", taskIDList).Find(&tasks)
-	taskMap := make(map[uint]models.Task)
+	taskMap := make(map[string]models.Task)
 	for _, t := range tasks {
 		taskMap[t.ID] = t
 	}
@@ -82,7 +96,7 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 			TaskName:  task.Name,
 			TaskType:  taskType,
 			AgentID:   log.AgentID,
-			Command:   log.Command,
+			Command:   string(log.Command),
 			Status:    log.Status,
 			Duration:  log.Duration,
 			StartTime: log.StartTime,
@@ -94,15 +108,26 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 	utils.PaginatedResponse(c, result, total, p)
 }
 
+// GetLogDetail 获取日志详情
+// @Summary 获取日志详情
+// @Description 根据 ID 获取任务日志详细内容（包含输出）
+// @Tags 日志管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "日志ID"
+// @Success 200 {object} utils.Response{data=vo.TaskLogVO}
+// @Failure 404 {object} utils.Response
+// @Router /logs/{id} [get]
 func (lc *LogController) GetLogDetail(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	id := c.Param("id")
+	if id == "" {
 		utils.BadRequest(c, "无效的日志ID")
 		return
 	}
 
 	var log models.TaskLog
-	if err := database.DB.First(&log, id).Error; err != nil {
+	if err := database.DB.Where("id = ?", id).First(&log).Error; err != nil {
 		utils.NotFound(c, "日志不存在")
 		return
 	}
@@ -110,9 +135,10 @@ func (lc *LogController) GetLogDetail(c *gin.Context) {
 	utils.Success(c, vo.ToTaskLogVO(&log))
 }
 
+// ClearLogs 清空日志
 func (lc *LogController) ClearLogs(c *gin.Context) {
 	var req struct {
-		TaskID *int `json:"task_id"`
+		TaskID *string `json:"task_id"`
 	}
 	
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -121,7 +147,7 @@ func (lc *LogController) ClearLogs(c *gin.Context) {
 	}
 
 	query := database.DB.Model(&models.TaskLog{})
-	if req.TaskID != nil && *req.TaskID > 0 {
+	if req.TaskID != nil && *req.TaskID != "" {
 		query = query.Where("task_id = ?", *req.TaskID)
 	} else {
 		query = query.Where("1 = 1") // Allow delete all without GORM safety block
@@ -135,14 +161,15 @@ func (lc *LogController) ClearLogs(c *gin.Context) {
 	utils.SuccessMsg(c, "日志清空成功")
 }
 
+// DeleteLog 删除日志
 func (lc *LogController) DeleteLog(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	id := c.Param("id")
+	if id == "" {
 		utils.BadRequest(c, "无效的日志ID")
 		return
 	}
 
-	if err := database.DB.Delete(&models.TaskLog{}, id).Error; err != nil {
+	if err := database.DB.Where("id = ?", id).Delete(&models.TaskLog{}).Error; err != nil {
 		utils.ServerError(c, "删除日志失败")
 		return
 	}

@@ -1,0 +1,48 @@
+FROM golang:1.25-trixie
+
+ENV TZ=Asia/Shanghai
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
+ENV NODE_VERSION=23
+ENV PYTHON_VERSION=3.13
+
+RUN sed -i 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's@security.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list.d/debian.sources \
+    && echo "${TZ}" > /etc/timezone \
+    && ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+         sudo gosu tzdata git curl wget vim htop ca-certificates rsync \
+    && BUILD_DEPS="gcc build-essential libssl-dev zlib1g-dev libbz2-dev \
+         libreadline-dev libsqlite3-dev libncursesw5-dev \
+         xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev" \
+    && apt-get install -y --no-install-recommends $BUILD_DEPS \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN go env -w GOPROXY=https://goproxy.cn,direct
+
+ENV MISE_GLOBAL_DIR=/opt/mise-dev
+ENV PATH="/opt/mise-dev/shims:/opt/mise-dev/bin:$PATH"
+RUN curl https://mise.run | MISE_INSTALL_PATH=/usr/local/bin/mise sh \
+    && MISE_DATA_DIR=/opt/mise-dev MISE_CONFIG_DIR=/opt/mise-dev MISE_HTTP_TIMEOUT=300 \
+    PYTHON_BUILD_MIRROR_URL=https://pyenv.pages.dev/api/mirror/binaries \
+    mise use -g node@${NODE_VERSION} python@${PYTHON_VERSION} \
+    && mise prune -- -f
+
+ENV MISE_DATA_DIR=/app/envs/mise
+ENV MISE_CONFIG_DIR=/app/envs/mise
+ENV PATH="/app/envs/mise/shims:/app/envs/mise/bin:$PATH"
+
+ENV NPM_CONFIG_CACHE=/var/cache/npm
+
+COPY docker/docker-entrypoint-dev.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint-dev.sh
+
+WORKDIR /app
+
+EXPOSE 8052 5173
+
+ENTRYPOINT ["docker-entrypoint-dev.sh"]
+
+CMD ["make", "dev"]

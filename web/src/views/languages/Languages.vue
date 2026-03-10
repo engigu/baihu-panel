@@ -64,6 +64,7 @@ const filteredVersions = computed(() => {
 
 const showTerminalDialog = ref(false)
 const terminalCommand = ref('')
+const isInstallSuccess = ref(false)
 
 const filteredLanguages = computed(() => {
     if (!searchQuery.value) return languages.value
@@ -169,12 +170,28 @@ function startInstall() {
 
 function runInTerminal(command: string) {
     terminalCommand.value = command
+    isInstallSuccess.value = false
     showTerminalDialog.value = true
 }
 
 function confirmDelete(lang: MiseLanguage) {
     const cmd = `mise uninstall ${lang.plugin}@${lang.version}`
     runInTerminal(cmd)
+}
+
+async function handleTerminalClose() {
+    showTerminalDialog.value = false
+    // 无论成功失败，都触发环境同步并刷新列表
+    syncing.value = true
+    try {
+        await api.mise.sync()
+        toast.success('环境同步完成')
+    } catch (e) {
+        toast.error('环境同步失败: ' + e)
+    } finally {
+        syncing.value = false
+    }
+    await loadLanguages()
 }
 
 function getLangIcon(plugin: string) {
@@ -278,56 +295,61 @@ onMounted(loadLanguages)
                     <Globe class="h-12 w-12 mx-auto mb-2 opacity-10" />
                     {{ searchQuery ? '未找到匹配的语言' : '未发现已安装的语言' }}
                 </div>
-                <div v-else v-for="lang in filteredLanguages" :key="lang.plugin + lang.version"
-                    class="flex flex-col sm:flex-row sm:items-center justify-between px-4 py-4 hover:bg-muted/50 transition-colors gap-4">
-                    <div class="flex items-center gap-4 min-w-0">
+                <template v-else>
+                    <div v-for="lang in filteredLanguages" :key="lang.plugin + lang.version"
+                        class="flex flex-col sm:flex-row sm:items-center justify-between px-4 py-4 hover:bg-muted/50 transition-colors gap-4">
+                        <div class="flex items-center gap-4 min-w-0">
+                            <div
+                                class="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary uppercase overflow-hidden shrink-0">
+                                <template v-if="getLangIcon(lang.plugin)">
+                                    <div class="w-full h-full bg-white/80 p-2 flex items-center justify-center">
+                                        <img :src="getLangIcon(lang.plugin)" :alt="lang.plugin"
+                                            class="w-full h-full object-contain" />
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    {{ lang.plugin.length > 2 ? lang.plugin.substring(0, 2) : lang.plugin }}
+                                </template>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-bold capitalize truncate">{{ lang.plugin }}</span>
+                                    <Badge variant="outline" class="font-mono whitespace-nowrap">{{ lang.version }}
+                                    </Badge>
+                                </div>
+                                <div class="text-xs text-muted-foreground mt-1 space-y-0.5">
+                                    <div class="font-mono opacity-60 truncate" :title="lang.source">来源: {{ lang.source
+                                        }}
+                                    </div>
+                                    <div v-if="lang.installed_at" class="opacity-50">
+                                        添加日期: {{ lang.installed_at }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <div
-                            class="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary uppercase overflow-hidden shrink-0">
-                            <template v-if="getLangIcon(lang.plugin)">
-                                <div class="w-full h-full bg-white/80 p-2 flex items-center justify-center">
-                                    <img :src="getLangIcon(lang.plugin)" :alt="lang.plugin"
-                                        class="w-full h-full object-contain" />
-                                </div>
-                            </template>
-                            <template v-else>
-                                {{ lang.plugin.length > 2 ? lang.plugin.substring(0, 2) : lang.plugin }}
-                            </template>
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <div class="flex items-center gap-2">
-                                <span class="font-bold capitalize truncate">{{ lang.plugin }}</span>
-                                <Badge variant="outline" class="font-mono whitespace-nowrap">{{ lang.version }}</Badge>
-                            </div>
-                            <div class="text-xs text-muted-foreground mt-1 space-y-0.5">
-                                <div class="font-mono opacity-60 truncate" :title="lang.source">来源: {{ lang.source }}
-                                </div>
-                                <div v-if="lang.installed_at" class="opacity-50">
-                                    添加日期: {{ lang.installed_at }}
-                                </div>
-                            </div>
+                            class="flex items-center gap-2 sm:ml-auto w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 hide-scrollbar">
+                            <Button v-if="SUPPORTED_DEPS_LANGS.includes(lang.plugin)" variant="outline" size="sm"
+                                class="whitespace-nowrap flex-1 sm:flex-none"
+                                @click="$router.push(`/dependencies?language=${lang.plugin}&version=${lang.version}`)">
+                                依赖管理
+                            </Button>
+                            <Badge v-else variant="secondary"
+                                class="h-8 opacity-60 flex-1 sm:flex-none justify-center whitespace-nowrap">
+                                不支持管理
+                            </Badge>
+                            <Button variant="outline" size="sm" class="whitespace-nowrap flex-1 sm:flex-none"
+                                @click="handleVerify(lang)">
+                                环境验证
+                            </Button>
+                            <Button variant="ghost" size="icon"
+                                class="text-destructive h-8 w-8 shrink-0 ml-auto sm:ml-0" @click="confirmDelete(lang)"
+                                title="卸载">
+                                <Trash2 class="h-4 w-4" />
+                            </Button>
                         </div>
                     </div>
-                    <div
-                        class="flex items-center gap-2 sm:ml-auto w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 hide-scrollbar">
-                        <Button v-if="SUPPORTED_DEPS_LANGS.includes(lang.plugin)" variant="outline" size="sm"
-                            class="whitespace-nowrap flex-1 sm:flex-none"
-                            @click="$router.push(`/dependencies?language=${lang.plugin}&version=${lang.version}`)">
-                            依赖管理
-                        </Button>
-                        <Badge v-else variant="secondary"
-                            class="h-8 opacity-60 flex-1 sm:flex-none justify-center whitespace-nowrap">
-                            不支持管理
-                        </Badge>
-                        <Button variant="outline" size="sm" class="whitespace-nowrap flex-1 sm:flex-none"
-                            @click="handleVerify(lang)">
-                            环境验证
-                        </Button>
-                        <Button variant="ghost" size="icon" class="text-destructive h-8 w-8 shrink-0 ml-auto sm:ml-0"
-                            @click="confirmDelete(lang)" title="卸载">
-                            <Trash2 class="h-4 w-4" />
-                        </Button>
-                    </div>
-                </div>
+                </template>
             </div>
         </div>
 
@@ -368,25 +390,28 @@ onMounted(loadLanguages)
                                             class="py-6 text-center text-xs text-muted-foreground">
                                             未找到匹配插件
                                         </div>
-                                        <button v-else v-for="p in filteredPlugins" :key="p"
-                                            @click="() => { newLangPlugin = p; openPluginPopover = false }"
-                                            class="w-full flex items-center px-2 py-1.5 text-sm rounded-sm hover:bg-muted text-left transition-colors group">
-                                            <div
-                                                class="mr-2 h-4 w-4 shrink-0 flex items-center justify-center relative">
-                                                <div v-if="getLangIcon(p)"
-                                                    class="w-full h-full rounded-sm bg-white/80 overflow-hidden p-0.5">
-                                                    <img :src="getLangIcon(p)" class="w-full h-full object-contain" />
+                                        <template v-else>
+                                            <button v-for="p in filteredPlugins" :key="p"
+                                                @click="() => { newLangPlugin = p; openPluginPopover = false }"
+                                                class="w-full flex items-center px-2 py-1.5 text-sm rounded-sm hover:bg-muted text-left transition-colors group">
+                                                <div
+                                                    class="mr-2 h-4 w-4 shrink-0 flex items-center justify-center relative">
+                                                    <div v-if="getLangIcon(p)"
+                                                        class="w-full h-full rounded-sm bg-white/80 overflow-hidden p-0.5">
+                                                        <img :src="getLangIcon(p)"
+                                                            class="w-full h-full object-contain" />
+                                                    </div>
+                                                    <div v-else
+                                                        class="w-full h-full flex items-center justify-center bg-primary/10 rounded-sm text-[8px] font-bold uppercase">
+                                                        {{ p.substring(0, 2) }}
+                                                    </div>
+                                                    <Check v-if="newLangPlugin === p"
+                                                        class="absolute -right-2 -top-1 h-3 w-3 text-primary bg-background rounded-full border shadow-sm" />
                                                 </div>
-                                                <div v-else
-                                                    class="w-full h-full flex items-center justify-center bg-primary/10 rounded-sm text-[8px] font-bold uppercase">
-                                                    {{ p.substring(0, 2) }}
-                                                </div>
-                                                <Check v-if="newLangPlugin === p"
-                                                    class="absolute -right-2 -top-1 h-3 w-3 text-primary bg-background rounded-full border shadow-sm" />
-                                            </div>
-                                            <span :class="{ 'font-bold text-primary': newLangPlugin === p }">{{ p
-                                            }}</span>
-                                        </button>
+                                                <span :class="{ 'font-bold text-primary': newLangPlugin === p }">{{ p
+                                                    }}</span>
+                                            </button>
+                                        </template>
                                     </div>
                                 </ScrollArea>
                             </PopoverContent>
@@ -425,13 +450,15 @@ onMounted(loadLanguages)
                                             class="py-6 text-center text-xs text-muted-foreground">
                                             未找到匹配版本
                                         </div>
-                                        <button v-else v-for="v in filteredVersions" :key="v"
-                                            @click="() => { newLangVersion = v; openVersionPopover = false }"
-                                            class="w-full flex items-center px-2 py-1.5 text-sm rounded-sm hover:bg-muted text-left transition-colors">
-                                            <Check
-                                                :class="cn('mr-2 h-3.5 w-3.5', newLangVersion === v ? 'opacity-100' : 'opacity-0')" />
-                                            {{ v }}
-                                        </button>
+                                        <template v-else>
+                                            <button v-for="v in filteredVersions" :key="v"
+                                                @click="() => { newLangVersion = v; openVersionPopover = false }"
+                                                class="w-full flex items-center px-2 py-1.5 text-sm rounded-sm hover:bg-muted text-left transition-colors">
+                                                <Check
+                                                    :class="cn('mr-2 h-3.5 w-3.5', newLangVersion === v ? 'opacity-100' : 'opacity-0')" />
+                                                {{ v }}
+                                            </button>
+                                        </template>
                                     </div>
                                 </ScrollArea>
                             </PopoverContent>
@@ -446,8 +473,11 @@ onMounted(loadLanguages)
         </Dialog>
 
         <!-- 终端对话框 -->
-        <Dialog v-model:open="showTerminalDialog" @update:open="(val) => !val && loadLanguages()">
-            <DialogContent class="max-w-4xl h-[600px] p-0 overflow-hidden bg-[#1e1e1e] border-none shadow-2xl">
+        <Dialog v-model:open="showTerminalDialog">
+            <DialogContent
+                class="w-[calc(100%-2rem)] sm:max-w-[90vw] lg:max-w-4xl xl:max-w-5xl h-[60vh] sm:h-[70vh] flex flex-col p-0 overflow-hidden bg-[#1e1e1e] border-none shadow-2xl"
+                :show-close-button="false" @interact-outside="(e) => e.preventDefault()"
+                @escape-key-down="(e) => e.preventDefault()">
                 <DialogHeader class="sr-only">
                     <DialogTitle>终端执行</DialogTitle>
                     <DialogDescription>正在执行 mise 相关指令</DialogDescription>
@@ -459,12 +489,13 @@ onMounted(loadLanguages)
                             <span class="text-xs font-medium text-gray-300">正在安装 / 执行: {{ terminalCommand }}</span>
                         </div>
                         <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white"
-                            @click="showTerminalDialog = false">
+                            @click="handleTerminalClose">
                             <X class="h-4 w-4" />
                         </Button>
                     </div>
                     <div class="flex-1">
-                        <XTerminal v-if="showTerminalDialog" :font-size="13" :initial-command="terminalCommand" />
+                        <XTerminal v-if="showTerminalDialog" :font-size="13" :initial-command="terminalCommand"
+                            @success="isInstallSuccess = true" @failed="isInstallSuccess = false" />
                     </div>
                 </div>
             </DialogContent>

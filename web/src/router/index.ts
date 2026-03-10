@@ -47,10 +47,20 @@ const router = createRouter({
         { path: 'languages', name: 'languages', component: () => import('@/views/languages/Languages.vue') },
         { path: 'agents', name: 'agents', component: () => import('@/views/agents/Agents.vue') },
         { path: 'history', name: 'history', component: () => import('@/views/history/History.vue') },
-        { path: 'loginlogs', name: 'loginlogs', component: () => import('@/views/loginlogs/LoginLogs.vue') },
+        { path: 'logs', name: 'logs', component: () => import('@/views/loginlogs/LoginLogs.vue') },
         { path: 'terminal', name: 'terminal', component: () => import('@/views/terminal/Terminal.vue') },
+        { path: 'notify', name: 'notify', component: () => import('@/views/notify/Notify.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/views/settings/Settings.vue') }
       ]
+    },
+    {
+      path: '/404',
+      name: '404',
+      component: () => import('@/views/error/NotFound.vue')
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/404'
     }
   ]
 })
@@ -77,6 +87,20 @@ router.beforeEach(async (to, _from, next) => {
     }
   } else {
     next()
+  }
+})
+
+// 捕获动态导入(Chunk)加载失败异常（部署新版本时发生）
+router.onError((error) => {
+  const isChunkLoadFailed = error.message && error.message.includes('Failed to fetch dynamically imported module')
+  if (isChunkLoadFailed) {
+    if (!sessionStorage.getItem('__chunk_reloaded__')) {
+      sessionStorage.setItem('__chunk_reloaded__', 'true')
+      window.location.reload()
+    } else {
+      console.error('动态模块加载持续失败', error)
+      sessionStorage.removeItem('__chunk_reloaded__')
+    }
   }
 })
 

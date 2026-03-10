@@ -34,25 +34,58 @@ const (
 	SectionSystem    = "system"
 	SectionScheduler = "scheduler"
 	SectionSecurity  = "security"
+	SectionNotify    = "notify"
 
 	// Site Settings Key 常量
-	KeyTitle      = "title"
-	KeySubtitle   = "subtitle"
-	KeyIcon       = "icon"
-	KeyPageSize       = "page_size"
-	KeyCookieDays     = "cookie_days"
-	KeyApiToken       = "api_token"
+	KeyTitle        = "title"
+	KeySubtitle     = "subtitle"
+	KeyIcon         = "icon"
+	KeyPageSize     = "page_size"
+	KeyCookieDays   = "cookie_days"
+	KeyOpenapiToken = "openapi_token"
 
 	// Security Settings Key 常量
 	KeySecret = "secret"
 
 	// System Settings Key 常量
 	KeyInitialized = "initialized"
+	// KeyLogRetention = "log_retention" // Deprecated
+
+	// Log Retention Keys
+	KeySystemNoticeDays     = "system_notice_days"
+	KeySystemNoticeMaxCount = "system_notice_max_count"
+	KeyPushLogDays          = "push_log_days"
+	KeyPushLogMaxCount      = "push_log_max_count"
+	KeyLoginLogDays         = "login_log_days"
+	KeyLoginLogMaxCount     = "login_log_max_count"
 
 	// Scheduler Settings Key 常量
 	KeyWorkerCount  = "worker_count"
 	KeyQueueSize    = "queue_size"
 	KeyRateInterval = "rate_interval"
+
+	// Notify Settings Key 常量
+	KeyNotifyChannels = "channels"
+	KeyNotifyEvents   = "events"
+	KeyNotifyToken    = "notify_token"
+
+	// 事件绑定类型
+	BindingTypeSystem = "system"
+	BindingTypeTask   = "task"
+
+	// 系统事件类型
+	EventUserLogin       = "user_login"
+	EventBruteForceLogin = "brute_force_login"
+	EventPasswordChanged = "password_changed"
+
+	// 任务事件类型
+	EventTaskSuccess = "task_success"
+	EventTaskFailed  = "task_failed"
+	EventTaskTimeout = "task_timeout"
+
+	// 其他事件类型
+	EventSystemNotice = "system_notice"
+	EventNotifySent   = "notify_sent"
 
 	// WebSocket 消息类型
 	WSTypeHeartbeat     = "heartbeat"
@@ -99,6 +132,22 @@ const (
 	// Agent 状态
 	AgentStatusOnline  = "online"
 	AgentStatusOffline = "offline"
+	// AppLog 分类
+	LogCategoryDefault      = "default"
+	LogCategorySystemNotice = "system_notice"
+	LogCategoryPushLog      = "push_log"
+	LogCategoryLoginLog     = "login_log"
+
+	// AppLog 级别
+	LogLevelInfo    = "info"
+	LogLevelWarning = "warning"
+	LogLevelError   = "error"
+
+	// AppLog 状态
+	LogStatusUnread  = "unread"
+	LogStatusRead    = "read"
+	LogStatusSuccess = "success"
+	LogStatusFailed  = "failed"
 )
 
 // TablePrefix 表前缀，从配置文件读取

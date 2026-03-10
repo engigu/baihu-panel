@@ -8,13 +8,13 @@ import (
 )
 
 type Claims struct {
-	UserID   uint   `json:"user_id"`
+	UserID   string `json:"user_id"`
 	Username string `json:"username"`
 	jwt.RegisteredClaims
 }
 
 // GenerateToken 生成 JWT token
-func GenerateToken(userID uint, username string, expireDays int, secret string) (string, error) {
+func GenerateToken(userID string, username string, expireDays int, secret string) (string, error) {
 	claims := Claims{
 		UserID:   userID,
 		Username: username,
@@ -29,18 +29,18 @@ func GenerateToken(userID uint, username string, expireDays int, secret string) 
 }
 
 // ParseToken 解析 JWT token
-func ParseToken(tokenString string, secret string) (uint, string, error) {
+func ParseToken(tokenString string, secret string) (string, string, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
 		return []byte(secret), nil
 	})
 
 	if err != nil {
-		return 0, "", err
+		return "", "", err
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
 		return claims.UserID, claims.Username, nil
 	}
 
-	return 0, "", errors.New("invalid token")
+	return "", "", errors.New("invalid token")
 }

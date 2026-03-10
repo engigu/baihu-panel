@@ -1,31 +1,65 @@
 package database
 
 import (
+	"strings"
+
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
 )
 
 func Migrate() error {
-	// 先执行自定义迁移
+	// 执行自定义迁移
 	if err := customMigrations(); err != nil {
 		logger.Warnf("[Database] 自定义迁移警告: %v", err)
 	}
 
-	return AutoMigrate(
+	allModels := []interface{}{
+		&models.AppLog{},
 		&models.User{},
 		&models.Task{},
 		&models.TaskLog{},
 		&models.Script{},
 		&models.EnvironmentVariable{},
 		&models.Setting{},
-		&models.LoginLog{},
 		&models.SendStats{},
 		&models.Dependency{},
 		&models.Agent{},
 		&models.AgentToken{},
 		&models.Language{},
 		&models.Workflow{},
-	)
+		&models.NotifyWay{},
+		&models.NotifyBinding{},
+	}
+
+	if err := AutoMigrate(allModels...); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// hasGormTypeText 检查 gorm tag 中是否包含 type:text
+func hasGormTypeText(gormTag string) bool {
+	for _, part := range strings.Split(gormTag, ";") {
+		if kv := strings.SplitN(strings.TrimSpace(part), ":", 2); len(kv) == 2 {
+			if strings.TrimSpace(kv[0]) == "type" && strings.EqualFold(strings.TrimSpace(kv[1]), "text") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// parseGormColumn 从 gorm tag 中提取 column:xxx
+func parseGormColumn(gormTag string) string {
+	for _, part := range strings.Split(gormTag, ";") {
+		if kv := strings.SplitN(strings.TrimSpace(part), ":", 2); len(kv) == 2 {
+			if strings.TrimSpace(kv[0]) == "column" {
+				return strings.TrimSpace(kv[1])
+			}
+		}
+	}
+	return ""
 }
 
 // customMigrations 自定义迁移（处理 AutoMigrate 无法自动完成的变更）

@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/engigu/baihu-panel/internal/cache"
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
@@ -49,11 +50,14 @@ func (s *BackupService) getTableConfigs() []tableConfig {
 		{"scripts.json", s.exportTable(&[]models.Script{}, true), s.restoreTable(&[]models.Script{}, true)},
 		{"settings.json", s.exportSettings, s.restoreSettings},
 		{"send_stats.json", s.exportTable(&[]models.SendStats{}, false), s.restoreTable(&[]models.SendStats{}, false)},
-		{"login_logs.json", s.exportTable(&[]models.LoginLog{}, false), s.restoreTable(&[]models.LoginLog{}, false)},
+
 		{"agents.json", s.exportTable(&[]models.Agent{}, true), s.restoreTable(&[]models.Agent{}, true)},
 		{"tokens.json", s.exportTable(&[]models.AgentToken{}, true), s.restoreTable(&[]models.AgentToken{}, true)},
 		{"languages.json", s.exportTable(&[]models.Language{}, true), s.restoreTable(&[]models.Language{}, true)},
 		{"deps.json", s.exportTable(&[]models.Dependency{}, true), s.restoreTable(&[]models.Dependency{}, true)},
+		{"notify_ways.json", s.exportTable(&[]models.NotifyWay{}, true), s.restoreTable(&[]models.NotifyWay{}, true)},
+		{"notify_bindings.json", s.exportTable(&[]models.NotifyBinding{}, true), s.restoreTable(&[]models.NotifyBinding{}, true)},
+		{"app_logs.json", s.exportTable(&[]models.AppLog{}, false), s.restoreTable(&[]models.AppLog{}, false)},
 	}
 }
 
@@ -158,7 +162,7 @@ func (s *BackupService) CreateBackup() (string, error) {
 
 	// 写入元数据信息
 	sysInfo := map[string]interface{}{
-		"version": "v2",
+		"version": "v3",
 		"ts":      time.Now().Format("2006-01-02 15:04:05"),
 	}
 	sysFile, err := zipWriter.Create("__sys__.json")
@@ -197,8 +201,26 @@ func (s *BackupService) Restore(zipPath string) error {
 		fileMap[f.Name] = f
 	}
 
+	// 校验版本
+	if f, ok := fileMap["__sys__.json"]; ok {
+		rc, err := f.Open()
+		if err == nil {
+			var sysInfo map[string]interface{}
+			json.NewDecoder(rc).Decode(&sysInfo)
+			rc.Close()
+			if v, ok := sysInfo["version"]; ok {
+				vs, _ := v.(string)
+				if vs < "v3" {
+					return fmt.Errorf("只能数据随版本升级上来，当前备份版本为 %s，限制 v3 以下的不能导入", vs)
+				}
+			}
+		}
+		// } else {
+		// 	return fmt.Errorf("非法备份包：缺失版本标记")
+	}
+
 	// 开启全局事务
-	return database.DB.Transaction(func(tx *gorm.DB) error {
+	err = database.DB.Transaction(func(tx *gorm.DB) error {
 		// 1. 清空现有数据（物理删除）
 		tx.Unscoped().Where("1=1").Delete(&models.User{})
 		tx.Unscoped().Where("1=1").Delete(&models.Task{})
@@ -207,11 +229,14 @@ func (s *BackupService) Restore(zipPath string) error {
 		tx.Unscoped().Where("1=1").Delete(&models.Script{})
 		tx.Unscoped().Where("section != ?", BackupSection).Delete(&models.Setting{})
 		tx.Unscoped().Where("1=1").Delete(&models.SendStats{})
-		tx.Unscoped().Where("1=1").Delete(&models.LoginLog{})
+
 		tx.Unscoped().Where("1=1").Delete(&models.Agent{})
 		tx.Unscoped().Where("1=1").Delete(&models.AgentToken{})
 		tx.Unscoped().Where("1=1").Delete(&models.Language{})
 		tx.Unscoped().Where("1=1").Delete(&models.Dependency{})
+		tx.Unscoped().Where("1=1").Delete(&models.NotifyWay{})
+		tx.Unscoped().Where("1=1").Delete(&models.NotifyBinding{})
+		tx.Unscoped().Where("1=1").Delete(&models.AppLog{})
 
 		// 2. 依次恢复每个表
 		for _, cfg := range configs {
@@ -227,6 +252,14 @@ func (s *BackupService) Restore(zipPath string) error {
 
 		return nil
 	})
+
+	if err == nil {
+		// 备份恢复成功后，需要同时刷新内存中的配置缓存以免数据不一致导致异常
+		constant.Secret = s.settingsService.Get(constant.SectionSecurity, constant.KeySecret)
+		cache.LoadSiteCache()
+	}
+
+	return err
 }
 
 func restoreStreamBatch[T any](tx *gorm.DB, decoder *json.Decoder) error {
@@ -295,8 +328,7 @@ func (s *BackupService) restoreFromZipFile(tx *gorm.DB, f *zip.File, filename st
 		return restoreStreamBatch[models.Script](tx, decoder)
 	case "send_stats.json":
 		return restoreStreamBatch[models.SendStats](tx, decoder)
-	case "login_logs.json":
-		return restoreStreamBatch[models.LoginLog](tx, decoder)
+
 	case "agents.json":
 		return restoreStreamBatch[models.Agent](tx, decoder)
 	case "tokens.json":
@@ -305,6 +337,12 @@ func (s *BackupService) restoreFromZipFile(tx *gorm.DB, f *zip.File, filename st
 		return restoreStreamBatch[models.Language](tx, decoder)
 	case "deps.json":
 		return restoreStreamBatch[models.Dependency](tx, decoder)
+	case "notify_ways.json":
+		return restoreStreamBatch[models.NotifyWay](tx, decoder)
+	case "notify_bindings.json":
+		return restoreStreamBatch[models.NotifyBinding](tx, decoder)
+	case "app_logs.json":
+		return restoreStreamBatch[models.AppLog](tx, decoder)
 	default:
 		return nil
 	}
@@ -382,7 +420,7 @@ func (s *BackupService) GetBackupFile() string {
 	if err := database.DB.Where("section = ? AND `key` = ?", BackupSection, BackupFileKey).First(&setting).Error; err != nil {
 		return ""
 	}
-	return setting.Value
+	return string(setting.Value)
 }
 
 func (s *BackupService) ClearBackup() error {

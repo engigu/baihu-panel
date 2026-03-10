@@ -373,7 +373,7 @@ func cmdTasks() {
 		Code int    `json:"code"`
 		Msg  string `json:"msg"`
 		Data struct {
-			AgentID uint        `json:"agent_id"`
+			AgentID string      `json:"agent_id"`
 			Tasks   []AgentTask `json:"tasks"`
 		} `json:"data"`
 	}
@@ -395,7 +395,7 @@ func cmdTasks() {
 
 	fmt.Printf("共 %d 个任务:\n\n", len(tasks))
 	for i, task := range tasks {
-		fmt.Printf("[%d] ID: %d\n", i+1, task.ID)
+		fmt.Printf("[%d] ID: %s\n", i+1, task.ID)
 		fmt.Printf("    名称: %s\n", task.Name)
 		fmt.Printf("    Cron: %s\n", task.Schedule)
 		fmt.Printf("    命令: %s\n", task.Command)

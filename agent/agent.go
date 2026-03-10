@@ -43,20 +43,21 @@ type WSMessage struct {
 }
 
 type AgentTask struct {
-	ID        uint                `json:"id"`
-	Name      string              `json:"name"`
-	Command   string              `json:"command"`
-	Schedule  string              `json:"schedule"`
-	Cron      string              `json:"cron"`
-	Timeout   int                 `json:"timeout"`
-	WorkDir   string              `json:"work_dir"`
-	Envs      string              `json:"envs"`
-	Languages []map[string]string `json:"languages"`
-	Enabled   bool                `json:"enabled"`
+	ID          string              `json:"id"`
+	Name        string              `json:"name"`
+	Command     string              `json:"command"`
+	Schedule    string              `json:"schedule"`
+	Cron        string              `json:"cron"`
+	Timeout     int                 `json:"timeout"`
+	WorkDir     string              `json:"work_dir"`
+	Envs        string              `json:"envs"`
+	Languages   []map[string]string `json:"languages"`
+	RandomRange int                 `json:"random_range"`
+	Enabled     bool                `json:"enabled"`
 }
 
 func (t *AgentTask) GetID() string {
-	return fmt.Sprintf("%d", t.ID)
+	return t.ID
 }
 
 func (t *AgentTask) GetName() string {
@@ -79,6 +80,10 @@ func (t *AgentTask) GetEnvs() string {
 	return t.Envs
 }
 
+func (t *AgentTask) GetEnvVars() []string {
+	return nil
+}
+
 func (t *AgentTask) GetLanguages() []map[string]string {
 	return t.Languages
 }
@@ -98,10 +103,14 @@ func (t *AgentTask) GetSchedule() string {
 	return t.Cron
 }
 
+func (t *AgentTask) GetRandomRange() int {
+	return t.RandomRange
+}
+
 type TaskResult struct {
-	TaskID    uint   `json:"task_id"`
-	LogID     uint   `json:"log_id"`
-	AgentID   uint   `json:"agent_id"` // 仅用于 HTTP 上报时后端补充
+	TaskID    string `json:"task_id"`
+	LogID     string `json:"log_id"`
+	AgentID   string `json:"agent_id"` // 仅用于 HTTP 上报时后端补充
 	Command   string `json:"command"`
 	Output    string `json:"output"`
 	Error     string `json:"error"`
@@ -118,16 +127,16 @@ type Agent struct {
 	machineID     string
 	scheduler     *executor.Scheduler
 	cronManager   *executor.CronManager
-	tasks         map[uint]*AgentTask // 本地任务缓存，用于执行 lookup
+	tasks         map[string]*AgentTask // 本地任务缓存，用于执行 lookup
 	lastTaskCount int
 	mu            sync.RWMutex
 	client        *http.Client
 	wsConn        *websocket.Conn
 	wsMu          sync.Mutex
 	stopCh        chan struct{}
-	wsStopCh      chan struct{}     // 用于停止当前 WebSocket 相关的 goroutine
-	taskLogs      map[uint][]string // 记录最近的日志行，用于失败显示
-	logMu         sync.Mutex        // taskLogs 的锁
+	wsStopCh      chan struct{}       // 用于停止当前 WebSocket 相关的 goroutine
+	taskLogs      map[string][]string // 记录最近的日志行，用于失败显示
+	logMu         sync.Mutex          // taskLogs 的锁
 }
 
 func NewAgent(config *Config, configFile string) *Agent {
@@ -135,11 +144,11 @@ func NewAgent(config *Config, configFile string) *Agent {
 		config:        config,
 		configFile:    configFile,
 		machineID:     utils.GenerateMachineID(),
-		tasks:         make(map[uint]*AgentTask),
+		tasks:         make(map[string]*AgentTask),
 		client:        &http.Client{Timeout: 30 * time.Second},
 		stopCh:        make(chan struct{}),
 		lastTaskCount: -1,
-		taskLogs:      make(map[uint][]string),
+		taskLogs:      make(map[string][]string),
 	}
 
 	// 初始化调度器
@@ -166,7 +175,7 @@ type AgentHandler struct {
 func (h *AgentHandler) OnTaskScheduled(req *executor.ExecutionRequest) {}
 
 func (h *AgentHandler) OnTaskExecuting(req *executor.ExecutionRequest) (io.Writer, io.Writer, error) {
-	if req.LogID > 0 {
+	if req.LogID != "" {
 		writer := &RealTimeLogWriter{agent: h.agent, logID: req.LogID}
 		return writer, writer, nil
 	}
@@ -174,7 +183,7 @@ func (h *AgentHandler) OnTaskExecuting(req *executor.ExecutionRequest) (io.Write
 }
 
 func (h *AgentHandler) OnTaskHeartbeat(req *executor.ExecutionRequest, duration int64) {
-	if req.LogID > 0 {
+	if req.LogID != "" {
 		h.agent.sendWSMessage(WSTypeTaskHeartbeat, map[string]interface{}{
 			"log_id":   req.LogID,
 			"duration": duration,
@@ -191,11 +200,8 @@ func (h *AgentHandler) OnTaskHeartbeat(req *executor.ExecutionRequest, duration 
 func (h *AgentHandler) OnTaskStarted(req *executor.ExecutionRequest) {}
 
 func (h *AgentHandler) OnTaskCompleted(req *executor.ExecutionRequest, result *executor.ExecutionResult) {
-	var taskID uint
-	fmt.Sscanf(req.TaskID, "%d", &taskID)
-
 	h.agent.sendTaskResult(&TaskResult{
-		TaskID:    taskID,
+		TaskID:    req.TaskID,
 		LogID:     result.LogID,
 		Command:   req.Command,
 		Output:    result.Output,
@@ -221,11 +227,8 @@ func (h *AgentHandler) OnTaskFailed(req *executor.ExecutionRequest, err error) {
 		"content": errMsg,
 	})
 
-	var taskID uint
-	fmt.Sscanf(req.TaskID, "%d", &taskID)
-
 	h.agent.sendTaskResult(&TaskResult{
-		TaskID:    taskID,
+		TaskID:    req.TaskID,
 		LogID:     req.LogID,
 		Command:   req.Command,
 		Output:    "",
@@ -399,7 +402,7 @@ func (a *Agent) fetchTasks() {
 
 func (a *Agent) handleConnected(data json.RawMessage) {
 	var resp struct {
-		AgentID         uint                   `json:"agent_id"`
+		AgentID         string                 `json:"agent_id"`
 		Name            string                 `json:"name"`
 		IsNewAgent      bool                   `json:"is_new_agent"`
 		MachineID       string                 `json:"machine_id"`
@@ -408,9 +411,9 @@ func (a *Agent) handleConnected(data json.RawMessage) {
 	json.Unmarshal(data, &resp)
 
 	if resp.IsNewAgent {
-		logger.Infof("注册成功: Agent #%d, 机器码: %s", resp.AgentID, a.machineID[:16]+"...")
+		logger.Infof("注册成功: Agent #%s, 机器码: %s", resp.AgentID, a.machineID[:16]+"...")
 	} else {
-		logger.Infof("连接成功: Agent #%d (已存在), 机器码: %s", resp.AgentID, a.machineID[:16]+"...")
+		logger.Infof("连接成功: Agent #%s (已存在), 机器码: %s", resp.AgentID, a.machineID[:16]+"...")
 	}
 
 	// 更新调度器配置
@@ -457,7 +460,7 @@ func (a *Agent) updateSchedulerConfig(config map[string]interface{}) {
 
 func (a *Agent) handleHeartbeatAck(data json.RawMessage) {
 	var resp struct {
-		AgentID       uint   `json:"agent_id"`
+		AgentID       string `json:"agent_id"`
 		Name          string `json:"name"`
 		NeedUpdate    bool   `json:"need_update"`
 		ForceUpdate   bool   `json:"force_update"`
@@ -488,8 +491,9 @@ func (a *Agent) handleTasks(data json.RawMessage) {
 
 func (a *Agent) handleExecute(data json.RawMessage) {
 	var req struct {
-		TaskID uint `json:"task_id"`
-		LogID  uint `json:"log_id"`
+		TaskID string `json:"task_id"`
+		LogID  string `json:"log_id"`
+		Envs   string `json:"envs"`
 	}
 	if err := json.Unmarshal(data, &req); err != nil {
 		logger.Errorf("解析立即执行请求失败: %v", err)
@@ -502,18 +506,24 @@ func (a *Agent) handleExecute(data json.RawMessage) {
 	a.mu.RUnlock()
 
 	if !exists {
-		logger.Warnf("任务 #%d 不存在，无法执行", req.TaskID)
+		logger.Warnf("任务 #%s 不存在，无法执行", req.TaskID)
 		return
 	}
 
 	// 准备执行请求
+	// 如果消息中携带了环境变量，则优先使用（通常由服务端解析好后推过来）
+	envs := task.Envs
+	if req.Envs != "" {
+		envs = req.Envs
+	}
+
 	execReq := &executor.ExecutionRequest{
-		TaskID:    fmt.Sprintf("%d", task.ID),
+		TaskID:    task.ID,
 		LogID:     req.LogID,
 		Name:      task.Name,
 		Command:   task.Command,
 		WorkDir:   task.WorkDir,
-		Envs:      executor.ParseEnvVars(task.Envs),
+		Envs:      executor.ParseEnvVars(envs),
 		Timeout:   task.Timeout,
 		Languages: task.Languages,
 		UseMise:   task.UseMise(),
@@ -526,25 +536,25 @@ func (a *Agent) handleExecute(data json.RawMessage) {
 
 func (a *Agent) handleStop(data json.RawMessage) {
 	var req struct {
-		LogID uint `json:"log_id"`
+		LogID string `json:"log_id"`
 	}
 	if err := json.Unmarshal(data, &req); err != nil {
 		logger.Errorf("解析停止请求失败: %v", err)
 		return
 	}
 
-	logger.Infof("[Agent] 收到停止指令 LogID: %d", req.LogID)
+	logger.Infof("[Agent] 收到停止指令 LogID: %s", req.LogID)
 	if a.scheduler.StopLog(req.LogID) {
-		logger.Infof("[Agent] 任务执行 #%d 已成功停止", req.LogID)
+		logger.Infof("[Agent] 任务执行 #%s 已成功停止", req.LogID)
 	} else {
-		logger.Warnf("[Agent] 任务执行 #%d 停止失败（可能已完成或不在运行队列中）", req.LogID)
+		logger.Warnf("[Agent] 任务执行 #%s 停止失败（可能已完成或不在运行队列中）", req.LogID)
 	}
 }
 
 // RealTimeLogWriter 实时日志写入器，通过 WebSocket 发送日志
 type RealTimeLogWriter struct {
 	agent *Agent
-	logID uint
+	logID string
 }
 
 func (w *RealTimeLogWriter) Write(p []byte) (n int, err error) {
@@ -655,7 +665,7 @@ func (a *Agent) updateTasks(tasks []AgentTask) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	newTasks := make(map[uint]*AgentTask)
+	newTasks := make(map[string]*AgentTask)
 	for i := range tasks {
 		newTasks[tasks[i].ID] = &tasks[i]
 	}
@@ -663,9 +673,9 @@ func (a *Agent) updateTasks(tasks []AgentTask) {
 	// 1. 移除不再存在的任务
 	for id := range a.tasks {
 		if _, exists := newTasks[id]; !exists {
-			a.cronManager.RemoveTask(fmt.Sprintf("%d", id))
+			a.cronManager.RemoveTask(id)
 			delete(a.tasks, id)
-			logger.Infof("移除调度任务 #%d", id)
+			logger.Infof("移除调度任务 #%s", id)
 		}
 	}
 
@@ -674,17 +684,18 @@ func (a *Agent) updateTasks(tasks []AgentTask) {
 		oldTask, exists := a.tasks[id]
 		if !exists || oldTask.Schedule != task.Schedule || oldTask.Command != task.Command ||
 			oldTask.Enabled != task.Enabled || oldTask.Timeout != task.Timeout ||
-			oldTask.WorkDir != task.WorkDir || oldTask.Envs != task.Envs {
+			oldTask.WorkDir != task.WorkDir || oldTask.Envs != task.Envs ||
+			oldTask.RandomRange != task.RandomRange {
 			if task.Enabled {
 				err := a.cronManager.AddTask(task)
 				if err != nil {
-					logger.Errorf("添加调度任务 #%d 失败: %v", id, err)
+					logger.Errorf("添加调度任务 #%s 失败: %v", id, err)
 					continue
 				}
-				logger.Infof("已添加调度任务 #%d %s (%s)", id, task.Name, task.GetSchedule())
+				logger.Infof("已添加调度任务 #%s %s (%s)", id, task.Name, task.GetSchedule())
 			} else {
-				a.cronManager.RemoveTask(fmt.Sprintf("%d", id))
-				logger.Infof("调度任务 #%d 已禁用", id)
+				a.cronManager.RemoveTask(id)
+				logger.Infof("调度任务 #%s 已禁用", id)
 			}
 			a.tasks[id] = task
 		}
@@ -696,17 +707,17 @@ func (a *Agent) clearAllTasks() {
 	defer a.mu.Unlock()
 
 	for id := range a.tasks {
-		a.cronManager.RemoveTask(fmt.Sprintf("%d", id))
-		logger.Infof("移除任务 #%d", id)
+		a.cronManager.RemoveTask(id)
+		logger.Infof("移除任务 #%s", id)
 	}
 
-	a.tasks = make(map[uint]*AgentTask)
+	a.tasks = make(map[string]*AgentTask)
 	a.lastTaskCount = 0
 	logger.Info("所有任务已清空")
 }
 
-func (a *Agent) addTaskLog(logID uint, p []byte) {
-	if logID == 0 {
+func (a *Agent) addTaskLog(logID string, p []byte) {
+	if logID == "" {
 		return
 	}
 	a.logMu.Lock()
@@ -721,8 +732,8 @@ func (a *Agent) addTaskLog(logID uint, p []byte) {
 	}
 }
 
-func (a *Agent) printLastLogs(logID uint) {
-	if logID == 0 {
+func (a *Agent) printLastLogs(logID string) {
+	if logID == "" {
 		return
 	}
 	a.logMu.Lock()
@@ -733,15 +744,15 @@ func (a *Agent) printLastLogs(logID uint) {
 		return
 	}
 
-	logger.Errorf("--- 任务 #%d 失败日志预览 (最近 %d 行) ---", logID, len(lines))
+	logger.Errorf("--- 任务 #%s 失败日志预览 (最近 %d 行) ---", logID, len(lines))
 	for _, line := range lines {
 		fmt.Println("  " + line)
 	}
-	logger.Errorf("--- 任务 #%d 结束 ---", logID)
+	logger.Errorf("--- 任务 #%s 结束 ---", logID)
 }
 
-func (a *Agent) clearTaskLog(logID uint) {
-	if logID == 0 {
+func (a *Agent) clearTaskLog(logID string) {
+	if logID == "" {
 		return
 	}
 	a.logMu.Lock()

@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -23,6 +24,7 @@ type Task interface {
 	GetTimeout() int
 	GetWorkDir() string
 	GetEnvs() string
+	GetEnvVars() []string
 	GetLanguages() []map[string]string
 	GetUseMise() bool
 }
@@ -32,6 +34,7 @@ type CronTask interface {
 	Task
 	GetSchedule() string
 	UseMise() bool
+	GetRandomRange() int
 }
 
 // Request 任务执行请求
@@ -58,13 +61,13 @@ type Result struct {
 // Hooks 执行钩子接口
 type Hooks interface {
 	// PreExecute 执行前钩子，返回日志ID和错误
-	PreExecute(ctx context.Context, req Request) (logID uint, err error)
+	PreExecute(ctx context.Context, req Request) (logID string, err error)
 
 	// PostExecute 执行后钩子，处理日志压缩和记录更新
-	PostExecute(ctx context.Context, logID uint, result *Result) error
+	PostExecute(ctx context.Context, logID string, result *Result) error
 
 	// OnHeartbeat 执行中心跳钩子，用于更新实时状态
-	OnHeartbeat(ctx context.Context, logID uint, duration int64) error
+	OnHeartbeat(ctx context.Context, logID string, duration int64) error
 }
 
 // Execute 执行命令（基础版本，不带钩子）
@@ -84,7 +87,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		}
 
 		// 仍然触发 PreExecute 以便流程完整
-		var logID uint
+		var logID string
 		if hooks != nil {
 			logID, _ = hooks.PreExecute(ctx, req)
 		}
@@ -117,7 +120,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	}
 
 	// 1. 执行前钩子
-	var logID uint
+	var logID string
 	if hooks != nil {
 		id, err := hooks.PreExecute(ctx, req)
 		if err != nil {
@@ -170,7 +173,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		)
 		f, ptyErr := pty.Start(cmd)
 		if ptyErr == nil {
-			logger.Infof("[Executor] 任务 #%d 启动于 PTY 模式", logID)
+		logger.Infof("[Executor] 任务 #%s 启动于 PTY 模式", logID)
 			ptyFile = f
 			started = true
 			copyDone = make(chan struct{})
@@ -181,7 +184,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 				f.Close()
 			}()
 		} else {
-			logger.Errorf("[Executor] 任务 #%d PTY 启动失败: %v", logID, ptyErr)
+			logger.Errorf("[Executor] 任务 #%s PTY 启动失败: %v", logID, ptyErr)
 		}
 	}
 
@@ -191,7 +194,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		if stdout != stderr && stdout != io.Discard {
 			logger.Debugf("[Executor] 任务 #%d stdout (%p) 和 stderr (%p) 不同，回退到 Pipe 模式。", logID, stdout, stderr)
 		}
-		logger.Infof("[Executor] 任务 #%d 启动于 Pipe 模式", logID)
+		logger.Infof("[Executor] 任务 #%s 启动于 Pipe 模式", logID)
 		if stdout != nil && stdout == stderr {
 			pr, pw, err := os.Pipe()
 			if err == nil {
@@ -328,4 +331,30 @@ func ParseEnvVars(envStr string) []string {
 	}
 
 	return result
+}
+
+// FormatEnvVars 将环境变量列表格式化为逗号分隔的字符串 "KEY1=VALUE1,KEY2=VALUE2"
+// 会对 , 和 = 进行转义
+func FormatEnvVars(envs []string) string {
+	if len(envs) == 0 {
+		return ""
+	}
+
+	pairs := make([]string, 0, len(envs))
+	for _, pair := range envs {
+		// 寻找第一个等号
+		idx := strings.Index(pair, "=")
+		if idx == -1 {
+			continue
+		}
+		name := pair[:idx]
+		value := pair[idx+1:]
+
+		// 转义特殊字符
+		encodedValue := strings.ReplaceAll(value, ",", "{{COMMA}}")
+		encodedValue = strings.ReplaceAll(encodedValue, "=", "{{EQUAL}}")
+		pairs = append(pairs, fmt.Sprintf("%s=%s", name, encodedValue))
+	}
+
+	return strings.Join(pairs, ",")
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/services/deps"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 type DependencyService struct{}
@@ -30,18 +31,25 @@ func (s *DependencyService) List(language, langVersion string) ([]models.Depende
 
 // Create 创建依赖记录
 func (s *DependencyService) Create(dep *models.Dependency) error {
-	// 检查是否已存在（名称、语言、版本 必须完全匹配）
+	// 检查是否已存在（名称、版本、语言及版本必须完全匹配）
 	var existing models.Dependency
-	err := database.DB.Where("name = ? AND language = ? AND lang_version = ?", dep.Name, dep.Language, dep.LangVersion).First(&existing).Error
+	err := database.DB.Where("name = ? AND version = ? AND language = ? AND lang_version = ?", dep.Name, dep.Version, dep.Language, dep.LangVersion).First(&existing).Error
 	if err == nil {
-		return errors.New("依赖已存在")
+		// 如果已存在，更新 ID 并执行更新
+		dep.ID = existing.ID
+		return database.DB.Model(&existing).Updates(dep).Error
+	}
+
+	// 不存在则新建
+	if dep.ID == "" {
+		dep.ID = utils.GenerateID()
 	}
 	return database.DB.Create(dep).Error
 }
 
 // Delete 删除依赖记录
-func (s *DependencyService) Delete(id int) error {
-	return database.DB.Delete(&models.Dependency{}, id).Error
+func (s *DependencyService) Delete(id string) error {
+	return database.DB.Where("id = ?", id).Delete(&models.Dependency{}).Error
 }
 
 // Install 安装依赖

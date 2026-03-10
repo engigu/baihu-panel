@@ -24,6 +24,11 @@ func Run(args []string) {
 
 	// 必须初始化环境与数据库才能修改密码
 	bootstrap.InitBasic()
+	settingsService := services.NewSettingsService()
+	if err := settingsService.InitSettings(); err != nil {
+		fmt.Printf("初始化系统设置失败: %v\n", err)
+		return
+	}
 
 	userService := services.NewUserService()
 	adminUser := userService.GetUserByUsername("admin")

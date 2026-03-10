@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Badge } from '@/components/ui/badge'
-import { ExternalLink } from 'lucide-vue-next'
+import { ExternalLink, TriangleAlert } from 'lucide-vue-next'
 import { api, type AboutInfo } from '@/api'
 
 const aboutInfo = ref<AboutInfo | null>(null)
@@ -71,6 +71,19 @@ onMounted(loadAbout)
             <span class="text-sm">{{ aboutInfo?.uptime || '-' }}</span>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div class="mt-8 p-4 bg-muted/40 rounded-lg border border-yellow-500/20">
+      <h4 class="text-sm font-semibold text-yellow-600 dark:text-yellow-500 mb-2 flex items-center gap-1.5">
+        <TriangleAlert class="h-4 w-4" />
+        免责声明
+      </h4>
+      <div class="space-y-1.5 text-xs text-muted-foreground">
+        <p>本项目不提供、不内置任何具有实际业务逻辑的第三方脚本。</p>
+        <p><strong>请勿轻易执行任何来源不明或不可信的外部脚本。</strong></p>
+        <p>所有脚本及代码均需由用户自行添加或配置，用户须自行审核以确保其安全性。本项目仅作为基础调度工具，<strong class="text-foreground/70">无法且不保证任何被执行任务的安全性</strong>。</p>
+        <p>本项目为业余开源开发，按“原样”提供，不保证不存在 Bug 或漏洞。开发者不对因使用本项目运行不安全脚本带来的数据泄露、系统损坏及法律责任等后果负责。</p>
       </div>
     </div>
 
