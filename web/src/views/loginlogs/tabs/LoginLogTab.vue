@@ -3,18 +3,7 @@ import { ref, onMounted } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
-import { RefreshCw, Search, Loader2, Trash2 } from 'lucide-vue-next'
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { LOG_CATEGORY } from '@/api'
+import { RefreshCw, Search, Loader2 } from 'lucide-vue-next'
 import TextOverflow from '@/components/TextOverflow.vue'
 import { api } from '@/api'
 import { toast } from 'vue-sonner'
@@ -59,7 +48,6 @@ const filterUsername = ref('')
 const currentPage = ref(1)
 const total = ref(0)
 const loading = ref(false)
-const showClearConfirm = ref(false)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 // IP 地理位置弹窗
@@ -115,17 +103,6 @@ function handlePageChange(page: number) {
     loadLogs()
 }
 
-async function handleClear() {
-    try {
-        await api.appLogs.clear(LOG_CATEGORY.LOGIN_LOG)
-        toast.success('清空成功')
-        currentPage.value = 1
-        loadLogs()
-    } catch (e: any) {
-        toast.error('清空失败: ' + (e.message || ''))
-    }
-}
-
 onMounted(loadLogs)
 </script>
 
@@ -143,28 +120,6 @@ onMounted(loadLogs)
                         title="刷新">
                         <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loading }" />
                     </Button>
-                    <AlertDialog :open="showClearConfirm" @update:open="showClearConfirm = $event">
-                        <Button variant="outline"
-                            class="h-9 px-4 shrink-0 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20"
-                            @click="showClearConfirm = true">
-                            <Trash2 class="h-4 w-4 sm:mr-2" /> <span class="hidden sm:inline"
-                                style="padding-left: 2px;">清空记录</span>
-                        </Button>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>确认清空所有登录日志？</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    此操作将永久清空所有记录，操作后无法恢复。确认要继续吗？
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>取消</AlertDialogCancel>
-                                <AlertDialogAction @click="handleClear" variant="destructive">
-                                    确认清空
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
                 </div>
             </div>
         </div>
