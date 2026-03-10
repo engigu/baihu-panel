@@ -59,9 +59,6 @@ func Setup(c *Controllers) *gin.Engine {
 	// 1. [ location /assets ] 静态资源路由
 	initStaticRoutes(root)
 
-	// 2. [ location /openapi ] OpenAPI 文档路由
-	initOpenAPIRoutes(root, urlPrefix)
-
 	// 3. [ location /api ] 内部 API 路由组
 	apiV1 := root.Group("/api/v1")
 	initPublicAPIRoutes(apiV1, c)     // 公开接口 (无需认证)

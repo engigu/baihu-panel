@@ -11,7 +11,8 @@ export default defineConfig({
         logo: '/logo.svg',
         nav: [
             { text: '指南', link: '/guide/introduction' },
-            { text: '部署', link: '/guide/deployment' }
+            { text: '部署', link: '/guide/deployment' },
+            { text: 'API接口', link: '/guide/api' }
         ],
 
         sidebar: [
@@ -20,7 +21,8 @@ export default defineConfig({
                 items: [
                     { text: '项目介绍', link: '/guide/introduction' },
                     { text: '快速部署', link: '/guide/deployment' },
-                    { text: '访问面板', link: '/guide/getting-started' }
+                    { text: '访问面板', link: '/guide/getting-started' },
+                    { text: 'API 接口', link: '/guide/api' }
                 ]
             },
             {
@@ -58,6 +60,11 @@ export default defineConfig({
 
         search: {
             provider: 'local'
+        }
+    },
+    vite: {
+        ssr: {
+            noExternal: ['@scalar/api-reference']
         }
     }
 })

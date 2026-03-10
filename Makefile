@@ -111,7 +111,14 @@ deps:
 
 # Generate swagger documentation
 swag:
-	go run github.com/swaggo/swag/cmd/swag@latest init -g main.go -o ./openapi_docs
+	@mkdir -p docs/public
+	go run github.com/swaggo/swag/cmd/swag@latest init -g main.go -o ./docs/public --ot json,yaml
+
+docs-dev:
+	cd docs && npm run docs:dev
+
+docs-build:
+	cd docs && npm run docs:build
 
 # Docker build
 docker-build:
@@ -169,5 +176,7 @@ help:
 	@echo "  docker-dev-d     - Start isolated Docker dev environment (background)"
 	@echo "  docker-dev-down  - Stop Docker dev environment (keep caches)"
 	@echo "  docker-dev-clean - Stop and clean Docker dev environment (remove caches)"
-	@echo "  swag             - Generate swagger documentation"
+	@echo "  swag             - Generate swagger documentation and sync with docs"
+	@echo "  docs-dev         - Run documentation development server"
+	@echo "  docs-build       - Build documentation"
 	@echo "  help             - Show this help message"

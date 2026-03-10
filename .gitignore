@@ -50,3 +50,12 @@ __pycache__/
 bin/
 
 *.log
+
+# VitePress
+docs/.vitepress/cache/
+docs/node_modules/
+docs/public/swagger.json
+docs/public/swagger.yaml
+
+# OpenAPI
+openapi_docs/
