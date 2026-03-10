@@ -1,0 +1,11 @@
+# 排除构建产物
+dist/* linguist-generated=true
+
+# 排除第三方
+node_modules/* linguist-vendored=true
+
+# 排除文档
+docs/* linguist-documentation=true
+
+# SQL 统计为 SQL
+*.sql linguist-language=SQL
