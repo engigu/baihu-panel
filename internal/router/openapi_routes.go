@@ -40,13 +40,9 @@ func initOpenAPIRoutes(root *gin.RouterGroup, urlPrefix string) {
 			return
 		}
 
-		// 执行认证
-		middleware.SwaggerAuth()(c)
+		// 执行主站 Cookie 认证
+		middleware.AuthRequired()(c)
 		if c.IsAborted() {
-			// 如果认证失败（且被中间件置为 404，如密码错误且我们想要隐藏它）
-			if c.Writer.Status() == http.StatusNotFound {
-				serveSPA(c, urlPrefix, 404)
-			}
 			return
 		}
 

@@ -182,23 +182,39 @@ func SwaggerAuth() gin.HandlerFunc {
 			}
 		}
 
+		// 获取请求中携带的凭证
+		// 1. URL 参数 token
+		// 2. Cookie 中的 openapi_token
+		// 3. HTTP Basic Auth
+		tokenQuery := c.Query("token")
+		tokenCookie, _ := c.Cookie("openapi_token")
 		_, password, hasAuth := c.Request.BasicAuth()
-		// 允许使用任意用户名，但密码必须匹配 OpenAPI Token
-		if hasAuth && password == tokenConfig.Token && tokenConfig.Token != "" {
+
+		var providedToken string
+		if tokenQuery != "" {
+			providedToken = tokenQuery
+		} else if tokenCookie != "" {
+			providedToken = tokenCookie
+		} else if hasAuth {
+			providedToken = password
+		}
+
+		// 检查提供的 token 是否匹配
+		if providedToken != "" && providedToken == tokenConfig.Token {
+			// 如果是通过 url 参数进来的，自动将其种入 Cookie，便于后续加载静态资源 (如 json)
+			if tokenQuery != "" {
+				c.SetCookie("openapi_token", providedToken, 86400, "/openapi", "", false, false)
+			}
 			c.Next()
 			return
 		}
 
-		// 未提供认证，触发浏览器登录弹窗
-		if !hasAuth {
-			c.Header("WWW-Authenticate", `Basic realm="OpenAPI Access Token (Any username)"`)
-			c.Status(http.StatusUnauthorized)
-			c.Abort()
-			return
-		}
-
-		// 认证失败 (密码错误)，返回 404 隐藏路由
-		c.Status(http.StatusNotFound)
+		// 验证失败，不再返回 WWW-Authenticate 头触发浏览器反人类原生弹窗
+		// 我们返回 401 的 JSON 或纯文本结构，以便由调用方自行接管鉴权逻辑
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code": 401,
+			"msg":  "OpenAPI 访问未授权或 Token 错误",
+		})
 		c.Abort()
 	}
 }

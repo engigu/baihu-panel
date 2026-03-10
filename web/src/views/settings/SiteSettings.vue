@@ -112,6 +112,14 @@ async function copyOpenapiToken() {
   }
 }
 
+function openSwaggerDocs() {
+  if (!form.value.openapi_enabled) {
+    toast.error('必须先开启 OpenAPI 才能查看接口文档页面')
+    return
+  }
+  window.open(`${baseUrl}/openapi/index.html`, '_blank')
+}
+
 
 onMounted(loadSettings)
 </script>
@@ -240,20 +248,20 @@ onMounted(loadSettings)
             class="font-normal text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 whitespace-nowrap">推荐方式</Badge>
         </div>
         <div class="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4">
-          <a :href="baseUrl + '/openapi/index.html'" target="_blank"
+          <a href="#" @click.prevent="openSwaggerDocs"
             class="flex items-center gap-1 text-xs text-blue-600 hover:underline shrink-0">
             查看接口文档
             <ExternalLink class="w-3 h-3" />
           </a>
           <div class="flex items-center gap-2 shrink-0">
             <Switch v-model="form.openapi_enabled" id="openapi-enabled" />
-            <Label for="openapi-enabled" class="text-xs cursor-pointer">开启鉴权</Label>
+            <Label for="openapi-enabled" class="text-xs cursor-pointer">开启 OpenAPI</Label>
           </div>
         </div>
       </div>
       <p class="text-sm text-muted-foreground mb-4">开启全局 OpenAPI 直接访问能力，配置后可通过请求头 <code
           class="bg-muted px-1.5 py-0.5 rounded text-xs select-all font-sans">Authorization: Bearer &lt;在此生成的Token&gt;</code>
-        无需登录直接调用系统的所有接口，请妥善保管并设置合理的有效期。<span class="text-amber-600 dark:text-amber-500 font-medium ml-1">注意：必须先开启鉴权开关才能查看接口文档页面和进行调用。</span></p>
+        以第三方身份调用系统的所有接口，请妥善保管 Token 并设置合理的有效期。<span class="text-amber-600 dark:text-amber-500 font-medium ml-1">注意：必须先开启本功能才能查看接口文档页面和对接调用。</span></p>
 
       <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4 mb-4">
         <Label class="sm:text-right text-muted-foreground">Token 密钥</Label>
@@ -302,6 +310,7 @@ onMounted(loadSettings)
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
 
   </div>
 </template>
