@@ -16,6 +16,8 @@ func initOpenAPIV1Routes(root *gin.RouterGroup, c *Controllers) {
 		registerOpenAPITaskRoutes(open, c)
 		// 环境变量相关接口
 		registerOpenAPIEnvRoutes(open, c)
+		// 脚本相关接口
+		registerOpenAPIScriptRoutes(open, c)
 		// 日志相关接口
 		registerOpenAPILogRoutes(open, c)
 		// 任务执行相关接口
@@ -39,10 +41,13 @@ func registerOpenAPITaskRoutes(g *gin.RouterGroup, c *Controllers) {
 func registerOpenAPIEnvRoutes(g *gin.RouterGroup, c *Controllers) {
 	env := g.Group("/env")
 	{
+		env.POST("", c.Env.CreateEnvVar)
 		env.GET("", c.Env.GetEnvVars)
 		env.GET("/all", c.Env.GetAllEnvVars)
 		env.GET("/:id", c.Env.GetEnvVar)
 		env.GET("/:id/tasks", c.Env.GetAssociatedTasks)
+		env.PUT("/:id", c.Env.UpdateEnvVar)
+		env.DELETE("/:id", c.Env.DeleteEnvVar)
 	}
 }
 
@@ -61,5 +66,17 @@ func registerOpenAPIExecutorRoutes(g *gin.RouterGroup, c *Controllers) {
 	{
 		execution.POST("/task/:id", c.Executor.ExecuteTask)
 		execution.GET("/results", c.Executor.GetLastResults)
+	}
+}
+
+// registerOpenAPIScriptRoutes 注册 OpenAPI 脚本路由
+func registerOpenAPIScriptRoutes(g *gin.RouterGroup, c *Controllers) {
+	scripts := g.Group("/scripts")
+	{
+		scripts.POST("", c.Script.CreateScript)
+		scripts.GET("", c.Script.GetScripts)
+		scripts.GET("/:id", c.Script.GetScript)
+		scripts.PUT("/:id", c.Script.UpdateScript)
+		scripts.DELETE("/:id", c.Script.DeleteScript)
 	}
 }

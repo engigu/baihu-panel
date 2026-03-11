@@ -97,7 +97,7 @@ function getLangIcon(plugin: string) {
     'kubernetes': 'kubernetes/kubernetes-plain.svg',
     'ansible': 'ansible/ansible-original.svg',
   }
-  return mapping[name] ? `https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${mapping[name]}` : ''
+  return mapping[name] ? `https://fastly.jsdelivr.net/gh/devicons/devicon/icons/${mapping[name]}` : ''
 }
 
 async function fetchPaths() {

@@ -18,6 +18,15 @@ func NewEnvController(envService *services.EnvService) *EnvController {
 }
 
 // CreateEnvVar 创建环境变量
+// @Summary 创建环境变量
+// @Description 创建一个新的环境变量
+// @Tags 环境变量
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "环境变量信息"
+// @Success 200 {object} utils.Response{data=vo.EnvVO}
+// @Router /env [post]
 func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 	userID := c.GetString("userID")
 
@@ -105,6 +114,17 @@ func (ec *EnvController) GetEnvVar(c *gin.Context) {
 }
 
 // UpdateEnvVar 更新环境变量
+// @Summary 更新环境变量
+// @Description 根据 ID 更新环境变量信息
+// @Tags 环境变量
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "环境变量ID"
+// @Param body body object true "环境变量更新信息"
+// @Success 200 {object} utils.Response{data=vo.EnvVO}
+// @Failure 404 {object} utils.Response
+// @Router /env/{id} [put]
 func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -145,6 +165,18 @@ func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
 }
 
 // DeleteEnvVar 删除环境变量
+// @Summary 删除环境变量
+// @Description 根据 ID 删除环境变量
+// @Tags 环境变量
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "环境变量ID"
+// @Param force query boolean false "强制删除（忽略任务关联）"
+// @Success 200 {object} utils.Response
+// @Failure 404 {object} utils.Response
+// @Failure 409 {object} utils.Response{data=[]vo.TaskVO}
+// @Router /env/{id} [delete]
 func (ec *EnvController) DeleteEnvVar(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {

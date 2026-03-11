@@ -184,7 +184,7 @@ function getLangIcon(plugin: string) {
   }
 
   if (mapping[name]) {
-    return `https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${mapping[name]}`
+    return `https://fastly.jsdelivr.net/gh/devicons/devicon/icons/${mapping[name]}`
   }
   return ''
 }
