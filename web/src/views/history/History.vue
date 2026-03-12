@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import LogViewer from './LogViewer.vue'
 import {
   RefreshCw, X, Search, Maximize2, GitBranch, Terminal,
   CheckCircle2, XCircle, AlertCircle, Ban, Clock, Zap as ZapIcon, Check, Trash2
 } from 'lucide-vue-next'
+import LogViewer from './LogViewer.vue'
+import LogTerminal from '@/components/LogTerminal.vue'
 import { api, type TaskLog } from '@/api'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -26,6 +27,7 @@ import {
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
 import TextOverflow from '@/components/TextOverflow.vue'
+import { useTheme } from '@/composables/useTheme'
 
 const route = useRoute()
 const { pageSize } = useSiteSettings()
@@ -55,15 +57,10 @@ const wsContent = ref('')
 const isWsLoading = ref(false)
 let logSocket: WebSocket | null = null
 
-
-import { ansiToHtml } from '@/utils/ansi'
+const { resolvedTheme } = useTheme()
 
 const decompressedOutput = computed(() => {
-  return wsContent.value || '无输出'
-})
-
-const renderedOutput = computed(() => {
-  return ansiToHtml(decompressedOutput.value)
+  return wsContent.value
 })
 
 async function loadLogs() {
@@ -570,10 +567,18 @@ watch(() => route.query, (newQuery) => {
               <Maximize2 class="h-3.5 w-3.5" />
             </Button>
           </div>
-          <div class="flex-1 overflow-auto bg-zinc-950 min-h-[160px]">
-            <pre
-              class="p-4 text-xs font-mono whitespace-pre-wrap break-all log-pre leading-relaxed text-zinc-300" v-html="renderedOutput"></pre>
-            <div v-if="isWsLoading" class="p-4 text-sm text-zinc-500 italic">连接中...</div>
+          <div
+            class="flex-1 overflow-hidden min-h-[160px]"
+            :class="resolvedTheme === 'dark' ? 'bg-zinc-950' : 'bg-zinc-100'"
+            ref="sideLogContainer"
+          >
+            <LogTerminal 
+              :content="decompressedOutput" 
+              :theme="resolvedTheme"
+            />
+            <div v-if="isWsLoading" class="px-4 py-2 text-sm text-zinc-500 italic border-t border-zinc-200 dark:border-zinc-800">
+              连接中...
+            </div>
           </div>
         </div>
       </div>

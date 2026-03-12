@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { watch, onUnmounted } from 'vue'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { X, Search } from 'lucide-vue-next'
+import { X } from 'lucide-vue-next'
+import LogTerminal from '@/components/LogTerminal.vue'
+import { useTheme } from '@/composables/useTheme'
+
+const { resolvedTheme } = useTheme()
 
 const props = defineProps<{
   open: boolean
@@ -15,15 +18,8 @@ const emit = defineEmits<{
   'update:open': [value: boolean]
 }>()
 
-const searchKeyword = ref('')
-
-import { ansiToHtml, highlightHtml } from '@/utils/ansi'
-
-// 高亮搜索结果并处理 ANSI 颜色
-const highlightedContent = computed(() => {
-  const html = ansiToHtml(props.content)
-  return highlightHtml(html, searchKeyword.value)
-})
+const lightLogBackgroundClass = 'bg-zinc-100'
+const darkLogBackgroundClass = 'bg-zinc-950'
 
 function close() {
   emit('update:open', false)
@@ -41,7 +37,6 @@ function toggleBodyScroll(lock: boolean) {
 // 监听打开状态
 watch(() => props.open, (val) => {
   if (val) {
-    searchKeyword.value = ''
     toggleBodyScroll(true)
   } else {
     toggleBodyScroll(false)
@@ -78,19 +73,19 @@ onUnmounted(() => {
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <div class="relative flex-1 sm:flex-none">
-              <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input v-model="searchKeyword" placeholder="搜索内容..." class="h-8 pl-9 w-full sm:w-56 text-sm" />
-            </div>
             <Button variant="ghost" size="icon" class="h-7 w-7 shrink-0" @click="close">
               <X class="h-4 w-4" />
             </Button>
           </div>
         </div>
-        <div class="flex-1 overflow-auto bg-zinc-950">
-          <pre class="p-3 sm:p-4 text-xs font-mono whitespace-pre-wrap break-all text-zinc-300" v-html="highlightedContent"></pre>
+        <div class="flex-1 overflow-hidden" :class="resolvedTheme === 'dark' ? darkLogBackgroundClass : lightLogBackgroundClass">
+          <LogTerminal 
+            :content="content" 
+            :theme="resolvedTheme"
+          />
         </div>
       </div>
     </div>
   </Teleport>
 </template>
+

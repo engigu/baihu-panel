@@ -1,8 +1,9 @@
-import { ref, watch, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 export type Theme = 'light' | 'dark' | 'system'
 
 const theme = ref<Theme>('system')
+const systemTheme = ref<'light' | 'dark'>('light')
 
 function getSystemTheme(): 'light' | 'dark' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
@@ -18,15 +19,16 @@ function applyTheme(t: Theme) {
 
 export function useTheme() {
   onMounted(() => {
-    // 从 localStorage 读取主题
+    systemTheme.value = getSystemTheme()
+
     const saved = localStorage.getItem('theme') as Theme | null
     if (saved && ['light', 'dark', 'system'].includes(saved)) {
       theme.value = saved
     }
     applyTheme(theme.value)
 
-    // 监听系统主题变化
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      systemTheme.value = getSystemTheme()
       if (theme.value === 'system') {
         applyTheme('system')
       }
@@ -38,12 +40,17 @@ export function useTheme() {
     applyTheme(newTheme)
   })
 
+  const resolvedTheme = computed<'light' | 'dark'>(() => {
+    return theme.value === 'system' ? systemTheme.value : theme.value
+  })
+
   function setTheme(t: Theme) {
     theme.value = t
   }
 
   return {
     theme,
-    setTheme
+    resolvedTheme,
+    setTheme,
   }
 }
