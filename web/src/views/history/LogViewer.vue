@@ -78,14 +78,14 @@ onUnmounted(() => {
             </Button>
           </div>
         </div>
-        <div class="flex-1 overflow-hidden" :class="resolvedTheme === 'dark' ? darkLogBackgroundClass : lightLogBackgroundClass">
-          <LogTerminal 
-            :content="content" 
-            :theme="resolvedTheme"
-          />
+        <div class="flex-1 overflow-hidden relative"
+          :class="resolvedTheme === 'dark' ? darkLogBackgroundClass : lightLogBackgroundClass">
+          <LogTerminal v-if="content" :content="content" :theme="resolvedTheme" />
+          <div v-else class="absolute inset-0 flex items-center justify-center text-zinc-500 font-mono text-sm italic">
+            无日志输出
+          </div>
         </div>
       </div>
     </div>
   </Teleport>
 </template>
-
