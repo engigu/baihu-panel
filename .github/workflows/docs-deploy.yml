@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event.repository.fork == false
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
