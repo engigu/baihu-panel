@@ -107,8 +107,9 @@
 
 ### 脚本运行环境
 白虎面板原生支持以下脚本的定时执行：
-- **Python3**, **Node.js**, **Bash** (内置环境)
+- **Python3**, **Node.js**, **Bash** (标准版镜像内置环境)
 - 通过 **Mise** 扩展：支持几乎所有主流编程语言的动态安装与切换。
+- **Minimal 版**：不预置 Python/Node，仅内置 Mise 底座，由用户按需安装。
 
 ### 依赖管理支持
 系统内置了高度集成的跨语言依赖管理器，支持自动化安装和管理以下语言的依赖项，并确保在容器内全局可用：
@@ -149,8 +150,9 @@
 
 | 标签 (Tag) | 基础镜像 | 说明 |
 | :--- | :--- | :--- |
-| `latest` | Debian 12 | 默认版本，集成 Python 3.13 与 Node.js 23 |
-| `latest-debian13` | Debian 13 | 尝鲜版本|
+| `latest` | Debian 12 | **默认推荐**：集成 Python 3.13 与 Node.js 23，开箱即用 |
+| `latest-debian13` | Debian 13 | 尝鲜版本，基于 Debian Trixie |
+| `latest-minimal` | Debian 13 | **最小化版**：不预置语言环境，由用户通过面板自主按需安装 |
 
 > **提示**：下方部署示例默认使用 `latest` 标签，如需换用 Debian 13 版，只需将 `latest` 替换为 `latest-debian13` 即可。
 

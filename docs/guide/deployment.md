@@ -6,10 +6,11 @@
 
 | 标签 (Tag) | 基础镜像 | 说明 |
 | :--- | :--- | :--- |
-| `latest` | Debian 12 | 默认版本，集成 Python 3.13 与 Node.js 23 |
-| `latest-debian13` | Debian 13 | 尝鲜版本|
+| `latest` | Debian 12 | **默认推荐**：集成 Python 3.13 与 Node.js 23，开箱即用 |
+| `latest-debian13` | Debian 13 | 尝鲜版本，基于 Debian Trixie |
+| `latest-minimal` | Debian 13 | **最小化版**：不预置任何语言环境，仅内置 Mise，适合追求极致纯净的用户 |
 
-> **提示**：下方部署示例默认使用 `latest` 标签，如需换用 Debian 13 版，只需将 `latest` 替换为 `latest-debian13` 即可。
+> **提示**：目前默认使用 `latest` 标签。如需切换环境，只需将镜像名后的 `latest` 替换为 `latest-minimal`（极致纯净）或 `latest-debian13` 即可。
 
 ## 环境版本重构说明 (2026.02.13+)
 
