@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"encoding/json"
 	"bufio"
 	"io"
 	"net/http"
@@ -158,6 +159,20 @@ func (tc *TerminalController) handlePtyMode(conn *websocket.Conn, userID string)
 		if err != nil {
 			break
 		}
+
+		// 处理调整窗口大小的消息
+		if len(message) > 0 && message[0] == '{' {
+			var resizeMsg struct {
+				Type string `json:"type"`
+				Rows uint16 `json:"rows"`
+				Cols uint16 `json:"cols"`
+			}
+			if err := json.Unmarshal(message, &resizeMsg); err == nil && resizeMsg.Type == "resize" {
+				pty.Setsize(ptmx, &pty.Winsize{Rows: resizeMsg.Rows, Cols: resizeMsg.Cols})
+				continue
+			}
+		}
+
 		if _, err := ptmx.Write(message); err != nil {
 			break
 		}
@@ -249,6 +264,16 @@ func (tc *TerminalController) handlePipeMode(conn *websocket.Conn, userID string
 		if err != nil {
 			break
 		}
+		// 过滤调整窗口大小的消息（Windows Pipe 模式不支持调整尺寸，需过滤掉避免写入 stdin）
+		if len(message) > 0 && message[0] == '{' {
+			var resizeMsg struct {
+				Type string `json:"type"`
+			}
+			if err := json.Unmarshal(message, &resizeMsg); err == nil && resizeMsg.Type == "resize" {
+				continue
+			}
+		}
+
 		if _, err := stdin.Write(message); err != nil {
 			break
 		}

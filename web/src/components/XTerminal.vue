@@ -177,15 +177,19 @@ function connectWebSocket() {
       }, 100)
     }
     terminal?.focus()
+    // 连接成功后立即触发一次尺寸同步
+    handleResize()
   }
 
   ws.onmessage = (event) => {
     if (event.data === '__PTY_MODE__') {
       isPtyMode = true
+      handleResize() // 关键：模式确认后立即同步一次尺寸
       return
     }
     if (event.data === '__PIPE_MODE__') {
       isPtyMode = false
+      handleResize()
       return
     }
     terminal?.write(event.data)
@@ -239,6 +243,14 @@ function dispose() {
 function handleResize() {
   try {
     fitAddon?.fit()
+    // 通知后端调整 PTY 尺寸
+    if (isPtyMode && terminal && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'resize',
+        cols: terminal.cols,
+        rows: terminal.rows
+      }))
+    }
   } catch (e) {
     console.warn('Terminal resize failed:', e)
   }
