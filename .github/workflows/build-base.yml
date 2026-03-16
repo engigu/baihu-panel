@@ -7,6 +7,8 @@ on:
       - main
     paths:
       - 'docker/Dockerfile.base'
+      - 'docker/Dockerfile.debian13.base'
+      - 'docker/Dockerfile.debian13.minimal'
 
 env:
   REGISTRY: ghcr.io
@@ -18,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        base_type: [debian, debian13]
+        base_type: [debian, debian13, slim]
         platform:
           - linux/amd64
           - linux/arm64
@@ -47,6 +49,14 @@ jobs:
             platform: linux/arm64
             dockerfile: docker/Dockerfile.debian13.base
             tag_suffix: "-debian13"
+          - base_type: minimal
+            platform: linux/amd64
+            dockerfile: docker/Dockerfile.debian13.minimal
+            tag_suffix: "-minimal"
+          - base_type: minimal
+            platform: linux/arm64
+            dockerfile: docker/Dockerfile.debian13.minimal
+            tag_suffix: "-minimal"
 
     permissions:
       contents: read
@@ -116,7 +126,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        base_type: [debian, debian13]
+        base_type: [debian, debian13, slim]
         include:
           - base_type: debian
             tag: base
@@ -124,6 +134,8 @@ jobs:
 #             tag: base-alpine
           - base_type: debian13
             tag: base-debian13
+          - base_type: minimal
+            tag: base-minimal
 
     permissions:
       contents: read

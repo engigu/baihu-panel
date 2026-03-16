@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        base_type: [debian, debian13]
+        base_type: [debian, debian13, minimal]
         include:
           - base_type: debian
             base_tag: base
@@ -25,6 +25,9 @@ jobs:
           - base_type: debian13
             base_tag: base-debian13
             tag_suffix: "-debian13"
+          - base_type: minimal
+            base_tag: base-minimal
+            tag_suffix: "-minimal"
 
     permissions:
       contents: read

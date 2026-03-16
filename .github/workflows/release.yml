@@ -89,7 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        base_type: [debian, debian13]
+        base_type: [debian, debian13, slim]
         platform:
           - linux/amd64
           - linux/arm64
@@ -118,6 +118,14 @@ jobs:
             platform: linux/arm64
             base_tag: base-debian13
             tag_suffix: "-debian13"
+          - base_type: minimal
+            platform: linux/amd64
+            base_tag: base-minimal
+            tag_suffix: "-minimal"
+          - base_type: minimal
+            platform: linux/arm64
+            base_tag: base-minimal
+            tag_suffix: "-minimal"
 
     permissions:
       contents: read
@@ -193,7 +201,7 @@ jobs:
     needs: [build, build-binaries]
     strategy:
       matrix:
-        base_type: [debian, debian13]
+        base_type: [debian, debian13, slim]
         include:
           - base_type: debian
             tag_suffix: ""
@@ -201,6 +209,8 @@ jobs:
 #             tag_suffix: "-alpine"
           - base_type: debian13
             tag_suffix: "-debian13"
+          - base_type: minimal
+            tag_suffix: "-minimal"
 
     permissions:
       contents: write

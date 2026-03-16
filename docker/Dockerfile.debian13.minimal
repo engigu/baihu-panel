@@ -1,0 +1,18 @@
+FROM debian:trixie-slim
+
+ENV TZ=Asia/Shanghai
+ENV MISE_DATA_DIR=/opt/mise-base
+ENV MISE_CONFIG_DIR=/opt/mise-base
+ENV PATH="/opt/mise-base/shims:/opt/mise-base/bin:$PATH"
+
+# 安装必要系统工具并仅预装 mise
+RUN sed -i 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's@security.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list.d/debian.sources \
+    && echo "${TZ}" > /etc/timezone \
+    && ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+         tzdata git curl wget vim htop ca-certificates rsync \
+    && curl https://mise.run | MISE_INSTALL_PATH=/usr/local/bin/mise sh \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /root/.cache/mise /opt/mise-base/cache/*

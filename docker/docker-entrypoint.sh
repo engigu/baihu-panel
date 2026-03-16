@@ -41,8 +41,10 @@ export MISE_DATA_DIR="$MISE_DIR"
 export MISE_CONFIG_DIR="$MISE_DIR"
 export PATH="$MISE_DIR/shims:$MISE_DIR/bin:$PATH"
 
-# 使 Node.js 运行脚本时能够自动找到全局安装的模块 (类似 Python site-packages 行为)
-export NODE_PATH=$(npm root -g 2>/dev/null)
+# 使 Node.js 运行脚本时能够自动找到全局安装的模块 (仅当 npm 存在时执行)
+if command -v npm >/dev/null 2>&1; then
+    export NODE_PATH=$(npm root -g 2>/dev/null)
+fi
 
 # 默认启用 Python 镜像源
 export PIP_INDEX_URL=${PIP_INDEX_URL:-https://pypi.org/simple}
@@ -55,9 +57,9 @@ export PYTHONPATH=/app/data/scripts:$PYTHONPATH
 # 打印确认
 # ============================
 log "mise version: $(mise --version 2>/dev/null | head -n 1)"
-log "python: $(python --version 2>&1 | head -n 1) at $(which python)"
-log "node: $(node --version 2>&1 | head -n 1) at $(which node)"
-log "npm: $(npm --version 2>&1 | head -n 1) at $(which npm)"
+[ -x "$(command -v python)" ] && log "python: $(python --version 2>&1 | head -n 1) at $(which python)" || log "python: not installed"
+[ -x "$(command -v node)" ] && log "node: $(node --version 2>&1 | head -n 1) at $(which node)" || log "node: not installed"
+[ -x "$(command -v npm)" ] && log "npm: $(npm --version 2>&1 | head -n 1) at $(which npm)" || log "npm: not installed"
 
 # ============================
 # 将 baihu 注册到全局命令
