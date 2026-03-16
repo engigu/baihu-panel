@@ -734,4 +734,6 @@ location /baihu/ {
 
 ## 许可证 
 
-[MIT License](LICENSE)
+本项目采用 [Apache License 2.0](LICENSE) 协议发布，并包含额外的 [NOTICE](NOTICE) 说明。
+
+**强制要求：** 在任何分发、修改或二次开发中，**必须完整保留原作者署名及项目名称**（详见 NOTICE 文件）。

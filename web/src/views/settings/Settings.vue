@@ -13,21 +13,22 @@ const activeTab = ref('password')
 
 <template>
   <div class="space-y-6">
-    <div>
-      <h2 class="text-xl sm:text-2xl font-bold tracking-tight">系统设置</h2>
-      <p class="text-muted-foreground text-sm">管理系统配置和账户安全</p>
-    </div>
+    <Tabs v-model="activeTab" class="w-full">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h2 class="text-xl sm:text-2xl font-bold tracking-tight">系统设置</h2>
+          <p class="text-muted-foreground text-sm">管理系统配置和账户安全</p>
+        </div>
+        <TabsList class="grid grid-cols-5 w-full sm:w-auto min-w-[420px]">
+          <TabsTrigger value="password">密码修改</TabsTrigger>
+          <TabsTrigger value="site">站点设置</TabsTrigger>
+          <TabsTrigger value="scheduler">调度设置</TabsTrigger>
+          <TabsTrigger value="backup">备份恢复</TabsTrigger>
+          <TabsTrigger value="about">关于</TabsTrigger>
+        </TabsList>
+      </div>
 
-    <Tabs v-model="activeTab" class="max-w-2xl">
-      <TabsList class="w-full sm:w-auto grid grid-cols-5 sm:inline-flex h-auto gap-1 p-1">
-        <TabsTrigger value="password" class="text-xs px-2 sm:px-3 py-1.5">密码修改</TabsTrigger>
-        <TabsTrigger value="site" class="text-xs px-2 sm:px-3 py-1.5">站点设置</TabsTrigger>
-        <TabsTrigger value="scheduler" class="text-xs px-2 sm:px-3 py-1.5">调度设置</TabsTrigger>
-        <TabsTrigger value="backup" class="text-xs px-2 sm:px-3 py-1.5">备份恢复</TabsTrigger>
-        <TabsTrigger value="about" class="text-xs px-2 sm:px-3 py-1.5">关于</TabsTrigger>
-      </TabsList>
-
-      <TabsContent value="password" class="mt-6">
+      <TabsContent value="password" class="mt-0">
         <Card>
           <CardHeader>
             <CardTitle>修改密码</CardTitle>
@@ -39,7 +40,7 @@ const activeTab = ref('password')
         </Card>
       </TabsContent>
 
-      <TabsContent value="site" class="mt-6">
+      <TabsContent value="site" class="mt-0">
         <Card>
           <CardHeader>
             <CardTitle>站点设置</CardTitle>
@@ -51,7 +52,7 @@ const activeTab = ref('password')
         </Card>
       </TabsContent>
 
-      <TabsContent value="scheduler" class="mt-6">
+      <TabsContent value="scheduler" class="mt-0">
         <Card>
           <CardHeader>
             <CardTitle>调度设置</CardTitle>
@@ -63,7 +64,7 @@ const activeTab = ref('password')
         </Card>
       </TabsContent>
 
-      <TabsContent value="backup" class="mt-6">
+      <TabsContent value="backup" class="mt-0">
         <Card>
           <CardHeader>
             <CardTitle>备份恢复</CardTitle>
@@ -75,7 +76,7 @@ const activeTab = ref('password')
         </Card>
       </TabsContent>
 
-      <TabsContent value="about" class="mt-6">
+      <TabsContent value="about" class="mt-0">
         <Card>
           <CardContent class="pt-6">
             <AboutSettings />
