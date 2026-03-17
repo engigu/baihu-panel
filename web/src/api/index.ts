@@ -268,7 +268,8 @@ export const api = {
     plugins: () => request<string[]>('/mise/plugins'),
     versions: (plugin: string) => request<string[]>(`/mise/versions?plugin=${plugin}`),
     verifyCommand: (plugin: string, version: string) => request<{ command: string }>(`/mise/verify-cmd?plugin=${plugin}&version=${version}`),
-    useGlobal: (plugin: string, version: string) => request<void>('/mise/use-global', { method: 'POST', body: JSON.stringify({ plugin, version }) })
+    useGlobal: (plugin: string, version: string) => request<void>('/mise/use-global', { method: 'POST', body: JSON.stringify({ plugin, version }) }),
+    unsetGlobal: (plugin: string, version: string) => request<void>('/mise/unset-global', { method: 'POST', body: JSON.stringify({ plugin, version }) })
   },
   terminal: {
     cmds: () => request<{ name: string, description: string }[]>('/terminal/cmds')

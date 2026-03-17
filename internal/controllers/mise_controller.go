@@ -96,3 +96,24 @@ func (c *MiseController) UseGlobal(ctx *gin.Context) {
 	}
 	utils.Success(ctx, nil)
 }
+
+// UnsetGlobal 取消全局默认版本
+func (c *MiseController) UnsetGlobal(ctx *gin.Context) {
+	var req struct {
+		Plugin  string `json:"plugin"`
+		Version string `json:"version"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(ctx, "参数错误: "+err.Error())
+		return
+	}
+	if req.Plugin == "" {
+		utils.BadRequest(ctx, "参数 plugin 不能为空")
+		return
+	}
+	if err := c.service.UnsetGlobal(req.Plugin, req.Version); err != nil {
+		utils.ServerError(ctx, "取消全局版本失败: "+err.Error())
+		return
+	}
+	utils.Success(ctx, nil)
+}

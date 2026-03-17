@@ -245,13 +245,18 @@ async function handleVerify(lang: MiseLanguage) {
     }
 }
 
-async function handleSetDefault(lang: MiseLanguage) {
+async function toggleDefault(lang: MiseLanguage) {
     try {
-        await api.mise.useGlobal(lang.plugin, lang.version)
-        toast.success(`已将 ${lang.plugin} ${lang.version} 设为全局默认版本`)
+        if (lang.is_global) {
+            await api.mise.unsetGlobal(lang.plugin, lang.version)
+            toast.success(`已取消 ${lang.plugin} 的全局默认设置`)
+        } else {
+            await api.mise.useGlobal(lang.plugin, lang.version)
+            toast.success(`已将 ${lang.plugin} ${lang.version} 设为全局默认版本`)
+        }
         await loadLanguages()
     } catch (e) {
-        toast.error('设置默认版本失败: ' + e)
+        toast.error('操作失败: ' + e)
     }
 }
 
@@ -364,9 +369,10 @@ onMounted(loadLanguages)
                                 @click="handleVerify(lang)">
                                 环境验证
                             </Button>
-                            <Button variant="outline" size="sm" class="whitespace-nowrap flex-1 sm:flex-none"
-                                :disabled="lang.isGlobal" @click="handleSetDefault(lang)">
-                                设为默认
+                            <Button variant="outline" size="sm" 
+                                :class="cn('whitespace-nowrap flex-1 sm:flex-none', lang.isGlobal && 'text-amber-600 border-amber-500/50 bg-amber-500/5 hover:bg-amber-500/10')"
+                                @click="toggleDefault(lang)">
+                                {{ lang.isGlobal ? '取消默认' : '设为默认' }}
                             </Button>
                             <Button variant="ghost" size="icon"
                                 class="text-destructive h-8 w-8 shrink-0 ml-auto sm:ml-0" @click="confirmDelete(lang)"

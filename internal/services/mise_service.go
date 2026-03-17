@@ -340,3 +340,19 @@ func (s *MiseService) UseGlobal(plugin, version string) error {
 	}
 	return nil
 }
+
+// UnsetGlobal 取消全局默认版本
+func (s *MiseService) UnsetGlobal(plugin, version string) error {
+	// 使用 mise unuse -g <tool>@<version> 移出全局配置
+	target := plugin
+	if version != "" {
+		target = fmt.Sprintf("%s@%s", plugin, version)
+	}
+	cmd := exec.Command("mise", "unuse", "-g", target)
+	cmd.Env = os.Environ()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("mise unuse global failed: %v, output: %s", err, string(output))
+	}
+	return nil
+}
