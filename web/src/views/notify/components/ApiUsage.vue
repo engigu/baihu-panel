@@ -252,7 +252,7 @@ const currentExample = computed(() => {
         <CardDescription>用于外部脚本或工具调用 API 时的安全凭证</CardDescription>
       </CardHeader>
       <CardContent class="space-y-4">
-        <div class="flex items-center gap-3">
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div class="relative flex-1 group">
             <Input :model-value="apiToken" readonly placeholder="尚未生成 Token"
               class="h-10 pr-10 bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/30 font-code text-sm tracking-tight" />
@@ -285,7 +285,7 @@ const currentExample = computed(() => {
               <div class="p-1.5 rounded-md bg-emerald-500/10 text-emerald-600">
                 <FileJson class="w-4 h-4" />
               </div>
-              <CardTitle class="text-sm font-bold uppercase tracking-wider">API 接口说明</CardTitle>
+              <CardTitle class="text-sm font-bold uppercase tracking-wider whitespace-nowrap">API 接口说明</CardTitle>
             </div>
           </div>
         </CardHeader>
@@ -357,27 +357,29 @@ const currentExample = computed(() => {
       <!-- 调用示例 -->
       <Card class="border bg-card shadow-sm flex flex-col overflow-hidden h-[520px]">
         <Tabs v-model="activeLang" class="w-full flex flex-col h-full overflow-hidden">
-          <CardHeader class="pb-3 shrink-0 border-b">
-            <div class="flex items-center justify-between">
+          <CardHeader class="pb-3 shrink-0 border-b px-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div class="flex items-center gap-2">
                 <div class="p-1.5 rounded-md bg-sky-500/10 text-sky-600">
                   <Terminal class="w-4 h-4" />
                 </div>
-                <CardTitle class="text-sm font-bold uppercase tracking-wider">脚本调用示例</CardTitle>
+                <CardTitle class="text-sm font-bold uppercase tracking-wider whitespace-nowrap">脚本调用示例</CardTitle>
               </div>
-              <div class="flex items-center gap-3">
-                <TabsList class="h-8 p-0.5 bg-muted/50 border">
-                  <TabsTrigger v-for="lang in examples" :key="lang.id" :value="lang.id"
-                    class="h-7 px-2.5 text-[11px] data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                    {{ lang.name }}
-                  </TabsTrigger>
-                </TabsList>
+              <div class="flex items-center gap-2 sm:gap-3 justify-between sm:justify-end overflow-hidden">
+                <div class="overflow-x-auto hide-scrollbar shrink-0">
+                  <TabsList class="h-8 p-0.5 bg-muted/50 border flex-nowrap">
+                    <TabsTrigger v-for="lang in examples" :key="lang.id" :value="lang.id"
+                      class="h-7 px-2.5 text-[11px] data-[state=active]:bg-background data-[state=active]:shadow-sm whitespace-nowrap">
+                      {{ lang.name }}
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
                 <Button variant="outline" size="sm"
-                  class="h-8 px-2.5 text-[11px] border-muted-foreground/30 hover:bg-muted transition-all"
+                  class="h-8 px-2.5 text-[11px] border-muted-foreground/30 hover:bg-muted transition-all shrink-0"
                   @click="copyToClipboard(currentExample, 'example')">
-                  <Check v-if="copiedBlock === 'example'" class="w-3.5 h-3.5 text-emerald-500 mr-1.5" />
-                  <Copy v-else class="w-3.5 h-3.5 mr-1.5" />
-                  复制代码
+                  <Check v-if="copiedBlock === 'example'" class="w-3.5 h-3.5 text-emerald-500 sm:mr-1.5" />
+                  <Copy v-else class="w-3.5 h-3.5 sm:mr-1.5" />
+                  <span class="hidden sm:inline">复制代码</span>
                 </Button>
               </div>
             </div>
