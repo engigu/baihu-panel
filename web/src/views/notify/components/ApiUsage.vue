@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Copy, Terminal, Key, FileJson, RefreshCw, Check, Hash, Info, AlertTriangle, Code2 } from 'lucide-vue-next'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   AlertDialog,
@@ -68,98 +69,105 @@ notify-token: <你的API Token>
   "text": "内容"
 }`
 
-const shellExample = computed(() => `send_notification() {
-  curl -s -X POST "http://${host.value}/api/v1/notify/send" \\
-    -H "Content-Type: application/json" \\
-    -H "notify-token: \${1:-${props.apiToken || 'YOUR_TOKEN'}}" \\
-    -d "{\\"channel_id\\":\\"\$2\\",\\"title\\":\\"\$3\\",\\"text\\":\\"\$4\\"}"
-}
+const activeLang = ref('shell')
+const testTitle = ref('系统通知')
+const testText = ref('这是一条测试消息内容')
+const testChannel = ref(props.channels[0]?.id || 'ID')
 
-# 使用示例: send_notification <Token> <渠道ID> <标题> <内容>
-send_notification "${props.apiToken || 'YOUR_TOKEN'}" "ID" "任务完成" "脚本执行完毕"`)
+const shellExample = computed(() => `# 1. 设置环境变量 (可选)
+# export BH_NOTIFY_TOKEN="${props.apiToken || 'YOUR_TOKEN'}"
+
+# 2. 调用 (优先使用环境变量)
+TOKEN="\${BH_NOTIFY_TOKEN:-${props.apiToken || 'YOUR_TOKEN'}}"
+curl -s -X POST "http://${host.value}/api/v1/notify/send" \\
+  -H "Content-Type: application/json" \\
+  -H "notify-token: $TOKEN" \\
+  -d '{"channel_id":"${testChannel.value}","title":"${testTitle.value}","text":"${testText.value}"}'`)
 
 const pythonExample = computed(() => `import requests
+import os
 
-def send_notification(token, channel_id, text, title="通知"):
-    url = "http://${host.value}/api/v1/notify/send"
-    headers = {
-        "Content-Type": "application/json",
-        "notify-token": token
-    }
-    payload = {
-        "channel_id": channel_id,
-        "title": title,
-        "text": text
-    }
-    return requests.post(url, json=payload, headers=headers).json()
+def send_notify(text, title="${testTitle.value}", channel="${testChannel.value}"):
+    token = os.getenv("BH_NOTIFY_TOKEN", "${props.apiToken || 'YOUR_TOKEN'}")
+    url = f"http://${host.value}/api/v1/notify/send"
+    data = {"channel_id": channel, "title": title, "text": text}
+    return requests.post(url, json=data, headers={"notify-token": token}).json()
 
-# 使用示例
-send_notification("${props.apiToken || 'YOUR_TOKEN'}", "ID", "脚本执行完毕", "任务完成")`)
+# 调用示例
+print(send_notify("${testText.value}"))`)
 
-const javascriptExample = computed(() => `async function sendNotification(token, channelId, text, title = "通知") {
-  const url = "http://${host.value}/api/v1/notify/send";
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "notify-token": token
-    },
+const javascriptExample = computed(() => `/**
+ * 发送通知 (优先使用环境变量 BH_NOTIFY_TOKEN)
+ * @param {string} text 消息内容
+ */
+const sendNotify = async (text) => {
+  const token = (typeof process !== 'undefined' ? process.env.BH_NOTIFY_TOKEN : null) || "${props.apiToken || 'YOUR_TOKEN'}";
+  const res = await fetch("http://${host.value}/api/v1/notify/send", {
     body: JSON.stringify({
-      channel_id: channelId,
-      title: title,
+      channel_id: "${testChannel.value}",
+      title: "${testTitle.value}",
       text: text
     })
   });
-  return res.json();
-}
+  return await res.json();
+};
 
-// 使用示例
-sendNotification("${props.apiToken || 'YOUR_TOKEN'}", "ID", "脚本执行完毕", "任务完成");`)
+sendNotify("${testText.value}");`)
 
 const goExample = computed(() => `package main
-
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"os"
 )
 
-func sendNotification(token, channelID, title, text string) error {
-	url := "http://${host.value}/api/v1/notify/send"
-	payload := map[string]string{
-		"channel_id": channelID,
+func sendNotify(title, text string) {
+	token := os.Getenv("BH_NOTIFY_TOKEN")
+	if token == "" {
+		token = "${props.apiToken || 'YOUR_TOKEN'}"
+	}
+	payload, _ := json.Marshal(map[string]string{
+		"channel_id": "${testChannel.value}",
 		"title":      title,
 		"text":       text,
-	}
-	body, _ := json.Marshal(payload)
-
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	})
+	req, _ := http.NewRequest("POST", "http://${host.value}/api/v1/notify/send", bytes.NewBuffer(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("notify-token", token)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	return nil
+	http.DefaultClient.Do(req)
 }
 
 func main() {
-	// 使用示例
-	sendNotification("${props.apiToken || 'YOUR_TOKEN'}", "ID", "任务完成", "脚本执行完毕")
+	sendNotify("${testTitle.value}", "${testText.value}")
 }`)
+
+const phpExample = computed(() => `<?php
+function sendNotify($text, $title = "${testTitle.value}", $channel = "${testChannel.value}") {
+    $token = getenv("BH_NOTIFY_TOKEN") ?: "${props.apiToken || 'YOUR_TOKEN'}";
+    $curl = curl_init("http://${host.value}/api/v1/notify/send");
+    curl_setopt($curl, CURLOPT_POST, true);
+    curl_setopt($curl, CURLOPT_HTTPHEADER, [
+        "Content-Type: application/json",
+        "notify-token: " . $token
+    ]);
+    curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode([
+        "channel_id" => $channel,
+        "title"      => $title,
+        "text"       => $text
+    ]));
+    curl_exec($curl);
+}
+sendNotify("${testText.value}");
+?>`)
 
 const examples = [
   { id: 'shell', name: 'Shell', icon: Terminal, code: shellExample },
   { id: 'python', name: 'Python', icon: Code2, code: pythonExample },
   { id: 'javascript', name: 'JavaScript', icon: Code2, code: javascriptExample },
   { id: 'go', name: 'Go', icon: Code2, code: goExample },
+  { id: 'php', name: 'PHP', icon: Code2, code: phpExample }
 ]
-
-const activeLang = ref('shell')
 
 const highlightCode = (code: string, lang: string) => {
   if (!code) return ''
@@ -181,7 +189,7 @@ const highlightCode = (code: string, lang: string) => {
     .replace(/>/g, '&gt;')
 
   // 1. 处理字符串 (优先处理，防止内部匹配)
-  html = html.replace(/("(?:\\.|[^"])*")|('(?:\\.|[^'])*')/g, `<span class="${colors.string}">$1</span>`)
+  html = html.replace(/("(?:\\.|[^"])*"|'(?:\\.|[^'])*')/g, `<span class="${colors.string}">$&</span>`)
 
   // 2. 处理注释 (注意排除 http:// 或 https:// 中的双斜杠)
   html = html.replace(/(^|[^\:])(\/\/.+)$|(#.+)$/gm, `$1<span class="${colors.comment}">$2$3</span>`)
@@ -189,24 +197,29 @@ const highlightCode = (code: string, lang: string) => {
   // 3. 语言配置
   const langConfig: Record<string, { keywords: string[], types: string[], functions: string[] }> = {
     shell: {
-      keywords: ['curl'],
+      keywords: ['curl', 'export'],
       types: [],
       functions: ['send_notification']
     },
     python: {
-      keywords: ['import', 'def', 'return', 'as', 'from'],
+      keywords: ['import', 'def', 'return', 'as', 'from', 'print'],
       types: ['dict', 'list', 'str', 'int', 'float'],
-      functions: ['send_notification', 'post', 'json']
+      functions: ['send_notify', 'post', 'json', 'getenv']
     },
     javascript: {
-      keywords: ['async', 'await', 'function', 'const', 'return', 'let', 'var', 'if', 'else', 'try', 'catch'],
+      keywords: ['async', 'await', 'function', 'const', 'return', 'let', 'var', 'if', 'else'],
       types: ['JSON', 'Promise', 'fetch'],
-      functions: ['sendNotification', 'stringify', 'json', 'post']
+      functions: ['sendNotify', 'stringify', 'json', 'post']
     },
     go: {
-      keywords: ['package', 'import', 'func', 'return', 'map', 'defer', 'if', 'nil', 'go', 'main'],
+      keywords: ['package', 'import', 'func', 'return', 'map', 'defer', 'main'],
       types: ['string', 'error', 'byte', 'int'],
-      functions: ['Marshal', 'NewRequest', 'Set', 'Do', 'Close', 'Sprintf']
+      functions: ['Marshal', 'NewRequest', 'Set', 'Do', 'Close', 'sendNotify']
+    },
+    php: {
+      keywords: ['function', 'return', 'true'],
+      types: [],
+      functions: ['curl_init', 'curl_setopt', 'curl_exec', 'json_encode', 'sendNotify']
     }
   }
 
@@ -240,7 +253,6 @@ const currentExample = computed(() => {
 
 <template>
   <div class="space-y-6">
-    <!-- API Token 管理卡片 -->
     <Card class="border bg-card shadow-sm overflow-hidden">
       <CardHeader class="pb-4">
         <div class="flex items-center gap-2 mb-1">
@@ -251,27 +263,68 @@ const currentExample = computed(() => {
         </div>
         <CardDescription>用于外部脚本或工具调用 API 时的安全凭证</CardDescription>
       </CardHeader>
-      <CardContent class="space-y-4">
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div class="relative flex-1 group">
-            <Input :model-value="apiToken" readonly placeholder="尚未生成 Token"
-              class="h-10 pr-10 bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/30 font-code text-sm tracking-tight" />
-            <div v-if="apiToken" @click="copyToClipboard(apiToken, 'token')"
-              class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary cursor-pointer transition-colors p-1 rounded-md hover:bg-muted"
-              title="复制 Token">
-              <Check v-if="copiedBlock === 'token'" class="w-4 h-4 text-emerald-500 animate-in zoom-in" />
-              <Copy v-else class="w-4 h-4" />
+      <CardContent class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+        <!-- 左侧：Token 管理 -->
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <label class="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">当前密钥</label>
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div class="relative flex-1 group">
+                <Input :model-value="apiToken" readonly placeholder="尚未生成 Token"
+                  class="h-10 pr-10 bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/30 font-code text-sm tracking-tight" />
+                <div v-if="apiToken" @click="copyToClipboard(apiToken, 'token')"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary cursor-pointer transition-colors p-1 rounded-md hover:bg-muted"
+                  title="复制 Token">
+                  <Check v-if="copiedBlock === 'token'" class="w-4 h-4 text-emerald-500 animate-in zoom-in" />
+                  <Copy v-else class="w-4 h-4" />
+                </div>
+              </div>
+              <Button variant="default" @click="onGenerateClick" class="h-10 px-4 shrink-0 transition-all active:scale-95">
+                <RefreshCw class="w-3.5 h-3.5 mr-2" />
+                {{ apiToken ? '重新生成' : '生成 Token' }}
+              </Button>
             </div>
           </div>
-          <Button variant="default" @click="onGenerateClick" class="h-10 px-4 shrink-0 transition-all active:scale-95">
-            <RefreshCw class="w-3.5 h-3.5 mr-2" />
-            {{ apiToken ? '重新生成' : '生成 Token' }}
-          </Button>
+          <div
+            class="flex items-start gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10 text-[12px] text-amber-700 dark:text-amber-400">
+            <Info class="w-4 h-4 mt-0.5 shrink-0" />
+            <p>请妥善保管您的 Token，令牌将作为请求头中的 <code>notify-token</code> 字段发送。</p>
+          </div>
         </div>
-        <div
-          class="flex items-start gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10 text-[13px] text-amber-700 dark:text-amber-400">
-          <Info class="w-4 h-4 mt-0.5 shrink-0" />
-          <p>请妥善保管您的 Token，一旦丢失需通过上方按钮重新生成。令牌将作为请求头中的 <code>notify-token</code> 字段发送。</p>
+
+        <!-- 右侧：测试参数预览 -->
+        <div class="space-y-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800">
+          <div class="flex items-center gap-2 mb-2">
+            <Badge variant="outline" class="text-[10px] py-0 border-emerald-500/30 text-emerald-600 bg-emerald-500/5">参数预览</Badge>
+            <span class="text-xs text-muted-foreground">修改下方参数实时生成代码</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="space-y-1.5">
+              <label class="text-[11px] font-medium text-zinc-500">标题 (Title)</label>
+              <Input v-model="testTitle" class="h-8 text-xs" />
+            </div>
+            <div class="space-y-1.5">
+              <label class="text-[11px] font-medium text-zinc-500">选择渠道 (Channel ID)</label>
+              <Select v-model="testChannel">
+                <SelectTrigger class="w-full h-8 text-xs bg-background">
+                  <SelectValue placeholder="选择渠道" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-if="channels.length === 0" value="ID">无可用渠道</SelectItem>
+                  <SelectItem v-for="ch in channels" :key="ch.id" :value="ch.id">
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium">{{ ch.name }}</span>
+                      <span class="text-[10px] text-muted-foreground font-mono">({{ ch.id.slice(0, 6) }})</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-[11px] font-medium text-zinc-500">正文内容 (Text)</label>
+            <Input v-model="testText" class="h-8 text-xs" />
+          </div>
         </div>
       </CardContent>
     </Card>
