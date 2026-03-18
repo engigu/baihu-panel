@@ -117,3 +117,48 @@ func (c *MiseController) UnsetGlobal(ctx *gin.Context) {
 	}
 	utils.Success(ctx, nil)
 }
+
+// Envs 获取全局环境变量
+func (c *MiseController) Envs(ctx *gin.Context) {
+	envs, err := c.service.Envs()
+	if err != nil {
+		utils.ServerError(ctx, "获取全局环境变量失败: "+err.Error())
+		return
+	}
+	utils.Success(ctx, envs)
+}
+
+// SetEnv 设置全局环境变量
+func (c *MiseController) SetEnv(ctx *gin.Context) {
+	var req struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(ctx, "参数错误: "+err.Error())
+		return
+	}
+	if req.Key == "" {
+		utils.BadRequest(ctx, "参数 key 不能为空")
+		return
+	}
+	if err := c.service.SetEnv(req.Key, req.Value); err != nil {
+		utils.ServerError(ctx, "设置环境变量失败: "+err.Error())
+		return
+	}
+	utils.Success(ctx, nil)
+}
+
+// UnsetEnv 取消全局环境变量
+func (c *MiseController) UnsetEnv(ctx *gin.Context) {
+	key := ctx.Query("key")
+	if key == "" {
+		utils.BadRequest(ctx, "参数 key 不能为空")
+		return
+	}
+	if err := c.service.UnsetEnv(key); err != nil {
+		utils.ServerError(ctx, "取消环境变量失败: "+err.Error())
+		return
+	}
+	utils.Success(ctx, nil)
+}

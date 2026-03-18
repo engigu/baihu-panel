@@ -359,3 +359,50 @@ func (s *MiseService) UnsetGlobal(plugin, version string) error {
 	}
 	return nil
 }
+// Envs 获取全局环境变量
+func (s *MiseService) Envs() (map[string]string, error) {
+	cmd := exec.Command("mise", "set")
+	cmd.Env = os.Environ()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("mise set failed: %v, output: %s", err, string(output))
+	}
+
+	envs := make(map[string]string)
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		// 期望格式: KEY VALUE SOURCE
+		// 跳过标题行或不合规行
+		if len(fields) < 3 || strings.ToLower(fields[0]) == "key" {
+			continue
+		}
+		// 仅显示来自全局配置文件的环境变量
+		if strings.Contains(strings.ToLower(fields[len(fields)-1]), "config.toml") {
+			envs[fields[0]] = fields[1]
+		}
+	}
+	return envs, nil
+}
+
+// SetEnv 设置全局环境变量
+func (s *MiseService) SetEnv(key, value string) error {
+	cmd := exec.Command("mise", "set", "-g", fmt.Sprintf("%s=%s", key, value))
+	cmd.Env = os.Environ()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("mise set -g failed: %v, output: %s", err, string(output))
+	}
+	return nil
+}
+
+// UnsetEnv 取消全局环境变量
+func (s *MiseService) UnsetEnv(key string) error {
+	cmd := exec.Command("mise", "unset", "-g", key)
+	cmd.Env = os.Environ()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("mise unset -g failed: %v, output: %s", err, string(output))
+	}
+	return nil
+}
