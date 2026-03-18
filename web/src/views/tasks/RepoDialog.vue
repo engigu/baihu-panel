@@ -13,6 +13,7 @@ import { X, Globe, GitBranch, Shield, Zap, Clock } from 'lucide-vue-next'
 import { api, type Task, type RepoConfig, type Agent } from '@/api'
 import { toast } from 'vue-sonner'
 import { cn } from '@/lib/utils'
+import { getCronDescription } from '@/utils/cron'
 
 const props = defineProps<{
   open: boolean
@@ -64,6 +65,11 @@ const allAgents = ref<Agent[]>([])
 const selectedAgentId = ref<string>('local')
 const tagInput = ref('')
 const whitelistInput = ref('')
+
+const cronDescription = computed(() => {
+  if (!form.value.schedule) return ''
+  return getCronDescription(form.value.schedule, (navigator as any).language)
+})
 
 function addTag() {
   const val = tagInput.value.trim()
@@ -420,6 +426,10 @@ async function save() {
                   <Label class="sm:text-right text-xs text-muted-foreground uppercase tracking-wider font-semibold">定时规则</Label>
                   <div class="sm:col-span-3">
                     <Input v-model="form.schedule" placeholder="* * * * * *" class="h-9 font-mono text-[13px] bg-muted/30 border-muted-foreground/20 focus:ring-1 focus:ring-primary/50" />
+                    <div v-if="cronDescription" class="mt-2.5 p-2 rounded-lg bg-primary/5 border border-primary/10 text-[11px] text-primary font-medium flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                      <Zap class="h-3 w-3" />
+                      {{ cronDescription }}
+                    </div>
                     <div class="mt-2.5 space-y-2">
                        <div class="flex items-center gap-1.5 text-[10px] text-muted-foreground/70 uppercase font-bold tracking-tighter">
                           <Clock class="h-3 w-3" /> 格式指导: 秒 分 时 日 月 周
