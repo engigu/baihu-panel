@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted } from 'vue'
+import { ref, watch, onUnmounted, nextTick } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { X, Search } from 'lucide-vue-next'
@@ -17,10 +17,36 @@ const emit = defineEmits<{
 }>()
 
 const searchKeyword = ref('')
+const scrollContainer = ref<HTMLElement | null>(null)
+const shouldAutoScroll = ref(true)
 
 function close() {
   emit('update:open', false)
 }
+
+// 处理滚动事件，判断用户是否手动向上滚动
+function handleScroll() {
+  if (!scrollContainer.value) return
+  const { scrollTop, scrollHeight, clientHeight } = scrollContainer.value
+  // 如果距离底部小于 50px，认为用户想继续跟随滚动
+  const isAtBottom = scrollHeight - scrollTop - clientHeight < 50
+  shouldAutoScroll.value = isAtBottom
+}
+
+// 滚动到底部
+const scrollToBottom = async () => {
+  await nextTick()
+  if (scrollContainer.value && shouldAutoScroll.value) {
+    scrollContainer.value.scrollTop = scrollContainer.value.scrollHeight
+  }
+}
+
+// 监听内容变化，实现自动滚动
+watch(() => props.content, () => {
+  if (props.open) {
+    scrollToBottom()
+  }
+})
 
 // 统一控制 Body 滚动
 function toggleBodyScroll(lock: boolean) {
@@ -35,7 +61,9 @@ function toggleBodyScroll(lock: boolean) {
 watch(() => props.open, (val) => {
   if (val) {
     searchKeyword.value = ''
+    shouldAutoScroll.value = true // 每次重新打开都开启自动滚动
     toggleBodyScroll(true)
+    scrollToBottom()
   } else {
     toggleBodyScroll(false)
   }
@@ -80,7 +108,7 @@ onUnmounted(() => {
             </Button>
           </div>
         </div>
-        <div class="flex-1 overflow-auto bg-black/5 dark:bg-white/5">
+        <div ref="scrollContainer" class="flex-1 overflow-auto bg-black/5 dark:bg-white/5" @scroll="handleScroll">
           <div class="p-3 sm:p-4 text-xs font-mono whitespace-pre-wrap break-all leading-relaxed">
             <Ansi>{{ content }}</Ansi>
           </div>
