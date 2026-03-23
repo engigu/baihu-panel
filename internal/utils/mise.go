@@ -23,7 +23,9 @@ func GetMiseNodePath(version string) string {
 	if err == nil {
 		nodeDir := strings.TrimSpace(string(out))
 		if nodeDir != "" {
-			nodePath := nodeDir + "/lib/node_modules"
+			// 采用双路径策略：lib/node_modules 是标准路径，lib 是某些环境（如 mise Docker）下的特殊路径
+			// 通过冒号分隔，让 Node.js 按顺序搜索，保证最大兼容性
+			nodePath := nodeDir + "/lib/node_modules:" + nodeDir + "/lib"
 			nodePathCache.Store(version, nodePath)
 			return nodePath
 		}

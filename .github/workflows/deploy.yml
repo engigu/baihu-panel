@@ -23,9 +23,9 @@ jobs:
 #           - base_type: alpine
 #             base_tag: base-alpine
 #             tag_suffix: "-alpine"
-          - base_type: debian13
-            base_tag: base-debian13
-            tag_suffix: "-debian13"
+          # - base_type: debian13
+          #   base_tag: base-debian13
+          #   tag_suffix: "-debian13"
 
     permissions:
       contents: read
