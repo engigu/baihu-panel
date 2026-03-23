@@ -12,6 +12,8 @@ env:
 jobs:
   build-binaries:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,11 +77,24 @@ jobs:
           cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$AGENT_LDFLAGS" -o ../data/agent/baihu-agent-darwin-arm64 . && cd ..
           cd data/agent && tar -czvf baihu-agent-darwin-arm64.tar.gz baihu-agent-darwin-arm64 config.example.ini && rm baihu-agent-darwin-arm64 && cd ../..
 
-      - name: Upload Binaries
-        uses: actions/upload-artifact@v4
+      - name: Prepare Release Notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view ${{ github.ref_name }} > /dev/null 2>&1; then
+            echo "$(cat CHANGELOG.md)" > FINAL_CHANGELOG.md
+            echo -e "\n\n" >> FINAL_CHANGELOG.md
+            gh release view ${{ github.ref_name }} --json body -q .body >> FINAL_CHANGELOG.md
+          else
+            cp CHANGELOG.md FINAL_CHANGELOG.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: baihu-binaries
-          path: |
+          tag_name: ${{ github.ref_name }}
+          body_path: FINAL_CHANGELOG.md
+          files: |
             baihu-linux-amd64.tar.gz
             baihu-linux-arm64.tar.gz
             data/agent/baihu-agent-*.tar.gz
@@ -257,34 +272,3 @@ jobs:
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
 
-      - name: Download Binaries
-        if: matrix.base_type == 'debian'
-        uses: actions/download-artifact@v4
-        with:
-          name: baihu-binaries
-          path: .
-
-      - name: Prepare Release Notes
-        if: matrix.base_type == 'debian'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh release view ${{ github.ref_name }} > /dev/null 2>&1; then
-            echo "$(cat CHANGELOG.md)" > FINAL_CHANGELOG.md
-            echo -e "\n\n" >> FINAL_CHANGELOG.md
-            gh release view ${{ github.ref_name }} --json body -q .body >> FINAL_CHANGELOG.md
-          else
-            cp CHANGELOG.md FINAL_CHANGELOG.md
-          fi
-
-      - name: Create GitHub Release
-        if: matrix.base_type == 'debian'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          body_path: FINAL_CHANGELOG.md
-          files: |
-            baihu-linux-amd64.tar.gz
-            baihu-linux-arm64.tar.gz
-            data/agent/baihu-agent-*.tar.gz
-            data/agent/baihu-agent-*.zip
