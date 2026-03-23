@@ -34,17 +34,20 @@ function handleScroll() {
 }
 
 // 滚动到底部
-const scrollToBottom = async () => {
+const scrollToBottom = async (smooth = true) => {
   await nextTick()
   if (scrollContainer.value && shouldAutoScroll.value) {
-    scrollContainer.value.scrollTop = scrollContainer.value.scrollHeight
+    scrollContainer.value.scrollTo({
+      top: scrollContainer.value.scrollHeight,
+      behavior: smooth ? 'smooth' : 'auto'
+    })
   }
 }
 
 // 监听内容变化，实现自动滚动
 watch(() => props.content, () => {
   if (props.open) {
-    scrollToBottom()
+    scrollToBottom(true)
   }
 })
 
@@ -63,7 +66,7 @@ watch(() => props.open, (val) => {
     searchKeyword.value = ''
     shouldAutoScroll.value = true // 每次重新打开都开启自动滚动
     toggleBodyScroll(true)
-    scrollToBottom()
+    scrollToBottom(false) // 首次打开立刻定位，不滑动
   } else {
     toggleBodyScroll(false)
   }
