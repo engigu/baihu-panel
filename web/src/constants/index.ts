@@ -45,3 +45,9 @@ export const AGENT_STATUS = {
   ONLINE: 'online',
   OFFLINE: 'offline',
 } as const
+
+// 环境变量类型
+export const ENV_TYPE = {
+  NORMAL: 'normal',
+  SECRET: 'secret',
+} as const
