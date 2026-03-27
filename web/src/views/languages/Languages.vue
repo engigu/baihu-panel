@@ -336,8 +336,8 @@ onMounted(() => {
                 <h2 class="text-xl sm:text-2xl font-bold tracking-tight">语言依赖</h2>
                 <div class="mt-1 space-y-1">
                     <p class="text-muted-foreground text-sm">管理系统环境中的编程语言运行时及相关包依赖 (Mise)</p>
-                    <div class="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-500 bg-amber-500/5 w-fit px-2 py-0.5 rounded-full border border-amber-500/20">
-                        <AlertCircle class="h-3 w-3" />
+                    <div class="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-500 bg-amber-500/5 px-3 py-2.5 rounded-lg border border-amber-500/20 leading-relaxed">
+                        <AlertCircle class="h-3.5 w-3.5 mt-0.5 shrink-0" />
                         <span><b>设为默认</b>：将选定版本设为系统全局默认 (mise use -g)，生效后所有未通过高级配置指定特定环境的任务将默认调用此环境。</span>
                     </div>
                 </div>
@@ -394,8 +394,8 @@ onMounted(() => {
                         </div>
                         <template v-else>
                             <div v-for="lang in filteredLanguages" :key="lang.plugin + lang.version"
-                                class="flex flex-col sm:flex-row sm:items-center justify-between px-4 py-4 hover:bg-muted/50 transition-colors gap-4">
-                                <div class="flex items-center gap-4 min-w-0">
+                                class="flex flex-col sm:flex-row sm:items-center justify-between px-4 py-4 hover:bg-muted/50 transition-colors gap-4 relative">
+                                <div class="flex items-center gap-4 min-w-0 pr-10 sm:pr-0">
                                     <div
                                         class="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary uppercase overflow-hidden shrink-0">
                                         <template v-if="getLangIcon(lang.plugin)">
@@ -428,28 +428,27 @@ onMounted(() => {
                                         </div>
                                     </div>
                                 </div>
-                                <div
-                                    class="flex items-center gap-2 sm:ml-auto w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 hide-scrollbar">
+                                <div class="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:ml-auto w-full sm:w-auto">
                                     <Button v-if="SUPPORTED_DEPS_LANGS.includes(lang.plugin)" variant="outline" size="sm"
-                                        class="whitespace-nowrap flex-1 sm:flex-none"
+                                        class="whitespace-nowrap w-full sm:w-auto"
                                         @click="$router.push(`/dependencies?language=${lang.plugin}&version=${lang.version}`)">
                                         依赖管理
                                     </Button>
                                     <Badge v-else variant="secondary"
-                                        class="h-8 opacity-60 flex-1 sm:flex-none justify-center whitespace-nowrap">
+                                        class="h-9 opacity-60 flex justify-center whitespace-nowrap sm:w-auto">
                                         不支持管理
                                     </Badge>
-                                    <Button variant="outline" size="sm" class="whitespace-nowrap flex-1 sm:flex-none"
+                                    <Button variant="outline" size="sm" class="whitespace-nowrap w-full sm:w-auto"
                                         @click="handleVerify(lang)">
                                         环境验证
                                     </Button>
                                     <Button variant="outline" size="sm"
-                                        :class="cn('whitespace-nowrap flex-1 sm:flex-none', lang.isGlobal && 'text-amber-600 border-amber-500/50 bg-amber-500/5 hover:bg-amber-500/10')"
+                                        :class="cn('whitespace-nowrap w-full sm:w-auto col-span-2 sm:col-span-1', lang.isGlobal && 'text-amber-600 border-amber-500/50 bg-amber-500/5 hover:bg-amber-500/10')"
                                         @click="toggleDefault(lang)">
-                                        {{ lang.isGlobal ? '取消默认' : '设为默认' }}
+                                        {{ lang.isGlobal ? '取消默认设置' : '设为默认版本' }}
                                     </Button>
                                     <Button variant="ghost" size="icon"
-                                        class="text-destructive h-8 w-8 shrink-0 ml-auto sm:ml-0" @click="confirmDelete(lang)"
+                                        class="text-destructive h-9 w-9 shrink-0 absolute top-4 right-4 sm:relative sm:top-0 sm:right-0" @click="confirmDelete(lang)"
                                         title="卸载">
                                         <Trash2 class="h-4 w-4" />
                                     </Button>

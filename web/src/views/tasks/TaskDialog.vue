@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import DirTreeSelect from '@/components/DirTreeSelect.vue'
-import { Plus, ChevronDown, X, Search, Check, ChevronsUpDown, AlertCircle, Terminal, Clock, Zap } from 'lucide-vue-next'
+import { Plus, ChevronDown, X, Search, Check, ChevronsUpDown, AlertCircle, Terminal, Clock, Zap, Loader2 } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import { api, type Task, type EnvVar, type Agent, type MiseLanguage } from '@/api'
 import { PATHS, TRIGGER_TYPE } from '@/constants'
