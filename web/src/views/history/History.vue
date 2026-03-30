@@ -59,8 +59,15 @@ const isWsLoading = ref(false)
 let logSocket: WebSocket | null = null
 
 
+import { decompressFromBase64 } from '@/utils/decompress'
+
 const decompressedOutput = computed(() => {
-  return wsContent.value || '无输出'
+  if (!wsContent.value) return '无输出'
+  // 检查是否是 base64 (尝试性，如果开头是 eJ 且长度较大，很可能是压缩后的)
+  if (wsContent.value.length > 20 && wsContent.value.startsWith('eJ')) {
+    return decompressFromBase64(wsContent.value)
+  }
+  return wsContent.value
 })
 
 async function loadLogs() {
@@ -159,6 +166,18 @@ async function selectLog(log: TaskLog) {
   wsContent.value = ''
   isWsLoading.value = true
 
+  if (log.status !== TASK_STATUS.RUNNING) {
+    try {
+      const res = await api.logs.get(log.id)
+      wsContent.value = res.output
+    } catch {
+      toast.error('加载详情失败')
+    } finally {
+      isWsLoading.value = false
+    }
+    return
+  }
+
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.host
   const baseUrl = (window as any).__BASE_URL__ || ''
@@ -174,16 +193,12 @@ async function selectLog(log: TaskLog) {
 
   logSocket.onmessage = (event) => {
     isWsLoading.value = false
-    if (log.status !== TASK_STATUS.RUNNING) {
-      wsContent.value = event.data
-    } else {
-      wsContent.value += event.data
-      // 自动滚动到底部
-      nextTick(() => {
-        const pre = document.querySelector('.log-pre')
-        if (pre) pre.scrollTop = pre.scrollHeight
-      })
-    }
+    wsContent.value += event.data
+    // 自动滚动到底部
+    nextTick(() => {
+      const pre = document.querySelector('.log-pre')
+      if (pre) pre.scrollTop = pre.scrollHeight
+    })
   }
 
   logSocket.onerror = (e) => {

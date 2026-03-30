@@ -14,7 +14,7 @@ import { api, type Agent, type Task } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
 import { useRouter, useRoute } from 'vue-router'
-import { TASK_TYPE, AGENT_STATUS, TRIGGER_TYPE } from '@/constants'
+import { TASK_TYPE, AGENT_STATUS, TRIGGER_TYPE, TASK_STATUS } from '@/constants'
 import TextOverflow from '@/components/TextOverflow.vue'
 
 const router = useRouter()
@@ -247,6 +247,16 @@ onUnmounted(() => {
   cleanupLogSocket()
 })
 
+import { decompressFromBase64 } from '@/utils/decompress'
+
+const displayLogContent = computed(() => {
+  if (!logContent.value) return '无输出'
+  if (latestLogStatus.value !== TASK_STATUS.RUNNING && logContent.value.length > 20 && logContent.value.startsWith('eJ')) {
+    return decompressFromBase64(logContent.value)
+  }
+  return logContent.value
+})
+
 async function viewLogs(taskId: string) {
   try {
     const res = await api.logs.list({ task_id: taskId, page: 1, page_size: 1 })
@@ -259,7 +269,17 @@ async function viewLogs(taskId: string) {
       logContent.value = ''
       showLogViewer.value = true
 
-      // Connect WebSocket to load log content
+      if (latestLog.status !== TASK_STATUS.RUNNING) {
+        try {
+          const detail = await api.logs.get(latestLog.id)
+          logContent.value = detail.output
+        } catch {
+          toast.error('加载日志详情失败')
+        }
+        return
+      }
+
+      // Connect WebSocket to load log content for running tasks
       cleanupLogSocket()
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       const host = window.location.host
@@ -269,11 +289,7 @@ async function viewLogs(taskId: string) {
 
       logSocket = new WebSocket(wsUrl)
       logSocket.onmessage = (event) => {
-        if (latestLog.status !== 'running') {
-          logContent.value = event.data
-        } else {
-          logContent.value += event.data
-        }
+        logContent.value += event.data
       }
     } else {
       toast.info('该任务暂无执行日志')
@@ -511,7 +527,7 @@ watch(() => route.query.agent_id, (newVal) => {
 
     <!-- 最新日志全屏查看 -->
     <LogViewer v-model:open="showLogViewer" :title="`最新日志 - ${latestLogTitle}`"
-      :content="logContent || '无输出'" :status="latestLogStatus" />
+      :content="displayLogContent || '无输出'" :status="latestLogStatus" />
 
     <!-- 删除确认 (批量) -->
     <AlertDialog v-model:open="showBatchDeleteDialog">
