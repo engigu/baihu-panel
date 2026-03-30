@@ -462,6 +462,9 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 		}, stdout, stderr)
 	}
 
+	// 重新加载最新的环境变量，满足即时生效的需求
+	es.refreshExecutionRequestEnvs(req, task)
+
 	// 特殊处理仓库同步任务
 	if task.Type == constant.TaskTypeRepo {
 		cmd, workDir := es.BuildRepoCommand(task)
@@ -1050,6 +1053,40 @@ func (es *ExecutorService) loadEnvVars(taskID string, envIDs string) ([]string, 
 	}
 
 	return nil, nil
+}
+
+// refreshExecutionRequestEnvs 重新加载最新的环境变量，并与原请求中的变量合并（保留额外变量）
+func (es *ExecutorService) refreshExecutionRequestEnvs(req *executor.ExecutionRequest, task *models.Task) {
+	if task == nil || (req.Type != executor.TaskTypeCron && req.Type != executor.TaskTypeManual) {
+		return
+	}
+
+	// 1. 备份原请求中的环境变量（用于后续保留手动指定的额外变量）
+	currentEnvs := req.Envs
+
+	// 2. 从数据库加载最新的环境变量设置
+	envs, secrets := es.loadEnvVars(task.ID, string(task.Envs))
+	req.Envs = envs
+	req.Secrets = secrets
+
+	// 3. 将原请求中存在但数据库中不存在的“额外变量”合并回来（如 API 注入、手动执行参数等）
+	for _, ce := range currentEnvs {
+		idx := strings.Index(ce, "=")
+		if idx == -1 {
+			continue
+		}
+		name := ce[:idx]
+		found := false
+		for _, ne := range envs {
+			if strings.HasPrefix(ne, name+"=") {
+				found = true
+				break
+			}
+		}
+		if !found {
+			req.Envs = append(req.Envs, ce)
+		}
+	}
 }
 
 func (es *ExecutorService) ResolvePath(path string) string {
