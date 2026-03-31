@@ -331,33 +331,41 @@ onMounted(() => {
 
 <template>
     <div class="space-y-4">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div class="flex-1">
+        <!-- 顶栏：标题与操作 -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
                 <h2 class="text-xl sm:text-2xl font-bold tracking-tight">语言依赖</h2>
-                <div class="mt-1 space-y-1">
-                    <p class="text-muted-foreground text-sm">管理系统环境中的编程语言运行时及相关包依赖 (Mise)</p>
-                    <div class="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-500 bg-amber-500/5 px-3 py-2.5 rounded-lg border border-amber-500/20 leading-relaxed">
-                        <AlertCircle class="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                        <span><b>设为默认</b>：将选定版本设为系统全局默认 (mise use -g)，生效后所有未通过高级配置指定特定环境的任务将默认调用此环境。</span>
-                    </div>
-                </div>
+                <p class="text-muted-foreground text-sm mt-0.5">管理系统环境中的编程语言运行时及相关包依赖 (Mise)</p>
             </div>
-            <Button @click="openInstallDialog">
-                <Plus class="h-4 w-4 mr-2" /> 新增语言
-            </Button>
+
+            <div class="flex flex-col sm:flex-row items-center gap-3 shrink-0 w-full md:w-auto">
+                <Button @click="openInstallDialog" class="w-full sm:w-auto h-9">
+                    <Plus class="h-4 w-4 mr-2" /> 新增语言
+                </Button>
+                <!-- 这里使用 Tabs 内部的 TabsList，所以外部需要包裹 Tabs -->
+                <Tabs v-model="activeTab" class="w-full sm:w-auto">
+                    <TabsList class="grid w-full sm:w-64 grid-cols-2 h-9">
+                        <TabsTrigger value="runtimes">安装列表</TabsTrigger>
+                        <TabsTrigger value="envs">镜像加速</TabsTrigger>
+                    </TabsList>
+                </Tabs>
+            </div>
         </div>
 
-        <div v-if="errorMsg"
-            class="bg-destructive/10 border border-destructive/20 rounded-lg p-4 flex items-center gap-3 text-destructive">
-            <AlertCircle class="h-5 w-5 shrink-0" />
-            <p class="text-sm font-medium">{{ errorMsg }}</p>
+        <!-- 贴士栏：全宽 Banner 增加视觉重心 -->
+        <div class="flex items-center gap-2.5 text-[13px] text-amber-600 dark:text-amber-500 bg-amber-500/10 px-4 py-2.5 rounded-lg border border-amber-500/20 leading-relaxed shadow-sm select-none">
+            <AlertCircle class="h-4 w-4 shrink-0" />
+            <span>
+                <b class="font-bold">设为默认</b>：将选定版本设为系统全局默认 (mise use -g)，生效后所有未通过高级配置指定特定环境的任务将默认调用此环境。
+            </span>
         </div>
 
         <Tabs v-model="activeTab" class="w-full">
-            <TabsList class="grid w-full sm:w-72 grid-cols-2 mb-4">
-                <TabsTrigger value="runtimes">安装列表</TabsTrigger>
-                <TabsTrigger value="envs">镜像加速</TabsTrigger>
-            </TabsList>
+            <div v-if="errorMsg"
+                class="bg-destructive/10 border border-destructive/20 rounded-lg p-4 flex items-center gap-3 text-destructive mb-4">
+                <AlertCircle class="h-5 w-5 shrink-0" />
+                <p class="text-sm font-medium">{{ errorMsg }}</p>
+            </div>
 
             <TabsContent value="runtimes" class="space-y-4 outline-none">
                 <!-- 列表部分 -->

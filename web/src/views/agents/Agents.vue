@@ -204,18 +204,18 @@ onUnmounted(() => {
 
 <template>
   <div class="space-y-4">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
         <h2 class="text-xl sm:text-2xl font-bold tracking-tight">Agent 管理</h2>
         <p class="text-muted-foreground text-sm">管理远程执行代理</p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 w-full md:w-auto">
         <div class="relative flex-1 sm:flex-none">
           <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input v-model="searchQuery" placeholder="搜索..." class="h-9 pl-8 w-full sm:w-48 text-sm" />
+          <Input v-model="searchQuery" placeholder="搜索..." class="h-9 pl-8 w-full sm:w-40 md:w-48 text-sm" />
         </div>
-        <Button variant="outline" size="sm" class="h-9" @click="showDownloadDialog = true">
-          <Download class="h-4 w-4 mr-1.5" />下载
+        <Button variant="outline" size="sm" class="h-9 shrink-0" @click="showDownloadDialog = true">
+          <Download class="h-4 w-4 sm:mr-1.5" /> <span class="hidden sm:inline">下载</span>
         </Button>
         <Button variant="outline" size="icon" class="h-9 w-9 shrink-0" @click="loadAgents" :disabled="loading">
           <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loading }" />

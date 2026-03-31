@@ -247,16 +247,16 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="space-y-6">
-    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
         <h2 class="text-xl sm:text-2xl font-bold tracking-tight">环境变量</h2>
         <p class="text-muted-foreground text-sm">管理脚本执行时的环境变量</p>
       </div>
-      <div class="flex flex-col sm:flex-row items-center gap-2">
+      <div class="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
         <div class="flex w-full sm:w-auto items-center gap-2">
           <div class="relative flex-1 sm:flex-none">
             <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input v-model="filterName" placeholder="搜索名称..." class="h-9 pl-9 w-full sm:w-48 text-sm"
+            <Input v-model="filterName" placeholder="搜索名称..." class="h-9 pl-9 w-full sm:w-40 md:w-48 text-sm"
               @input="handleSearch" />
           </div>
           <Button @click="openCreate" class="shrink-0 h-9" :disabled="activeTab === ENV_TYPE.SECRET && !isSecretSet">
@@ -264,7 +264,7 @@ onBeforeUnmount(() => {
           </Button>
         </div>
         <Tabs v-model="activeTab" class="w-full sm:w-auto shrink-0">
-          <TabsList class="grid w-full grid-cols-2 sm:w-[200px] h-9">
+          <TabsList class="grid w-full grid-cols-2 sm:w-[180px] h-9">
             <TabsTrigger value="normal" class="text-sm">
               <span>环境变量</span>
             </TabsTrigger>

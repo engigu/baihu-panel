@@ -233,26 +233,28 @@ onMounted(async () => {
     <div class="mt-4">
       <div class="rounded-lg border bg-card overflow-x-auto">
         <!-- 工具栏 -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 border-b bg-muted/10">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 px-4 py-3 border-b bg-muted/10">
           <div class="flex items-center gap-2">
             <Badge variant="secondary">{{ filteredDeps.length }} 个包</Badge>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <div class="relative flex-1 sm:flex-none">
               <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input v-model="searchQuery" placeholder="搜索包名..." class="h-9 pl-8 w-full sm:w-48 text-sm" />
+              <Input v-model="searchQuery" placeholder="搜索包名..." class="h-9 pl-8 w-full sm:w-40 md:w-48 text-sm" />
             </div>
-            <Button variant="outline" size="icon" class="h-9 w-9 shrink-0" @click="loadDeps" :disabled="loading">
-              <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loading }" />
-            </Button>
-            <Button variant="outline" size="sm" class="h-9 shrink-0" @click="reinstallAll"
-              :disabled="reinstallingAll || filteredDeps.length === 0">
-              <RotateCw class="h-4 w-4 sm:mr-1.5" :class="{ 'animate-spin': reinstallingAll }" /> <span
-                class="hidden sm:inline">全部重装</span>
-            </Button>
-            <Button size="sm" class="h-9 shrink-0" @click="openInstallDialog">
-              <Download class="h-4 w-4 sm:mr-1.5" /> <span class="hidden sm:inline">安装</span>
-            </Button>
+            <div class="flex items-center gap-2">
+              <Button variant="outline" size="icon" class="h-9 w-9 shrink-0" @click="loadDeps" :disabled="loading">
+                <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loading }" />
+              </Button>
+              <Button variant="outline" size="sm" class="h-9 shrink-0" @click="reinstallAll"
+                :disabled="reinstallingAll || filteredDeps.length === 0">
+                <RotateCw class="h-4 w-4 sm:mr-1.5" :class="{ 'animate-spin': reinstallingAll }" /> <span
+                  class="hidden sm:inline">全部重装</span>
+              </Button>
+              <Button size="sm" class="h-9 shrink-0" @click="openInstallDialog">
+                <Download class="h-4 w-4 sm:mr-1.5" /> <span class="hidden sm:inline">安装</span>
+              </Button>
+            </div>
           </div>
         </div>
 
