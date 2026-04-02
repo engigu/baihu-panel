@@ -2,7 +2,7 @@
 import { ref, watch, onUnmounted, nextTick } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { X, Search, AlertCircle } from 'lucide-vue-next'
+import { X, Search, AlertCircle, Check } from 'lucide-vue-next'
 import Ansi from 'ansi-to-vue3'
 
 const props = defineProps<{
@@ -87,18 +87,20 @@ onUnmounted(() => {
         <div
           class="flex flex-col sm:flex-row sm:items-center justify-between px-3 sm:px-4 py-2 sm:py-3 border-b shrink-0 gap-2">
           <div class="flex items-center gap-3 min-w-0">
-            <span class="text-sm font-medium truncate">{{ title }}</span>
+            <span class="text-sm font-normal text-muted-foreground truncate">{{ title }}</span>
             <div v-if="status"
-              class="flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors shrink-0"
-              :class="status === 'success' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
-                status === 'failed' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
-                  'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'">
+              class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-normal uppercase transition-all shrink-0 border shadow-sm ring-4 ring-transparent hover:ring-primary/5"
+              :class="status === 'success' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
+                status === 'failed' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
+                  'bg-blue-500/10 text-blue-600 border-blue-500/20'">
+              <Check v-if="status === 'success'" class="h-3 w-3 fill-green-500/20" />
+              <X v-else-if="status === 'failed'" class="h-3 w-3 fill-red-500/20" />
               <span v-if="status === 'running'" class="relative flex h-1.5 w-1.5 mr-0.5">
                 <span
-                  class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-yellow-500"></span>
+                  class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-blue-500"></span>
               </span>
-              {{ status === 'success' ? '成功' : status === 'failed' ? '失败' : '执行中' }}
+              {{ status === 'success' ? 'SUCCESS' : status === 'failed' ? 'FAILED' : 'RUNNING' }}
             </div>
           </div>
           <div class="flex items-center gap-2">
@@ -116,7 +118,7 @@ onUnmounted(() => {
             <div class="w-16 h-16 rounded-3xl bg-muted/20 flex items-center justify-center mb-6 border border-muted-foreground/10 mx-auto">
               <AlertCircle class="h-8 w-8 text-muted-foreground/20" />
             </div>
-            <span class="text-base text-muted-foreground font-semibold">未检测到输出内容</span>
+            <span class="text-base text-muted-foreground font-normal">未检测到输出内容</span>
             <p class="text-xs text-muted-foreground/40 mt-2 max-w-[280px] leading-relaxed mx-auto">
               此任务已执行完毕，但在标准输出（Stdout）和错误输出（Stderr）通道中均未捕获到任何有效数据。
             </p>
