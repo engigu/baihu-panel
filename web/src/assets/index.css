@@ -230,6 +230,60 @@
   }
 }
 
+/* ========================================
+   移动端字体独立优化（< 640px）
+   大屏保持不变，小屏单独增重、优化渲染
+   ======================================== */
+@media (max-width: 639px) {
+  body {
+    font-size: 15px;
+    font-weight: 450;
+    letter-spacing: 0;
+    /* 移动端关闭 subpixel antialiasing，字体更实更清晰 */
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
+  }
+
+  /* 标题类字体在小屏下同步增重 */
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  /* 正文段落、描述类文字增重 */
+  p,
+  span:not([class*="icon"]),
+  label,
+  [class*="description"],
+  [class*="muted"] {
+    font-weight: 420;
+  }
+
+  /* 小号字在移动端专门增重，与 Windows 小字优化区分开 */
+  .text-xs {
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+
+  .text-sm {
+    font-size: 0.9rem;
+    font-weight: 450;
+    letter-spacing: 0;
+  }
+
+  /* 按钮文字增重，更易点击辨识 */
+  button,
+  [role="button"] {
+    font-weight: 500;
+  }
+
+  /* 表格单元格 */
+  td, th {
+    font-weight: 430;
+  }
+}
+
 /* 高级感增强 - 微妙的渐变背景 */
 body {
   background-color: var(--background);
