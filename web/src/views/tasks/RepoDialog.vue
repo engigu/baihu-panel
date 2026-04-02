@@ -448,6 +448,10 @@ async function save() {
                   <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">任务名称</Label>
                   <Input v-model="form.name" placeholder="输入同步任务名称" class="sm:col-span-3 h-9 bg-muted/30 border-muted-foreground/20 focus:bg-background transition-all" />
                 </div>
+                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">任务备注</Label>
+                  <Input v-model="form.remark" placeholder="输入同步任务备注" class="sm:col-span-3 h-9 bg-muted/30 border-muted-foreground/20 focus:bg-background transition-all" />
+                </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
                   <Label class="sm:text-right text-xs text-muted-foreground uppercase tracking-wider pt-2.5">任务标签</Label>

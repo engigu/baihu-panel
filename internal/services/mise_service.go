@@ -109,12 +109,6 @@ func (s *MiseService) fetchLiveLanguages() ([]MiseLanguage, error) {
 	return s.listFallback()
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 func (s *MiseService) listFallback() ([]MiseLanguage, error) {
 	cmd := exec.Command("mise", "ls")

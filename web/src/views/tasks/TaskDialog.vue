@@ -464,6 +464,10 @@ async function save() {
                   <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">任务名称</Label>
                   <Input v-model="form.name" placeholder="输入任务描述性名称" :class="cn('sm:col-span-3 h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50', form.name ? 'text-sm font-medium' : 'text-[11px] font-normal')" />
                 </div>
+                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">任务备注</Label>
+                  <Input v-model="form.remark" placeholder="输入任务备注信息 (可选)" :class="cn('sm:col-span-3 h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50', form.remark ? 'text-sm font-medium' : 'text-[11px] font-normal')" />
+                </div>
                 <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
                   <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold pt-2.5">任务标签</Label>
                   <div class="sm:col-span-3 space-y-2">

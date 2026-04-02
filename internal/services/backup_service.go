@@ -43,21 +43,21 @@ type tableConfig struct {
 
 func (s *BackupService) getTableConfigs() []tableConfig {
 	return []tableConfig{
-		{"users.json", s.exportTable(&[]models.User{}, true), s.restoreTable(&[]models.User{}, true)},
-		{"tasks.json", s.exportTable(&[]models.Task{}, true), s.restoreTable(&[]models.Task{}, true)},
-		{"task_logs.json", s.exportTable(&[]models.TaskLog{}, false), s.restoreTable(&[]models.TaskLog{}, false)},
-		{"envs.json", s.exportTable(&[]models.EnvironmentVariable{}, true), s.restoreTable(&[]models.EnvironmentVariable{}, true)},
-		{"scripts.json", s.exportTable(&[]models.Script{}, true), s.restoreTable(&[]models.Script{}, true)},
+		{"users.json", s.exportTable(&[]models.User{}, true), s.restoreTable(&[]models.User{})},
+		{"tasks.json", s.exportTable(&[]models.Task{}, true), s.restoreTable(&[]models.Task{})},
+		{"task_logs.json", s.exportTable(&[]models.TaskLog{}, false), s.restoreTable(&[]models.TaskLog{})},
+		{"envs.json", s.exportTable(&[]models.EnvironmentVariable{}, true), s.restoreTable(&[]models.EnvironmentVariable{})},
+		{"scripts.json", s.exportTable(&[]models.Script{}, true), s.restoreTable(&[]models.Script{})},
 		{"settings.json", s.exportSettings, s.restoreSettings},
-		{"send_stats.json", s.exportTable(&[]models.SendStats{}, false), s.restoreTable(&[]models.SendStats{}, false)},
+		{"send_stats.json", s.exportTable(&[]models.SendStats{}, false), s.restoreTable(&[]models.SendStats{})},
 
-		{"agents.json", s.exportTable(&[]models.Agent{}, true), s.restoreTable(&[]models.Agent{}, true)},
-		{"tokens.json", s.exportTable(&[]models.AgentToken{}, true), s.restoreTable(&[]models.AgentToken{}, true)},
-		{"languages.json", s.exportTable(&[]models.Language{}, true), s.restoreTable(&[]models.Language{}, true)},
-		{"deps.json", s.exportTable(&[]models.Dependency{}, true), s.restoreTable(&[]models.Dependency{}, true)},
-		{"notify_ways.json", s.exportTable(&[]models.NotifyWay{}, true), s.restoreTable(&[]models.NotifyWay{}, true)},
-		{"notify_bindings.json", s.exportTable(&[]models.NotifyBinding{}, true), s.restoreTable(&[]models.NotifyBinding{}, true)},
-		{"app_logs.json", s.exportTable(&[]models.AppLog{}, false), s.restoreTable(&[]models.AppLog{}, false)},
+		{"agents.json", s.exportTable(&[]models.Agent{}, true), s.restoreTable(&[]models.Agent{})},
+		{"tokens.json", s.exportTable(&[]models.AgentToken{}, true), s.restoreTable(&[]models.AgentToken{})},
+		{"languages.json", s.exportTable(&[]models.Language{}, true), s.restoreTable(&[]models.Language{})},
+		{"deps.json", s.exportTable(&[]models.Dependency{}, true), s.restoreTable(&[]models.Dependency{})},
+		{"notify_ways.json", s.exportTable(&[]models.NotifyWay{}, true), s.restoreTable(&[]models.NotifyWay{})},
+		{"notify_bindings.json", s.exportTable(&[]models.NotifyBinding{}, true), s.restoreTable(&[]models.NotifyBinding{})},
+		{"app_logs.json", s.exportTable(&[]models.AppLog{}, false), s.restoreTable(&[]models.AppLog{})},
 	}
 }
 
@@ -104,7 +104,7 @@ func (s *BackupService) exportTable(modelPtr any, unscoped bool) func(io.Writer)
 	}
 }
 
-func (s *BackupService) restoreTable(dest any, unscoped bool) func([]byte) error {
+func (s *BackupService) restoreTable(dest any) func([]byte) error {
 	return func(data []byte) error {
 		if err := json.Unmarshal(data, dest); err != nil {
 			return err
@@ -375,14 +375,6 @@ func (s *BackupService) restoreScriptsDir(r *zip.ReadCloser) {
 	}
 }
 
-func (s *BackupService) readZipFile(f *zip.File) ([]byte, error) {
-	rc, err := f.Open()
-	if err != nil {
-		return nil, err
-	}
-	defer rc.Close()
-	return io.ReadAll(rc)
-}
 
 func (s *BackupService) addDirToZip(zipWriter *zip.Writer, srcDir, prefix string) error {
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {

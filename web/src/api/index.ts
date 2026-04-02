@@ -338,6 +338,7 @@ export interface FileNode {
 export interface Task {
   id: string
   name: string
+  remark: string
   command: string
   tags: string
   type: string
