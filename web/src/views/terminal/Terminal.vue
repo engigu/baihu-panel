@@ -28,6 +28,11 @@ function reconnect() {
     isReconnecting.value = false
   }, 1000)
 }
+
+const statusState = ref<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
+function handleStatusChange(status: any) {
+  statusState.value = status
+}
 </script>
 
 <template>
@@ -58,13 +63,33 @@ function reconnect() {
           </PopoverContent>
         </Popover>
       </div>
-      <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white" @click="reconnect"
-        :disabled="isReconnecting" title="重新连接">
-        <RefreshCw class="h-3 w-3" :class="{ 'animate-spin': isReconnecting }" />
-      </Button>
+      <div class="flex items-center gap-3">
+        <!-- 终端状态指示 (右上角) -->
+        <div v-if="statusState" class="flex items-center gap-1.5 transition-all animate-in fade-in slide-in-from-right-1">
+          <div :class="[
+            'w-1.5 h-1.5 rounded-full',
+            statusState.type === 'success' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' :
+              statusState.type === 'error' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]' :
+                'bg-blue-400 animate-pulse'
+          ]" />
+          <span :class="[
+            'text-[11px] font-medium transition-colors',
+            statusState.type === 'success' ? 'text-green-500/90' :
+              statusState.type === 'error' ? 'text-red-500/90' :
+                'text-blue-400/90'
+          ]">
+            {{ statusState.text }}
+          </span>
+        </div>
+
+        <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white" @click="reconnect"
+          :disabled="isReconnecting" title="重新连接">
+          <RefreshCw class="h-3 w-3" :class="{ 'animate-spin': isReconnecting }" />
+        </Button>
+      </div>
     </div>
     <div class="flex-1 border border-[#3c3c3c] border-t-0 rounded-b-md overflow-hidden bg-[#1e1e1e]">
-      <XTerminal ref="terminalRef" :font-size="13" />
+      <XTerminal ref="terminalRef" :font-size="13" @status-change="handleStatusChange" />
     </div>
   </div>
 </template>

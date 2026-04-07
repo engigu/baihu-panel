@@ -331,9 +331,9 @@ watch(() => route.query.agent_id, (newVal: any) => {
         <p class="text-muted-foreground text-sm">管理和调度自动化执行任务</p>
       </div>
 
-      <div class="flex flex-col sm:flex-row flex-wrap gap-3 w-full lg:flex-1 lg:justify-end">
+      <div class="flex flex-col sm:flex-row flex-wrap gap-3 w-full lg:w-auto lg:ml-auto lg:justify-end">
         <!-- 搜索与标签 -->
-        <div class="flex flex-col sm:flex-row items-center gap-2 w-full sm:flex-1 sm:w-auto text-sm">
+        <div class="flex flex-col sm:flex-row items-center gap-2 w-full sm:flex-1 lg:flex-none lg:w-auto text-sm">
           <div class="relative w-full sm:flex-1 lg:max-w-[240px] group">
             <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <Input v-model="filterName" placeholder="搜索任务..." class="h-9 pl-9 w-full bg-muted/20 border-muted-foreground/10 focus:bg-background"

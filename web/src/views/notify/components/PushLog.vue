@@ -166,7 +166,7 @@ function onDialogClose(open: boolean) {
 <template>
   <div class="space-y-6">
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full">
-      <div class="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
+      <div class="flex items-center gap-2 w-full lg:w-auto lg:ml-auto">
         <div class="relative w-full sm:w-60 group">
           <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <Input v-model="filters.keyword" placeholder="搜索标题或内容..." class="h-9 pl-9 w-full text-sm bg-muted/20 border-muted-foreground/10 focus:bg-background"

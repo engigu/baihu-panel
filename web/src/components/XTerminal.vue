@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -22,6 +22,7 @@ const emit = defineEmits<{
   disconnected: []
   success: []
   failed: []
+  'status-change': [status: { text: string; type: 'success' | 'error' | 'info' } | null]
 }>()
 
 const terminalRef = ref<HTMLDivElement | null>(null)
@@ -33,14 +34,21 @@ let inputBuffer = ''
 let commandHistory: string[] = []
 let historyIndex = -1
 
+const statusMessage = ref<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
+
+watch(statusMessage, (newVal) => {
+  emit('status-change', newVal)
+})
+
 function initTerminal(forceConnect = false) {
   if (!terminalRef.value) return
 
-  // 清理旧终端
+  // 清理旧终端与 DOM 内容
   if (terminal) {
     terminal.dispose()
     terminal = null
   }
+  terminalRef.value.innerHTML = ''
 
   // 确保旧的 WebSocket 完全关闭
   if (ws) {
@@ -52,6 +60,7 @@ function initTerminal(forceConnect = false) {
 
   inputBuffer = ''
   isPtyMode = false
+  statusMessage.value = { text: '正在初始化终端...', type: 'info' }
 
   terminal = new Terminal({
     cursorBlink: true,
@@ -160,12 +169,12 @@ function connectWebSocket() {
   try {
     ws = new WebSocket(wsUrl)
   } catch {
-    terminal?.writeln('\x1b[31m无法创建 WebSocket 连接\x1b[0m')
+    statusMessage.value = { text: '无法创建 WebSocket 连接', type: 'error' }
     return
   }
 
   ws.onopen = () => {
-    terminal?.writeln('\x1b[32m已连接到终端\x1b[0m')
+    statusMessage.value = { text: '已连接到终端', type: 'success' }
     emit('connected')
 
     // 如果有初始命令，延迟发送（PTY 会自动回显命令）
@@ -205,24 +214,17 @@ function connectWebSocket() {
   }
 
   ws.onclose = () => {
-    terminal?.writeln('')
-    terminal?.writeln('\x1b[31m连接已断开\x1b[0m')
+    statusMessage.value = { text: '连接已断开', type: 'error' }
     emit('disconnected')
   }
 
   ws.onerror = () => {
-    terminal?.writeln('\x1b[31m连接错误\x1b[0m')
+    statusMessage.value = { text: '连接错误', type: 'error' }
   }
 }
 
 function reconnect() {
-  if (ws) {
-    ws.close()
-  }
-  inputBuffer = ''
-  isPtyMode = false
-  terminal?.clear()
-  connectWebSocket()
+  initTerminal(true)
 }
 
 function dispose() {

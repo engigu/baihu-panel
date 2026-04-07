@@ -111,7 +111,7 @@ onMounted(() => {
     <!-- Application Card: The main floating surface -->
     <div
       class="flex h-full w-full bg-background relative transition-all duration-500 overflow-hidden
-             2xl:max-w-[1800px] 2xl:max-h-[92vh] 2xl:rounded-[2.5rem] 
+             2xl:max-w-[1800px] 2xl:max-h-[92vh] 2xl:rounded-[1.25rem] 
              2xl:shadow-[0_50px_100px_-20px_rgba(0,0,0,0.25),0_0_0_1px_rgba(255,255,255,0.05)]
              2xl:ring-1 2xl:ring-slate-900/5 dark:2xl:ring-white/10
              2xl:border 2xl:border-slate-200/60 dark:2xl:border-white/5
