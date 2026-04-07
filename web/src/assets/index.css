@@ -236,51 +236,57 @@
    ======================================== */
 @media (max-width: 639px) {
   body {
-    font-size: 15px;
-    font-weight: 450;
-    letter-spacing: 0;
-    /* 移动端关闭 subpixel antialiasing，字体更实更清晰 */
-    -webkit-font-smoothing: auto;
-    -moz-osx-font-smoothing: auto;
+    font-size: 14.5px;
+    font-weight: 500;
+    line-height: 1.55;
+    letter-spacing: -0.01em;
+    /* 移动端使用 antialiased 以匹配高 DPI 渲染，开启字重补偿 */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* 标题类字体在小屏下同步增重 */
+  /* 标题类在小屏下保持稳健厚实 */
   h1, h2, h3, h4, h5, h6 {
     font-weight: 700;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
+    line-height: 1.3;
   }
 
-  /* 正文段落、描述类文字增重 */
+  /* 正文与描述类文字同步加厚，避免手机端自动淡出造成的纤细感 */
   p,
   span:not([class*="icon"]),
   label,
   [class*="description"],
-  [class*="muted"] {
-    font-weight: 420;
+  [class*="muted"],
+  .text-muted-foreground {
+    font-weight: 480;
+    line-height: 1.6;
   }
 
-  /* 小号字在移动端专门增重，与 Windows 小字优化区分开 */
+  /* 针对移动端小字进行强制加粗补偿（400 在手机上易由于笔画过细而消失） */
   .text-xs {
-    font-size: 0.8rem;
-    font-weight: 500;
+    font-size: 11.5px;
+    font-weight: 550;
+    line-height: 1.4;
     letter-spacing: 0.01em;
   }
 
   .text-sm {
-    font-size: 0.9rem;
-    font-weight: 450;
-    letter-spacing: 0;
-  }
-
-  /* 按钮文字增重，更易点击辨识 */
-  button,
-  [role="button"] {
+    font-size: 13.5px;
     font-weight: 500;
+    line-height: 1.5;
   }
 
-  /* 表格单元格 */
+  /* 交互性元素显著加厚，提升点击信心 */
+  button,
+  [role="button"],
+  .font-medium {
+    font-weight: 600;
+  }
+
+  /* 表格单元格保持高对比度 */
   td, th {
-    font-weight: 430;
+    font-weight: 500;
   }
 }
 
