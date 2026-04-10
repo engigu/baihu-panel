@@ -107,7 +107,7 @@ onMounted(loadAbout)
 
     <!-- 底部：版权和链接 -->
     <div class="mt-6 pt-4 border-t flex items-center justify-center gap-2 text-sm text-muted-foreground">
-      <span>© {{ new Date().getFullYear() }} 保留所有权利。</span>
+      <span>© 2025 - Present 保留所有权利。</span>
       <a href="https://github.com/engigu/baihu-panel/" target="_blank"
         class="inline-flex items-center gap-1 text-primary hover:underline">
         <ExternalLink class="h-3.5 w-3.5" />
