@@ -1,7 +1,7 @@
 package builtininstall
 
 import (
-	"fmt"
+
 	"os"
 	"os/exec"
 	"path/filepath"
