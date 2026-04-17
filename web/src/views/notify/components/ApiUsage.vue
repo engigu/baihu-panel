@@ -327,10 +327,10 @@ const currentExample = computed(() => {
         <CardHeader class="pb-2 shrink-0">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <div class="p-1.5 rounded-md bg-emerald-500/10 text-emerald-600">
-                <Code2 class="w-4 h-4" />
+              <div class="w-5 h-5 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center text-[11px] font-bold border border-emerald-500/20">
+                1
               </div>
-              <CardTitle class="text-sm font-bold uppercase tracking-wider whitespace-nowrap">内建助手库说明</CardTitle>
+              <CardTitle class="text-[13px] font-bold uppercase tracking-wider whitespace-nowrap">内建助手库 (推荐)</CardTitle>
             </div>
           </div>
         </CardHeader>
@@ -436,10 +436,10 @@ const currentExample = computed(() => {
           <CardHeader class="pb-3 shrink-0 border-b px-4">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div class="flex items-center gap-2">
-                <div class="p-1.5 rounded-md bg-sky-500/10 text-sky-600">
-                  <Terminal class="w-4 h-4" />
+                <div class="w-5 h-5 rounded-full bg-sky-500/10 text-sky-600 flex items-center justify-center text-[11px] font-bold border border-sky-500/20">
+                  2
                 </div>
-                <CardTitle class="text-sm font-bold uppercase tracking-wider whitespace-nowrap">脚本调用示例</CardTitle>
+                <CardTitle class="text-[13px] font-bold uppercase tracking-wider whitespace-nowrap">原始 API 调用</CardTitle>
               </div>
               <div class="flex items-center gap-2 sm:gap-3 justify-between sm:justify-end overflow-hidden">
                 <div class="overflow-x-auto hide-scrollbar shrink-0">
