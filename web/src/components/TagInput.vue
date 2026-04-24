@@ -45,7 +45,7 @@ const currentTags = computed(() => {
 
 const filteredTags = computed(() => {
   const parts = (inputValue.value || '').split(',')
-  const query = parts[parts.length - 1].trim().toLowerCase()
+  const query = (parts[parts.length - 1] || '').trim().toLowerCase()
   
   if (!query) {
     return allTags.value.slice(0, 10)
