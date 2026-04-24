@@ -1,12 +1,12 @@
 package utils
 
 import (
-	"github.com/rs/xid"
+	"github.com/engigu/baihu-panel/internal/utils/idgen"
 )
 
 // GenerateID 生成一个新的 ID (使用 xid，20位字符)
 func GenerateID() string {
-	return xid.New().String()
+	return idgen.GenerateID()
 }
 // IsNumeric 检查字符串是否全为数字
 func IsNumeric(s string) bool {

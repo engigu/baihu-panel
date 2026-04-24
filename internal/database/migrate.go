@@ -3,8 +3,10 @@ package database
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"reflect"
 	"strings"
+	"github.com/engigu/baihu-panel/internal/utils/idgen"
 
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/logger"
@@ -26,6 +28,8 @@ var allModels = []interface{}{
 	&models.Language{},
 	&models.NotifyWay{},
 	&models.NotifyBinding{},
+	&models.DataRelation{},
+	&models.DataStorage{},
 }
 
 func Migrate() error {
@@ -139,5 +143,99 @@ func customMigrations() error {
 		}
 	}
 
+	// 迁移标签到关联关系表
+	if err := migrateTagsToRelations(); err != nil {
+		logger.Warnf("[Database] 标签数据迁移失败: %v", err)
+	}
+
+	return nil
+}
+
+// migrateTagsToRelations 迁移旧的逗号分隔标签到 DataRelation 和 DataStorage 表
+func migrateTagsToRelations() error {
+	// 检查迁移标志
+	var flag models.Setting
+	res := DB.Where(&models.Setting{Section: "system", Key: "migration_tags_v1"}).Limit(1).Find(&flag)
+	if res.RowsAffected > 0 && string(flag.Value) == "true" {
+		return nil
+	}
+
+	// 确保表已创建
+	if !DB.Migrator().HasTable(&models.DataRelation{}) || !DB.Migrator().HasTable(&models.DataStorage{}) {
+		return nil
+	}
+
+	logger.Info("[Database] 正在执行标签数据到关联表的迁移...")
+
+	var tasks []models.Task
+	if err := DB.Find(&tasks).Error; err != nil {
+		return err
+	}
+
+	for _, task := range tasks {
+		if task.Tags == "" {
+			continue
+		}
+		tags := strings.Split(task.Tags, ",")
+		for i, tagName := range tags {
+			tagName = strings.TrimSpace(tagName)
+			if tagName == "" {
+				continue
+			}
+
+			// 查找或创建 DataStorage (type=tag)
+			var storage models.DataStorage
+			findRes := DB.Where(&models.DataStorage{Type: "tag", Key: tagName}).Limit(1).Find(&storage)
+			if findRes.RowsAffected == 0 {
+				dataJson, _ := json.Marshal(map[string]string{"name": tagName})
+				storage = models.DataStorage{
+					ID:   idgen.GenerateID(),
+					Type: "tag",
+					Key:  tagName,
+					Data: models.BigText(dataJson),
+				}
+				if err := DB.Create(&storage).Error; err != nil {
+					logger.Errorf("[Database] 创建标签存储失败: %v", err)
+					continue
+				}
+			}
+
+			// 创建 DataRelation (type=task_tag)，避免重复创建
+			var relation models.DataRelation
+			relRes := DB.Where(&models.DataRelation{
+				DataID:   task.ID,
+				RelateID: storage.ID,
+				Type:     "task_tag",
+			}).Limit(1).Find(&relation)
+
+			if relRes.RowsAffected == 0 {
+				relation = models.DataRelation{
+					ID:        idgen.GenerateID(),
+					DataID:    task.ID,
+					RelateID:  storage.ID,
+					Type:      "task_tag",
+					SortOrder: i,
+				}
+				if err := DB.Create(&relation).Error; err != nil {
+					logger.Errorf("[Database] 创建标签关联失败: %v", err)
+					continue
+				}
+			}
+		}
+	}
+
+	// 标记迁移完成
+	if res.RowsAffected > 0 {
+		DB.Model(&flag).Update("value", models.BigText("true"))
+	} else {
+		DB.Create(&models.Setting{
+			ID:      idgen.GenerateID(),
+			Section: "system",
+			Key:     "migration_tags_v1",
+			Value:   models.BigText("true"),
+		})
+	}
+
+	logger.Info("[Database] 标签数据迁移完成")
 	return nil
 }

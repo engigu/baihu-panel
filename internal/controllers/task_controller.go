@@ -456,3 +456,9 @@ func (tc *TaskController) StopTask(c *gin.Context) {
 
 	utils.SuccessMsg(c, "停止请求已发送")
 }
+
+// GetTags 获取所有任务标签
+func (tc *TaskController) GetTags(c *gin.Context) {
+	tags := tc.taskService.GetAllTags()
+	utils.Success(c, tags)
+}
