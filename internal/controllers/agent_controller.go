@@ -404,6 +404,7 @@ func (c *AgentController) WSConnect(ctx *gin.Context) {
 		logger.Errorf("[AgentWS] 升级连接失败: %v, Agent #%s, IP=%s", err, agent.ID, ip)
 		return
 	}
+	conn.SetReadLimit(constant.MaxMessageSize)
 
 	// 连接成功，重置失败计数
 	c.wsManager.RecordConnectSuccess(ip)

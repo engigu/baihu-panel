@@ -181,19 +181,21 @@ func (ac *AuthController) GetCurrentUser(c *gin.Context) {
 }
 
 func (ac *AuthController) Register(c *gin.Context) {
-	var req struct {
-		Username string `json:"username" binding:"required"`
-		Email    string `json:"email" binding:"required"`
-		Password string `json:"password" binding:"required"`
-	}
+	/*
+		var req struct {
+			Username string `json:"username" binding:"required"`
+			Email    string `json:"email" binding:"required"`
+			Password string `json:"password" binding:"required"`
+		}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
-		return
-	}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			utils.BadRequest(c, err.Error())
+			return
+		}
 
-	// 安全性：强制设定角色为 user，防止注册时篡改角色为 admin
-	// 修复原代码中 email 和 password 参数位置颠倒的问题
-	user := ac.userService.CreateUser(req.Username, req.Password, req.Email, constant.DefaultRole)
-	utils.Success(c, vo.ToUserVO(user))
+		// 安全性：强制设定角色为 user，防止注册时篡改角色为 admin
+		user := ac.userService.CreateUser(req.Username, req.Password, req.Email, constant.DefaultRole)
+		utils.Success(c, vo.ToUserVO(user))
+	*/
+	utils.BadRequest(c, "注册功能已关闭")
 }

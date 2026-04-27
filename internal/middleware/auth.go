@@ -27,7 +27,11 @@ func AuthRequired() gin.HandlerFunc {
 				origin = c.GetHeader("Referer")
 			}
 			// 如果有 Origin 且不匹配则拒绝（实际部署时应配置允许的 Origin）
-			// 这里由于是通用逻辑，暂且记录日志或做更严谨的校验
+			if origin != "" && !utils.CheckWSOrigin(c.Writer, c.Request) {
+				utils.Forbidden(c, "CSRF 校验失败: 非法的请求来源")
+				c.Abort()
+				return
+			}
 		}
 
 		token, err := c.Cookie(constant.CookieName)

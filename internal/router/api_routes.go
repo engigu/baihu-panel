@@ -18,7 +18,7 @@ func initPublicAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 	{
 		auth.POST("/login", c.Auth.Login)
 		auth.POST("/logout", c.Auth.Logout)
-		auth.POST("/register", c.Auth.Register)
+		// auth.POST("/register", c.Auth.Register)
 	}
 
 	// 公开的站点设置（无需认证）
