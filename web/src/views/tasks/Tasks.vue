@@ -263,6 +263,7 @@ const logContent = ref('')
 const logEmptyTitle = ref<string | undefined>(undefined)
 const logEmptyDesc = ref<string | undefined>(undefined)
 let logSocket: WebSocket | null = null
+let durationTimer: ReturnType<typeof setInterval> | null = null
 
 function cleanupLogSocket() {
   if (logSocket) {
@@ -275,15 +276,24 @@ function cleanupLogSocket() {
   }
 }
 
+function cleanupDurationTimer() {
+  if (durationTimer) {
+    clearInterval(durationTimer)
+    durationTimer = null
+  }
+}
+
 watch(showLogViewer, (val) => {
   if (!val) {
     cleanupLogSocket()
+    cleanupDurationTimer()
     logContent.value = ''
   }
 })
 
 onUnmounted(() => {
   cleanupLogSocket()
+  cleanupDurationTimer()
 })
 
 import { decompressFromBase64 } from '@/utils/decompress'
@@ -327,6 +337,26 @@ async function viewLogs(taskId: string) {
       logSocket.onmessage = (event) => {
         logContent.value += event.data
       }
+
+      // 启动状态轮询
+      cleanupDurationTimer()
+      const updateLogStatus = async () => {
+        try {
+          const res = await api.logs.get(latestLog.id)
+          if (res && selectedLog.value && selectedLog.value.id === latestLog.id) {
+            selectedLog.value.duration = res.duration
+            selectedLog.value.status = res.status
+            selectedLog.value.end_time = res.end_time
+            
+            // 如果任务结束，停止轮询
+            if (res.status !== TASK_STATUS.RUNNING) {
+              cleanupDurationTimer()
+              loadTasks() // 同时刷新列表状态
+            }
+          }
+        } catch { /* ignore */ }
+      }
+      durationTimer = setInterval(updateLogStatus, 3000)
     } else {
       // 如果没有日志，构造一个基础的任务信息对象用于展示弹窗
       const task = tasks.value.find(t => t.id === taskId)

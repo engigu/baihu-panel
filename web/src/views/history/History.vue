@@ -494,7 +494,9 @@ watch(() => route.query, (newQuery) => {
     <!-- 全屏查看日志 -->
     <LogViewer v-model:open="showFullscreen"
       :log="selectedLog"
-      :content="decompressedOutput" />
+      :is-stopping="isStopping"
+      :content="decompressedOutput"
+      @stop="stopTask" />
 
     <!-- 清空日志确认弹窗 -->
     <BaihuDialog v-model:open="showClearDialog" title="确认清空日志?">
