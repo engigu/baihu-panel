@@ -7,6 +7,8 @@ import { Switch } from '@/components/ui/switch'
 import { Bell } from 'lucide-vue-next'
 import { api, type NotifyChannel, type NotifyBinding } from '@/api'
 import { cn } from '@/lib/utils'
+import { TEMPLATE_TAGS } from '@/utils/template'
+import { ChevronDown, Info, Type, FileText, Zap, Search } from 'lucide-vue-next'
 
 const props = defineProps<{
   taskId?: string
@@ -19,6 +21,17 @@ const notifyOnFailure = ref(false)
 const notifyOnTimeout = ref(false)
 const notifyIncludeLog = ref(false)
 const notifyLogLimit = ref(1000)
+
+// 模板配置 (v2)
+const templates = ref<Record<string, { title: string; content: string }>>({
+  task_success: { title: '任务 [{{task_name}}] 成功', content: '任务 #{{task_id}} {{task_name}}\n状态: 成功\n执行时间: {{start_time}}\n耗时: {{duration}}ms' },
+  task_failed: { title: '任务 [{{task_name}}] 失败', content: '任务 #{{task_id}} {{task_name}}\n状态: 失败\n错误原因: {{output}}' },
+  task_timeout: { title: '任务 [{{task_name}}] 超时', content: '任务 #{{task_id}} {{task_name}}\n状态: 超时\n耗时: {{duration}}ms' }
+})
+
+// 控制折叠状态
+const activeEvent = ref<string | null>(null)
+const showHelp = ref(false)
 
 onMounted(async () => {
   try {
@@ -62,6 +75,11 @@ async function loadConfig(taskId?: string) {
           const extra = JSON.parse(extraBinding.extra)
           notifyIncludeLog.value = !!extra.enable_log
           notifyLogLimit.value = extra.log_limit || 1000
+          
+          // 加载 v2 模板
+          if (extra.version === 'v2' && extra.templates) {
+            templates.value = { ...templates.value, ...extra.templates }
+          }
         } catch {
           notifyIncludeLog.value = false
           notifyLogLimit.value = 1000
@@ -92,7 +110,9 @@ async function saveConfig(taskId: string) {
 
       const extra = JSON.stringify({
         enable_log: notifyIncludeLog.value,
-        log_limit: notifyLogLimit.value
+        log_limit: notifyLogLimit.value,
+        version: 'v2',
+        templates: templates.value
       })
 
       for (const event of events) {
@@ -115,6 +135,50 @@ async function saveConfig(taskId: string) {
   } catch (e) {
     console.error('Save notifications failed', e)
   }
+}
+
+function insertTag(event: string, field: 'title' | 'content', tag: string) {
+  const key = `${event}_${field}`
+  const input = document.querySelector(`[data-event-key="${key}"]`) as HTMLTextAreaElement | HTMLInputElement
+  const tagStr = `{{${tag}}}`
+  
+  if (input) {
+    const start = input.selectionStart || 0
+    const end = input.selectionEnd || 0
+    const val = field === 'title' ? templates.value[event].title : templates.value[event].content
+    const newVal = val.substring(0, start) + tagStr + val.substring(end)
+    
+    if (field === 'title') {
+      templates.value[event].title = newVal
+    } else {
+      templates.value[event].content = newVal
+    }
+    
+    // 重新聚焦并设置光标
+    setTimeout(() => {
+      input.focus()
+      input.setSelectionRange(start + tagStr.length, start + tagStr.length)
+    }, 0)
+  } else {
+    if (field === 'title') {
+      templates.value[event].title += tagStr
+    } else {
+      templates.value[event].content += tagStr
+    }
+  }
+}
+
+function toggleEvent(key: string) {
+  activeEvent.value = activeEvent.value === key ? null : key
+}
+
+function getEventLabel(key: string) {
+  const map: Record<string, string> = {
+    task_success: '任务成功',
+    task_failed: '任务失败',
+    task_timeout: '任务超时'
+  }
+  return map[key] || key
 }
 
 defineExpose({
@@ -184,6 +248,106 @@ defineExpose({
                     <input type="text" inputmode="numeric" :value="notifyLogLimit" @input="(e: any) => notifyLogLimit = Number(e.target.value.replace(/\D/g, ''))" 
                       class="w-16 h-4 text-center text-[11px] font-bold font-mono bg-transparent border-none outline-none focus:ring-0 p-0 text-primary" />
                     <span class="text-[10px] text-foreground/40 font-bold">字</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 模板编辑器 (v2) -->
+            <div class="space-y-4 mt-6">
+              <div class="flex items-center justify-between px-1">
+                <div class="flex items-center gap-2">
+                  <FileText class="w-3.5 h-3.5 text-primary" />
+                  <span class="text-[11px] font-bold text-foreground/70 uppercase tracking-widest">推送模板定制 (v2)</span>
+                </div>
+                <button @click="showHelp = !showHelp" class="flex items-center gap-1 text-[10px] text-primary/70 hover:text-primary transition-colors font-medium">
+                  <Info class="w-3 h-3" />
+                  {{ showHelp ? '隐藏指引' : '高级语法指引' }}
+                </button>
+              </div>
+
+              <!-- 语法指引面板 -->
+              <div v-if="showHelp" class="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-3 animate-in zoom-in-95 duration-200">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="space-y-2">
+                    <h4 class="text-[11px] font-bold text-primary flex items-center gap-1.5">
+                      <Zap class="w-3 h-3" /> 条件分支 (If/Else)
+                    </h4>
+                    <p class="text-[10px] text-muted-foreground leading-relaxed">
+                      支持根据变量状态切换内容。注意：逻辑判断内部变量需带点前缀 <code class="bg-primary/10 px-1 rounded text-primary">.</code>
+                    </p>
+                    <div v-pre class="bg-background/60 p-2 rounded border border-primary/10 font-mono text-[9px] text-foreground/80">
+                      {{ if eq .status "success" }} ✅ {{ else }} ❌ {{ end }}
+                    </div>
+                  </div>
+                  <div class="space-y-2">
+                    <h4 class="text-[11px] font-bold text-primary flex items-center gap-1.5">
+                      <Search class="w-3 h-3" /> 关键字过滤 (Contains)
+                    </h4>
+                    <p class="text-[10px] text-muted-foreground leading-relaxed">
+                      检测日志输出中是否包含特定字符。常用于异常告警。
+                    </p>
+                    <div v-pre class="bg-background/60 p-2 rounded border border-primary/10 font-mono text-[9px] text-foreground/80">
+                      {{ if contains .output "Error" }} 🚨 发现报错! {{ end }}
+                    </div>
+                  </div>
+                </div>
+                <div class="pt-2 border-t border-primary/10">
+                  <p class="text-[10px] text-muted-foreground italic">
+                    提示：在“正文模板”中你可以自由编排。例如：只需在成功时发简报，失败时才发详细日志。
+                  </p>
+                </div>
+              </div>
+              
+              <div v-for="event in ['task_success', 'task_failed', 'task_timeout']" :key="event" 
+                :class="cn('border rounded-xl transition-all overflow-hidden', 
+                   activeEvent === event ? 'border-primary/30 ring-1 ring-primary/10 shadow-sm' : 'border-muted-foreground/10 bg-muted/5')">
+                
+                <!-- Header -->
+                <div @click="toggleEvent(event)" class="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors">
+                  <div class="flex items-center gap-3">
+                    <div :class="cn('h-1.5 w-1.5 rounded-full', 
+                      event === 'task_success' ? 'bg-green-500' : (event === 'task_failed' ? 'bg-destructive' : 'bg-amber-500'))" />
+                    <span class="text-xs font-bold">{{ getEventLabel(event) }}</span>
+                    <span class="text-[10px] text-muted-foreground font-mono opacity-60">ID: {{ event }}</span>
+                  </div>
+                  <ChevronDown :class="cn('w-4 h-4 text-muted-foreground transition-transform duration-300', activeEvent === event && 'rotate-180')" />
+                </div>
+
+                <!-- Body -->
+                <div v-if="activeEvent === event" class="p-4 pt-0 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                  <!-- Tag Bar -->
+                  <div class="p-2.5 rounded-lg bg-background/50 border border-dashed border-muted-foreground/20">
+                    <div class="flex items-center gap-1.5 mb-2 px-1">
+                      <Info class="w-3 h-3 text-primary" />
+                      <span class="text-[10px] text-muted-foreground font-medium">可用参数 (点击插入):</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5">
+                      <button v-for="tag in TEMPLATE_TAGS" :key="tag.value"
+                        @click="insertTag(event, 'content', tag.label)"
+                        class="px-2 py-1 rounded-md bg-muted hover:bg-primary/10 hover:text-primary text-[10px] font-mono transition-all border border-transparent hover:border-primary/20">
+                        {{ tag.label }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Title Input -->
+                  <div class="space-y-1.5">
+                    <div class="flex items-center gap-2 px-1">
+                      <Type class="w-3 h-3 text-muted-foreground" />
+                      <label class="text-[10px] font-bold text-muted-foreground uppercase">推送标题模板</label>
+                    </div>
+                    <input v-model="templates[event].title" :data-event-key="event + '_title'" class="w-full h-9 px-3 bg-background border border-muted-foreground/20 rounded-md text-xs focus:ring-1 focus:ring-primary/30 outline-none transition-all" />
+                  </div>
+
+                  <!-- Content Input -->
+                  <div class="space-y-1.5">
+                    <div class="flex items-center gap-2 px-1">
+                      <FileText class="w-3 h-3 text-muted-foreground" />
+                      <label class="text-[10px] font-bold text-muted-foreground uppercase">推送正文模板</label>
+                    </div>
+                    <textarea v-model="templates[event].content" :data-event-key="event + '_content'" rows="4" 
+                      class="w-full p-3 bg-background border border-muted-foreground/20 rounded-md text-xs focus:ring-1 focus:ring-primary/30 outline-none transition-all resize-none font-mono" />
                   </div>
                 </div>
               </div>

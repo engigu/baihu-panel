@@ -326,16 +326,7 @@ func stripAnsi(str string) string {
 	return ansiRegexp.ReplaceAllString(str, "")
 }
 
-// parseTemplate 简单的 {{key}} 模板替换
-func (s *NotificationService) parseTemplate(tmpl string, payload map[string]interface{}) string {
-	result := tmpl
-	for k, v := range payload {
-		placeholder := fmt.Sprintf("{{%s}}", k)
-		valStr := fmt.Sprintf("%v", v)
-		result = strings.ReplaceAll(result, placeholder, valStr)
-	}
-	return result
-}
+// parseTemplate 已由 utils.RenderTemplate 取代
 
 // getDefaultMessage 兜底默认消息内容
 func (s *NotificationService) getDefaultMessage(eventType string, payload map[string]interface{}) (string, string) {
@@ -428,10 +419,14 @@ func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 
 			// 处理输出内容，避免过长
 			if output, ok := payload["output"].(string); ok {
+				// 预处理：移除 ANSI 颜色代码，供 v2 模板使用
+				cleanOutput := stripAnsi(output)
+				
 				// 如果输出包含了压缩后的 Base64 (以 "base64:" 开头)，由于是推送到通知，我们尽量不发大段 Base64
-				// 这里简单处理：如果过长则截断，或者如果是压缩的则记录一下
-				if len(output) > 1000 {
-					payload["output"] = output[len(output)-1000:] + "\n...(截断)"
+				if len(cleanOutput) > 2000 {
+					payload["output"] = cleanOutput[len(cleanOutput)-2000:] + "\n...(截断)"
+				} else {
+					payload["output"] = cleanOutput
 				}
 			}
 
@@ -447,10 +442,10 @@ func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 			tmplText := s.settingsService.Get(constant.SectionNotify, tmplTextKey)
 
 			if tmplTitle != "" {
-				title = s.parseTemplate(tmplTitle, payload)
+				title = utils.RenderTemplate(tmplTitle, payload)
 			}
 			if tmplText != "" {
-				text = s.parseTemplate(tmplText, payload)
+				text = utils.RenderTemplate(tmplText, payload)
 			}
 
 			// 如果模板为空，使用兜底默认逻辑（保持向上兼容）
@@ -481,26 +476,34 @@ func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 				continue
 			}
 
-			// 克隆文本以便修改
-			currentText := text
-
 			// 解析额外配置
-			var extra models.BindingExtra
-			if binding.Extra != "" {
-				_ = json.Unmarshal([]byte(binding.Extra), &extra)
-			}
-			// 默认日志限制为 1000
-			if extra.LogLimit <= 0 {
-				extra.LogLimit = 1000
+			var currentTitle = title
+			var currentText = text
+
+			extraV2, _ := utils.ParseNotifyExtra(string(binding.Extra))
+			if extraV2 != nil && extraV2.Version == "v2" {
+				// 如果是 v2 标识，优先使用绑定中定制的模板
+				if tmpl, ok := extraV2.Templates[e.Type]; ok {
+					if tmpl.Title != "" {
+						currentTitle = utils.RenderTemplate(tmpl.Title, payload)
+					}
+					if tmpl.Content != "" {
+						currentText = utils.RenderTemplate(tmpl.Content, payload)
+					}
+				}
 			}
 
-			// 如果开启了日志推送
-			if extra.EnableLog {
+			// 兼容逻辑：处理旧版的日志附带开关
+			// 如果开启了日志推送，且正文中还没有包含 {{output}} (避免重复)
+			if extraV2 != nil && extraV2.EnableLog && !strings.Contains(currentText, "[执行日志]") {
 				if output, ok := payload["output"].(string); ok && output != "" {
-					// 仅保留指定字数的日志内容并移除 ANSI 颜色代码
-					logSnippet := stripAnsi(output)
-					if len(logSnippet) > extra.LogLimit {
-						logSnippet = "...\n" + logSnippet[len(logSnippet)-extra.LogLimit:]
+					limit := extraV2.LogLimit
+					if limit <= 0 {
+						limit = 1000
+					}
+					logSnippet := output // 这里的 output 已经在上面 stripAnsi 处理过了
+					if len(logSnippet) > limit {
+						logSnippet = "...\n" + logSnippet[len(logSnippet)-limit:]
 					}
 					currentText += "\n\n[执行日志]\n" + logSnippet
 				}
@@ -511,7 +514,7 @@ func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 				if !result.Success {
 					logger.Warnf("[Notify] 发送事件 %s 到渠道 %s(%s) 失败: %s", e.Type, channel.Name, channel.Type, result.Error)
 				}
-			}(ch, title, currentText)
+			}(ch, currentTitle, currentText)
 		}
 	}
 }

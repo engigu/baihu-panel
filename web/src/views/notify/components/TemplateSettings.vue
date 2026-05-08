@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { api } from '@/api'
 import { toast } from 'vue-sonner'
-import { Save, RefreshCcw, Info, ChevronDown, ChevronUp, Shield, Terminal } from 'lucide-vue-next'
+import { Save, RefreshCcw, Info, ChevronDown, ChevronUp, Shield, Terminal, Zap, Search, FileText } from 'lucide-vue-next'
 
 const props = defineProps<{
   activeTab?: string,
@@ -22,6 +22,7 @@ const saving = ref(false)
 const prefix = ref('')
 const templates = ref<Record<string, string>>({})
 const expandedEvents = ref<Record<string, boolean>>({})
+const showHelp = ref(false)
 
 const eventGroups = [
   {
@@ -104,8 +105,24 @@ async function saveSettings() {
 }
 
 function insertVariable(eventKey: string, variable: string) {
-  const current = templates.value[eventKey] || ''
-  templates.value[eventKey] = current + ` {{${variable}}}`
+  const input = document.querySelector(`[data-event-key="${eventKey}"]`) as HTMLTextAreaElement | HTMLInputElement
+  const tag = `{{${variable}}}`
+  
+  if (input) {
+    const start = input.selectionStart || 0
+    const end = input.selectionEnd || 0
+    const val = templates.value[eventKey] || ''
+    templates.value[eventKey] = val.substring(0, start) + tag + val.substring(end)
+    
+    // 重新聚焦并设置光标
+    setTimeout(() => {
+      input.focus()
+      input.setSelectionRange(start + tag.length, start + tag.length)
+    }, 0)
+  } else {
+    const current = templates.value[eventKey] || ''
+    templates.value[eventKey] = current + tag
+  }
 }
 
 function toggleExpand(id: string) {
@@ -169,6 +186,48 @@ onMounted(() => {
             </div>
           </CardContent>
         </Card>
+        
+        <!-- v2 语法指引 -->
+        <div class="space-y-4">
+          <div class="flex items-center justify-between px-1">
+            <div class="flex items-center gap-2">
+              <FileText class="w-3.5 h-3.5 text-primary" />
+              <span class="text-[11px] font-bold text-foreground/70 uppercase tracking-widest">模板逻辑定制 (v2)</span>
+            </div>
+            <button @click="showHelp = !showHelp" class="flex items-center gap-1 text-[10px] text-primary/70 hover:text-primary transition-colors font-medium">
+              <Zap class="w-3 h-3" />
+              {{ showHelp ? '隐藏指引' : '高级语法指引' }}
+            </button>
+          </div>
+
+          <!-- 语法指引面板 -->
+          <div v-if="showHelp" class="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-3 animate-in zoom-in-95 duration-200">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <h4 class="text-[11px] font-bold text-primary flex items-center gap-1.5">
+                  <Zap class="w-3 h-3" /> 条件分支 (If/Else)
+                </h4>
+                <p class="text-[10px] text-muted-foreground leading-relaxed">
+                  支持根据变量状态切换内容。注意：逻辑判断内部变量需带点前缀 <code class="bg-primary/10 px-1 rounded text-primary">.</code>
+                </p>
+                <div v-pre class="bg-background/60 p-2 rounded border border-primary/10 font-mono text-[9px] text-foreground/80">
+                  {{ if eq .status_label "成功" }} 🟢 {{ else }} 🔴 {{ end }}
+                </div>
+              </div>
+              <div class="space-y-2">
+                <h4 class="text-[11px] font-bold text-primary flex items-center gap-1.5">
+                  <Search class="w-3 h-3" /> 比较与判断
+                </h4>
+                <p class="text-[10px] text-muted-foreground leading-relaxed">
+                  你可以通过 <code class="bg-primary/10 px-1 rounded text-primary">contains</code> 判断日志是否包含特定内容。
+                </p>
+                <div v-pre class="bg-background/60 p-2 rounded border border-primary/10 font-mono text-[9px] text-foreground/80">
+                  {{ if contains .output "Error" }} ⚠️ 日志中发现错误! {{ end }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <!-- 模板详情分组列表 -->
         <div class="space-y-5">
@@ -222,12 +281,14 @@ onMounted(() => {
                     <div class="space-y-1.5">
                       <Label class="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">推送标题模板</Label>
                       <Input v-model="templates[event.keys.title]" placeholder="通知标题" 
+                        :data-event-key="event.keys.title"
                         class="h-9 text-sm bg-background border-muted-foreground/20 focus:border-primary/50" />
                     </div>
                     <div class="space-y-1.5">
                       <Label class="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">推送正文模板</Label>
                       <Textarea v-model="templates[event.keys.text]" 
                         :rows="4"
+                        :data-event-key="event.keys.text"
                         placeholder="通知详细内容..." 
                         class="resize-none font-sans text-sm leading-relaxed bg-background border-muted-foreground/20 focus:border-primary/50" />
                     </div>
