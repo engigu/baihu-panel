@@ -193,6 +193,8 @@ func registerDependencyRoutes(g *gin.RouterGroup, c *Controllers) {
 		deps.POST("/reinstall/:id", c.Dependency.Reinstall)
 		deps.POST("/reinstall-all", c.Dependency.ReinstallAll)
 		deps.POST("/reinstall-all-cmd", c.Dependency.GetReinstallAllCommand)
+		deps.POST("/batch-install-cmd", c.Dependency.GetBatchInstallCommand)
+		deps.POST("/import", c.Dependency.ParseAndImport)
 		deps.GET("/installed", c.Dependency.GetInstalled)
 	}
 }

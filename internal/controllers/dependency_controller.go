@@ -6,6 +6,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
+	"github.com/engigu/baihu-panel/internal/services/deps"
 	"github.com/engigu/baihu-panel/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -302,4 +303,97 @@ func (c *DependencyController) GetInstalled(ctx *gin.Context) {
 	}
 
 	utils.Success(ctx, packages)
+}
+
+// GetBatchInstallCommand 获取批量安装依赖包的命令
+func (c *DependencyController) GetBatchInstallCommand(ctx *gin.Context) {
+	var req struct {
+		Items []struct {
+			Name        string `json:"name" binding:"required"`
+			Version     string `json:"version"`
+			Language    string `json:"language" binding:"required"`
+			LangVersion string `json:"lang_version"`
+		} `json:"items" binding:"required,gt=0"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(ctx, "参数错误: items 不能为空且必须包含 name 和 language")
+		return
+	}
+
+	var depsList []models.Dependency
+	for _, item := range req.Items {
+		depsList = append(depsList, models.Dependency{
+			Name:        item.Name,
+			Version:     item.Version,
+			Language:    item.Language,
+			LangVersion: item.LangVersion,
+		})
+	}
+
+	cmd, err := c.service.GetBatchInstallCommand(depsList)
+	if err != nil {
+		utils.ServerError(ctx, err.Error())
+		return
+	}
+
+	utils.Success(ctx, gin.H{"command": cmd})
+}
+
+// ParseAndImport 解析上传/粘贴的清单文件内容并批量导入至数据库
+func (c *DependencyController) ParseAndImport(ctx *gin.Context) {
+	var req struct {
+		Language    string `json:"language" binding:"required"`
+		LangVersion string `json:"lang_version"`
+		Content     string `json:"content" binding:"required"`
+		ImportDB    bool   `json:"import_db"` // 是否持久化到数据库做可视化管理
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(ctx, "参数错误: language 和 content 必填")
+		return
+	}
+
+	// 1. 解析文本清单内容
+	parsedDeps, err := deps.ParseManifest(req.Language, req.Content)
+	if err != nil {
+		utils.ServerError(ctx, "清单文件解析失败: "+err.Error())
+		return
+	}
+
+	if len(parsedDeps) == 0 {
+		utils.BadRequest(ctx, "未解析到任何有效依赖包")
+		return
+	}
+
+	// 2. 补全语言和版本属性
+	for i := range parsedDeps {
+		parsedDeps[i].Language = req.Language
+		parsedDeps[i].LangVersion = req.LangVersion
+	}
+
+	// 3. 根据需求决定是否导入数据库
+	var finalDeps []models.Dependency
+	if req.ImportDB {
+		imported, err := c.service.ImportDependencies(parsedDeps)
+		if err != nil {
+			utils.ServerError(ctx, "导入依赖记录至数据库失败: "+err.Error())
+			return
+		}
+		finalDeps = imported
+	} else {
+		finalDeps = parsedDeps
+	}
+
+	// 4. 为这一批包生成合并批量安装命令
+	cmd, err := c.service.GetBatchInstallCommand(finalDeps)
+	if err != nil {
+		utils.ServerError(ctx, "生成安装命令失败: "+err.Error())
+		return
+	}
+
+	utils.Success(ctx, gin.H{
+		"dependencies": vo.ToDependencyVOListFromModels(finalDeps),
+		"command":      cmd,
+	})
 }
