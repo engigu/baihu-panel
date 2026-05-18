@@ -93,22 +93,7 @@ func ResolveAbsScriptsDir() string {
 		return filepath.Clean(scriptsDir)
 	}
 
-	if configPath := os.Getenv("BH_CONFIG_PATH"); configPath != "" {
-		if !filepath.IsAbs(configPath) {
-			if absConfigPath, err := filepath.Abs(configPath); err == nil {
-				configPath = absConfigPath
-			}
-		}
-
-		projectRoot := filepath.Dir(filepath.Dir(configPath))
-		return filepath.Clean(filepath.Join(projectRoot, constant.ScriptsWorkDir))
-	}
-
-	if absScriptsDir, err := filepath.Abs(constant.ScriptsWorkDir); err == nil {
-		return absScriptsDir
-	}
-
-	return filepath.Clean(constant.ScriptsWorkDir)
+	return constant.ScriptsWorkDir
 }
 
 func appendEnvIfSet(envs *[]string, key, value string) {

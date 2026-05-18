@@ -34,13 +34,7 @@ func init() {
 
 // ResolveAppRootDir 获取应用程序的绝对根目录路径。
 func ResolveAppRootDir() string {
-	// 1. 检查 BH_CONFIG_PATH 环境变量
-	if configPath := os.Getenv("BH_CONFIG_PATH"); configPath != "" {
-		if absConfigPath, err := filepath.Abs(configPath); err == nil {
-			return filepath.Dir(filepath.Dir(absConfigPath))
-		}
-	}
-	// 2. 检查当前可执行文件路径
+	// 1. 检查当前可执行文件路径
 	if exe, err := os.Executable(); err == nil {
 		dir := filepath.Dir(exe)
 		for {
@@ -57,7 +51,7 @@ func ResolveAppRootDir() string {
 			dir = parent
 		}
 	}
-	// 3. 回退到当前工作目录
+	// 2. 回退到当前工作目录
 	if cwd, err := os.Getwd(); err == nil {
 		return cwd
 	}
