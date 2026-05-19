@@ -269,7 +269,7 @@ function onDialogClose(open: boolean) {
                             <span>{{ selectedLog.level === LOG_LEVEL.INFO ? '信息' : selectedLog.level === LOG_LEVEL.WARNING ? '警告' : '错误' }}</span>
                         </div>
                     </Badge>
-                    <span class="text-[10px] text-muted-foreground font-mono">{{ selectedLog ? formatDate(selectedLog.created_at) : '-' }}</span>
+                    <span class="hidden sm:inline text-[10px] text-muted-foreground font-mono">{{ selectedLog ? formatDate(selectedLog.created_at) : '-' }}</span>
                 </div>
             </template>
 
@@ -288,6 +288,11 @@ function onDialogClose(open: boolean) {
                         <div class="text-sm leading-relaxed text-destructive/90 break-all whitespace-pre-wrap font-mono bg-destructive/5 p-3 rounded-lg border border-destructive/10">
                             {{ detailDialogProps.error }}
                         </div>
+                    </div>
+
+                    <!-- 移动端/小屏下在右下角展示时间 -->
+                    <div v-if="selectedLog" class="sm:hidden flex justify-end text-[10px] text-muted-foreground font-mono opacity-80 pt-1">
+                        {{ formatDate(selectedLog.created_at) }}
                     </div>
                 </div>
             </div>

@@ -201,7 +201,20 @@ func (s *AppLogService) CleanUp() {
 		catTotal := daysDeleted + countDeleted
 		if catTotal > 0 {
 			totalDeleted += catTotal
-			summaryBuilder.WriteString(fmt.Sprintf("分类 [%s]: 过期清理 %d 条，溢出限制清理 %d 条；\n", cat, daysDeleted, countDeleted))
+			var catLabel string
+			switch cat {
+			case constant.LogCategorySystemNotice:
+				catLabel = "系统通知"
+			case constant.LogCategoryPushLog:
+				catLabel = "推送日志"
+			case constant.LogCategoryLoginLog:
+				catLabel = "登录日志"
+			case constant.LogCategorySchedulerLog:
+				catLabel = "调度日志"
+			default:
+				catLabel = cat
+			}
+			summaryBuilder.WriteString(fmt.Sprintf("分类 [%s]: 过期清理 %d 条，溢出限制清理 %d 条；\n", catLabel, daysDeleted, countDeleted))
 		}
 	}
 
