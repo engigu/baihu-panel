@@ -89,31 +89,61 @@ onMounted(checkBackupStatus)
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div class="flex flex-wrap items-center gap-3">
-      <Button @click="createBackup" :disabled="backupLoading" variant="outline" class="shrink-0">
-        <Archive class="w-4 h-4 mr-2" />
-        {{ backupLoading ? '备份中...' : '创建备份' }}
-      </Button>
-      <Button v-if="hasBackup" @click="downloadBackup" variant="outline" class="shrink-0">
-        <Download class="w-4 h-4 mr-2" />
-        下载备份
-      </Button>
-      <span v-if="hasBackup && backupTime" class="text-xs text-muted-foreground">{{ backupTime }}</span>
-    </div>
-    <div class="text-xs text-muted-foreground">
-      备份包含：任务、执行日志、环境变量、脚本、设置及 scripts 文件夹。第一次下载后，5分钟后文件将被删除。
-    </div>
-    <div class="border-t pt-4 mt-4">
-      <div class="flex items-center gap-4">
-        <Button @click="showRestoreConfirm" :disabled="restoreLoading" variant="outline">
-          <Upload class="w-4 h-4 mr-2" />
-          {{ restoreLoading ? '恢复中...' : '恢复备份' }}
-        </Button>
-        <input ref="fileInput" type="file" accept=".zip" class="hidden" @change="handleFileSelect" />
+  <div class="space-y-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <!-- 备份 Card -->
+      <div class="p-4 rounded-lg border border-border bg-muted/20 flex flex-col justify-between space-y-4">
+        <div class="space-y-2">
+          <div class="flex items-center gap-2">
+            <Archive class="w-4 h-4 text-foreground/80" />
+            <h4 class="text-xs font-semibold text-foreground">数据备份</h4>
+          </div>
+          <p class="text-[10px] text-muted-foreground leading-relaxed">
+            备份包含任务、执行日志、环境变量、脚本、系统设置及整个 scripts 文件夹。
+          </p>
+          <p class="text-[10px] text-amber-600 dark:text-amber-500 font-medium">
+            提示：备份文件在第一次被下载 5 分钟后将被系统自动物理删除。
+          </p>
+        </div>
+        
+        <div class="space-y-2">
+          <div v-if="hasBackup && backupTime" class="text-[10px] text-muted-foreground flex items-center gap-1.5">
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0"></span>
+            备份生成时间: {{ backupTime }}
+          </div>
+          <div class="flex flex-wrap gap-2.5">
+            <Button @click="createBackup" :disabled="backupLoading" class="h-9 text-xs shadow-sm">
+              {{ backupLoading ? '备份中...' : '创建备份' }}
+            </Button>
+            <Button v-if="hasBackup" @click="downloadBackup" variant="outline" class="h-9 text-xs shadow-sm">
+              <Download class="w-3.5 h-3.5 mr-1.5" />
+              下载备份
+            </Button>
+          </div>
+        </div>
       </div>
-      <div class="text-xs text-muted-foreground mt-2">
-        上传 .zip 备份文件进行恢复，恢复会覆盖现有数据
+
+      <!-- 恢复 Card -->
+      <div class="p-4 rounded-lg border border-border bg-muted/20 flex flex-col justify-between space-y-4">
+        <div class="space-y-2">
+          <div class="flex items-center gap-2">
+            <Upload class="w-4 h-4 text-foreground/80" />
+            <h4 class="text-xs font-semibold text-foreground">数据恢复</h4>
+          </div>
+          <p class="text-[10px] text-muted-foreground leading-relaxed">
+            上传此前下载的 .zip 格式备份文件，将当前系统数据与配置恢复到当时的快照状态。
+          </p>
+          <p class="text-[10px] text-destructive font-medium">
+            警告：恢复操作是不可逆的，且会完全覆盖系统现存的所有数据和配置。
+          </p>
+        </div>
+
+        <div>
+          <Button @click="showRestoreConfirm" :disabled="restoreLoading" variant="outline" class="h-9 text-xs shadow-sm w-full sm:w-auto">
+            {{ restoreLoading ? '恢复中...' : '恢复备份' }}
+          </Button>
+          <input ref="fileInput" type="file" accept=".zip" class="hidden" @change="handleFileSelect" />
+        </div>
       </div>
     </div>
 
