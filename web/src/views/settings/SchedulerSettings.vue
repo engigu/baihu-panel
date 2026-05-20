@@ -63,27 +63,33 @@ onMounted(loadSettings)
 
 <template>
   <div class="space-y-4">
-    <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-2 sm:gap-4">
-      <Label class="sm:text-right pt-2">Worker数量</Label>
-      <div class="sm:col-span-3 space-y-1">
-        <Input v-model="form.worker_count" type="number" class="w-full sm:w-24" />
-        <span class="text-xs text-muted-foreground block">并发执行任务的 worker 数量</span>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="space-y-1.5">
+        <Label class="text-xs font-medium text-foreground">并发限制数 (Workers)</Label>
+        <Input type="number" v-model="form.worker_count" :min="1" class="h-9" />
+        <p class="text-[10px] text-muted-foreground">并发执行任务的 worker 数量</p>
+      </div>
+      <div class="space-y-1.5">
+        <Label class="text-xs font-medium text-foreground">最大队列数 (Queue Size)</Label>
+        <Input type="number" v-model="form.queue_size" :min="1" class="h-9" />
+        <p class="text-[10px] text-muted-foreground">任务队列缓冲区大小</p>
       </div>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-2 sm:gap-4">
-      <Label class="sm:text-right pt-2">队列大小</Label>
-      <div class="sm:col-span-3 space-y-1">
-        <Input v-model="form.queue_size" type="number" class="w-full sm:w-24" />
-        <span class="text-xs text-muted-foreground block">任务队列缓冲区大小</span>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="space-y-1.5">
+        <Label class="text-xs font-medium text-foreground">调度频率限制 (Rate Interval)</Label>
+        <div class="relative">
+          <Input type="number" v-model="form.rate_interval" :min="0" class="h-9 pr-10" />
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">ms</span>
+        </div>
+        <p class="text-[10px] text-muted-foreground">两次调度启动的最小间隔时间（例如 200ms = 每秒最多 5 个）</p>
       </div>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-2 sm:gap-4">
-      <Label class="sm:text-right pt-2">速率间隔</Label>
-      <div class="sm:col-span-3 space-y-1">
-        <Input v-model="form.rate_interval" type="number" class="w-full sm:w-24" />
-        <span class="text-xs text-muted-foreground block">ms，任务启动间隔（200ms = 每秒最多5个）</span>
-      </div>
+
+    <div class="rounded-md bg-yellow-500/10 border border-yellow-500/20 p-2.5 text-[10px] text-yellow-600 dark:text-yellow-400 leading-relaxed mt-2">
+      <strong>提示：</strong>此处配置仅对<strong>主服务</strong>的调度生效。如需修改 Agent 节点的调度设置，请前往 <strong>Agent 节点</strong> 页面为每个节点进行单独配置。
     </div>
+
     <div class="flex justify-end pt-2">
       <Button @click="confirmSave" :disabled="loading">
         {{ loading ? '保存中...' : '保存设置' }}
