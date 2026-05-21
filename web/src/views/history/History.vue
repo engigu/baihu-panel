@@ -462,7 +462,7 @@ watch(() => route.query, (newQuery) => {
               </span>
               <span class="w-36 shrink-0 font-medium truncate text-sm">{{ log.task_name }}</span>
               <code class="flex-1 min-w-0 text-muted-foreground truncate text-xs bg-muted/40 px-2 py-1 rounded">
-                <TextOverflow :text="log.command" title="执行命令" />
+                <TextOverflow :text="log.command" title="执行命令" disable-dialog />
               </code>
               <span class="w-12 flex justify-center shrink-0">
                 <div v-if="log.status === TASK_STATUS.SUCCESS"

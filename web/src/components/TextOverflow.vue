@@ -6,15 +6,18 @@ const props = withDefaults(
   defineProps<{
     text: string
     title?: string
+    disableDialog?: boolean
   }>(),
   {
-    title: '详情'
+    title: '详情',
+    disableDialog: false
   }
 )
 
 const showDialog = ref(false)
 
 function handleClick() {
+  if (props.disableDialog) return
   if (props.text && props.text !== '-') {
     showDialog.value = true
   }
@@ -22,8 +25,11 @@ function handleClick() {
 </script>
 
 <template>
-  <span v-bind="$attrs" class="truncate block cursor-pointer hover:text-primary transition-colors" :title="text || '-'"
-    @click.stop="handleClick">
+  <span v-bind="$attrs" 
+    class="truncate block transition-colors" 
+    :class="[!disableDialog ? 'cursor-pointer hover:text-primary' : '']"
+    :title="text || '-'"
+    @click="e => { if (!disableDialog) { e.stopPropagation(); handleClick(); } }">
     {{ text || '-' }}
   </span>
 
