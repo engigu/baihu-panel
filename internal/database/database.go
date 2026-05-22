@@ -64,9 +64,9 @@ func Init(cfg *Config) error {
 		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
 		gormlogger.Config{
 			SlowThreshold:             time.Millisecond * 500, // 慢 SQL 阈值，默认是 200ms，这里改为 500ms
-			LogLevel:                  gormlogger.Warn, // 日志级别
-			IgnoreRecordNotFoundError: true,            // 忽略 ErrRecordNotFound（找不到记录）错误
-			Colorful:                  true,            // 禁用彩色打印
+			LogLevel:                  gormlogger.Warn,        // 日志级别
+			IgnoreRecordNotFoundError: true,                   // 忽略 ErrRecordNotFound（找不到记录）错误
+			Colorful:                  true,                   // 禁用彩色打印
 		},
 	)
 

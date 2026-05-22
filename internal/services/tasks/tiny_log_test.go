@@ -23,7 +23,7 @@ func TestTinyLog_UTF8Splitting(t *testing.T) {
 	}
 
 	_, _ = tl.Write(part2)
-	// Currently it should collect both parts but still no newline, 
+	// Currently it should collect both parts but still no newline,
 	// so remainder should be 5 bytes.
 	if len(tl.remainder) != 5 {
 		t.Errorf("Expected remainder len 5, got %d", len(tl.remainder))
@@ -58,7 +58,7 @@ func TestTinyLog_CarriageReturn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadLastLines failed: %v", err)
 	}
-	
+
 	// Should contain both progress lines (or at least be split correctly)
 	if !bytes.Contains(data, []byte("progress: 50%")) {
 		t.Errorf("Expected output to contain 'progress: 50%%', got %q", data)
@@ -94,7 +94,7 @@ func TestTinyLog_LongLineCut(t *testing.T) {
 	// Our logic finds the last safe boundary before maxLogBufferLen.
 	// RuneStart(E4) at maxLogBufferLen-1 is true. FullRune(E4 at maxLogBufferLen-1 in payload[:maxLogBufferLen]) is false.
 	// So lastSafe should be maxLogBufferLen-1.
-	
+
 	// The first maxLogBufferLen-1 bytes (all 'A') should be processed.
 	// The "你" should be in remainder.
 

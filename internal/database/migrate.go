@@ -95,7 +95,6 @@ func getModelSignature(models []interface{}) string {
 	return hex.EncodeToString(hash[:])
 }
 
-
 // customMigrations 自定义迁移（处理 AutoMigrate 无法自动完成的变更）
 func customMigrations() error {
 	// 检查 ql_tokens 表是否存在

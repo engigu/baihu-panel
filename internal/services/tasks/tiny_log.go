@@ -64,7 +64,7 @@ type TinyLog struct {
 	path        string
 	writer      *bufio.Writer
 	subscribers []chan []byte
-	remainder   []byte // Leftover bytes from previous write (partial lines)
+	remainder   []byte   // Leftover bytes from previous write (partial lines)
 	masks       []string // Secrets to mask
 	closed      bool
 }

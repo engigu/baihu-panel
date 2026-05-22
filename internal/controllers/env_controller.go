@@ -42,11 +42,11 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 	userID := c.GetString("userID")
 
 	var req struct {
-		Name   string `json:"name" binding:"required"`
-		Value  string `json:"value" binding:"required"`
-		Remark string `json:"remark"`
-		Type   string `json:"type"`
-		Hidden *bool  `json:"hidden"`
+		Name    string `json:"name" binding:"required"`
+		Value   string `json:"value" binding:"required"`
+		Remark  string `json:"remark"`
+		Type    string `json:"type"`
+		Hidden  *bool  `json:"hidden"`
 		Enabled *bool  `json:"enabled"`
 	}
 

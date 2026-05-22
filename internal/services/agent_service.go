@@ -12,8 +12,8 @@ import (
 
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
-	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/executor"
+	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/engigu/baihu-panel/internal/utils"
@@ -324,7 +324,7 @@ func (s *AgentService) GetTasks(agentID string) []models.AgentTask {
 	for i, task := range tasksList {
 		// 加载环境配置
 		var envVars []string
-		
+
 		// 检查全量注入模式
 		allEnvs := false
 		if task.Config != "" {
@@ -344,7 +344,7 @@ func (s *AgentService) GetTasks(agentID string) []models.AgentTask {
 		}
 
 		envVarsStr := executor.FormatEnvVars(envVars)
-		
+
 		command := string(task.Command)
 		preCommand := string(task.PreCommand)
 		postCommand := string(task.PostCommand)
@@ -377,7 +377,6 @@ func (s *AgentService) GetTasks(agentID string) []models.AgentTask {
 
 	return result
 }
-
 
 // ReportResult Agent 上报执行结果
 func (s *AgentService) ReportResult(result *models.AgentTaskResult) error {

@@ -41,7 +41,7 @@ func Encrypt(plaintext string) (string, error) {
 	if !IsSecretKeySet() {
 		return "", ErrKeyNotSet
 	}
-	
+
 	block, err := aes.NewCipher(masterSecretKey)
 	if err != nil {
 		return "", err

@@ -27,7 +27,7 @@ func (v *VoceChat) Request(title, content string) ([]byte, error) {
 	}
 
 	url := fmt.Sprintf("%s/api/bot/%s/%s", server, endpoint, v.TargetID)
-	
+
 	// Use text/plain for now as requested
 	body := content
 	if title != "" {

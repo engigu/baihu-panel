@@ -137,21 +137,21 @@ type TaskResult struct {
 }
 
 type Agent struct {
-	config        *Config
-	configFile    string
-	machineID     string
-	scheduler     *executor.Scheduler
-	cronManager   *executor.CronManager
-	tasks         map[string]*AgentTask // 本地任务缓存，用于执行 lookup
-	lastTaskCount int
-	mu            sync.RWMutex
-	client        *http.Client
-	wsConn        *websocket.Conn
-	wsMu          sync.Mutex
-	stopCh        chan struct{}
-	wsStopCh      chan struct{}       // 用于停止当前 WebSocket 相关的 goroutine
-	taskLogs      map[string][]string // 记录最近的日志行，用于失败显示
-	logMu         sync.Mutex          // taskLogs 的锁
+	config           *Config
+	configFile       string
+	machineID        string
+	scheduler        *executor.Scheduler
+	cronManager      *executor.CronManager
+	tasks            map[string]*AgentTask // 本地任务缓存，用于执行 lookup
+	lastTaskCount    int
+	mu               sync.RWMutex
+	client           *http.Client
+	wsConn           *websocket.Conn
+	wsMu             sync.Mutex
+	stopCh           chan struct{}
+	wsStopCh         chan struct{}       // 用于停止当前 WebSocket 相关的 goroutine
+	taskLogs         map[string][]string // 记录最近的日志行，用于失败显示
+	logMu            sync.Mutex          // taskLogs 的锁
 	schedulerStarted bool                // 调度器是否已经启动
 }
 

@@ -8,34 +8,34 @@ import (
 
 // TaskVO 任务视图对象
 type TaskVO struct {
-	ID          string              `json:"id"`
-	Name        string              `json:"name"`
-	Remark      string              `json:"remark"`
-	Command     string              `json:"command"`
-	PreCommand  string              `json:"pre_command"`
-	PostCommand string              `json:"post_command"`
-	Tags        string              `json:"tags"`
-	Type        string              `json:"type"`
-	TriggerType string              `json:"trigger_type"`
-	Config      string              `json:"config"`
-	Schedule    string              `json:"schedule"`
-	Timeout     int                 `json:"timeout"`
-	WorkDir     string              `json:"work_dir"`
-	CleanConfig string              `json:"clean_config"`
-	Envs        string              `json:"envs"`
-	Languages   models.TaskLanguages `json:"languages"`
-	AgentID     *string             `json:"agent_id"`
-	RepoTaskID  string              `json:"repo_task_id"`
-	Enabled       bool                `json:"enabled"`
-	RetryCount    int                 `json:"retry_count"`
-	RetryInterval int                 `json:"retry_interval"`
-	RandomRange   int                 `json:"random_range"`
-	PinType       string              `json:"pin_type"`
-	LastRun       *models.LocalTime   `json:"last_run"`
-	NextRun     *models.LocalTime   `json:"next_run"`
-	CreatedAt   models.LocalTime    `json:"created_at"`
-	UpdatedAt   models.LocalTime    `json:"updated_at"`
-	RunningStatus string              `json:"running_status"`
+	ID            string               `json:"id"`
+	Name          string               `json:"name"`
+	Remark        string               `json:"remark"`
+	Command       string               `json:"command"`
+	PreCommand    string               `json:"pre_command"`
+	PostCommand   string               `json:"post_command"`
+	Tags          string               `json:"tags"`
+	Type          string               `json:"type"`
+	TriggerType   string               `json:"trigger_type"`
+	Config        string               `json:"config"`
+	Schedule      string               `json:"schedule"`
+	Timeout       int                  `json:"timeout"`
+	WorkDir       string               `json:"work_dir"`
+	CleanConfig   string               `json:"clean_config"`
+	Envs          string               `json:"envs"`
+	Languages     models.TaskLanguages `json:"languages"`
+	AgentID       *string              `json:"agent_id"`
+	RepoTaskID    string               `json:"repo_task_id"`
+	Enabled       bool                 `json:"enabled"`
+	RetryCount    int                  `json:"retry_count"`
+	RetryInterval int                  `json:"retry_interval"`
+	RandomRange   int                  `json:"random_range"`
+	PinType       string               `json:"pin_type"`
+	LastRun       *models.LocalTime    `json:"last_run"`
+	NextRun       *models.LocalTime    `json:"next_run"`
+	CreatedAt     models.LocalTime     `json:"created_at"`
+	UpdatedAt     models.LocalTime     `json:"updated_at"`
+	RunningStatus string               `json:"running_status"`
 }
 
 // ToTaskVO 将 Task 模型转换为 TaskVO
@@ -44,22 +44,22 @@ func ToTaskVO(task *models.Task) *TaskVO {
 		return nil
 	}
 	return &TaskVO{
-		ID:          task.ID,
-		Name:        task.Name,
-		Remark:      task.Remark,
-		Command:     string(task.Command),
-		PreCommand:  string(task.PreCommand),
-		PostCommand: string(task.PostCommand),
-		Tags:        task.Tags,
-		Type:        task.Type,
-		TriggerType: task.TriggerType,
-		Config:      string(task.Config),
-		Schedule:    task.Schedule,
-		Timeout:     task.Timeout,
-		WorkDir:     task.WorkDir,
-		CleanConfig: task.CleanConfig,
-		Envs:        string(task.Envs),
-		Languages:   task.Languages,
+		ID:            task.ID,
+		Name:          task.Name,
+		Remark:        task.Remark,
+		Command:       string(task.Command),
+		PreCommand:    string(task.PreCommand),
+		PostCommand:   string(task.PostCommand),
+		Tags:          task.Tags,
+		Type:          task.Type,
+		TriggerType:   task.TriggerType,
+		Config:        string(task.Config),
+		Schedule:      task.Schedule,
+		Timeout:       task.Timeout,
+		WorkDir:       task.WorkDir,
+		CleanConfig:   task.CleanConfig,
+		Envs:          string(task.Envs),
+		Languages:     task.Languages,
 		AgentID:       task.AgentID,
 		RepoTaskID:    task.RepoTaskID,
 		Enabled:       utils.DerefBool(task.Enabled, true),
@@ -68,9 +68,9 @@ func ToTaskVO(task *models.Task) *TaskVO {
 		RandomRange:   task.RandomRange,
 		PinType:       task.PinType,
 		LastRun:       task.LastRun,
-		NextRun:     task.NextRun,
-		CreatedAt:   task.CreatedAt,
-		UpdatedAt:   task.UpdatedAt,
+		NextRun:       task.NextRun,
+		CreatedAt:     task.CreatedAt,
+		UpdatedAt:     task.UpdatedAt,
 		RunningStatus: func() string {
 			if task.IsRunning() {
 				return "running"

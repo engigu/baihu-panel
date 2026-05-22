@@ -132,7 +132,6 @@ func initPWARoutes(root *gin.RouterGroup) {
 	})
 }
 
-
 func handleManifest(ctx *gin.Context) {
 	staticFS := static.GetFS()
 	if staticFS == nil {

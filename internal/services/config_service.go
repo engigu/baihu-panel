@@ -160,8 +160,6 @@ func LoadConfig(path string) (*AppConfig, error) {
 	return Config, nil
 }
 
-
-
 // applyEnvOverrides 从环境变量加载配置
 func applyEnvOverrides() {
 	// Server

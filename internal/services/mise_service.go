@@ -109,7 +109,6 @@ func (s *MiseService) fetchLiveLanguages() ([]MiseLanguage, error) {
 	return s.listFallback()
 }
 
-
 func (s *MiseService) listFallback() ([]MiseLanguage, error) {
 	cmd := exec.Command("mise", "ls")
 	cmd.Env = os.Environ()
@@ -286,7 +285,7 @@ func (s *MiseService) syncToDB(languages []MiseLanguage) {
 		}
 
 		if queryErr == nil && rowsAffected == 0 {
-				// 如果不存在，则创建
+			// 如果不存在，则创建
 			newLang := models.Language{
 				ID:          utils.GenerateID(),
 				Plugin:      lang.Plugin,
@@ -329,6 +328,7 @@ func (s *MiseService) GetVerifyCommand(plugin, version string) (string, error) {
 	}
 	return m.GetVerifyCommand(version)
 }
+
 // UseGlobal 设置全局默认版本
 func (s *MiseService) UseGlobal(plugin, version string) error {
 	cmd := exec.Command("mise", "use", "-g", fmt.Sprintf("%s@%s", plugin, version))
@@ -355,6 +355,7 @@ func (s *MiseService) UnsetGlobal(plugin, version string) error {
 	}
 	return nil
 }
+
 // Envs 获取全局环境变量
 func (s *MiseService) Envs() (map[string]string, error) {
 	cmd := exec.Command("mise", "set")

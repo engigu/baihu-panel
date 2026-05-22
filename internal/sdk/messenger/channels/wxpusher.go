@@ -54,7 +54,7 @@ func (c *WxPusherChannel) Send(config ChannelConfig, msg *Message) (*Result, err
 	}
 
 	_, formattedContent := c.FormatContent(msg)
-	
+
 	// 如果有标题，将标题和内容合并
 	content := formattedContent
 	if msg.Title != "" {

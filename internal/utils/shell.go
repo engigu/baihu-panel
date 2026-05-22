@@ -14,7 +14,6 @@ var (
 	shellOnce    sync.Once
 )
 
-
 // GetShell 返回当前操作系统的 shell 和参数
 func GetShell() (shell string, args []string) {
 	shellOnce.Do(func() {

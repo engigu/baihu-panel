@@ -101,7 +101,7 @@ func (m *SystemWSManager) SubscribeEvents(bus *eventbus.EventBus) {
 		constant.EventTaskRunning,
 		constant.EventTaskQueued,
 	}
-	
+
 	for _, evt := range taskEvents {
 		bus.Subscribe(evt, func(e eventbus.Event) {
 			m.Broadcast(e.Type, e.Payload)

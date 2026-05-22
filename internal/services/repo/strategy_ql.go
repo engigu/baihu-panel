@@ -1,9 +1,9 @@
 package repo
 
 import (
+	"github.com/engigu/baihu-panel/internal/models"
 	"regexp"
 	"strings"
-	"github.com/engigu/baihu-panel/internal/models"
 )
 
 // QinglongStrategy 实现与青龙兼容的解析逻辑

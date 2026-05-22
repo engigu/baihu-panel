@@ -9,17 +9,17 @@ import (
 
 // AgentVO 代理视图对象
 type AgentVO struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Status      string            `json:"status"`
-	LastSeen    *models.LocalTime `json:"last_seen"`
-	IP          string            `json:"ip"`
-	Version     string            `json:"version"`
-	BuildTime   string            `json:"build_time"`
-	Hostname    string            `json:"hostname"`
-	OS          string            `json:"os"`
-	Arch        string            `json:"arch"`
+	ID              string                  `json:"id"`
+	Name            string                  `json:"name"`
+	Description     string                  `json:"description"`
+	Status          string                  `json:"status"`
+	LastSeen        *models.LocalTime       `json:"last_seen"`
+	IP              string                  `json:"ip"`
+	Version         string                  `json:"version"`
+	BuildTime       string                  `json:"build_time"`
+	Hostname        string                  `json:"hostname"`
+	OS              string                  `json:"os"`
+	Arch            string                  `json:"arch"`
 	ForceUpdate     bool                    `json:"force_update"`
 	Enabled         bool                    `json:"enabled"`
 	SchedulerConfig *AgentSchedulerConfigVO `json:"scheduler_config"`
@@ -44,17 +44,17 @@ func ToAgentVO(agent *models.Agent) *AgentVO {
 		}
 	}
 	return &AgentVO{
-		ID:          agent.ID,
-		Name:        agent.Name,
-		Description: agent.Description,
-		Status:      agent.Status,
-		LastSeen:    agent.LastSeen,
-		IP:          agent.IP,
-		Version:     agent.Version,
-		BuildTime:   agent.BuildTime,
-		Hostname:    agent.Hostname,
-		OS:          agent.OS,
-		Arch:        agent.Arch,
+		ID:              agent.ID,
+		Name:            agent.Name,
+		Description:     agent.Description,
+		Status:          agent.Status,
+		LastSeen:        agent.LastSeen,
+		IP:              agent.IP,
+		Version:         agent.Version,
+		BuildTime:       agent.BuildTime,
+		Hostname:        agent.Hostname,
+		OS:              agent.OS,
+		Arch:            agent.Arch,
 		ForceUpdate:     agent.ForceUpdate,
 		Enabled:         utils.DerefBool(agent.Enabled, true),
 		SchedulerConfig: schedulerConfigVO,

@@ -1,8 +1,8 @@
 package router
 
 import (
-	"strings"
 	"os"
+	"strings"
 
 	"github.com/engigu/baihu-panel/internal/controllers"
 	"github.com/engigu/baihu-panel/internal/middleware"

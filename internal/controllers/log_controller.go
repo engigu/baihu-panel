@@ -1,7 +1,6 @@
 package controllers
 
 import (
-
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
@@ -132,7 +131,7 @@ func (lc *LogController) ClearLogs(c *gin.Context) {
 	var req struct {
 		TaskID *string `json:"task_id"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, err.Error())
 		return

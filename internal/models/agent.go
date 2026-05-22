@@ -58,9 +58,9 @@ type Agent struct {
 	Hostname        string               `json:"hostname" gorm:"size:100"`                      // Agent 主机名
 	OS              string               `json:"os" gorm:"size:20"`                             // 操作系统
 	Arch            string               `json:"arch" gorm:"size:20"`                           // 架构
-	ForceUpdate     bool                 `json:"force_update" gorm:"default:false"`       // 强制更新标志
-	Enabled         *bool                `json:"enabled" gorm:"default:true"`             // 是否启用
-	SchedulerConfig AgentSchedulerConfig `json:"scheduler_config" gorm:"type:text"`       // 调度配置，以 JSON 字符串形式存储在 Text 类型字段中
+	ForceUpdate     bool                 `json:"force_update" gorm:"default:false"`             // 强制更新标志
+	Enabled         *bool                `json:"enabled" gorm:"default:true"`                   // 是否启用
+	SchedulerConfig AgentSchedulerConfig `json:"scheduler_config" gorm:"type:text"`             // 调度配置，以 JSON 字符串形式存储在 Text 类型字段中
 	CreatedAt       LocalTime            `json:"created_at"`
 	UpdatedAt       LocalTime            `json:"updated_at"`
 }
@@ -71,15 +71,15 @@ func (Agent) TableName() string {
 
 // AgentToken Agent 令牌
 type AgentToken struct {
-	ID        string         `json:"id" gorm:"primaryKey;size:20"`
-	Token     string         `json:"token" gorm:"size:64;uniqueIndex;not null"` // 令牌
-	Remark    string         `json:"remark" gorm:"size:255"`                    // 备注
-	MaxUses   int            `json:"max_uses" gorm:"default:0"`                 // 最大使用次数，0 表示无限制
-	UsedCount int            `json:"used_count" gorm:"default:0"`               // 已使用次数
-	ExpiresAt *LocalTime     `json:"expires_at"`                                // 过期时间，null 表示永不过期
-	Enabled   *bool          `json:"enabled" gorm:"default:true"`               // 是否启用
-	CreatedAt LocalTime      `json:"created_at"`
-	UpdatedAt LocalTime      `json:"updated_at"`
+	ID        string     `json:"id" gorm:"primaryKey;size:20"`
+	Token     string     `json:"token" gorm:"size:64;uniqueIndex;not null"` // 令牌
+	Remark    string     `json:"remark" gorm:"size:255"`                    // 备注
+	MaxUses   int        `json:"max_uses" gorm:"default:0"`                 // 最大使用次数，0 表示无限制
+	UsedCount int        `json:"used_count" gorm:"default:0"`               // 已使用次数
+	ExpiresAt *LocalTime `json:"expires_at"`                                // 过期时间，null 表示永不过期
+	Enabled   *bool      `json:"enabled" gorm:"default:true"`               // 是否启用
+	CreatedAt LocalTime  `json:"created_at"`
+	UpdatedAt LocalTime  `json:"updated_at"`
 }
 
 func (AgentToken) TableName() string {
@@ -88,8 +88,8 @@ func (AgentToken) TableName() string {
 
 // AgentTask Agent 任务配置（用于下发给 Agent）
 type AgentTask struct {
-	ID        string              `json:"id"`
-	Name      string              `json:"name"`
+	ID          string              `json:"id"`
+	Name        string              `json:"name"`
 	Command     string              `json:"command"`
 	PreCommand  string              `json:"pre_command"`
 	PostCommand string              `json:"post_command"`

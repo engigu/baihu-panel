@@ -46,10 +46,10 @@ type Request struct {
 	PreCommand  string
 	PostCommand string
 	WorkDir     string
-	Envs      []string
-	Timeout   int // 任务超时时间（分钟）
-	Languages []map[string]string
-	UseMise   bool
+	Envs        []string
+	Timeout     int // 任务超时时间（分钟）
+	Languages   []map[string]string
+	UseMise     bool
 }
 
 // Result 任务执行结果

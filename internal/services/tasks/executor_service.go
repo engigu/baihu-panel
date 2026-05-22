@@ -486,7 +486,7 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 
 	// 组合指令逻辑已移至 executor.ExecuteWithHooks 中，此处不再处理
 	// 以避免指令被重复组合。
-	
+
 	// 远程任务
 	if task.AgentID != nil && *task.AgentID != "" {
 		// 将请求中已包含的环境变量（已合并）传递给 Agent
@@ -806,7 +806,7 @@ func (es *ExecutorService) StopTaskExecution(logID string) error {
 	taskLog.Status = constant.TaskStatusFailed
 	errorMessage := "任务执行实例已丢失（可能由于系统重启导致），已自动同步状态为失败"
 	taskLog.Error = models.BigText(errorMessage)
-	
+
 	// 更新数据库状态
 	database.DB.Model(&taskLog).Updates(map[string]interface{}{
 		"status": taskLog.Status,

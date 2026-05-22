@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
-	"strings"
 	"unicode/utf8"
 
 	"github.com/engigu/baihu-panel/internal/constant"
@@ -22,7 +22,6 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
-
 
 type TerminalController struct {
 	envService *services.EnvService

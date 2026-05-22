@@ -92,7 +92,6 @@ func (ts *TaskService) CreateTask(p *TaskParam) *models.Task {
 	}
 	database.DB.Select("*").Create(task)
 
-
 	return task
 }
 
@@ -111,7 +110,7 @@ func (ts *TaskService) GetTasksWithPagination(page, pageSize int, name string, a
 	if name != "" {
 		query = query.Where("name LIKE ? OR remark LIKE ?", "%"+name+"%", "%"+name+"%")
 	}
-	
+
 	// 标签筛选 (并集)
 	if tags != "" {
 		tagList := strings.Split(tags, ",")
@@ -200,7 +199,7 @@ func (ts *TaskService) UpdateTask(id string, p *TaskParam) *models.Task {
 func (ts *TaskService) DeleteTask(id string) bool {
 	// 同时删除关联的通知推送设置
 	database.DB.Where("type = ? AND data_id = ?", constant.BindingTypeTask, id).Delete(&models.NotifyBinding{})
-	
+
 	result := database.DB.Where("id = ?", id).Delete(&models.Task{})
 	return result.RowsAffected > 0
 }
@@ -208,7 +207,7 @@ func (ts *TaskService) DeleteTask(id string) bool {
 func (ts *TaskService) BatchDeleteTasks(ids []string) int64 {
 	// 同时删除关联的通知推送设置
 	database.DB.Where("type = ? AND data_id IN ?", constant.BindingTypeTask, ids).Delete(&models.NotifyBinding{})
-	
+
 	result := database.DB.Where("id IN ?", ids).Delete(&models.Task{})
 	return result.RowsAffected
 }

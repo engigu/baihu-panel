@@ -13,13 +13,12 @@ import (
 
 func setupEventHandlers(subscribers ...eventbus.Subscriber) {
 	bus := eventbus.DefaultBus
-	
+
 	// 遍历并统一初始化所有订阅者的事件链路
 	for _, s := range subscribers {
 		s.SubscribeEvents(bus)
 	}
 }
-
 
 func startAppLogCleanup(appLogSvc *services.AppLogService) {
 	// 初始化时执行一次清理

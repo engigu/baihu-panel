@@ -1,9 +1,9 @@
 package executor
 
 import (
+	"fmt"
 	"math/rand"
 	"strings"
-	"fmt"
 	"sync"
 	"time"
 
@@ -71,7 +71,6 @@ func (m *CronManager) Stop() {
 	m.logger.Infof("[CronManager] 调度管理服务已停止")
 }
 
-
 // AddTask 添加或更新计划任务
 func (m *CronManager) AddTask(task CronTask) error {
 	m.mu.Lock()
@@ -109,15 +108,15 @@ func (m *CronManager) AddTask(task CronTask) error {
 				return m.OnTrigger(task)
 			}
 			return &ExecutionRequest{
-				TaskID:    taskID,
-				Name:      name,
+				TaskID:      taskID,
+				Name:        name,
 				Command:     cmd,
 				PreCommand:  task.GetPreCommand(),
 				PostCommand: task.GetPostCommand(),
-				Type:      TaskTypeCron,
-				Timeout:   timeout,
-				WorkDir:   workDir,
-				Envs:      func() []string {
+				Type:        TaskTypeCron,
+				Timeout:     timeout,
+				WorkDir:     workDir,
+				Envs: func() []string {
 					if vars := task.GetEnvVars(); len(vars) > 0 {
 						return vars
 					}

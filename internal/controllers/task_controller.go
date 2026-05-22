@@ -6,12 +6,12 @@ import (
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/engigu/baihu-panel/internal/utils"
-	"github.com/engigu/baihu-panel/internal/logger"
 
 	"github.com/gin-gonic/gin"
 	"os"
@@ -59,26 +59,26 @@ func resolveWorkDir(workDir string) string {
 
 func (tc *TaskController) CreateTask(c *gin.Context) {
 	var req struct {
-		Name        string              `json:"name" binding:"required"`
-		Remark      string              `json:"remark"`
-		Command     string              `json:"command"`
-		PreCommand  string              `json:"pre_command"`
-		PostCommand string              `json:"post_command"`
-		Tags        string              `json:"tags"`
-		Type        string              `json:"type"`
-		Config      string              `json:"config"`
-		Schedule    string              `json:"schedule"`
-		Timeout     int                 `json:"timeout"`
-		WorkDir     string              `json:"work_dir"`
-		CleanConfig string              `json:"clean_config"`
-		Envs        string              `json:"envs"`
-		Languages   models.TaskLanguages `json:"languages"`
-		AgentID       *string             `json:"agent_id"`
-		TriggerType   string              `json:"trigger_type"`
-		RetryCount    int                 `json:"retry_count"`
-		RetryInterval int                 `json:"retry_interval"`
-		RandomRange   int                 `json:"random_range"`
-		PinType       string              `json:"pin_type"`
+		Name          string               `json:"name" binding:"required"`
+		Remark        string               `json:"remark"`
+		Command       string               `json:"command"`
+		PreCommand    string               `json:"pre_command"`
+		PostCommand   string               `json:"post_command"`
+		Tags          string               `json:"tags"`
+		Type          string               `json:"type"`
+		Config        string               `json:"config"`
+		Schedule      string               `json:"schedule"`
+		Timeout       int                  `json:"timeout"`
+		WorkDir       string               `json:"work_dir"`
+		CleanConfig   string               `json:"clean_config"`
+		Envs          string               `json:"envs"`
+		Languages     models.TaskLanguages `json:"languages"`
+		AgentID       *string              `json:"agent_id"`
+		TriggerType   string               `json:"trigger_type"`
+		RetryCount    int                  `json:"retry_count"`
+		RetryInterval int                  `json:"retry_interval"`
+		RandomRange   int                  `json:"random_range"`
+		PinType       string               `json:"pin_type"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -251,27 +251,27 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 	}
 
 	var req struct {
-		Name        string              `json:"name"`
-		Remark      string              `json:"remark"`
-		Command     string              `json:"command"`
-		PreCommand  string              `json:"pre_command"`
-		PostCommand string              `json:"post_command"`
-		Tags        string              `json:"tags"`
-		Type        string              `json:"type"`
-		Config      string              `json:"config"`
-		Schedule    string              `json:"schedule"`
-		Timeout     int                 `json:"timeout"`
-		WorkDir     string              `json:"work_dir"`
-		CleanConfig string              `json:"clean_config"`
-		Envs        string              `json:"envs"`
-		Enabled     bool                `json:"enabled"`
-		Languages   models.TaskLanguages `json:"languages"`
-		AgentID       *string             `json:"agent_id"`
-		TriggerType   string              `json:"trigger_type"`
-		RetryCount    int                 `json:"retry_count"`
-		RetryInterval int                 `json:"retry_interval"`
-		RandomRange   int                 `json:"random_range"`
-		PinType       string              `json:"pin_type"`
+		Name          string               `json:"name"`
+		Remark        string               `json:"remark"`
+		Command       string               `json:"command"`
+		PreCommand    string               `json:"pre_command"`
+		PostCommand   string               `json:"post_command"`
+		Tags          string               `json:"tags"`
+		Type          string               `json:"type"`
+		Config        string               `json:"config"`
+		Schedule      string               `json:"schedule"`
+		Timeout       int                  `json:"timeout"`
+		WorkDir       string               `json:"work_dir"`
+		CleanConfig   string               `json:"clean_config"`
+		Envs          string               `json:"envs"`
+		Enabled       bool                 `json:"enabled"`
+		Languages     models.TaskLanguages `json:"languages"`
+		AgentID       *string              `json:"agent_id"`
+		TriggerType   string               `json:"trigger_type"`
+		RetryCount    int                  `json:"retry_count"`
+		RetryInterval int                  `json:"retry_interval"`
+		RandomRange   int                  `json:"random_range"`
+		PinType       string               `json:"pin_type"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -695,4 +695,3 @@ func (tc *TaskController) ToggleTask(c *gin.Context) {
 
 	utils.Success(c, vo.ToTaskVO(updatedTask))
 }
-

@@ -76,6 +76,7 @@ func (c *MiseController) VerifyCommand(ctx *gin.Context) {
 	}
 	utils.Success(ctx, gin.H{"command": cmd})
 }
+
 // UseGlobal 设置全局默认版本
 func (c *MiseController) UseGlobal(ctx *gin.Context) {
 	var req struct {

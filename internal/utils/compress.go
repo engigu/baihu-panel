@@ -34,14 +34,14 @@ func CompressToBase64(data string) (string, error) {
 	var buf bytes.Buffer
 	zw := GetZlibWriter(&buf)
 	defer PutZlibWriter(zw)
-	
+
 	if _, err := zw.Write([]byte(data)); err != nil {
 		return "", err
 	}
 	if err := zw.Close(); err != nil {
 		return "", err
 	}
-	
+
 	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 

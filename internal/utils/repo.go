@@ -12,7 +12,7 @@ func GetRepoIdentifier(url string, branch string) string {
 	url = strings.TrimSuffix(url, "/")
 
 	repoName := url[strings.LastIndex(url, "/")+1:]
-	
+
 	author := ""
 	lastSlash := strings.LastIndex(url, "/")
 	if lastSlash != -1 {
@@ -43,7 +43,7 @@ func GetRepoIdentifier(url string, branch string) string {
 	if branch != "" && branch != "master" && branch != "main" {
 		identifier = identifier + "_" + branch
 	}
-	
+
 	// Replace any invalid characters for tags or paths
 	identifier = strings.ReplaceAll(identifier, "/", "_")
 	identifier = strings.ReplaceAll(identifier, ".", "_")

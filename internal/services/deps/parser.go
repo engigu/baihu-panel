@@ -25,7 +25,7 @@ func ParseRequirements(content string) []models.Dependency {
 	var deps []models.Dependency
 	// 使用正则表达式按行分割，兼容 Windows 和 Linux 的换行符
 	lines := regexp.MustCompile(`\r?\n`).Split(content, -1)
-	
+
 	// 用于分割包名和版本的正则 (支持 ==, >=, <=, ~=, >, <, @)
 	versionRegex := regexp.MustCompile(`[=><~@]+`)
 
@@ -43,7 +43,7 @@ func ParseRequirements(content string) []models.Dependency {
 		if len(parts) > 1 {
 			// 清除可能存在的后续参数，比如 requests==2.31.0 --hash=sha256:...
 			versionPart := strings.TrimSpace(parts[1])
-			
+
 			// 如果有逗号分隔的多个范围限制，比如 >=1.20,<2.0，只取第一个范围作为参考版本号
 			if idx := strings.Index(versionPart, ","); idx != -1 {
 				versionPart = versionPart[:idx]

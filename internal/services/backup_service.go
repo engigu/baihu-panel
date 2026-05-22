@@ -372,7 +372,6 @@ func (s *BackupService) restoreScriptsDir(r *zip.ReadCloser) {
 	}
 }
 
-
 func (s *BackupService) addDirToZip(zipWriter *zip.Writer, srcDir, prefix string) error {
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {

@@ -22,7 +22,7 @@ func NewBaseChannel(channelType string, supportedFormats []string) *BaseChannel 
 	return &BaseChannel{channelType: channelType, supportedFormats: supportedFormats}
 }
 
-func (c *BaseChannel) GetType() string              { return c.channelType }
+func (c *BaseChannel) GetType() string               { return c.channelType }
 func (c *BaseChannel) GetSupportedFormats() []string { return c.supportedFormats }
 
 // FormatContent 根据渠道支持的格式选择最佳内容

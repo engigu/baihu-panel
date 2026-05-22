@@ -96,17 +96,17 @@ func (b *Bark) Request(title, content string) ([]byte, error) {
 				encryptData[k] = v
 			}
 		}
-		
+
 		jsonData, err := json.Marshal(encryptData)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		ciphertext, err := b.encryptPayload(string(jsonData))
 		if err != nil {
 			return nil, fmt.Errorf("encryption failed: %v", err)
 		}
-		
+
 		postData = map[string]interface{}{
 			"ciphertext": ciphertext,
 			"iv":         b.IV,

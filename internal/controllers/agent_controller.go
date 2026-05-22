@@ -82,12 +82,12 @@ func (c *AgentController) Update(ctx *gin.Context) {
 		Enabled         bool                       `json:"enabled"`
 		SchedulerConfig *vo.AgentSchedulerConfigVO `json:"scheduler_config"`
 	}
- 
+
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(ctx, "参数错误")
 		return
 	}
- 
+
 	// 获取旧状态
 	oldAgent := c.agentService.GetByID(id)
 	if oldAgent == nil {
@@ -95,7 +95,7 @@ func (c *AgentController) Update(ctx *gin.Context) {
 		return
 	}
 	wasEnabled := utils.DerefBool(oldAgent.Enabled, true)
- 
+
 	var schedulerConfig models.AgentSchedulerConfig
 	if req.SchedulerConfig != nil {
 		schedulerConfig.WorkerCount = req.SchedulerConfig.WorkerCount
@@ -109,7 +109,7 @@ func (c *AgentController) Update(ctx *gin.Context) {
 		utils.ServerError(ctx, err.Error())
 		return
 	}
- 
+
 	// 如果启用状态发生变化，通知 Agent
 	if wasEnabled != req.Enabled {
 		if req.Enabled {
@@ -126,7 +126,7 @@ func (c *AgentController) Update(ctx *gin.Context) {
 			})
 		}
 	}
- 
+
 	// 推送最新的调度配置给 Agent (如果 Agent 在线)
 	if req.Enabled {
 		// 重新加载已更新的 Agent 信息以获取正确的 SchedulerConfig
@@ -139,7 +139,7 @@ func (c *AgentController) Update(ctx *gin.Context) {
 			})
 		}
 	}
- 
+
 	utils.SuccessMsg(ctx, "更新成功")
 }
 
@@ -470,7 +470,7 @@ func (c *AgentController) WSConnect(ctx *gin.Context) {
 		"machine_id":       machineID,
 		"scheduler_config": schedCfg,
 	})
- 
+
 	logger.Infof("[AgentWS] Agent #%s 连接成功 (配置: %v)", agent.ID, schedCfg)
 
 	// 启动读写协程

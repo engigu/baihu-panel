@@ -3,17 +3,17 @@ package repo
 import (
 	"bufio"
 	"fmt"
+	"github.com/engigu/baihu-panel/internal/utils"
+	"github.com/robfig/cron/v3"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"github.com/engigu/baihu-panel/internal/utils"
-	"github.com/robfig/cron/v3"
 )
 
 var (
 	// envRegex 匹配脚本中的环境名称设置，如 Env("名称")
-	envRegex  = regexp.MustCompile(`(?i)(?:new[ \t]+)?Env\(['"]?([^'"]+)['"]?\)`)
+	envRegex = regexp.MustCompile(`(?i)(?:new[ \t]+)?Env\(['"]?([^'"]+)['"]?\)`)
 	// cronRegex 匹配脚本中的 cron 表达式设置
 	cronRegex = regexp.MustCompile(`(?i)(?:cron[ \t]*[:=][ \t]*['"]?([^'"\r\n]+))|(?:(?:^|[ \t\*\/])(([0-9\*\/\-,L?#]+[ \t]+){4,5}[0-9\*\/\-,L?#]+))`)
 	// cronFormatRegex 用于校验提取出的字符串是否符合 Cron 表达式格式 (5位或6位)
