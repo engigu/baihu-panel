@@ -755,7 +755,7 @@ location /baihu/ {
 
 ## 贡献 
 
-欢迎提交 Issue 和 Pull Request！如果觉得本项目对你有帮助，欢迎点个 Star 支持一下，大家的 Star 是我持续更新的动力！
+欢迎提交 Issue 和 Pull Request！如果觉得本项目对你有帮助，不求大富大贵，只求顺手点个 Star，大家的 Star 是我持续更新的动力！
 
 <img src="https://f.pz.al/pzal/2026/01/07/83be93eb4e2a3.png" width="200" />
 
