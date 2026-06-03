@@ -129,6 +129,7 @@ func registerFileRoutes(g *gin.RouterGroup, c *Controllers) {
 		files.GET("/tree", c.File.GetFileTree)
 		files.GET("/content", c.File.GetFileContent)
 		files.GET("/download", c.File.DownloadFile)
+		files.GET("/download-zip", c.File.DownloadZip)
 		files.POST("/content", c.File.SaveFileContent)
 		files.POST("/create", c.File.CreateFile)
 		files.POST("/delete", c.File.DeleteFile)
