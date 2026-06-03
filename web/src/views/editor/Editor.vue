@@ -297,6 +297,15 @@ async function handleDownload(path: string) {
   toast.success('下载中')
 }
 
+async function handleDownloadZip(path: string) {
+  const url = api.files.downloadZip(path)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = (path.split('/').pop() || 'archive') + '.zip'
+  a.click()
+  toast.success('下载中')
+}
+
 async function handleCopyFile(path: string) {
   try {
     const parts = path.split('/')
@@ -466,6 +475,7 @@ onUnmounted(() => {
       @delete="(path: string) => dialogsRef?.openDelete(path)"
       @create="(parent: string) => dialogsRef?.openCreate(parent)"
       @download="handleDownload"
+      @download-zip="handleDownloadZip"
       @move="handleMove"
       @rename="(path: string) => dialogsRef?.openRename(path)"
       @duplicate="handleCopyFile"

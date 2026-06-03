@@ -267,6 +267,21 @@ async function handleDownload(path: string) {
   }
 }
 
+async function handleDownloadZip(path: string) {
+  try {
+    const url = api.files.downloadZip(path)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = (path.split('/').pop() || 'archive') + '.zip'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    toast.success('已发起下载')
+  } catch (error: any) {
+    toast.error('下载出错: ' + (error.message || '未知错误'))
+  }
+}
+
 async function handleCopyFile(path: string) {
   console.log('Copy file requested:', path)
   try {
@@ -320,7 +335,7 @@ onMounted(loadTree)
         </div>
         <FileTreeNode v-for="node in fileTree" :key="node.path" :node="node" :expanded-dirs="expandedDirs"
           :selected-path="selectedFile || selectedDir" @select="handleSelect" @delete="confirmDeleteFile"
-          @download-file="handleDownload" @duplicate="handleCopyFile" />
+          @download-file="handleDownload" @download-zip="handleDownloadZip" @duplicate="handleCopyFile" />
       </div>
     </div>
 

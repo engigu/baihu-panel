@@ -19,6 +19,7 @@ const emit = defineEmits<{
   select: [node: FileNode]
   delete: [path: string]
   download: [path: string]
+  downloadZip: [path: string]
   move: [oldPath: string, newPath: string]
   rename: [path: string]
   duplicate: [path: string]
@@ -158,6 +159,7 @@ function handleFilesUpload(e: Event) {
         @delete="p => emit('delete', p)" 
         @create="p => emit('create', p)"
         @download-file="p => emit('download', p)" 
+        @download-zip="p => emit('downloadZip', p)"
         @move="(o, n) => emit('move', o, n)" 
         @rename="p => emit('rename', p)" 
         @duplicate="p => emit('duplicate', p)" />
