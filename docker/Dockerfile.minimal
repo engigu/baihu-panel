@@ -100,6 +100,7 @@ RUN VERSION_VAL=$(cat /build-info/version.txt) && \
     } && \
     build_agent linux amd64 "" && \
     build_agent linux arm64 "" && \
+    build_agent android arm64 "" && \
     build_agent darwin amd64 "" && \
     build_agent darwin arm64 ""
 

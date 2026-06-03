@@ -48,6 +48,8 @@ jobs:
           tar -czvf baihu-linux-amd64.tar.gz baihu-linux-amd64
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags web -ldflags="$LDFLAGS" -o baihu-linux-arm64 main.go
           tar -czvf baihu-linux-arm64.tar.gz baihu-linux-arm64
+          CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -tags web -ldflags="$LDFLAGS" -o baihu-android-arm64 main.go
+          tar -czvf baihu-android-arm64.tar.gz baihu-android-arm64
 
       - name: Build Agent Binaries
         run: |
@@ -97,6 +99,7 @@ jobs:
           files: |
             baihu-linux-amd64.tar.gz
             baihu-linux-arm64.tar.gz
+            baihu-android-arm64.tar.gz
             data/agent/baihu-agent-*.tar.gz
             data/agent/baihu-agent-*.zip
 

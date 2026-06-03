@@ -117,6 +117,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     } && \
     build_agent linux amd64 "" && \
     build_agent linux arm64 "" && \
+    build_agent android arm64 "" && \
     build_agent darwin amd64 "" && \
     build_agent darwin arm64 "" && \
     echo "Agent build completed for all platforms"

@@ -60,6 +60,14 @@ release:
 	cp -r web/dist internal/static/dist
 	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) $(TAGS_WEB) -o $(BINARY) main.go
 
+# Build release version for Android Termux
+release-android:
+	cd web && npm ci && npm run build
+	@mkdir -p bin
+	rm -rf internal/static/dist
+	cp -r web/dist internal/static/dist
+	CGO_ENABLED=0 GOOS=android GOARCH=arm64 $(GOBUILD) -trimpath $(LDFLAGS) $(TAGS_WEB) -o bin/baihu-android-arm64 main.go
+
 # Build release version (Frontend + Backend with embedded assets)
 release-binary:
 	cd web && npm ci && VITE_RELEASE_OPTIMIZE=true npm run build
@@ -72,7 +80,7 @@ release-binary:
 build-all: release
 
 # Build agent for all platforms
-build-agent: build-agent-linux-amd64 build-agent-linux-arm64 build-agent-windows-amd64 build-agent-darwin-amd64 build-agent-darwin-arm64
+build-agent: build-agent-linux-amd64 build-agent-linux-arm64 build-agent-android-arm64 build-agent-windows-amd64 build-agent-darwin-amd64 build-agent-darwin-arm64
 	@echo "All agent packages built in data/agent/"
 	@ls -lh data/agent/baihu-agent-*
 
@@ -87,6 +95,11 @@ build-agent-linux-arm64:
 	@mkdir -p data/agent
 	@echo "$(VERSION)" > data/agent/version.txt
 	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="$(AGENT_LDFLAGS)" -o ../data/agent/baihu-agent-linux-arm64 .
+
+build-agent-android-arm64:
+	@mkdir -p data/agent
+	@echo "$(VERSION)" > data/agent/version.txt
+	cd agent && CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -ldflags="$(AGENT_LDFLAGS)" -o ../data/agent/baihu-agent-android-arm64 .
 
 build-agent-windows-amd64:
 	@mkdir -p data/agent
