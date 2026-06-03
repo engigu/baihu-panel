@@ -78,6 +78,10 @@ jobs:
           # Darwin ARM64
           cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$AGENT_LDFLAGS" -o ../data/agent/baihu-agent-darwin-arm64 . && cd ..
           cd data/agent && tar -czvf baihu-agent-darwin-arm64.tar.gz baihu-agent-darwin-arm64 config.example.ini && rm baihu-agent-darwin-arm64 && cd ../..
+          
+          # Android ARM64
+          cd agent && CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -ldflags="$AGENT_LDFLAGS" -o ../data/agent/baihu-agent-android-arm64 . && cd ..
+          cd data/agent && tar -czvf baihu-agent-android-arm64.tar.gz baihu-agent-android-arm64 config.example.ini && rm baihu-agent-android-arm64 && cd ../..
 
       - name: Prepare Release Notes
         env:
