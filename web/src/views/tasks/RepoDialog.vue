@@ -482,7 +482,7 @@ async function save() {
             <DialogTitle class="text-xl font-bold whitespace-nowrap">
               {{ isEdit ? '编辑仓库同步' : '新建仓库同步' }}
             </DialogTitle>
-            <div class="flex flex-wrap items-center gap-2 sm:mr-4">
+            <div class="flex flex-wrap items-center justify-end self-end sm:self-auto gap-2 sm:mr-4">
               <Button v-if="isEdit" variant="outline" size="sm" @click="exportBaihuCommand" title="复制导出 baihu 指令" class="h-8 gap-1.5 bg-primary/5 hover:bg-primary/10 border-primary/20 hover:border-primary/40 text-primary px-3">
                 <Terminal class="w-3.5 h-3.5" />
                 <span class="text-xs">复制指令</span>
