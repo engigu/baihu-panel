@@ -51,7 +51,7 @@ const releaseOptimizePlugin = (isOptimize: boolean) => ({
     if (isOptimize) {
       return html.replace(
         '</head>',
-        `  <link rel="preconnect" href="https://fonts.geekzu.org">\n  <link rel="stylesheet" href="https://fonts.geekzu.org/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Noto+Sans+SC:wght@100..900&display=swap">\n  </head>`
+        `  <link rel="preconnect" href="https://fonts.geekzu.org">\n  <link rel="stylesheet" href="https://fonts.geekzu.org/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap">\n  </head>`
       )
     }
     return html
@@ -61,7 +61,6 @@ const releaseOptimizePlugin = (isOptimize: boolean) => ({
       return {
         code: code
           .replace(/@import\s+["']@fontsource-variable\/inter\/index\.css["'];/g, '/* Removed for CDN */')
-          .replace(/@import\s+["']@fontsource-variable\/noto-sans-sc\/index\.css["'];/g, '/* Removed for CDN */')
           .replace(/@import\s+["']@fontsource-variable\/jetbrains-mono\/index\.css["'];/g, '/* Removed for CDN */'),
         map: null
       }
