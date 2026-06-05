@@ -831,12 +831,12 @@ async function save() {
                       </p>
                     </div>
 
-                    <div class="flex items-center gap-4">
+                    <div class="flex flex-wrap items-center gap-y-3 gap-x-4">
                       <div class="flex items-center gap-2">
                          <Input :model-value="form.timeout" @update:model-value="(v: string | number) => form.timeout = Number(v || 0)" type="number" :min="0" class="w-20 h-9 bg-muted/30 text-center" />
                          <span class="text-[11px] font-semibold text-muted-foreground">分钟超时</span>
                       </div>
-                      <div class="flex items-center gap-2 pl-4 border-l">
+                      <div class="flex items-center gap-2 sm:pl-4 sm:border-l">
                         <Select :model-value="cleanType" @update:model-value="(v: any) => cleanType = String(v || 'none')">
                           <SelectTrigger class="w-28 h-9 text-xs bg-muted/10">
                             <SelectValue />

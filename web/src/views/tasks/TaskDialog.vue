@@ -697,12 +697,12 @@ async function save() {
                 <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
                   <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-semibold">运行策略</Label>
                   <div class="sm:col-span-3 space-y-4">
-                    <div class="flex items-center gap-4">
+                    <div class="flex flex-wrap items-center gap-y-3 gap-x-4">
                       <div class="flex items-center gap-2">
                         <Input :model-value="form.timeout" @update:model-value="(v: string | number) => form.timeout = Number(v)" type="number" :min="0" class="w-20 h-9 bg-muted/30 text-center font-semibold text-xs" />
                         <span class="text-[11px] font-semibold text-muted-foreground">分钟超时</span>
                       </div>
-                      <div class="flex items-center gap-2 pl-4 border-l border-muted">
+                      <div class="flex items-center gap-2 sm:pl-4 sm:border-l sm:border-muted">
                         <Select :model-value="cleanType" @update:model-value="(v: any) => cleanType = String(v || 'none')">
                           <SelectTrigger class="w-28 h-9 text-xs bg-muted/10">
                             <SelectValue />
