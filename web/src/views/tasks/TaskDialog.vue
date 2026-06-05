@@ -717,18 +717,7 @@ async function save() {
                       </div>
                     </div>
 
-                    <div class="p-3 rounded-xl bg-muted/20 border border-muted-foreground/10 space-y-2.5">
-                      <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2 text-xs font-semibold">
-                          <Zap :class="cn('h-3.5 w-3.5', commentToTaskEnabled ? 'text-primary' : 'text-muted-foreground')" /> 
-                          兼容 QL 格式任务脚本注释解析
-                        </div>
-                        <Switch :model-value="commentToTaskEnabled" @update:model-value="v => commentToTaskEnabled = v" />
-                      </div>
-                      <p class="text-[11px] text-muted-foreground leading-relaxed italic">
-                        {{ commentToTaskEnabled ? '尝试从脚本注释中提取任务名称和定时规则。' : '仅使用当前手动配置。' }}
-                      </p>
-                    </div>
+
 
                     <div class="p-3 rounded-xl bg-muted/20 border border-muted-foreground/10 space-y-2.5">
                       <div class="flex items-center justify-between">
