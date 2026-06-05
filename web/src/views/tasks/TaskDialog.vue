@@ -645,6 +645,15 @@ async function save() {
                   </div>
                 </template>
                 <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-semibold">执行超时</Label>
+                  <div class="sm:col-span-3">
+                    <div class="flex items-center gap-2">
+                      <Input :model-value="form.timeout" @update:model-value="(v: string | number) => form.timeout = Number(v)" type="number" :min="0" class="w-20 h-9 bg-muted/30 text-center font-semibold text-xs" />
+                      <span class="text-[11px] font-semibold text-muted-foreground">分钟超时</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
                   <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-semibold">失败策略</Label>
                   <div class="sm:col-span-3 flex items-center gap-4">
                     <div class="flex items-center gap-2">
@@ -657,33 +666,30 @@ async function save() {
                   </div>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-semibold">运行策略</Label>
-                  <div class="sm:col-span-3 space-y-4">
-                    <div class="flex flex-wrap items-center gap-y-3 gap-x-4">
-                      <div class="flex items-center gap-2">
-                        <Input :model-value="form.timeout" @update:model-value="(v: string | number) => form.timeout = Number(v)" type="number" :min="0" class="w-20 h-9 bg-muted/30 text-center font-semibold text-xs" />
-                        <span class="text-[11px] font-semibold text-muted-foreground">分钟超时</span>
-                      </div>
-                      <div class="flex items-center gap-2 sm:pl-4 sm:border-l sm:border-muted">
-                        <Select :model-value="cleanType" @update:model-value="(v: any) => cleanType = String(v || 'none')">
-                          <SelectTrigger class="w-28 h-9 text-xs bg-muted/10">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">保留日志</SelectItem>
-                            <SelectItem value="day">按天清理</SelectItem>
-                            <SelectItem value="count">按条清理</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <div v-if="cleanType && cleanType !== 'none'" class="flex items-center gap-2">
-                          <Input :model-value="cleanKeep" @update:model-value="(v: string | number) => cleanKeep = Number(v || 30)" type="number" class="w-20 h-9 bg-muted/30 text-center font-semibold text-xs" />
-                          <span class="text-[11px] font-semibold text-muted-foreground">{{ cleanType === 'day' ? '天' : '条' }}</span>
-                        </div>
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-semibold">日志清理</Label>
+                  <div class="sm:col-span-3">
+                    <div class="flex items-center gap-2">
+                      <Select :model-value="cleanType" @update:model-value="(v: any) => cleanType = String(v || 'none')">
+                        <SelectTrigger class="w-28 h-9 text-xs bg-muted/10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">保留日志</SelectItem>
+                          <SelectItem value="day">按天清理</SelectItem>
+                          <SelectItem value="count">按条清理</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <div v-if="cleanType && cleanType !== 'none'" class="flex items-center gap-2">
+                        <Input :model-value="cleanKeep" @update:model-value="(v: string | number) => cleanKeep = Number(v || 30)" type="number" class="w-20 h-9 bg-muted/30 text-center font-semibold text-xs" />
+                        <span class="text-[11px] font-semibold text-muted-foreground">{{ cleanType === 'day' ? '天' : '条' }}</span>
                       </div>
                     </div>
+                  </div>
+                </div>
 
-
-
+                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-semibold">运行策略</Label>
+                  <div class="sm:col-span-3 space-y-4">
                     <div class="p-3 rounded-xl bg-muted/20 border border-muted-foreground/10 space-y-2.5">
                       <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2 text-xs font-semibold">
