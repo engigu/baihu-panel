@@ -713,7 +713,10 @@ async function save() {
                             <SelectItem value="count">按条清理</SelectItem>
                           </SelectContent>
                         </Select>
-                        <Input v-if="cleanType && cleanType !== 'none'" :model-value="cleanKeep" @update:model-value="(v: string | number) => cleanKeep = Number(v || 30)" type="number" class="w-16 h-9 bg-muted/30 text-center text-xs" />
+                        <div v-if="cleanType && cleanType !== 'none'" class="flex items-center gap-2">
+                          <Input :model-value="cleanKeep" @update:model-value="(v: string | number) => cleanKeep = Number(v || 30)" type="number" class="w-20 h-9 bg-muted/30 text-center font-semibold text-xs" />
+                          <span class="text-[11px] font-semibold text-muted-foreground">{{ cleanType === 'day' ? '天' : '条' }}</span>
+                        </div>
                       </div>
                     </div>
 
