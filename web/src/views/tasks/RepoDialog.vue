@@ -197,6 +197,39 @@ const qlCommandInput = ref('')
 const showBaihuImportDialog = ref(false)
 const baihuCommandInput = ref('')
 
+function exportBaihuCommand() {
+  const parts = ['baihu', 'reposync']
+  if (repoConfig.value.source_type) parts.push(`--source-type ${repoConfig.value.source_type}`)
+  if (repoConfig.value.source_url) parts.push(`--source-url "${repoConfig.value.source_url}"`)
+  if (repoConfig.value.target_path) parts.push(`--target-path "${repoConfig.value.target_path}"`)
+  if (repoConfig.value.branch) parts.push(`--branch "${repoConfig.value.branch}"`)
+  if (repoConfig.value.sparse_path) parts.push(`--path "${repoConfig.value.sparse_path}"`)
+  if (repoConfig.value.single_file) parts.push(`--single-file`)
+  if (repoConfig.value.proxy && repoConfig.value.proxy !== 'none') parts.push(`--proxy ${repoConfig.value.proxy}`)
+  if (repoConfig.value.proxy_url) parts.push(`--proxy-url "${repoConfig.value.proxy_url}"`)
+  if (repoConfig.value.auth_token) parts.push(`--auth-token "${repoConfig.value.auth_token}"`)
+  if (repoConfig.value.whitelist_paths) parts.push(`--whitelist-paths "${repoConfig.value.whitelist_paths}"`)
+  if (repoConfig.value.blacklist) parts.push(`--blacklist "${repoConfig.value.blacklist}"`)
+  if (repoConfig.value.dependence) parts.push(`--dependence "${repoConfig.value.dependence}"`)
+  if (repoConfig.value.extensions) parts.push(`--extensions "${repoConfig.value.extensions}"`)
+  if (repoConfig.value.auto_add_cron) parts.push(`--commenttotask true`)
+  
+  if (form.value.pre_command) parts.push(`--pre-command "${form.value.pre_command}"`)
+  if (form.value.post_command) parts.push(`--post-command "${form.value.post_command}"`)
+  if (form.value.timeout !== undefined && form.value.timeout !== 30) parts.push(`--task-timeout ${form.value.timeout}`)
+  
+  if (selectedLangs.value.length > 0) {
+    const langs = selectedLangs.value.filter(l => l.name).map(l => ({ name: l.name, version: l.version }))
+    if (langs.length > 0) {
+      parts.push(`--task-langs '${JSON.stringify(langs)}'`)
+    }
+  }
+
+  const cmd = parts.join(' ')
+  navigator.clipboard.writeText(cmd)
+  toast.success('baihu 指令已复制到剪贴板')
+}
+
 function importFromBaihu() {
   baihuCommandInput.value = ''
   showBaihuImportDialog.value = true
@@ -449,7 +482,12 @@ async function save() {
             <DialogTitle class="text-xl font-bold whitespace-nowrap">
               {{ isEdit ? '编辑仓库同步' : '新建仓库同步' }}
             </DialogTitle>
-            <div v-if="!isEdit" class="flex flex-wrap items-center gap-2 sm:mr-4">
+            <div class="flex flex-wrap items-center gap-2 sm:mr-4">
+              <Button v-if="isEdit" variant="outline" size="sm" @click="exportBaihuCommand" title="复制导出 baihu 指令" class="h-8 gap-1.5 bg-primary/5 hover:bg-primary/10 border-primary/20 hover:border-primary/40 text-primary px-3">
+                <Terminal class="w-3.5 h-3.5" />
+                <span class="text-xs">复制指令</span>
+              </Button>
+              <template v-else>
               <Button variant="outline" size="sm" @click="importFromBaihu" class="flex-1 sm:flex-initial h-8 gap-1.5 bg-primary/5 hover:bg-primary/10 border-primary/20 hover:border-primary/40 text-primary px-3">
                 <Terminal class="w-3.5 h-3.5" />
                 <span class="text-xs">Baihu 命令导入</span>
@@ -458,6 +496,7 @@ async function save() {
                 <Download class="w-3.5 h-3.5" />
                 <span class="text-xs">Qinlong格式导入</span>
               </Button>
+              </template>
             </div>
           </div>
         </DialogHeader>
