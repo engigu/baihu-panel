@@ -7,14 +7,14 @@ import XTerminal from '@/components/XTerminal.vue'
 import { Save, Play, FilePen, TextCursorInput, Eye, X, Download, Trash2 } from 'lucide-vue-next'
 import { api, type FileNode, type MiseLanguage } from '@/api'
 import { toast } from 'vue-sonner'
-import { PATHS, FILE_RUNNERS } from '@/constants'
+import { PATHS } from '@/constants'
 
 // New component imports
 import FileSidebar from './components/FileSidebar.vue'
 import RunConfigDialog from './components/RunConfigDialog.vue'
 import FileActionDialogs from './components/FileActionDialogs.vue'
-import BaihuDialog from '@/components/ui/BaihuDialog.vue'
-import { AlertCircle } from 'lucide-vue-next'
+import UnsavedConfirmDialog from './components/UnsavedConfirmDialog.vue'
+import { buildExecutionCommand } from './utils'
 
 const route = useRoute()
 const router = useRouter()
@@ -73,41 +73,7 @@ async function fetchInstalledLangs() {
   }
 }
 
-function getLangIcon(plugin: string) {
-  const name = plugin.toLowerCase().trim()
-  const mapping: Record<string, string> = {
-    'python': 'python/python-original.svg',
-    'node': 'nodejs/nodejs-original.svg',
-    'nodejs': 'nodejs/nodejs-original.svg',
-    'go': 'go/go-original.svg',
-    'rust': 'rust/rust-original.svg',
-    'ruby': 'ruby/ruby-plain.svg',
-    'php': 'php/php-plain.svg',
-    'java': 'java/java-plain.svg',
-    'deno': 'deno/deno-plain.svg',
-    'bun': 'bun/bun-plain.svg',
-    'zig': 'zig/zig-original.svg',
-    'dotnet': 'dot-net/dot-net-original.svg',
-    '.net': 'dot-net/dot-net-original.svg',
-    'elixir': 'elixir/elixir-original.svg',
-    'erlang': 'erlang/erlang-original.svg',
-    'crystal': 'crystal/crystal-original.svg',
-    'lua': 'lua/lua-original.svg',
-    'julia': 'julia/julia-original.svg',
-    'nim': 'nim/nim-original.svg',
-    'perl': 'perl/perl-original.svg',
-    'scala': 'scala/scala-original.svg',
-    'kotlin': 'kotlin/kotlin-original.svg',
-    'clojure': 'clojure/clojure-line.svg',
-    'dart': 'dart/dart-original.svg',
-    'flutter': 'flutter/flutter-original.svg',
-    'terraform': 'terraform/terraform-original.svg',
-    'docker': 'docker/docker-original.svg',
-    'kubernetes': 'kubernetes/kubernetes-plain.svg',
-    'ansible': 'ansible/ansible-original.svg',
-  }
-  return mapping[name] ? `https://fastly.jsdelivr.net/gh/devicons/devicon/icons/${mapping[name]}` : ''
-}
+import { getLangIcon } from '@/utils/icons'
 
 async function fetchPaths() {
   try {
@@ -370,27 +336,10 @@ async function runScript() {
 
 async function startExecution() {
   if (!selectedFile.value) return
-  const parts = selectedFile.value.split('/')
-  const fileName = parts.pop() || selectedFile.value
-  const dirPath = parts.join('/')
-  const ext = fileName.split('.').pop()?.toLowerCase() || ''
-  let runner = FILE_RUNNERS[ext] || ''
-
-  const validEnvs = selectedEnvs.value.filter(e => e.plugin && e.version)
-  let cmd = ''
-    if (validEnvs.length > 0) {
-    const specs = validEnvs.map(e => `${e.plugin}@${e.version}`).join(' ')
-    if (!runner && !['sh', 'bash'].includes(ext)) {
-       const first = validEnvs[0]!.plugin
-       runner = (first === 'node' ? 'node' : first)
-    }
-    cmd = `mise exec ${specs} -- ${runner ? `${runner} ${fileName}` : `./${fileName}`}`
-  } else {
-    cmd = runner ? `${runner} ${fileName}` : `./${fileName}`
-  }
-
+  
   const base = scriptsDir.value || PATHS.SCRIPTS_DIR
-  runCommand.value = `cd ${base}${dirPath ? '/' + dirPath : ''} && ${cmd}`
+  runCommand.value = buildExecutionCommand(selectedFile.value, selectedEnvs.value, base)
+  
   showRunDialog.value = false
   showTerminalDialog.value = true
   await nextTick()
@@ -557,27 +506,10 @@ onUnmounted(() => {
       </DialogContent>
     </Dialog>
 
-    <BaihuDialog v-model:open="confirmLeave.show" title="未保存的更改" icon="AlertCircle" size="sm">
-      <div class="flex flex-col sm:flex-row items-center sm:items-start gap-4 p-1">
-        <div class="h-12 w-12 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
-          <AlertCircle class="h-6 w-6 text-yellow-500" />
-        </div>
-        <div class="flex-1 text-center sm:text-left">
-          <p class="text-sm text-foreground/90 leading-relaxed font-medium">文件尚未保存</p>
-          <p class="text-[13px] text-muted-foreground mt-1">
-            当前文件有未保存的更改。如果现在离开，您的更改将会丢失。
-          </p>
-          <div class="mt-3 px-2 py-1.5 bg-muted/50 rounded text-[11px] font-mono text-muted-foreground break-all border border-muted">
-            {{ confirmLeave.path }}
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <div class="flex flex-col-reverse sm:flex-row gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-          <Button variant="outline" @click="confirmLeave.show = false" class="w-full sm:w-24">继续编辑</Button>
-          <Button variant="destructive" @click="confirmLeave.show = false; confirmLeave.onConfirm()" class="w-full sm:w-auto px-6">放弃更改</Button>
-        </div>
-      </template>
-    </BaihuDialog>
+    <UnsavedConfirmDialog
+      v-model:open="confirmLeave.show"
+      :path="confirmLeave.path"
+      @confirm="confirmLeave.onConfirm()"
+    />
   </div>
 </template>
