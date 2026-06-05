@@ -697,9 +697,24 @@ async function save() {
                 <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
                   <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-semibold">运行策略</Label>
                   <div class="sm:col-span-3 space-y-4">
-                    <div class="flex items-center gap-3">
-                      <Input :model-value="form.timeout" @update:model-value="(v: string | number) => form.timeout = Number(v)" type="number" :min="0" class="w-20 h-9 bg-muted/30 text-center font-semibold text-xs" />
-                      <span class="text-[11px] font-semibold text-muted-foreground">分钟超时</span>
+                    <div class="flex items-center gap-4">
+                      <div class="flex items-center gap-2">
+                        <Input :model-value="form.timeout" @update:model-value="(v: string | number) => form.timeout = Number(v)" type="number" :min="0" class="w-20 h-9 bg-muted/30 text-center font-semibold text-xs" />
+                        <span class="text-[11px] font-semibold text-muted-foreground">分钟超时</span>
+                      </div>
+                      <div class="flex items-center gap-2 pl-4 border-l border-muted">
+                        <Select :model-value="cleanType" @update:model-value="(v: any) => cleanType = String(v || 'none')">
+                          <SelectTrigger class="w-28 h-9 text-xs bg-muted/10">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">保留日志</SelectItem>
+                            <SelectItem value="day">按天清理</SelectItem>
+                            <SelectItem value="count">按条清理</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input v-if="cleanType && cleanType !== 'none'" :model-value="cleanKeep" @update:model-value="(v: string | number) => cleanKeep = Number(v || 30)" type="number" class="w-16 h-9 bg-muted/30 text-center text-xs" />
+                      </div>
                     </div>
 
                     <div class="p-3 rounded-xl bg-muted/20 border border-muted-foreground/10 space-y-2.5">
