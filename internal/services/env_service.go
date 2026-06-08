@@ -6,6 +6,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/services/relation"
 	"github.com/engigu/baihu-panel/internal/utils"
 
 	"gorm.io/gorm"
@@ -76,11 +77,11 @@ func (es *EnvService) GetEnvVarsWithPagination(userID string, name string, envTy
 		}
 		if len(validTags) > 0 {
 			var storageIDs []string
-			database.DB.Model(&models.DataStorage{}).Where("type = ? AND name IN ?", "env_tag", validTags).Pluck("id", &storageIDs)
+			database.DB.Model(&models.DataStorage{}).Where("type = ? AND name IN ?", constant.RelationTypeEnvTag, validTags).Pluck("id", &storageIDs)
 			
 			var envIDs []string
 			if len(storageIDs) > 0 {
-				database.DB.Model(&models.DataRelation{}).Where("type = ? AND relate_id IN ?", "env_tag", storageIDs).Pluck("data_id", &envIDs)
+				database.DB.Model(&models.DataRelation{}).Where("type = ? AND relate_id IN ?", constant.RelationTypeEnvTag, storageIDs).Pluck("data_id", &envIDs)
 			}
 			
 			if len(envIDs) > 0 {
@@ -138,8 +139,11 @@ func (es *EnvService) UpdateEnvVar(id string, name, value, remark, envType strin
 
 func (es *EnvService) GetAssociatedTasks(id string) []models.Task {
 	var associatedTasks []models.Task
-	query := "envs = ? OR envs LIKE ? OR envs LIKE ? OR envs LIKE ?"
-	database.DB.Where(query, id, id+",%", "%,"+id, "%,"+id+",%").Find(&associatedTasks)
+	var taskIDs []string
+	database.DB.Model(&models.DataRelation{}).Where("type = ? AND relate_id = ?", "task_env", id).Pluck("data_id", &taskIDs)
+	if len(taskIDs) > 0 {
+		database.DB.Where("id IN ?", taskIDs).Find(&associatedTasks)
+	}
 	return associatedTasks
 }
 
@@ -152,19 +156,9 @@ func (es *EnvService) DeleteEnvVar(id string, force bool) (bool, []models.Task) 
 
 	if force {
 		err := database.DB.Transaction(func(tx *gorm.DB) error {
-			// Update tasks to remove this env ID
-			for _, task := range associatedTasks {
-				ids := splitEnvIDs(string(task.Envs))
-				var newIDs []string
-				for _, eid := range ids {
-					if eid != id {
-						newIDs = append(newIDs, eid)
-					}
-				}
-				newEnvs := strings.Join(newIDs, ",")
-				if err := tx.Model(&task).Update("envs", newEnvs).Error; err != nil {
-					return err
-				}
+			// Delete the relations mapping this env to any tasks
+			if err := tx.Where("type = ? AND relate_id = ?", "task_env", id).Delete(&models.DataRelation{}).Error; err != nil {
+				return err
 			}
 			// Delete the env var
 			if err := tx.Where("id = ?", id).Delete(&models.EnvironmentVariable{}).Error; err != nil {
@@ -173,7 +167,7 @@ func (es *EnvService) DeleteEnvVar(id string, force bool) (bool, []models.Task) 
 			return nil
 		})
 		if err == nil {
-			es.CleanEnvTags(id)
+			relation.DataRelation.CleanRelations(id, constant.RelationTypeEnvTag)
 			return true, nil
 		}
 		return false, nil
@@ -181,7 +175,7 @@ func (es *EnvService) DeleteEnvVar(id string, force bool) (bool, []models.Task) 
 
 	result := database.DB.Where("id = ?", id).Delete(&models.EnvironmentVariable{})
 	if result.RowsAffected > 0 {
-		es.CleanEnvTags(id)
+		relation.DataRelation.CleanRelations(id, constant.RelationTypeEnvTag)
 		return true, nil
 	}
 	return false, nil
@@ -348,7 +342,7 @@ func splitEnvIDs(envIDs string) []string {
 
 // SaveEnvTags 保存环境变量标签
 func (es *EnvService) SaveEnvTags(envID string, tagsStr string) {
-	database.DB.Where("data_id = ? AND type = ?", envID, "env_tag").Delete(&models.DataRelation{})
+	database.DB.Where("data_id = ? AND type = ?", envID, constant.RelationTypeEnvTag).Delete(&models.DataRelation{})
 	if tagsStr == "" {
 		return
 	}
@@ -359,11 +353,11 @@ func (es *EnvService) SaveEnvTags(envID string, tagsStr string) {
 			continue
 		}
 		var storage models.DataStorage
-		res := database.DB.Where("type = ? AND name = ?", "env_tag", tag).Limit(1).Find(&storage)
+		res := database.DB.Where("type = ? AND name = ?", constant.RelationTypeEnvTag, tag).Limit(1).Find(&storage)
 		if res.RowsAffected == 0 {
 			storage = models.DataStorage{
 				ID:        utils.GenerateID(),
-				Type:      "env_tag",
+				Type:      constant.RelationTypeEnvTag,
 				Name:      tag,
 				CreatedAt: models.Now(),
 				UpdatedAt: models.Now(),
@@ -374,7 +368,7 @@ func (es *EnvService) SaveEnvTags(envID string, tagsStr string) {
 			ID:        utils.GenerateID(),
 			DataID:    envID,
 			RelateID:  storage.ID,
-			Type:      "env_tag",
+			Type:      constant.RelationTypeEnvTag,
 			CreatedAt: models.Now(),
 			UpdatedAt: models.Now(),
 		}
@@ -391,46 +385,25 @@ func (es *EnvService) LoadEnvTags(envs []models.EnvironmentVariable) {
 	for i, e := range envs {
 		envIDs[i] = e.ID
 	}
-	var relations []models.DataRelation
-	database.DB.Where("data_id IN ? AND type = ?", envIDs, "env_tag").Find(&relations)
-	if len(relations) == 0 {
-		return
-	}
-	relateIDs := make([]string, len(relations))
-	for i, r := range relations {
-		relateIDs[i] = r.RelateID
-	}
-	var storages []models.DataStorage
-	database.DB.Where("id IN ? AND type = ?", relateIDs, "env_tag").Find(&storages)
 
-	storageMap := make(map[string]string)
-	for _, s := range storages {
-		storageMap[s.ID] = s.Name
-	}
-
-	envTagsMap := make(map[string][]string)
-	for _, r := range relations {
-		if name, ok := storageMap[r.RelateID]; ok {
-			envTagsMap[r.DataID] = append(envTagsMap[r.DataID], name)
-		}
-	}
+	tagsMap := relation.DataRelation.LoadTags(envIDs, constant.RelationTypeEnvTag)
 
 	for i, e := range envs {
-		if tags, ok := envTagsMap[e.ID]; ok {
+		if tags, ok := tagsMap[e.ID]; ok {
 			envs[i].Tags = strings.Join(tags, ",")
+		} else {
+			envs[i].Tags = ""
 		}
 	}
 }
 
-// GetAllEnvTags 获取所有环境变量标签
+// GetAllEnvTags 获取全局环境变量标签
 func (es *EnvService) GetAllEnvTags() ([]string, error) {
-	var tags []string
-	err := database.DB.Model(&models.DataStorage{}).Where("type = ?", "env_tag").Pluck("name", &tags).Error
-	return tags, err
+	return relation.DataRelation.GetAllTags(constant.RelationTypeEnvTag)
 }
 
 // CleanEnvTags 删除环境变量时清理关联标签记录
 func (es *EnvService) CleanEnvTags(id string) {
-	database.DB.Where("data_id = ? AND type = ?", id, "env_tag").Delete(&models.DataRelation{})
+	database.DB.Where("data_id = ? AND type = ?", id, constant.RelationTypeEnvTag).Delete(&models.DataRelation{})
 }
 

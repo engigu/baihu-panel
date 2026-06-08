@@ -76,7 +76,7 @@ type Task struct {
 	Command        BigText       `json:"command"`                                    // 普通任务的命令
 	PreCommand     BigText       `json:"pre_command"`                                // 执行前的命令
 	PostCommand    BigText       `json:"post_command"`                               // 执行后的命令
-	Tags           string        `json:"tags" gorm:"size:255;default:''"`            // 标签，逗号分隔
+	Tags           string        `json:"tags" gorm:"-"`                              // 标签，逗号分隔
 	Type           string        `json:"type" gorm:"size:20;default:'task'"`         // 任务类型: constant.TaskTypeNormal, constant.TaskTypeRepo
 	TriggerType    string        `json:"trigger_type" gorm:"size:25;default:'cron'"` // 触发类型: constant.TriggerTypeCron, constant.TriggerTypeBaihuStartup
 	Config         BigText       `json:"config"`                                     // 配置 JSON（仓库同步配置等）
@@ -84,7 +84,7 @@ type Task struct {
 	Timeout        int           `json:"timeout" gorm:"default:30"`                  // 超时时间（分钟），默认30分钟
 	WorkDir        string        `json:"work_dir" gorm:"size:255;default:''"`        // 工作目录，为空则使用 scripts 目录
 	CleanConfig    string        `json:"clean_config" gorm:"size:255;default:''"`    // 清理配置 JSON
-	Envs           BigText       `json:"envs"`                                       // 环境变量ID列表，逗号分隔
+	Envs           BigText       `json:"envs" gorm:"-"`                              // 环境变量ID列表，逗号分隔
 	Languages      TaskLanguages `json:"languages" gorm:"type:text"`                 // 针对本地任务的语言配置列表
 	AgentID        *string       `json:"agent_id" gorm:"size:20;index"`              // Agent ID，为空表示本地执行
 	RetryCount     int           `json:"retry_count" gorm:"default:0"`               // 失败重试次数

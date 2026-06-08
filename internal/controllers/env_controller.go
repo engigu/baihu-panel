@@ -1,8 +1,10 @@
 package controllers
 
 import (
+	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
+	"github.com/engigu/baihu-panel/internal/services/relation"
 	"github.com/engigu/baihu-panel/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -72,7 +74,7 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 
 	envVar := ec.envService.CreateEnvVar(req.Name, req.Value, req.Remark, req.Type, hidden, enabled, userID)
 	if envVar != nil {
-		ec.envService.SaveEnvTags(envVar.ID, req.Tags)
+		relation.DataRelation.SaveTags(envVar.ID, constant.RelationTypeEnvTag, req.Tags)
 		envVar.Tags = req.Tags
 	}
 	utils.Success(c, vo.ToEnvVO(envVar))
@@ -205,7 +207,7 @@ func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
 		return
 	}
 
-	ec.envService.SaveEnvTags(envVar.ID, req.Tags)
+	relation.DataRelation.SaveTags(envVar.ID, constant.RelationTypeEnvTag, req.Tags)
 	envVar.Tags = req.Tags
 
 	utils.Success(c, vo.ToEnvVO(envVar))

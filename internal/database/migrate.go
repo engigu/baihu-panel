@@ -9,6 +9,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/rs/xid"
 )
 
 var allModels = []interface{}{
@@ -97,25 +98,188 @@ func getModelSignature(models []interface{}) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// customMigrations 自定义迁移（处理 AutoMigrate 无法自动完成的变更）
+// customMigrations 自定义迁移，处理 AutoMigrate 无法自动解决的变更
 func customMigrations() error {
 	// 检查 ql_tokens 表是否存在
 	if DB.Migrator().HasTable("ql_tokens") {
-		// 将 code 列重命名为 token（如果 code 列存在）
+		// 如果 code 列存在，且 token 列不存在，则重命名
 		if DB.Migrator().HasColumn(&models.AgentToken{}, "code") {
 			if err := DB.Migrator().RenameColumn(&models.AgentToken{}, "code", "token"); err != nil {
-				logger.Debugf("[Database] 重命名 ql_tokens.code 列: %v", err)
+				logger.Debugf("[Database] 重命名 ql_tokens.code 失败: %v", err)
 			}
 		}
 	}
 	// 移除 deps 表中的 type 字段（如果存在）
 	if DB.Migrator().HasColumn(&models.Dependency{}, "type") {
 		if err := DB.Migrator().DropColumn(&models.Dependency{}, "type"); err != nil {
-			logger.Debugf("[Database] 移除 deps.type 列失败: %v", err)
+			logger.Debugf("[Database] 移除 deps.type 字段失败: %v", err)
 		} else {
-			logger.Infof("[Database] 已成功移除 deps 表中的冗余 type 列")
+			logger.Infof("[Database] 已成功移除 deps 表中的 type 字段")
 		}
 	}
 
+	migrateTaskTags()
+	migrateTaskEnvs()
+
 	return nil
+}
+
+// migrateTaskEnvs 迁移旧的任务绑定环境变量到通用数据关联表
+func migrateTaskEnvs() {
+	// 检查 settings 表中是否已经记录了迁移状态
+	if DB.Migrator().HasTable(&models.Setting{}) {
+		var setting models.Setting
+		res := DB.Where(&models.Setting{Section: "system", Key: "task_envs_migrated"}).Limit(1).Find(&setting)
+		if res.RowsAffected > 0 && string(setting.Value) == "true" {
+			return
+		}
+	}
+
+	if !DB.Migrator().HasColumn(&models.Task{}, "envs") {
+		markTaskEnvsMigrated()
+		return
+	}
+	logger.Infof("[Database] 正在迁移旧任务环境变量绑定...")
+
+	type TaskMigration struct {
+		ID   string
+		Envs models.BigText
+	}
+	var tasks []TaskMigration
+	DB.Table((&models.Task{}).TableName()).Select("id, envs").Where("envs IS NOT NULL AND envs != ?", "").Find(&tasks)
+
+	for _, task := range tasks {
+		envs := strings.Split(string(task.Envs), ",")
+		for _, envID := range envs {
+			envID = strings.TrimSpace(envID)
+			if envID == "" {
+				continue
+			}
+			var count int64
+			DB.Model(&models.DataRelation{}).Where("data_id = ? AND relate_id = ? AND type = ?", task.ID, envID, constant.RelationTypeTaskEnv).Count(&count)
+			if count == 0 {
+				relation := models.DataRelation{
+					ID:        xid.New().String(),
+					DataID:    task.ID,
+					RelateID:  envID,
+					Type:      constant.RelationTypeTaskEnv,
+					CreatedAt: models.Now(),
+					UpdatedAt: models.Now(),
+				}
+				DB.Create(&relation)
+			}
+		}
+	}
+
+	// if err := DB.Migrator().DropColumn(&models.Task{}, "envs"); err != nil {
+	// 	logger.Debugf("[Database] 移除 bh_tasks.envs 字段失败: %v", err)
+	// } else {
+	// 	logger.Infof("[Database] 成功迁移 %d 个环境变量绑定的任务，并删除了旧 envs 字段", len(tasks))
+	// }
+	logger.Infof("[Database] 成功迁移 %d 个环境变量绑定的任务", len(tasks))
+	markTaskEnvsMigrated()
+}
+
+func markTaskEnvsMigrated() {
+	if !DB.Migrator().HasTable(&models.Setting{}) {
+		return
+	}
+	var setting models.Setting
+	res := DB.Where(&models.Setting{Section: "system", Key: "task_envs_migrated"}).Limit(1).Find(&setting)
+	if res.RowsAffected > 0 {
+		DB.Model(&setting).Update("value", models.BigText("true"))
+	} else {
+		DB.Create(&models.Setting{
+			ID:      xid.New().String(),
+			Section: "system",
+			Key:     "task_envs_migrated",
+			Value:   models.BigText("true"),
+		})
+	}
+}
+
+// migrateTaskTags 迁移旧的任务标签到通用数据关联表
+func migrateTaskTags() {
+	// 检查 settings 表中是否已经记录了迁移状态
+	if DB.Migrator().HasTable(&models.Setting{}) {
+		var setting models.Setting
+		res := DB.Where(&models.Setting{Section: "system", Key: "task_tags_migrated"}).Limit(1).Find(&setting)
+		if res.RowsAffected > 0 && string(setting.Value) == "true" {
+			return
+		}
+	}
+
+	if !DB.Migrator().HasColumn(&models.Task{}, "tags") {
+		markTaskTagsMigrated()
+		return
+	}
+	logger.Infof("[Database] 正在迁移旧任务标签...")
+
+	type TaskMigration struct {
+		ID   string
+		Tags string
+	}
+	var tasks []TaskMigration
+	DB.Table((&models.Task{}).TableName()).Select("id, tags").Where("tags != ?", "").Find(&tasks)
+
+	for _, task := range tasks {
+		tags := strings.Split(task.Tags, ",")
+		for _, tag := range tags {
+			tag = strings.TrimSpace(tag)
+			if tag == "" {
+				continue
+			}
+			var storage models.DataStorage
+			res := DB.Where("type = ? AND name = ?", constant.RelationTypeTaskTag, tag).Limit(1).Find(&storage)
+			if res.RowsAffected == 0 {
+				storage = models.DataStorage{
+					ID:        xid.New().String(),
+					Type:      constant.RelationTypeTaskTag,
+					Name:      tag,
+					CreatedAt: models.Now(),
+					UpdatedAt: models.Now(),
+				}
+				DB.Create(&storage)
+			}
+			var count int64
+			DB.Model(&models.DataRelation{}).Where("data_id = ? AND relate_id = ? AND type = ?", task.ID, storage.ID, constant.RelationTypeTaskTag).Count(&count)
+			if count == 0 {
+				relation := models.DataRelation{
+					ID:        xid.New().String(),
+					DataID:    task.ID,
+					RelateID:  storage.ID,
+					Type:      constant.RelationTypeTaskTag,
+					CreatedAt: models.Now(),
+					UpdatedAt: models.Now(),
+				}
+				DB.Create(&relation)
+			}
+		}
+	}
+
+	// if err := DB.Migrator().DropColumn(&models.Task{}, "tags"); err != nil {
+	// 	logger.Debugf("[Database] 移除 bh_tasks.tags 字段失败: %v", err)
+	// } else {
+	// 	logger.Infof("[Database] 成功迁移 %d 个带有标签的任务，并删除了旧 tags 字段", len(tasks))
+	// }
+	logger.Infof("[Database] 成功迁移 %d 个带有标签的任务", len(tasks))
+	markTaskTagsMigrated()
+}
+
+func markTaskTagsMigrated() {
+	if !DB.Migrator().HasTable(&models.Setting{}) {
+		return
+	}
+	var setting models.Setting
+	res := DB.Where(&models.Setting{Section: "system", Key: "task_tags_migrated"}).Limit(1).Find(&setting)
+	if res.RowsAffected > 0 {
+		DB.Model(&setting).Update("value", models.BigText("true"))
+	} else {
+		DB.Create(&models.Setting{
+			ID:      xid.New().String(),
+			Section: "system",
+			Key:     "task_tags_migrated",
+			Value:   models.BigText("true"),
+		})
+	}
 }

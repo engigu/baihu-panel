@@ -159,6 +159,11 @@ const (
 	EnvTypeNormal = "normal"
 	EnvTypeSecret = "secret"
 
+	// Relation Types
+	RelationTypeTaskTag = "task_tag"
+	RelationTypeTaskEnv = "task_env"
+	RelationTypeEnvTag  = "env_tag"
+
 	// WebSocket 安全常量
 	// PongWait 收到 pong 的超时时间
 	PongWait = 60 * time.Second
