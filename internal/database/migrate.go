@@ -120,6 +120,7 @@ func customMigrations() error {
 
 	migrateTaskTags()
 	migrateTaskEnvs()
+	migrateEnvTags()
 
 	return nil
 }
@@ -283,3 +284,84 @@ func markTaskTagsMigrated() {
 		})
 	}
 }
+
+// migrateEnvTags 迁移旧的变量标签关系
+func migrateEnvTags() {
+	if DB.Migrator().HasTable(&models.Setting{}) {
+		var setting models.Setting
+		res := DB.Where(&models.Setting{Section: "system", Key: "env_tags_migrated"}).Limit(1).Find(&setting)
+		if res.RowsAffected > 0 && string(setting.Value) == "true" {
+			return
+		}
+	}
+
+	if !DB.Migrator().HasColumn(&models.EnvironmentVariable{}, "tags") {
+		markEnvTagsMigrated()
+		return
+	}
+	logger.Infof("[Database] 迁移环境变量标签...")
+
+	type EnvMigration struct {
+		ID   string
+		Tags string
+	}
+	var envs []EnvMigration
+	DB.Table((&models.EnvironmentVariable{}).TableName()).Select("id, tags").Where("tags != ?", "").Find(&envs)
+
+	for _, env := range envs {
+		tags := strings.Split(env.Tags, ",")
+		for _, tag := range tags {
+			tag = strings.TrimSpace(tag)
+			if tag == "" {
+				continue
+			}
+			var storage models.DataStorage
+			res := DB.Where("type = ? AND name = ?", constant.RelationTypeEnvTag, tag).Limit(1).Find(&storage)
+			if res.RowsAffected == 0 {
+				storage = models.DataStorage{
+					ID:        xid.New().String(),
+					Type:      constant.RelationTypeEnvTag,
+					Name:      tag,
+					CreatedAt: models.Now(),
+					UpdatedAt: models.Now(),
+				}
+				DB.Create(&storage)
+			}
+			var count int64
+			DB.Model(&models.DataRelation{}).Where("data_id = ? AND relate_id = ? AND type = ?", env.ID, storage.ID, constant.RelationTypeEnvTag).Count(&count)
+			if count == 0 {
+				relation := models.DataRelation{
+					ID:        xid.New().String(),
+					DataID:    env.ID,
+					RelateID:  storage.ID,
+					Type:      constant.RelationTypeEnvTag,
+					CreatedAt: models.Now(),
+					UpdatedAt: models.Now(),
+				}
+				DB.Create(&relation)
+			}
+		}
+	}
+
+	logger.Infof("[Database] 成功迁移 %d 个变量标签关系", len(envs))
+	markEnvTagsMigrated()
+}
+
+func markEnvTagsMigrated() {
+	if !DB.Migrator().HasTable(&models.Setting{}) {
+		return
+	}
+	var setting models.Setting
+	res := DB.Where(&models.Setting{Section: "system", Key: "env_tags_migrated"}).Limit(1).Find(&setting)
+	if res.RowsAffected > 0 {
+		DB.Model(&setting).Update("value", models.BigText("true"))
+	} else {
+		DB.Create(&models.Setting{
+			ID:      xid.New().String(),
+			Section: "system",
+			Key:     "env_tags_migrated",
+			Value:   models.BigText("true"),
+		})
+	}
+}
+
