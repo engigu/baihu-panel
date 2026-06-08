@@ -1,148 +1,43 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-    Plus, Globe, Search, RefreshCw, Loader2, Trash2,
-    Terminal as TerminalIcon, X, AlertCircle,
-    Check, ChevronsUpDown, ArrowRight, Boxes, Zap
-} from 'lucide-vue-next'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Plus, Loader2, Terminal as TerminalIcon, X, AlertCircle, Boxes, Zap } from 'lucide-vue-next'
 import { api, type MiseLanguage } from '@/api'
 import { toast } from 'vue-sonner'
 import XTerminal from '@/components/XTerminal.vue'
-import { cn } from '@/lib/utils'
-import BaihuDialog from '@/components/ui/BaihuDialog.vue'
 
-const SUPPORTED_DEPS_LANGS = [
-    'python', 'node', 'ruby', 'go', 'rust', 'bun', 'php',
-    'deno', 'dotnet', 'elixir', 'erlang', 'lua', 'nim',
-    'dart', 'flutter', 'perl', 'crystal'
-]
+// Import components
+import RuntimeListTab from './components/RuntimeListTab.vue'
+import EnvMirrorTab from './components/EnvMirrorTab.vue'
+import InstallLanguageDialog from './components/InstallLanguageDialog.vue'
+import LanguageDetailDialog from './components/LanguageDetailDialog.vue'
 
 interface DisplayLanguage extends Omit<MiseLanguage, 'source'> {
     source: string
     isGlobal: boolean
 }
 
+const activeTab = ref('runtimes')
+
+// Shared State
 const languages = ref<DisplayLanguage[]>([])
 const loading = ref(false)
-const searchQuery = ref('')
 const errorMsg = ref('')
+
 const syncing = ref(false)
 const showSyncConfirm = ref(false)
+
+// Dialog Refs and States
+const installDialogRef = ref<InstanceType<typeof InstallLanguageDialog> | null>(null)
 const showDetailDialog = ref(false)
 const selectedLang = ref<DisplayLanguage | null>(null)
 
-function viewDetail(lang: DisplayLanguage) {
-    selectedLang.value = lang
-    showDetailDialog.value = true
-}
-
-const showInstallDialog = ref(false)
-const newLangPlugin = ref('')
-const newLangVersion = ref('')
-
-// 下拉列表相关
-const availablePlugins = ref<string[]>([])
-const loadingPlugins = ref(false)
-const pluginSearch = ref('')
-const openPluginPopover = ref(false)
-
-const availableVersions = ref<string[]>([])
-const loadingVersions = ref(false)
-const versionSearch = ref('')
-const openVersionPopover = ref(false)
-
-const filteredPlugins = computed(() => {
-    if (!pluginSearch.value) return availablePlugins.value
-    const s = pluginSearch.value.toLowerCase()
-    return availablePlugins.value.filter(p => p.toLowerCase().includes(s))
-})
-
-const activeTab = ref('runtimes')
-
-// 全局变量相关
-const globalEnvs = ref<Record<string, string>>({})
-const loadingEnvs = ref(false)
-const showAddEnvDialog = ref(false)
-const newEnvKey = ref('')
-const newEnvValue = ref('')
-
-const ENV_PRESETS = [
-    { label: 'npm (淘宝镜像)', key: 'NPM_CONFIG_REGISTRY', value: 'https://registry.npmmirror.com' },
-    { label: 'Python (清华镜像)', key: 'PIP_INDEX_URL', value: 'https://pypi.tuna.tsinghua.edu.cn/simple' },
-    { label: 'Go (goproxy.cn)', key: 'GOPROXY', value: 'https://goproxy.cn,direct' },
-    { label: 'Rust (Sparse protocol)', key: 'CARGO_REGISTRY_CRATES_IO_PROTOCOL', value: 'sparse' },
-    { label: 'Rust (中科大镜像)', key: 'CARGO_REGISTRIES_CRATES_IO_INDEX', value: 'https://mirrors.ustc.edu.cn/crates.io-index' },
-]
-
-async function loadGlobalEnvs() {
-    loadingEnvs.value = true
-    try {
-        globalEnvs.value = await api.mise.getEnvs()
-    } catch (e) {
-        toast.error('获取全局环境变量失败: ' + e)
-    } finally {
-        loadingEnvs.value = false
-    }
-}
-
-async function handleSetEnv(key: string, value: string) {
-    try {
-        await api.mise.setEnv(key, value)
-        toast.success(`环境变量 ${key} 设置成功`)
-        loadGlobalEnvs()
-    } catch (e) {
-        toast.error('设置失败: ' + e)
-    }
-}
-
-async function handleUnsetEnv(key: string) {
-    try {
-        await api.mise.unsetEnv(key)
-        toast.success(`环境变量 ${key} 已移除`)
-        loadGlobalEnvs()
-    } catch (e) {
-        toast.error('移除失败: ' + e)
-    }
-}
-
-function applyPreset(preset: { key: string, value: string }) {
-    newEnvKey.value = preset.key
-    newEnvValue.value = preset.value
-    showAddEnvDialog.value = true
-}
-
-function startAddEnv() {
-    if (!newEnvKey.value.trim()) return
-    handleSetEnv(newEnvKey.value.trim(), newEnvValue.value.trim())
-    showAddEnvDialog.value = false
-    newEnvKey.value = ''
-    newEnvValue.value = ''
-}
-
+// Terminal State
 const showTerminalDialog = ref(false)
 const terminalCommand = ref('')
 const isInstallSuccess = ref(false)
-
-const filteredLanguages = computed(() => {
-    if (!searchQuery.value) return languages.value
-    const q = searchQuery.value.toLowerCase()
-    return languages.value.filter(l => l.plugin.toLowerCase().includes(q) || l.version.toLowerCase().includes(q))
-})
-
-const filteredVersions = computed(() => {
-    const list = availableVersions.value
-    if (!versionSearch.value) return list
-    const s = versionSearch.value.toLowerCase()
-    return list.filter(v => v.toLowerCase().includes(s))
-})
 
 async function loadLanguages() {
     loading.value = true
@@ -180,65 +75,8 @@ async function handleSync() {
     }
 }
 
-async function fetchPlugins() {
-    if (availablePlugins.value.length > 0) return
-    loadingPlugins.value = true
-    try {
-        availablePlugins.value = await api.mise.plugins()
-    } catch (e) {
-        console.error('Fetch plugins failed', e)
-    } finally {
-        loadingPlugins.value = false
-    }
-}
-
-async function fetchVersions(plugin: string) {
-    if (!plugin) return
-    loadingVersions.value = true
-    availableVersions.value = []
-    try {
-        availableVersions.value = await api.mise.versions(plugin)
-    } catch (e) {
-        console.error('Fetch versions failed', e)
-    } finally {
-        loadingVersions.value = false
-        // 如果当前版本为空且已经有列表，默认选择第一个（通常是最新版本）
-        if (!newLangVersion.value && availableVersions.value.length > 0) {
-            newLangVersion.value = availableVersions.value[0] || ''
-        }
-    }
-}
-
-watch(newLangPlugin, (newVal) => {
-    if (newVal) {
-        fetchVersions(newVal)
-    } else {
-        availableVersions.value = []
-    }
-    newLangVersion.value = ''
-})
-
 function openInstallDialog() {
-    newLangPlugin.value = ''
-    newLangVersion.value = ''
-    showInstallDialog.value = true
-    fetchPlugins()
-}
-
-function startInstall() {
-    if (!newLangPlugin.value.trim()) {
-        toast.error('请输入或选择语言名称')
-        return
-    }
-    if (!newLangVersion.value.trim()) {
-        toast.error('请选择版本')
-        return
-    }
-    const version = newLangVersion.value.trim()
-    const cmd = `mise install ${newLangPlugin.value.trim()}@${version}`
-
-    showInstallDialog.value = false
-    runInTerminal(cmd)
+    installDialogRef.value?.openDialog()
 }
 
 function runInTerminal(command: string) {
@@ -247,27 +85,15 @@ function runInTerminal(command: string) {
     showTerminalDialog.value = true
 }
 
+function handleInstall(plugin: string, version: string) {
+    const cmd = `mise install ${plugin}@${version}`
+    runInTerminal(cmd)
+}
+
 function confirmDelete(lang: MiseLanguage) {
     const cmd = `mise uninstall ${lang.plugin}@${lang.version}`
     runInTerminal(cmd)
 }
-
-async function handleTerminalClose() {
-    showTerminalDialog.value = false
-    // 无论成功失败，都触发环境同步并刷新列表
-    syncing.value = true
-    try {
-        await api.mise.sync()
-        toast.success('环境同步完成')
-    } catch (e) {
-        toast.error('环境同步失败: ' + e)
-    } finally {
-        syncing.value = false
-    }
-    await loadLanguages()
-}
-
-import { getLangIcon } from '@/utils/icons'
 
 async function handleVerify(lang: MiseLanguage) {
     try {
@@ -293,9 +119,27 @@ async function toggleDefault(lang: MiseLanguage) {
     }
 }
 
+async function handleTerminalClose() {
+    showTerminalDialog.value = false
+    syncing.value = true
+    try {
+        await api.mise.sync()
+        toast.success('环境同步完成')
+    } catch (e) {
+        toast.error('环境同步失败: ' + e)
+    } finally {
+        syncing.value = false
+    }
+    await loadLanguages()
+}
+
+function viewDetail(lang: DisplayLanguage) {
+    selectedLang.value = lang
+    showDetailDialog.value = true
+}
+
 onMounted(() => {
     loadLanguages()
-    loadGlobalEnvs()
 })
 </script>
 
@@ -327,7 +171,6 @@ onMounted(() => {
             </div>
         </div>
 
-        <!-- 贴士栏：全宽 Banner 增加视觉重心 -->
         <div
             class="flex items-center gap-2.5 text-[13px] text-amber-600 dark:text-amber-500 bg-amber-500/10 px-4 py-2.5 rounded-lg border border-amber-500/20 leading-relaxed shadow-sm select-none">
             <AlertCircle class="h-4 w-4 shrink-0" />
@@ -344,327 +187,27 @@ onMounted(() => {
             </div>
 
             <TabsContent value="runtimes" class="space-y-4 outline-none">
-                <!-- 列表部分 -->
-                <div class="rounded-lg border bg-card overflow-hidden">
-                    <div
-                        class="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 border-b bg-muted/30 gap-2 sm:gap-4">
-                        <div class="relative w-full sm:w-64 group">
-                            <Search
-                                class="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 transition-colors group-focus-within:text-primary" />
-                            <Input v-model="searchQuery" placeholder="搜索语言或版本..."
-                                class="h-9 pl-9 text-sm bg-muted/20 border-border/40 focus:bg-background transition-all" />
-                        </div>
-                        <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                            <Button variant="outline" class="h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm shadow-sm"
-                                @click="showSyncConfirm = true" :disabled="syncing || loading">
-                                <RefreshCw class="h-3.5 w-3.5 sm:mr-2" :class="{ 'animate-spin': syncing }" />
-                                <span class="hidden sm:inline">更新环境</span>
-                                <span class="sm:hidden">同步</span>
-                            </Button>
-                            <Button variant="outline" size="icon" class="h-8 w-8 sm:h-9 sm:w-9 shrink-0 shadow-sm"
-                                @click="loadLanguages" :disabled="loading">
-                                <RefreshCw class="h-3.5 w-3.5 sm:h-4 sm:w-4" :class="{ 'animate-spin': loading }" />
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div class="max-h-[700px] overflow-y-auto min-h-[200px] p-3 sm:p-4">
-                        <div v-if="loading && languages.length === 0" class="text-center py-12 text-muted-foreground">
-                            <Loader2 class="h-8 w-8 animate-spin mx-auto mb-2 opacity-20" />
-                            正在扫描运行环境...
-                        </div>
-                        <div v-else-if="filteredLanguages.length === 0 && !loading"
-                            class="text-center py-12 text-muted-foreground">
-                            <Globe class="h-12 w-12 mx-auto mb-2 opacity-10" />
-                            {{ searchQuery ? '未找到匹配的语言' : '未发现已安装的语言' }}
-                        </div>
-                        <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
-                            <div v-for="(lang, index) in filteredLanguages" :key="lang.plugin + lang.version"
-                                class="relative group/item flex flex-col p-3.5 sm:p-4 rounded-xl border bg-card/40 hover:bg-accent/40 hover:border-primary/40 transition-all duration-200 shadow-sm">
-                                
-                                <!-- 顶部：图标、名称、版本与删除 (移动端始终显示快捷删除，桌面端悬浮显示) -->
-                                <div class="flex items-start justify-between gap-3">
-                                    <div class="flex items-center gap-3 overflow-hidden">
-                                        <!-- 序号 -->
-                                        <div class="flex items-center justify-center w-6 sm:w-7 shrink-0">
-                                            <span class="text-[10px] font-mono text-muted-foreground/50 tabular-nums">#{{
-                                                filteredLanguages.length - index }}</span>
-                                        </div>
-                                        <!-- 图标 -->
-                                        <div class="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center font-bold text-primary uppercase shrink-0 border border-primary/10 shadow-sm overflow-hidden bg-background">
-                                            <template v-if="getLangIcon(lang.plugin)">
-                                                <div class="w-full h-full p-2 flex items-center justify-center">
-                                                    <img :src="getLangIcon(lang.plugin)" :alt="lang.plugin" class="w-full h-full object-contain" />
-                                                </div>
-                                            </template>
-                                            <template v-else>
-                                                <span class="text-xs">{{ lang.plugin.substring(0, 2) }}</span>
-                                            </template>
-                                        </div>
-                                        <!-- 基本信息 -->
-                                        <div class="min-w-0">
-                                            <div class="flex items-center gap-2">
-                                                <span class="font-bold capitalize truncate text-sm sm:text-base text-foreground">{{ lang.plugin }}</span>
-                                                <Badge v-if="lang.isGlobal" variant="secondary"
-                                                    class="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] h-4.5 px-1.5 font-medium shrink-0">
-                                                    默认
-                                                </Badge>
-                                            </div>
-                                            <div class="mt-0.5">
-                                                <Badge variant="outline" class="font-mono text-[10px] h-4.5 px-1.5 bg-muted/50 border-muted-foreground/20 leading-none">{{ lang.version }}</Badge>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- 右上角删除按钮 (移动端直接显示，桌面端隐现) -->
-                                    <Button variant="ghost" size="icon" 
-                                        class="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all sm:opacity-0 group-hover/item:opacity-100" 
-                                        @click="confirmDelete(lang)" title="卸载">
-                                        <Trash2 class="h-4 w-4" />
-                                    </Button>
-                                </div>
-
-                                <!-- 中间：完整路径 (可点击查看详情) -->
-                                <div class="mt-3 px-1">
-                                    <div class="text-[11px] text-muted-foreground cursor-help hover:text-primary transition-colors flex items-center bg-muted/30 rounded-md py-1.5 px-2 group/path" @click="viewDetail(lang)">
-                                        <TerminalIcon class="h-3 w-3 mr-1.5 shrink-0 opacity-50" />
-                                        <span class="font-mono truncate select-all">{{ lang.source }}</span>
-                                    </div>
-                                </div>
-
-                                <!-- 底部：操作按钮网格 -->
-                                <div class="mt-4 flex items-center gap-2">
-                                    <Button variant="outline" size="sm"
-                                        :disabled="!SUPPORTED_DEPS_LANGS.includes(lang.plugin)"
-                                        class="h-8 px-0 text-[11px] font-semibold flex-1 bg-background/50 disabled:opacity-40 disabled:cursor-not-allowed"
-                                        @click="$router.push(`/dependencies?language=${lang.plugin}&version=${lang.version}`)">
-                                        依赖管理
-                                    </Button>
-                                    <Button variant="outline" size="sm"
-                                        class="h-8 px-0 text-[11px] font-semibold flex-1 bg-background/50"
-                                        @click="handleVerify(lang)">
-                                        运行验证
-                                    </Button>
-                                    <Button variant="outline" size="sm"
-                                        :class="cn('h-8 px-0 text-[11px] font-semibold flex-1 bg-background/50', 
-                                            lang.isGlobal ? 'text-amber-600 border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10' : '')"
-                                        @click="toggleDefault(lang)">
-                                        {{ lang.isGlobal ? '取消默认' : '设为默认' }}
-                                    </Button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <RuntimeListTab 
+                    :languages="languages" 
+                    :loading="loading" 
+                    :syncing="syncing"
+                    @sync="showSyncConfirm = true"
+                    @refresh="loadLanguages"
+                    @uninstall="confirmDelete"
+                    @verify="handleVerify"
+                    @toggle-default="toggleDefault"
+                    @view-detail="viewDetail"
+                />
             </TabsContent>
 
             <TabsContent value="envs" class="space-y-4 outline-none">
-                <div class="rounded-lg border bg-card p-6">
-                    <div class="flex items-start justify-between mb-8">
-                        <div>
-                            <h3 class="text-lg font-bold flex items-center gap-2">
-                                <Globe class="h-5 w-5 text-primary" />
-                                镜像源加速 (Mirror Acceleration)
-                            </h3>
-                            <p class="text-xs text-muted-foreground mt-1 max-w-2xl">
-                                通过配置全局环境变量，加速编程语言环境及依赖包（如 pip, npm, go get）的安装速度。
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- 常用预设网格 -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div v-for="preset in ENV_PRESETS" :key="preset.label" :class="cn(
-                            'relative p-4 rounded-xl border transition-all group overflow-hidden',
-                            globalEnvs[preset.key] ? 'bg-primary/5 border-primary shadow-sm' : 'bg-muted/30 hover:border-primary/50 cursor-pointer'
-                        )"
-                            @click="applyPreset({ key: preset.key, value: globalEnvs[preset.key] || preset.value })">
-
-                            <div class="flex items-start justify-between mb-2">
-                                <div class="font-semibold text-sm">{{ preset.label }}</div>
-                                <div v-if="globalEnvs[preset.key]"
-                                    class="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                                    <Check class="h-3 w-3" />
-                                </div>
-                            </div>
-
-                            <div class="text-[10px] font-mono mb-3">
-                                <div class="text-muted-foreground truncate">{{ preset.key }}</div>
-                                <div v-if="globalEnvs[preset.key]"
-                                    class="mt-1 text-primary/80 font-medium truncate bg-primary/5 px-1.5 py-0.5 rounded-sm border border-primary/10"
-                                    :title="globalEnvs[preset.key] as string">
-                                    {{ globalEnvs[preset.key] }}
-                                </div>
-                            </div>
-
-                            <div class="flex items-center justify-between mt-auto">
-                                <span v-if="globalEnvs[preset.key]" class="text-[10px] font-medium text-primary">
-                                    已启用 (点击修改)
-                                </span>
-                                <span v-else
-                                    class="text-[10px] font-medium text-muted-foreground group-hover:text-primary transition-colors flex items-center">
-                                    立即启用
-                                    <ArrowRight class="h-3 w-3 ml-1 group-hover:translate-x-1 transition-transform" />
-                                </span>
-
-                                <Button v-if="globalEnvs[preset.key]" variant="ghost" size="icon"
-                                    class="h-6 w-6 text-destructive hover:bg-destructive/10"
-                                    @click.stop="handleUnsetEnv(preset.key)">
-                                    <Trash2 class="h-3.5 w-3.5" />
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <EnvMirrorTab />
             </TabsContent>
         </Tabs>
 
-        <!-- 安装对话框 (带搜索下拉) -->
-        <Dialog v-model:open="showInstallDialog">
-            <DialogContent class="sm:max-w-[400px]">
-                <DialogHeader>
-                    <DialogTitle>管理语言运行时</DialogTitle>
-                    <DialogDescription>配置并安装新的编程语言环境</DialogDescription>
-                </DialogHeader>
-                <div class="grid gap-6 py-4">
-                    <!-- 语言选择 -->
-                    <div class="grid gap-2">
-                        <Label>语言名称 (Mise Plugin)</Label>
-                        <Popover v-model:open="openPluginPopover">
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" role="combobox" :aria-expanded="openPluginPopover"
-                                    class="justify-between w-full font-normal">
-                                    {{ newLangPlugin || "选择或输入语言..." }}
-                                    <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent class="p-0 w-[var(--reka-popover-trigger-width)]" align="start">
-                                <div class="p-2 border-b">
-                                    <div class="relative">
-                                        <Search
-                                            class="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                                        <Input v-model="pluginSearch" placeholder="搜索插件..." class="h-8 pl-8 text-xs"
-                                            @keydown.enter="() => { if (pluginSearch) { newLangPlugin = pluginSearch; openPluginPopover = false } }" />
-                                    </div>
-                                </div>
-                                <ScrollArea class="h-64">
-                                    <div class="p-1">
-                                        <div v-if="loadingPlugins" class="flex items-center justify-center py-6">
-                                            <Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
-                                        </div>
-                                        <div v-else-if="filteredPlugins.length === 0"
-                                            class="py-6 text-center text-xs text-muted-foreground">
-                                            未找到匹配插件
-                                        </div>
-                                        <template v-else>
-                                            <button v-for="p in filteredPlugins" :key="p"
-                                                @click="() => { newLangPlugin = p; openPluginPopover = false }"
-                                                class="w-full flex items-center px-2 py-1.5 text-sm rounded-sm hover:bg-muted text-left transition-colors group">
-                                                <div
-                                                    class="mr-2 h-4 w-4 shrink-0 flex items-center justify-center relative">
-                                                    <div v-if="getLangIcon(p)"
-                                                        class="w-full h-full rounded-sm bg-white/80 overflow-hidden p-0.5">
-                                                        <img :src="getLangIcon(p)"
-                                                            class="w-full h-full object-contain" />
-                                                    </div>
-                                                    <div v-else
-                                                        class="w-full h-full flex items-center justify-center bg-primary/10 rounded-sm text-[8px] font-bold uppercase">
-                                                        {{ p.substring(0, 2) }}
-                                                    </div>
-                                                    <Check v-if="newLangPlugin === p"
-                                                        class="absolute -right-2 -top-1 h-3 w-3 text-primary bg-background rounded-full border shadow-sm" />
-                                                </div>
-                                                <span :class="{ 'font-bold text-primary': newLangPlugin === p }">{{ p
-                                                }}</span>
-                                            </button>
-                                        </template>
-                                    </div>
-                                </ScrollArea>
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-
-                    <!-- 版本选择 -->
-                    <div class="grid gap-2">
-                        <Label>版本</Label>
-                        <Popover v-model:open="openVersionPopover">
-                            <PopoverTrigger asChild :disabled="!newLangPlugin">
-                                <Button variant="outline" role="combobox" :aria-expanded="openVersionPopover"
-                                    class="justify-between w-full font-normal" :disabled="!newLangPlugin">
-                                    {{ newLangVersion || "选择或输入版本..." }}
-                                    <div class="flex items-center">
-                                        <Loader2 v-if="loadingVersions" class="mr-2 h-3 w-3 animate-spin opacity-50" />
-                                        <ChevronsUpDown class="h-4 w-4 shrink-0 opacity-50" />
-                                    </div>
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent class="p-0 w-[var(--reka-popover-trigger-width)]" align="start">
-                                <div class="p-2 border-b">
-                                    <div class="relative">
-                                        <Search
-                                            class="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                                        <Input v-model="versionSearch" placeholder="搜索版本..." class="h-8 pl-8 text-xs"
-                                            @keydown.enter="() => { if (versionSearch) { newLangVersion = versionSearch; openVersionPopover = false } }" />
-                                    </div>
-                                </div>
-                                <ScrollArea class="h-64">
-                                    <div class="p-1">
-                                        <div class="p-1">
-                                            <div v-if="loadingVersions" class="flex items-center justify-center py-6">
-                                                <Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
-                                            </div>
-                                            <div v-else-if="filteredVersions.length === 0"
-                                                class="py-6 text-center text-xs text-muted-foreground">
-                                                未找到匹配版本
-                                            </div>
-                                            <template v-else>
-                                                <button v-for="v in filteredVersions" :key="v"
-                                                    @click="() => { newLangVersion = v; openVersionPopover = false }"
-                                                    class="w-full flex items-center px-2 py-1.5 text-sm rounded-sm hover:bg-muted text-left transition-colors">
-                                                    <Check
-                                                        :class="cn('mr-2 h-3.5 w-3.5', newLangVersion === v ? 'opacity-100' : 'opacity-0')" />
-                                                    {{ v }}
-                                                </button>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </ScrollArea>
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" @click="showInstallDialog = false">取消</Button>
-                    <Button @click="startInstall">开始安装</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-
-        <!-- 启用/编辑镜像加速对话框 -->
-        <Dialog v-model:open="showAddEnvDialog">
-            <DialogContent class="sm:max-w-[400px]">
-                <DialogHeader>
-                    <DialogTitle>设置镜像加速</DialogTitle>
-                    <DialogDescription>
-                        正在配置 <span class="font-bold text-primary">{{ newEnvKey }}</span>。你可以根据需要调整镜像地址。
-                    </DialogDescription>
-                </DialogHeader>
-                <div class="grid gap-4 py-4">
-                    <div class="grid gap-2">
-                        <Label>环境变量名 (Readonly)</Label>
-                        <Input v-model="newEnvKey" readonly class="bg-muted cursor-default" />
-                    </div>
-                    <div class="grid gap-2">
-                        <Label>镜像源地址 (Value)</Label>
-                        <Input v-model="newEnvValue" placeholder="请输入镜像地址" @keydown.enter="startAddEnv" />
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" @click="showAddEnvDialog = false">取消</Button>
-                    <Button @click="startAddEnv">确认启用</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+        <!-- 对话框组件 -->
+        <InstallLanguageDialog ref="installDialogRef" @install="handleInstall" />
+        <LanguageDetailDialog v-model:open="showDetailDialog" :lang="selectedLang" />
 
         <!-- 终端对话框 -->
         <Dialog v-model:open="showTerminalDialog">
@@ -714,50 +257,5 @@ onMounted(() => {
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-
-        <!-- 语言详情弹窗 -->
-        <BaihuDialog v-model:open="showDetailDialog" title="运行环境详情" icon="Info">
-            <template v-if="selectedLang">
-                <div class="space-y-4">
-                    <div class="flex items-center gap-4 p-3 rounded-lg bg-muted/30 border border-border/40">
-                        <div
-                            class="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center font-bold text-primary uppercase overflow-hidden shrink-0 border border-primary/10">
-                            <template v-if="getLangIcon(selectedLang.plugin)">
-                                <div class="w-full h-full bg-white/90 p-2.5">
-                                    <img :src="getLangIcon(selectedLang.plugin)" class="w-full h-full object-contain" />
-                                </div>
-                            </template>
-                            <template v-else>
-                                <span class="text-lg">{{ selectedLang.plugin.substring(0, 2) }}</span>
-                            </template>
-                        </div>
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <span class="font-bold text-lg capitalize">{{ selectedLang.plugin }}</span>
-                                <Badge variant="outline" class="font-mono text-xs">{{ selectedLang.version }}</Badge>
-                            </div>
-                            <div class="text-xs text-muted-foreground mt-1">
-                                {{ selectedLang.isGlobal ? '系统全局默认版本' : '普通已安装版本' }}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="space-y-3">
-                        <div class="space-y-1.5">
-                            <div class="text-xs font-bold text-muted-foreground uppercase tracking-wider px-1">
-                                完整安装路径</div>
-                            <div
-                                class="p-3 bg-muted/50 rounded-lg border border-border/40 break-all text-xs font-mono leading-relaxed select-all">
-                                {{ selectedLang.source }}
-                            </div>
-                        </div>
-                        <div v-if="selectedLang.installed_at" class="flex flex-row items-center justify-between px-1">
-                            <div class="text-xs font-bold text-muted-foreground uppercase tracking-wider">安装日期</div>
-                            <div class="text-xs font-mono text-muted-foreground">{{ selectedLang.installed_at }}</div>
-                        </div>
-                    </div>
-                </div>
-            </template>
-        </BaihuDialog>
     </div>
 </template>
