@@ -66,7 +66,7 @@ defineExpose({
 
 <template>
   <Dialog v-model:open="isOpen">
-    <DialogContent class="w-[calc(100vw-2rem)] max-w-md min-w-0">
+    <DialogContent class="w-[calc(100vw-2rem)] max-w-md min-w-0" @open-auto-focus="(e) => e.preventDefault()">
       <DialogHeader>
         <DialogTitle>{{ isEdit ? (editingEnv.type === ENV_TYPE.SECRET ? '更新机密' : '编辑变量') : (editingEnv.type === ENV_TYPE.SECRET ? '新建机密' : '新建变量') }}</DialogTitle>
         <div v-if="editingEnv.type === ENV_TYPE.SECRET" class="flex items-center gap-2.5 p-3 mt-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-amber-600 dark:text-amber-400 text-xs leading-relaxed">
