@@ -230,6 +230,20 @@ func (m *AgentWSManager) BroadcastTasks(agentID string) {
 	})
 }
 
+// BroadcastTasksToAll 广播任务更新给所有在线 Agent
+func (m *AgentWSManager) BroadcastTasksToAll() {
+	m.mu.RLock()
+	var agentIDs []string
+	for agentID := range m.connections {
+		agentIDs = append(agentIDs, agentID)
+	}
+	m.mu.RUnlock()
+
+	for _, agentID := range agentIDs {
+		m.BroadcastTasks(agentID)
+	}
+}
+
 // RegisterRemoteWaiter 注册远程任务结果等待者
 func (m *AgentWSManager) RegisterRemoteWaiter(logID string) chan *models.AgentTaskResult {
 	m.mu.Lock()

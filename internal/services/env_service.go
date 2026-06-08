@@ -140,7 +140,7 @@ func (es *EnvService) UpdateEnvVar(id string, name, value, remark, envType strin
 func (es *EnvService) GetAssociatedTasks(id string) []models.Task {
 	var associatedTasks []models.Task
 	var taskIDs []string
-	database.DB.Model(&models.DataRelation{}).Where("type = ? AND relate_id = ?", "task_env", id).Pluck("data_id", &taskIDs)
+	database.DB.Model(&models.DataRelation{}).Where("type = ? AND relate_id = ?", constant.RelationTypeTaskEnv, id).Pluck("data_id", &taskIDs)
 	if len(taskIDs) > 0 {
 		database.DB.Where("id IN ?", taskIDs).Find(&associatedTasks)
 	}
@@ -157,7 +157,7 @@ func (es *EnvService) DeleteEnvVar(id string, force bool) (bool, []models.Task) 
 	if force {
 		err := database.DB.Transaction(func(tx *gorm.DB) error {
 			// Delete the relations mapping this env to any tasks
-			if err := tx.Where("type = ? AND relate_id = ?", "task_env", id).Delete(&models.DataRelation{}).Error; err != nil {
+			if err := tx.Where("type = ? AND relate_id = ?", constant.RelationTypeTaskEnv, id).Delete(&models.DataRelation{}).Error; err != nil {
 				return err
 			}
 			// Delete the env var
