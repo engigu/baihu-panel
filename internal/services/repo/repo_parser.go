@@ -11,6 +11,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/services/relation"
 	"github.com/engigu/baihu-panel/internal/utils"
 )
 
@@ -225,6 +226,12 @@ func upsertRepoTask(parentTask *models.Task, sourceID, name, command, cron, work
 		}
 		newTask.ID = utils.GenerateID()
 		database.DB.Create(newTask)
+
+		// 确保将标签同步写入到新的 DataRelation 中
+		if tag != "" {
+			relation.DataRelation.SaveTags(newTask.ID, constant.RelationTypeTaskTag, tag)
+		}
+		
 		return newTask.ID, true
 	}
 }
