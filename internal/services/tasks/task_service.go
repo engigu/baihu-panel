@@ -167,9 +167,10 @@ func (ts *TaskService) GetTaskByID(id string) *models.Task {
 	if res.Error != nil || res.RowsAffected == 0 {
 		return nil
 	}
-	ts.loadTagsAndEnvs([]models.Task{task})
+	tasks := []models.Task{task}
+	ts.loadTagsAndEnvs(tasks)
 	
-	return &task
+	return &tasks[0]
 }
 
 func (ts *TaskService) UpdateTask(id string, p *TaskParam) *models.Task {

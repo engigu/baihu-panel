@@ -15,6 +15,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/executor"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/services/relation"
 	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/engigu/baihu-panel/internal/utils"
 
@@ -317,6 +318,20 @@ func (s *AgentService) Heartbeat(token, ip, version, buildTime, hostname, osType
 func (s *AgentService) GetTasks(agentID string) []models.AgentTask {
 	var tasksList []models.Task
 	database.DB.Where("agent_id = ? AND enabled = ?", agentID, true).Find(&tasksList)
+
+	// 装载关联的变量信息
+	if len(tasksList) > 0 {
+		taskIDs := make([]string, len(tasksList))
+		for i, t := range tasksList {
+			taskIDs[i] = t.ID
+		}
+		envsMap := relation.DataRelation.LoadRelations(taskIDs, constant.RelationTypeTaskEnv)
+		for i, t := range tasksList {
+			if envs, ok := envsMap[t.ID]; ok {
+				tasksList[i].Envs = models.BigText(strings.Join(envs, ","))
+			}
+		}
+	}
 
 	result := make([]models.AgentTask, len(tasksList))
 	envService := NewEnvService()
