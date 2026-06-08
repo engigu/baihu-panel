@@ -168,6 +168,11 @@ func ParseRepoScriptsAndAddCron(taskID string, logWriter io.Writer, forceComment
 				log("[移除] 脚本已不存在，删除对应任务: %s", ot.Name)
 				deletedTaskCount++
 				deletedIDs = append(deletedIDs, ot.ID)
+				
+				// 删除关联
+				relation.DataRelation.CleanRelations(ot.ID, constant.RelationTypeTaskTag)
+				relation.DataRelation.CleanRelations(ot.ID, constant.RelationTypeTaskEnv)
+				
 				database.DB.Unscoped().Where("id = ?", ot.ID).Delete(&models.Task{})
 			}
 		}
