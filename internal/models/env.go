@@ -14,6 +14,7 @@ type EnvironmentVariable struct {
 	Hidden    *bool     `json:"hidden" gorm:"default:true"`
 	Enabled   *bool     `json:"enabled" gorm:"default:true"`
 	UserID    string    `json:"user_id" gorm:"size:20;index"`
+	Tags      string    `json:"-" gorm:"-"`
 	CreatedAt LocalTime `json:"created_at"`
 	UpdatedAt LocalTime `json:"updated_at"`
 }

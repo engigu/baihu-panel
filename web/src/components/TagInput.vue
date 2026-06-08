@@ -10,9 +10,11 @@ const props = withDefaults(defineProps<{
   icon?: any
   multiple?: boolean
   clearOnSelect?: boolean
+  fetchTags?: () => Promise<string[]>
 }>(), {
   multiple: false,
-  clearOnSelect: false
+  clearOnSelect: false,
+  fetchTags: () => api.tasks.tags()
 })
 
 const emit = defineEmits(['update:modelValue', 'enter'])
@@ -27,10 +29,10 @@ watch(() => props.modelValue, (newVal) => {
   inputValue.value = newVal
 })
 
-async function fetchTags() {
+async function fetchTagsData() {
   loading.value = true
   try {
-    const res = await api.tasks.tags()
+    const res = await props.fetchTags()
     allTags.value = res || []
   } catch (e) {
     console.error('Failed to fetch tags', e)
@@ -101,7 +103,7 @@ function handleClickOutside(e: MouseEvent) {
 }
 
 onMounted(() => {
-  fetchTags()
+  fetchTagsData()
   window.addEventListener('mousedown', handleClickOutside)
 })
 

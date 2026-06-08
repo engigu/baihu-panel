@@ -11,6 +11,7 @@ import { api, type EnvVar } from '@/api'
 import { toast } from 'vue-sonner'
 import { ENV_TYPE } from '@/constants'
 import LineNumberTextarea from '@/components/LineNumberTextarea.vue'
+import EnvTagsConfig from './EnvTagsConfig.vue'
 
 const emit = defineEmits<{
   (e: 'saved'): void
@@ -23,7 +24,7 @@ const editingEnv = ref<Partial<EnvVar>>({})
 const textareaRef = ref<InstanceType<typeof LineNumberTextarea> | null>(null)
 
 function openCreate(type: string) {
-  editingEnv.value = { name: '', value: '', remark: '', type, hidden: true, enabled: true }
+  editingEnv.value = { name: '', value: '', remark: '', type, hidden: true, enabled: true, tags: '' }
   isEdit.value = false
   isOpen.value = true
 }
@@ -95,6 +96,7 @@ defineExpose({
           />
 
         </div>
+        <EnvTagsConfig v-model="editingEnv.tags" />
         <div class="space-y-2 min-w-0">
           <Label>备注</Label>
           <Textarea v-model="editingEnv.remark" class="w-full min-w-0 resize-none break-all text-sm" rows="3" :placeholder="editingEnv.type === ENV_TYPE.SECRET ? '机密用途说明...' : '变量用途说明...'" />

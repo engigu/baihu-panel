@@ -48,6 +48,7 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 		Type    string `json:"type"`
 		Hidden  *bool  `json:"hidden"`
 		Enabled *bool  `json:"enabled"`
+		Tags    string `json:"tags"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -70,6 +71,10 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 	}
 
 	envVar := ec.envService.CreateEnvVar(req.Name, req.Value, req.Remark, req.Type, hidden, enabled, userID)
+	if envVar != nil {
+		ec.envService.SaveEnvTags(envVar.ID, req.Tags)
+		envVar.Tags = req.Tags
+	}
 	utils.Success(c, vo.ToEnvVO(envVar))
 }
 
@@ -84,6 +89,7 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
 // @Param type query string false "按类型筛选"
+// @Param tags query string false "按标签筛选"
 // @Success 200 {object} utils.Response{data=utils.PaginationData{data=[]vo.EnvVO}}
 // @Router /env [get]
 func (ec *EnvController) GetEnvVars(c *gin.Context) {
@@ -91,7 +97,8 @@ func (ec *EnvController) GetEnvVars(c *gin.Context) {
 	p := utils.ParsePagination(c)
 	name := c.DefaultQuery("name", "")
 	envType := c.DefaultQuery("type", "")
-	envVars, total := ec.envService.GetEnvVarsWithPagination(userID, name, envType, p.Page, p.PageSize)
+	tags := c.DefaultQuery("tags", "")
+	envVars, total := ec.envService.GetEnvVarsWithPagination(userID, name, envType, tags, p.Page, p.PageSize)
 	utils.PaginatedResponse(c, vo.ToEnvVOListFromModels(envVars), total, p)
 }
 
@@ -163,6 +170,7 @@ func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
 		Type    string `json:"type"`
 		Hidden  *bool  `json:"hidden"`
 		Enabled *bool  `json:"enabled"`
+		Tags    string `json:"tags"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -196,6 +204,9 @@ func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
 		utils.NotFound(c, "环境变量不存在")
 		return
 	}
+
+	ec.envService.SaveEnvTags(envVar.ID, req.Tags)
+	envVar.Tags = req.Tags
 
 	utils.Success(c, vo.ToEnvVO(envVar))
 }
@@ -258,4 +269,22 @@ func (ec *EnvController) GetAssociatedTasks(c *gin.Context) {
 	}
 	tasks := ec.envService.GetAssociatedTasks(id)
 	utils.Success(c, vo.ToTaskVOListFromModels(tasks))
+}
+
+// GetTags 获取所有环境变量标签
+// @Summary 获取所有环境变量标签
+// @Description 获取所有环境变量中使用的标签列表
+// @Tags 环境变量
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.Response{data=[]string}
+// @Router /env/tags [get]
+func (ec *EnvController) GetTags(c *gin.Context) {
+	tags, err := ec.envService.GetAllEnvTags()
+	if err != nil {
+		utils.ServerError(c, "获取标签失败")
+		return
+	}
+	utils.Success(c, tags)
 }

@@ -71,7 +71,8 @@ const filteredEnvVars = computed(() => {
     const q = envSearchQuery.value.toLowerCase()
     const matchSearch = !q || 
       env.name.toLowerCase().includes(q) || 
-      (env.remark && env.remark.toLowerCase().includes(q))
+      (env.remark && env.remark.toLowerCase().includes(q)) ||
+      (env.tags && env.tags.toLowerCase().includes(q))
     const notSelected = !selectedEnvIds.value.includes(env.id)
     return matchSearch && notSelected
   })
@@ -400,7 +401,7 @@ async function save() {
                         <div class="px-4 py-3.5 border-b bg-muted/20 backdrop-blur-md sticky top-0 z-10">
                           <div class="relative group">
                             <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
-                            <Input v-model="envSearchQuery" placeholder="输入关键字搜索变量名或备注..." 
+                            <Input v-model="envSearchQuery" placeholder="输入关键字搜索变量名、备注或标签..." 
                               class="pl-9 h-9 bg-background/50 border-primary/10 focus:border-primary/30 transition-all rounded-lg text-[13px]" />
                           </div>
                         </div>
@@ -423,6 +424,9 @@ async function save() {
                                 <Badge v-if="env.type === 'secret'" variant="outline" class="h-4 px-1.5 text-[9px] border-amber-500/20 bg-amber-500/5 text-amber-600 font-bold uppercase tracking-tight scale-90">
                                   机密
                                 </Badge>
+                                <div v-if="env.tags" class="flex items-center gap-1 overflow-hidden ml-1">
+                                  <span v-for="tag in env.tags.split(',').filter(Boolean).slice(0, 3)" :key="tag" class="truncate text-[9px] leading-none px-1 py-0.5 bg-secondary text-secondary-foreground rounded border">{{ tag }}</span>
+                                </div>
                               </div>
                               <div class="flex items-center gap-2 scale-75 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 translate-x-2 transition-all duration-300 shrink-0">
                                 <Plus class="h-4 w-4 text-primary" />

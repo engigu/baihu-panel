@@ -96,14 +96,16 @@ export const api = {
     delete: (id: string) => request(`/scripts/${id}`, { method: 'DELETE' })
   },
   env: {
-    list: (params?: { page?: number; page_size?: number; name?: string; type?: string }) => {
+    list: (params?: { page?: number; page_size?: number; name?: string; type?: string; tags?: string }) => {
       const query = new URLSearchParams()
       if (params?.page) query.set('page', String(params.page))
       if (params?.page_size) query.set('page_size', String(params.page_size))
       if (params?.name) query.set('name', params.name)
       if (params?.type && params.type !== 'all') query.set('type', params.type)
+      if (params?.tags) query.set('tags', params.tags)
       return request<EnvListResponse>(`/env?${query}`)
     },
+    tags: () => request<string[]>('/env/tags'),
     secretStatus: () => request<boolean>('/env/secret-status'),
     all: () => request<EnvVar[]>('/env/all'),
     tasks: (id: string) => request<Task[]>(`/env/${id}/tasks`),
@@ -462,6 +464,7 @@ export interface EnvVar {
   type: string
   hidden: boolean
   enabled: boolean
+  tags: string
   created_at?: string
   updated_at?: string
 }

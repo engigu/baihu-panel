@@ -3,8 +3,9 @@ import { ref, watch, onMounted } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
-import { Plus, Pencil, Trash2, Eye, EyeOff, Search, AlertTriangle, Terminal, Zap, ZapOff, Shield } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Eye, EyeOff, Search, AlertTriangle, Terminal, Zap, ZapOff, Shield, Tag } from 'lucide-vue-next'
 import TextOverflow from '@/components/TextOverflow.vue'
+import TagInput from '@/components/TagInput.vue'
 import { api, type EnvVar } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
@@ -31,6 +32,7 @@ const envVars = ref<EnvVar[]>([])
 const showValues = ref<Record<string, boolean>>({})
 
 const filterName = ref('')
+const filterTags = ref('')
 const currentPage = ref(1)
 const total = ref(0)
 const activeTab = ref<string>(ENV_TYPE.NORMAL)
@@ -53,7 +55,13 @@ async function checkSecretStatus() {
 
 async function loadEnvVars() {
   try {
-    const res = await api.env.list({ page: currentPage.value, page_size: pageSize.value, name: filterName.value || undefined, type: activeTab.value })
+    const res = await api.env.list({ 
+      page: currentPage.value, 
+      page_size: pageSize.value, 
+      name: filterName.value || undefined, 
+      type: activeTab.value,
+      tags: filterTags.value || undefined
+    })
     envVars.value = res.data
     total.value = res.total
     // 初始化显示状态，根据数据库的 hidden 状态同步显示
@@ -140,9 +148,12 @@ onMounted(() => {
       <div class="flex flex-row items-center flex-wrap gap-2 w-full md:w-auto md:ml-auto md:justify-end">
         <!-- 搜索与操作 -->
         <div class="flex flex-row items-center gap-2 w-full sm:flex-1 md:flex-none md:w-auto text-sm">
-          <div class="relative flex-1 md:flex-none md:w-[200px] group">
+          <div class="relative flex-1 md:flex-none md:w-[150px] lg:w-[200px] group">
             <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <Input v-model="filterName" placeholder="搜索名称..." class="h-9 pl-9 w-full bg-muted/20 border-muted-foreground/10 focus:bg-background text-sm" @input="handleSearch" />
+          </div>
+          <div class="w-[120px] lg:w-[150px] shrink-0">
+            <TagInput v-model="filterTags" placeholder="标签过滤..." :icon="Tag" multiple :fetchTags="api.env.tags" class="h-9 bg-muted/20 border-muted-foreground/10 focus:bg-background text-sm" @enter="handleSearch" @update:modelValue="handleSearch" />
           </div>
           
           <Button variant="outline" class="h-9 px-3 shrink-0 shadow-sm" @click="openCreate" :disabled="activeTab === ENV_TYPE.SECRET && !isSecretSet">
@@ -195,9 +206,14 @@ onMounted(() => {
             class="flex items-center gap-4 px-4 py-1.5 hover:bg-muted/30 transition-colors">
             <div class="w-12 shrink-0 pl-1 text-muted-foreground tabular-nums">#{{ total - (currentPage - 1) * pageSize - index }}</div>
             
-            <div class="w-48 shrink-0 flex items-center gap-1.5 overflow-hidden">
-              <code class="font-bold truncate text-[11px] bg-muted/60 px-2 py-0.5 rounded text-zinc-700 dark:text-zinc-200">{{ env.name }}</code>
-              <Badge v-if="isNotifyEnv(env.name)" variant="secondary" class="text-[9px] h-3.5 px-1 rounded-sm uppercase font-bold tracking-tighter shrink-0 leading-none">内置</Badge>
+            <div class="w-48 shrink-0 flex flex-col gap-1 justify-center overflow-hidden">
+              <div class="flex items-center gap-1.5 overflow-hidden">
+                <code class="font-bold truncate text-[11px] bg-muted/60 px-2 py-0.5 rounded text-zinc-700 dark:text-zinc-200">{{ env.name }}</code>
+                <Badge v-if="isNotifyEnv(env.name)" variant="secondary" class="text-[9px] h-3.5 px-1 rounded-sm uppercase font-bold tracking-tighter shrink-0 leading-none">内置</Badge>
+              </div>
+              <div v-if="env.tags" class="flex items-center gap-1 overflow-hidden">
+                <span v-for="tag in env.tags.split(',').filter(Boolean).slice(0, 3)" :key="tag" class="truncate text-[9px] leading-none px-1 py-0.5 bg-secondary text-secondary-foreground rounded border">{{ tag }}</span>
+              </div>
             </div>
 
             <div class="flex-1 min-w-0 text-muted-foreground truncate text-xs px-1">
@@ -255,9 +271,14 @@ onMounted(() => {
             class="flex items-center gap-4 px-4 py-2 hover:bg-muted/30 transition-colors">
             <div class="w-12 shrink-0 pl-1 text-muted-foreground tabular-nums text-xs">#{{ total - (currentPage - 1) * pageSize - index }}</div>
             
-            <div class="w-48 shrink-0 flex items-center gap-1.5 overflow-hidden">
-              <code class="font-bold truncate text-[11px] bg-muted/60 px-2 py-0.5 rounded text-zinc-700 dark:text-zinc-200">{{ env.name }}</code>
-              <Badge v-if="isNotifyEnv(env.name)" variant="secondary" class="text-[9px] h-3.5 px-1 rounded-sm uppercase font-bold tracking-tighter shrink-0 leading-none">内置</Badge>
+            <div class="w-48 shrink-0 flex flex-col gap-1 justify-center overflow-hidden">
+              <div class="flex items-center gap-1.5 overflow-hidden">
+                <code class="font-bold truncate text-[11px] bg-muted/60 px-2 py-0.5 rounded text-zinc-700 dark:text-zinc-200">{{ env.name }}</code>
+                <Badge v-if="isNotifyEnv(env.name)" variant="secondary" class="text-[9px] h-3.5 px-1 rounded-sm uppercase font-bold tracking-tighter shrink-0 leading-none">内置</Badge>
+              </div>
+              <div v-if="env.tags" class="flex items-center gap-1 overflow-hidden">
+                <span v-for="tag in env.tags.split(',').filter(Boolean).slice(0, 3)" :key="tag" class="truncate text-[9px] leading-none px-1 py-0.5 bg-secondary text-secondary-foreground rounded border">{{ tag }}</span>
+              </div>
             </div>
 
             <div class="flex-1 min-w-0 text-muted-foreground truncate text-xs">
@@ -298,10 +319,15 @@ onMounted(() => {
         </div>
         <div v-for="(env, index) in envVars" :key="`small-${env.id}`" class="p-3 hover:bg-muted/50 transition-colors">
           <div class="flex items-start justify-between mb-3 border-b border-border/40 pb-2">
-            <div class="flex items-center gap-2 flex-1 min-w-0 pr-2">
-              <span class="text-xs text-muted-foreground tabular-nums flex-shrink-0">#{{ total - (currentPage - 1) * pageSize - index }}</span>
-              <code class="font-bold text-xs bg-muted/60 px-2 py-0.5 rounded truncate text-zinc-700 dark:text-zinc-200">{{ env.name }}</code>
-              <Badge v-if="isNotifyEnv(env.name)" variant="secondary" class="text-[8px] h-3.5 px-1 rounded-sm uppercase font-bold tracking-tighter leading-none shrink-0">内置</Badge>
+            <div class="flex flex-col gap-1 flex-1 min-w-0 pr-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-muted-foreground tabular-nums flex-shrink-0">#{{ total - (currentPage - 1) * pageSize - index }}</span>
+                <code class="font-bold text-xs bg-muted/60 px-2 py-0.5 rounded truncate text-zinc-700 dark:text-zinc-200">{{ env.name }}</code>
+                <Badge v-if="isNotifyEnv(env.name)" variant="secondary" class="text-[8px] h-3.5 px-1 rounded-sm uppercase font-bold tracking-tighter leading-none shrink-0">内置</Badge>
+              </div>
+              <div v-if="env.tags" class="flex items-center gap-1 pl-6 overflow-hidden">
+                <span v-for="tag in env.tags.split(',').filter(Boolean).slice(0, 3)" :key="tag" class="truncate text-[9px] leading-none px-1 py-0.5 bg-secondary text-secondary-foreground rounded border">{{ tag }}</span>
+              </div>
             </div>
             <span @click="toggleEnabled(env)" class="cursor-pointer">
               <div v-if="env.enabled" class="h-6 w-6 rounded-md bg-green-500/10 flex items-center justify-center">
