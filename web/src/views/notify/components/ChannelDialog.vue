@@ -64,19 +64,18 @@ function updateConfigField(key: string, value: string) {
       </DialogHeader>
 
       <div class="space-y-4 py-2">
-        <div class="grid grid-cols-4 items-center gap-3">
+        <div class="grid grid-cols-[130px_1fr] items-center gap-3">
           <Label class="text-right text-sm">名称</Label>
           <Input 
             :model-value="channel.name" 
             @update:model-value="updateChannelField('name', $event)"
             placeholder="给渠道起个名字" 
-            class="col-span-3" 
           />
         </div>
 
-        <div class="grid grid-cols-4 items-center gap-3">
+        <div class="grid grid-cols-[130px_1fr] items-center gap-3">
           <Label class="text-right text-sm">类型</Label>
-          <div class="col-span-3">
+          <div>
             <Select 
               :model-value="channel.type" 
               @update:model-value="(val: any) => emit('type-change', String(val))" 
@@ -94,7 +93,7 @@ function updateConfigField(key: string, value: string) {
           </div>
         </div>
 
-        <div class="grid grid-cols-4 items-center gap-3">
+        <div class="grid grid-cols-[130px_1fr] items-center gap-3">
           <Label class="text-right text-sm">启用</Label>
           <Switch v-model="enabledModel" />
         </div>
@@ -102,12 +101,11 @@ function updateConfigField(key: string, value: string) {
         <div v-if="currentConfigFields.length > 0" class="border-t pt-4 mt-4">
           <h4 class="text-sm font-medium mb-3 text-muted-foreground">渠道配置</h4>
           <div class="space-y-3">
-            <div v-for="field in currentConfigFields" :key="field.key" class="grid grid-cols-4 items-start gap-3">
-              <Label class="text-right text-sm pt-2">
-                {{ field.label }}
-                <span v-if="field.required" class="text-destructive">*</span>
+            <div v-for="field in currentConfigFields" :key="field.key" class="grid grid-cols-[130px_1fr] gap-3" :class="field.type === 'textarea' ? 'items-start' : 'items-center'">
+              <Label class="text-right text-sm" :class="field.type === 'textarea' ? 'pt-2' : ''">
+                {{ field.label }}<span v-if="field.required" class="text-destructive ml-1">*</span>
               </Label>
-              <div class="col-span-3">
+              <div>
                 <Input
                   v-if="!field.type"
                   :model-value="channel.config?.[field.key] || ''"
@@ -115,7 +113,7 @@ function updateConfigField(key: string, value: string) {
                   :placeholder="field.placeholder || ''"
                   class="text-sm"
                 />
-                <div v-else-if="field.type === 'note'" class="text-xs text-muted-foreground pt-2">
+                <div v-else-if="field.type === 'note'" class="text-xs text-muted-foreground py-1">
                   {{ field.placeholder || '' }}
                 </div>
                 <textarea
