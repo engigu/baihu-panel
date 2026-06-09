@@ -672,7 +672,7 @@ watch(() => route.query.agent_id, (newVal: any) => {
               :state="task.running_status === 'running' ? 'running' : (task.running_status === 'queued' || task.running_status === 'pending' ? 'pending' : 'none')"
               :title="task.running_status === 'running' ? '运行中' : (task.running_status === 'queued' || task.running_status === 'pending' ? '排队中' : '')" 
             />
-            <div class="w-12 shrink-0 text-muted-foreground tabular-nums">#{{ total - (currentPage - 1) * pageSize - index }}</div>
+            <div class="w-12 shrink-0 text-muted-foreground tabular-nums text-[11px]">#{{ total - (currentPage - 1) * pageSize - index }}</div>
             <span class="w-8 shrink-0 flex justify-center" :title="getTaskTypeTitle(task.type || 'task')">
               <div class="relative">
                 <GitBranch v-if="task.type === TASK_TYPE.REPO" class="h-4 w-4 text-primary" />
@@ -773,7 +773,7 @@ watch(() => route.query.agent_id, (newVal: any) => {
             <div v-if="task.running_status === 'running'" class="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)] shrink-0" />
             <div v-else-if="task.running_status === 'queued' || task.running_status === 'pending'" class="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse shrink-0" />
             <div v-else class="h-1 w-1 rounded-full bg-muted-foreground/20 shrink-0" />
-            <div class="w-12 shrink-0 text-muted-foreground tabular-nums text-xs">#{{ total - (currentPage - 1) * pageSize - index }}</div>
+            <div class="w-12 shrink-0 text-muted-foreground tabular-nums text-[10px]">#{{ total - (currentPage - 1) * pageSize - index }}</div>
             <div class="w-48 shrink-0 flex items-center gap-2 overflow-hidden">
               <span class="shrink-0" :title="getTaskTypeTitle(task.type || 'task')">
                 <div class="relative">
@@ -847,7 +847,7 @@ watch(() => route.query.agent_id, (newVal: any) => {
               <div v-if="task.running_status === 'running'" class="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)] shrink-0" />
               <div v-else-if="task.running_status === 'queued' || task.running_status === 'pending'" class="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse shrink-0" />
               <div v-else class="h-1 w-1 rounded-full bg-muted-foreground/20 shrink-0" />
-              <span class="text-xs text-muted-foreground tabular-nums flex-shrink-0">#{{ total - (currentPage - 1) * pageSize - index }}</span>
+              <span class="text-[10px] text-muted-foreground tabular-nums flex-shrink-0">#{{ total - (currentPage - 1) * pageSize - index }}</span>
               <span class="shrink-0">
                 <div class="relative">
                   <GitBranch v-if="task.type === TASK_TYPE.REPO" class="h-3.5 w-3.5 text-primary" />

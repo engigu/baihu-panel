@@ -139,7 +139,7 @@ defineExpose({
                     class="sm:hidden p-3 hover:bg-muted/50 transition-colors cursor-pointer group" @click="showIpInfo(log.ip)">
                     <div class="flex items-start justify-between mb-3 border-b border-border/40 pb-2">
                         <div class="flex items-center gap-2 flex-1 min-w-0 mr-2">
-                            <span class="text-xs text-muted-foreground shrink-0 tabular-nums">#{{ total - (currentPage - 1) * pageSize - index }}</span>
+                            <span class="text-[10px] text-muted-foreground shrink-0 tabular-nums">#{{ total - (currentPage - 1) * pageSize - index }}</span>
                             <span class="font-bold text-sm truncate">{{ log.username }}</span>
                         </div>
                         <span :class="['h-2 w-2 mt-1.5 rounded-full shrink-0 shadow-[0_0_8px]',
@@ -186,7 +186,7 @@ defineExpose({
                 <!-- ========== 3. 大屏布局 (Large >= 1024px) - 用户调好 ========== -->
                 <div v-for="(log, index) in logs" :key="`large-${log.id}`"
                     class="hidden lg:flex items-center gap-4 px-4 py-2 hover:bg-muted/50 transition-colors">
-                    <span class="w-16 shrink-0 text-muted-foreground text-[13px] pl-1">#{{ total - (currentPage - 1) * pageSize - index }}</span>
+                    <span class="w-16 shrink-0 text-muted-foreground text-[11px] pl-1">#{{ total - (currentPage - 1) * pageSize - index }}</span>
                     <div class="w-32 shrink-0 flex items-center gap-2 min-w-0 text-[13px]">
                         <span :class="['h-2 w-2 rounded-full shrink-0', log.status === 'success' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.3)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.3)]']"></span>
                         <span class="truncate">{{ log.username }}</span>

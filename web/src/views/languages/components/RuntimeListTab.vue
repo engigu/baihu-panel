@@ -87,7 +87,7 @@ const filteredLanguages = computed(() => {
                         <div class="flex items-center gap-3 overflow-hidden">
                             <!-- 序号 -->
                             <div class="flex items-center justify-center w-6 sm:w-7 shrink-0">
-                                <span class="text-[10px] font-mono text-muted-foreground/50 tabular-nums">#{{
+                                <span class="text-[9px] font-mono text-muted-foreground/50 tabular-nums">#{{
                                     filteredLanguages.length - index }}</span>
                             </div>
                             <!-- 图标 -->

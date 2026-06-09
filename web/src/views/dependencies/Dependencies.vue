@@ -448,7 +448,7 @@ onMounted(async () => {
                 class="appearance-none size-4 shrink-0 rounded-[5px] border border-zinc-300 dark:border-zinc-700/60 bg-zinc-50/50 dark:bg-zinc-900/30 hover:border-primary/60 checked:border-primary checked:bg-gradient-to-br checked:from-primary checked:to-indigo-600 checked:bg-[url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%223.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%2220%206%209%2017%204%2012%22%2F%3E%3C%2Fsvg%3E')] checked:bg-[size:10px_10px] checked:bg-center checked:bg-no-repeat focus:outline-none focus:ring-2 focus:ring-primary/20 checked:shadow-[0_2px_8px_rgba(99,102,241,0.35)] checked:scale-[1.05] active:scale-95 transition-all duration-200 cursor-pointer ease-out"
               />
             </div>
-            <div class="w-12 hidden sm:block shrink-0 text-[11px] text-muted-foreground tabular-nums pl-1">#{{ filteredDeps.length - index }}</div>
+            <div class="w-12 hidden sm:block shrink-0 text-[9px] text-muted-foreground tabular-nums pl-1">#{{ filteredDeps.length - index }}</div>
             <span class="flex-1 font-mono text-[12px] sm:text-[13px] truncate font-medium min-w-0">
               <TextOverflow :text="dep.name" title="包名" />
             </span>

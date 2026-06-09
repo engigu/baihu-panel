@@ -408,8 +408,7 @@ watch(() => route.query, (newQuery) => {
             <!-- 小屏行 -->
             <div class="flex sm:hidden items-center gap-2 px-3 py-2">
               <StatusDot :state="log.status" />
-              <span class="w-14 shrink-0 text-muted-foreground text-xs tabular-nums">#{{ total - (currentPage - 1) * pageSize - index
-                }}</span>
+              <span class="w-14 shrink-0 text-muted-foreground text-[10px] tabular-nums">#{{ total - (currentPage - 1) * pageSize - index }}</span>
               <span class="w-8 shrink-0 flex justify-center" :title="getTaskTypeTitle(log.task_type || 'task')">
                 <GitBranch v-if="log.task_type === TASK_TYPE.REPO" class="h-3.5 w-3.5 text-primary" />
                 <Terminal v-else class="h-3.5 w-3.5 text-primary" />
@@ -428,8 +427,7 @@ watch(() => route.query, (newQuery) => {
             <!-- 大屏行 -->
             <div class="hidden sm:flex items-center gap-2 px-4 py-2">
               <StatusDot :state="log.status" />
-              <span class="w-16 shrink-0 text-muted-foreground text-sm tabular-nums">#{{ total - (currentPage - 1) * pageSize - index
-                }}</span>
+              <span class="w-16 shrink-0 text-muted-foreground text-[11px] tabular-nums">#{{ total - (currentPage - 1) * pageSize - index }}</span>
               <span class="w-10 shrink-0 flex justify-center" :title="getTaskTypeTitle(log.task_type || 'task')">
                 <GitBranch v-if="log.task_type === TASK_TYPE.REPO" class="h-4 w-4 text-primary" />
                 <Terminal v-else class="h-4 w-4 text-primary" />

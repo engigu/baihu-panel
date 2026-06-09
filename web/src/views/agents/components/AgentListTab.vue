@@ -100,7 +100,7 @@ async function forceUpdate(agent: Agent) {
         <div v-for="(agent, index) in agents" :key="`large-${agent.id}`"
           class="flex items-center gap-2 px-4 py-1.5 hover:bg-muted/30 transition-colors">
           <StatusDot :state="isOnline(agent) ? 'online' : 'offline'" :title="isOnline(agent) ? '在线' : '离线'" />
-          <div class="w-12 shrink-0 pl-1 text-muted-foreground tabular-nums text-sm">#{{ agents.length - index }}</div>
+          <div class="w-12 shrink-0 pl-1 text-muted-foreground tabular-nums text-[11px]">#{{ agents.length - index }}</div>
           <div class="w-48 shrink-0 flex flex-col justify-center gap-0.5 overflow-hidden">
             <span class="font-medium truncate cursor-pointer hover:text-primary transition-colors" @click="viewDetail(agent)">{{ agent.name }}</span>
             <div v-if="agent.description" class="text-[10px] text-muted-foreground truncate">{{ agent.description }}</div>
@@ -159,7 +159,7 @@ async function forceUpdate(agent: Agent) {
         <div v-for="(agent, index) in agents" :key="`medium-${agent.id}`"
           class="flex items-center gap-2 px-4 py-2.5 hover:bg-muted/30 transition-colors">
           <StatusDot :state="isOnline(agent) ? 'online' : 'offline'" :title="isOnline(agent) ? '在线' : '离线'" />
-          <div class="w-12 shrink-0 pl-1 text-muted-foreground tabular-nums text-xs">#{{ agents.length - index }}</div>
+          <div class="w-12 shrink-0 pl-1 text-muted-foreground tabular-nums text-[10px]">#{{ agents.length - index }}</div>
           <div class="w-48 shrink-0 flex flex-col justify-center gap-0.5 overflow-hidden">
             <span class="font-medium truncate">{{ agent.name }}</span>
             <div v-if="agent.description" class="text-[10px] text-muted-foreground truncate">{{ agent.description }}</div>
@@ -203,7 +203,7 @@ async function forceUpdate(agent: Agent) {
         <div class="flex items-start justify-between mb-3 border-b border-border/40 pb-2">
           <div class="flex items-center gap-2 flex-1 min-w-0 pr-2">
             <StatusDot :state="isOnline(agent) ? 'online' : 'offline'" :title="isOnline(agent) ? '在线' : '离线'" />
-            <span class="text-xs text-muted-foreground tabular-nums flex-shrink-0">#{{ agents.length - index }}</span>
+            <span class="text-[10px] text-muted-foreground tabular-nums flex-shrink-0">#{{ agents.length - index }}</span>
             <div class="flex items-center gap-1.5 min-w-0 flex-1">
               <span class="font-bold text-sm truncate" @click="viewDetail(agent)">{{ agent.name }}</span>
             </div>

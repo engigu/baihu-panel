@@ -204,7 +204,7 @@ onMounted(() => {
           </div>
           <div v-for="(env, index) in envVars" :key="`large-${env.id}`"
             class="flex items-center gap-4 px-4 py-1.5 hover:bg-muted/30 transition-colors">
-            <div class="w-12 shrink-0 pl-1 text-muted-foreground tabular-nums">#{{ total - (currentPage - 1) * pageSize - index }}</div>
+            <div class="w-12 shrink-0 pl-1 text-muted-foreground tabular-nums text-[11px]">#{{ total - (currentPage - 1) * pageSize - index }}</div>
             
             <div class="w-48 shrink-0 flex flex-col gap-1 justify-center overflow-hidden">
               <div class="flex items-center gap-1.5 overflow-hidden">
@@ -269,7 +269,7 @@ onMounted(() => {
         <div class="divide-y text-sm">
           <div v-for="(env, index) in envVars" :key="`med-${env.id}`"
             class="flex items-center gap-4 px-4 py-2 hover:bg-muted/30 transition-colors">
-            <div class="w-12 shrink-0 pl-1 text-muted-foreground tabular-nums text-xs">#{{ total - (currentPage - 1) * pageSize - index }}</div>
+            <div class="w-12 shrink-0 pl-1 text-muted-foreground tabular-nums text-[10px]">#{{ total - (currentPage - 1) * pageSize - index }}</div>
             
             <div class="w-48 shrink-0 flex flex-col gap-1 justify-center overflow-hidden">
               <div class="flex items-center gap-1.5 overflow-hidden">
@@ -321,7 +321,7 @@ onMounted(() => {
           <div class="flex items-start justify-between mb-3 border-b border-border/40 pb-2">
             <div class="flex flex-col gap-1 flex-1 min-w-0 pr-2">
               <div class="flex items-center gap-2">
-                <span class="text-xs text-muted-foreground tabular-nums flex-shrink-0">#{{ total - (currentPage - 1) * pageSize - index }}</span>
+                <span class="text-[10px] text-muted-foreground tabular-nums flex-shrink-0">#{{ total - (currentPage - 1) * pageSize - index }}</span>
                 <code class="font-bold text-xs bg-muted/60 px-2 py-0.5 rounded truncate text-zinc-700 dark:text-zinc-200">{{ env.name }}</code>
                 <Badge v-if="isNotifyEnv(env.name)" variant="secondary" class="text-[8px] h-3.5 px-1 rounded-sm uppercase font-bold tracking-tighter leading-none shrink-0">内置</Badge>
               </div>

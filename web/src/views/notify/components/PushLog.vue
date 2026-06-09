@@ -196,7 +196,7 @@ function onDialogClose(open: boolean) {
           :class="[selectedLogId === log.id && 'bg-accent/50']">
           <div class="flex items-start justify-between mb-3 border-b border-border/40 pb-2">
             <div class="flex items-center gap-2 flex-1 min-w-0 mr-2">
-              <span class="text-xs text-muted-foreground shrink-0">#{{ getLogIndex(index) }}</span>
+              <span class="text-[10px] text-muted-foreground shrink-0">#{{ getLogIndex(index) }}</span>
               <span class="font-bold text-sm truncate">{{ log.title }}</span>
             </div>
             <span
@@ -245,7 +245,7 @@ function onDialogClose(open: boolean) {
         <div v-for="(log, index) in logs" :key="`large-${log.id}`"
           class="hidden lg:flex items-center gap-4 px-4 py-2 hover:bg-muted/50 transition-colors cursor-pointer group"
           :class="[selectedLogId === log.id && 'bg-accent/50']" @click="showDetail(log)">
-          <span class="w-16 shrink-0 text-muted-foreground text-[13px] tabular-nums pl-1">#{{ getLogIndex(index) }}</span>
+          <span class="w-16 shrink-0 text-muted-foreground text-[11px] tabular-nums pl-1">#{{ getLogIndex(index) }}</span>
           <div class="w-56 shrink-0 flex items-center gap-3 min-w-0 text-[13px]">
             <span :class="['h-2 w-2 rounded-full shrink-0', log.status === LOG_STATUS.SUCCESS ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.3)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.3)]']"></span>
             <span class="truncate" :title="log.title">
