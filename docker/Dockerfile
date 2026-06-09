@@ -111,9 +111,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     # Helper to build and compress
     build_agent() { \
         local os=$1; local arch=$2; local suffix=$3; \
-        CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="${LDFLAGS}" -o baihu-agent$suffix . && \
-        tar -czvf /opt/agent/baihu-agent-$os-$arch.tar.gz baihu-agent$suffix config.example.ini && \
-        rm baihu-agent$suffix; \
+        local tmpdir="build-$os-$arch"; \
+        mkdir -p $tmpdir && cp config.example.ini $tmpdir/ && \
+        CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="${LDFLAGS}" -o $tmpdir/baihu-agent$suffix . && \
+        (cd $tmpdir && tar -czvf /opt/agent/baihu-agent-$os-$arch.tar.gz baihu-agent$suffix config.example.ini) && \
+        rm -rf $tmpdir; \
     } ; \
     build_agent linux amd64 "" & pid1=$!; \
     build_agent linux arm64 "" & pid2=$!; \
