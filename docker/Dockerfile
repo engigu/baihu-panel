@@ -114,7 +114,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
         CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="${LDFLAGS}" -o baihu-agent$suffix . && \
         tar -czvf /opt/agent/baihu-agent-$os-$arch.tar.gz baihu-agent$suffix config.example.ini && \
         rm baihu-agent$suffix; \
-    } && \
+    } ; \
     build_agent linux amd64 "" & pid1=$!; \
     build_agent linux arm64 "" & pid2=$!; \
     build_agent android arm64 "" & pid3=$!; \
