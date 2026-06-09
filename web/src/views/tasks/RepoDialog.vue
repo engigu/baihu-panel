@@ -16,6 +16,7 @@ import { toast } from 'vue-sonner'
 import { cn } from '@/lib/utils'
 
 import { parseBaihuCommand, parseQlCommand } from '@/utils/repo-parser'
+import { copyToClipboard } from '@/utils/clipboard'
 import TaskNotificationConfig from './components/TaskNotificationConfig.vue'
 import TaskAdvancedConfig from './components/TaskAdvancedConfig.vue'
 import TaskCronConfig from './components/TaskCronConfig.vue'
@@ -120,8 +121,9 @@ function exportBaihuCommand() {
   }
 
   const cmd = parts.join(' ')
-  navigator.clipboard.writeText(cmd)
-  toast.success('baihu 指令已复制到剪贴板')
+  copyToClipboard(cmd).then((success) => {
+    if (success) toast.success('baihu 指令已复制到剪贴板')
+  })
 }
 
 function importFromBaihu() {

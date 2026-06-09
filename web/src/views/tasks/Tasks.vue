@@ -31,6 +31,7 @@ import { TASK_TYPE, AGENT_STATUS, TRIGGER_TYPE, TASK_STATUS } from '@/constants'
 import TextOverflow from '@/components/TextOverflow.vue'
 import { getCronDescription } from '@/utils/cron'
 import { generateBaihuCommand } from '@/utils/repo-parser'
+import { copyToClipboard } from '@/utils/clipboard'
 
 
 const router = useRouter()
@@ -186,11 +187,13 @@ function openExportDialog(task: Task) {
 
 function copyCommandText() {
   if (!exportCommandText.value) return
-  navigator.clipboard.writeText(exportCommandText.value).then(() => {
-    toast.success('同步指令已复制到剪贴板')
-    showExportDialog.value = false
-  }).catch(() => {
-    toast.error('复制失败，请手动选择复制')
+  copyToClipboard(exportCommandText.value).then((success) => {
+    if (success) {
+      toast.success('同步指令已复制到剪贴板')
+      showExportDialog.value = false
+    } else {
+      toast.error('复制失败，请手动选择复制')
+    }
   })
 }
 

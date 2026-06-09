@@ -47,34 +47,18 @@ function handleStatusChange(status: any) {
   statusState.value = status
 }
 
+import { copyToClipboard } from '@/utils/clipboard'
+
 const copiedCommand = ref<string | null>(null)
-const copyToClipboard = async (text: string) => {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text)
-    } else {
-      const textArea = document.createElement("textarea")
-      textArea.value = text
-      textArea.style.position = "absolute"
-      textArea.style.opacity = "0"
-      document.body.prepend(textArea)
-      textArea.select()
-      try {
-        document.execCommand('copy')
-      } catch (err) {
-        console.error('Fallback copy failed', err)
-      } finally {
-        textArea.remove()
-      }
-    }
+const handleCopy = async (text: string) => {
+  const success = await copyToClipboard(text)
+  if (success) {
     copiedCommand.value = text
     setTimeout(() => {
       if (copiedCommand.value === text) {
         copiedCommand.value = null
       }
     }, 2000)
-  } catch (err) {
-    console.error('Failed to copy', err)
   }
 }
 </script>
@@ -105,7 +89,7 @@ const copyToClipboard = async (text: string) => {
                     <span class="font-bold text-blue-400 text-xs">baihu {{ cmd.name }}</span>
                     <span class="text-gray-400 text-[11px] leading-tight mt-0.5">{{ cmd.description }}</span>
                   </div>
-                  <button @click.stop.prevent="copyToClipboard(`baihu ${cmd.name}`)" class="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[#3c3c3c] rounded text-gray-400 hover:text-white focus:outline-none focus:ring-0 shrink-0 mt-0.5" :title="copiedCommand === `baihu ${cmd.name}` ? '已复制' : '复制命令'">
+                  <button @click.stop.prevent="handleCopy(`baihu ${cmd.name}`)" class="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[#3c3c3c] rounded text-gray-400 hover:text-white focus:outline-none focus:ring-0 shrink-0 mt-0.5" :title="copiedCommand === `baihu ${cmd.name}` ? '已复制' : '复制命令'">
                     <Check v-if="copiedCommand === `baihu ${cmd.name}`" class="h-3 w-3 text-green-500" />
                     <Copy v-else class="h-3 w-3" />
                   </button>
