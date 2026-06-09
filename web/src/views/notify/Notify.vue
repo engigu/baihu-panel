@@ -11,6 +11,7 @@ import EventBinding from './components/EventBinding.vue'
 import ApiUsage from './components/ApiUsage.vue'
 import ChannelDialog from './components/ChannelDialog.vue'
 import TemplateSettings from './components/TemplateSettings.vue'
+import { copyToClipboard } from '@/utils/clipboard'
 
 const activeTab = ref('channels')
 
@@ -291,10 +292,10 @@ async function copyApiToken() {
     toast.error('请先生成 Token')
     return
   }
-  try {
-    await navigator.clipboard.writeText(apiToken.value)
+  const success = await copyToClipboard(apiToken.value)
+  if (success) {
     toast.success('Token 已复制到剪贴板')
-  } catch {
+  } else {
     toast.error('复制失败')
   }
 }
@@ -311,10 +312,10 @@ async function copyApiExample() {
   -H "Content-Type: application/json" \\
   -H "notify-token: ${token}" \\
   -d '{"channel_id": "${ch.id}", "title": "测试通知", "text": "来自脚本的通知"}'`
-  try {
-    await navigator.clipboard.writeText(example)
+  const success = await copyToClipboard(example)
+  if (success) {
     toast.success('API 调用示例已复制到剪贴板')
-  } catch {
+  } else {
     toast.error('复制失败')
   }
 }

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { api, type SiteSettings } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
+import { copyToClipboard as copyTextToClipboard } from '@/utils/clipboard'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { RefreshCw, Copy, AlertTriangle, ExternalLink, Info, Clock } from 'lucide-vue-next'
@@ -107,10 +108,10 @@ async function generateOpenapiToken() {
 
 async function copyOpenapiToken() {
   if (!form.value.openapi_token) return
-  try {
-    await navigator.clipboard.writeText(form.value.openapi_token)
+  const success = await copyTextToClipboard(form.value.openapi_token)
+  if (success) {
     toast.success('Token 已复制到剪贴板')
-  } catch {
+  } else {
     toast.error('复制失败，请手动复制')
   }
 }

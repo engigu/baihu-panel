@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Plus, Ticket, Check, X, Copy, Pencil, Trash2 } from 'lucide-vue-next'
 import { type AgentToken, api } from '@/api'
 import { toast } from 'vue-sonner'
+import { copyToClipboard } from '@/utils/clipboard'
 
 const props = defineProps<{
   tokens: AgentToken[]
@@ -25,8 +26,9 @@ function isTokenExhausted(token: AgentToken) {
 }
 
 function copyToken(token: string) {
-  navigator.clipboard.writeText(token)
-  toast.success('已复制')
+  copyToClipboard(token).then((success) => {
+    if (success) toast.success('已复制')
+  })
 }
 
 function openTokenDialog() {

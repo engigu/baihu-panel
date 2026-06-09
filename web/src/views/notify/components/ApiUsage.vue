@@ -19,6 +19,7 @@ import {
 import type { NotifyChannel, ChannelType } from '@/api'
 import { ref, computed } from 'vue'
 import { toast } from 'vue-sonner'
+import { copyToClipboard } from '@/utils/clipboard'
 
 const props = defineProps<{
   channels: NotifyChannel[]
@@ -49,13 +50,15 @@ function handleConfirmGenerate() {
   emit('generateToken')
 }
 
-function copyToClipboard(text: string, blockId: string) {
-  navigator.clipboard.writeText(text).then(() => {
-    copiedBlock.value = blockId
-    toast.success('已复制到剪贴板')
-    setTimeout(() => {
-      copiedBlock.value = null
-    }, 2000)
+function handleCopy(text: string, blockId: string) {
+  copyToClipboard(text).then((success) => {
+    if (success) {
+      copiedBlock.value = blockId
+      toast.success('已复制到剪贴板')
+      setTimeout(() => {
+        copiedBlock.value = null
+      }, 2000)
+    }
   })
 }
 
@@ -264,7 +267,7 @@ const currentExample = computed(() => {
               <div class="relative flex-1 group">
                 <Input :model-value="apiToken" readonly placeholder="尚未生成 Token"
                   class="h-10 pr-10 bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/30 font-code text-sm tracking-tight" />
-                <div v-if="apiToken" @click="copyToClipboard(apiToken, 'token')"
+                <div v-if="apiToken" @click="handleCopy(apiToken, 'token')"
                   class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary cursor-pointer transition-colors p-1 rounded-md hover:bg-muted"
                   title="复制 Token">
                   <Check v-if="copiedBlock === 'token'" class="w-4 h-4 text-emerald-500 animate-in zoom-in" />
@@ -361,7 +364,7 @@ const currentExample = computed(() => {
                   </div>
                   <Button variant="ghost" size="icon"
                     class="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 text-zinc-500 hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
-                    @click="copyToClipboard('baihu builtininstall', 'install-cmd')">
+                    @click="handleCopy('baihu builtininstall', 'install-cmd')">
                     <Check v-if="copiedBlock === 'install-cmd'" class="w-3.5 h-3.5 text-emerald-500" />
                     <Copy v-else class="w-3.5 h-3.5" />
                   </Button>
@@ -389,7 +392,7 @@ const currentExample = computed(() => {
                       <pre class="text-[11px] leading-snug"><span class="text-violet-500">import</span> baihu<br/>baihu.notify(<span class="text-emerald-600">"标题"</span>, <span class="text-emerald-600">"内容"</span>)</pre>
                       <Button variant="ghost" size="icon"
                         class="absolute right-2 top-2 h-6 w-6 text-zinc-400 opacity-0 group-hover:opacity-100 transition-all"
-                        @click="copyToClipboard('import baihu\nbaihu.notify(\'标题\', \'内容\')', 'py-builtin')">
+                        @click="handleCopy('import baihu\nbaihu.notify(\'标题\', \'内容\')', 'py-builtin')">
                         <Check v-if="copiedBlock === 'py-builtin'" class="w-3.5 h-3.5 text-emerald-500" />
                         <Copy v-else class="w-3.5 h-3.5" />
                       </Button>
@@ -406,7 +409,7 @@ const currentExample = computed(() => {
                       <pre class="text-[11px] leading-snug"><span class="text-violet-500">const</span> baihu = require(<span class="text-emerald-600">'baihu'</span>);<br/>baihu.notify(<span class="text-emerald-600">"标题"</span>, <span class="text-emerald-600">"内容"</span>);</pre>
                       <Button variant="ghost" size="icon"
                         class="absolute right-2 top-2 h-6 w-6 text-zinc-400 opacity-0 group-hover:opacity-100 transition-all"
-                        @click="copyToClipboard('const baihu = require(\'baihu\');\nbaihu.notify(\'标题\', \'内容\');', 'js-builtin')">
+                        @click="handleCopy('const baihu = require(\'baihu\');\nbaihu.notify(\'标题\', \'内容\');', 'js-builtin')">
                         <Check v-if="copiedBlock === 'js-builtin'" class="w-3.5 h-3.5 text-emerald-500" />
                         <Copy v-else class="w-3.5 h-3.5" />
                       </Button>
@@ -452,7 +455,7 @@ const currentExample = computed(() => {
                 </div>
                 <Button variant="outline" size="sm"
                   class="h-8 px-2.5 text-[11px] border-muted-foreground/30 hover:bg-muted transition-all shrink-0"
-                  @click="copyToClipboard(currentExample, 'example')">
+                  @click="handleCopy(currentExample, 'example')">
                   <Check v-if="copiedBlock === 'example'" class="w-3.5 h-3.5 text-emerald-500 sm:mr-1.5" />
                   <Copy v-else class="w-3.5 h-3.5 sm:mr-1.5" />
                   <span class="hidden sm:inline">复制代码</span>
@@ -481,7 +484,7 @@ const currentExample = computed(() => {
                   <span class="text-zinc-600 dark:text-zinc-500 truncate max-w-[100px]">{{ ch.name }}</span>
                   <Button variant="ghost" size="icon"
                     class="h-5 w-5 ml-auto text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800 opacity-0 group-hover:opacity-100 transition-all rounded"
-                    @click="copyToClipboard(ch.id, 'channel-' + ch.id)">
+                    @click="handleCopy(ch.id, 'channel-' + ch.id)">
                     <Check v-if="copiedBlock === 'channel-' + ch.id" class="w-2.5 h-2.5 text-emerald-500" />
                     <Copy v-else class="w-2.5 h-2.5" />
                   </Button>
