@@ -115,11 +115,12 @@ RUN --mount=type=cache,target=/go/pkg/mod \
         tar -czvf /opt/agent/baihu-agent-$os-$arch.tar.gz baihu-agent$suffix config.example.ini && \
         rm baihu-agent$suffix; \
     } && \
-    build_agent linux amd64 "" && \
-    build_agent linux arm64 "" && \
-    build_agent android arm64 "" && \
-    build_agent darwin amd64 "" && \
-    build_agent darwin arm64 "" && \
+    build_agent linux amd64 "" & pid1=$!; \
+    build_agent linux arm64 "" & pid2=$!; \
+    build_agent android arm64 "" & pid3=$!; \
+    build_agent darwin amd64 "" & pid4=$!; \
+    build_agent darwin arm64 "" & pid5=$!; \
+    wait $pid1 && wait $pid2 && wait $pid3 && wait $pid4 && wait $pid5 && \
     echo "Agent build completed for all platforms"
 # ================================
 # Stage 4: Final image
