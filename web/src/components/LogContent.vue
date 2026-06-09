@@ -143,7 +143,7 @@ watch(
 </script>
 
 <template>
-  <div class="flex-1 flex flex-col h-full w-full relative">
+  <div class="flex-1 flex flex-col h-full w-full relative min-h-0 lg:min-h-full">
     <!-- 加载状态 -->
     <template v-if="loading">
       <div class="flex-1 flex flex-col items-center justify-center p-4 select-none text-center">
@@ -154,7 +154,7 @@ watch(
 
     <!-- 空状态 -->
     <template v-else-if="!content || !content.trim()">
-      <div class="flex-1 flex flex-col items-center justify-center p-4 select-none text-center">
+      <div class="flex-1 flex flex-col items-center justify-center py-10 lg:py-0 select-none text-center min-h-[160px]">
         <div class="w-14 h-14 rounded-3xl bg-muted/20 flex items-center justify-center mb-4 border border-muted-foreground/10 mx-auto">
           <AlertCircle class="h-7 w-8 text-muted-foreground/20" />
         </div>
@@ -168,7 +168,7 @@ watch(
     <!-- 正常内容 -->
     <div 
       v-show="!loading && content && content.trim()" 
-      class="flex-1 w-full h-full p-2 overflow-hidden"
+      class="flex-1 w-full p-2 overflow-hidden h-[200px] lg:h-full lg:min-h-0"
     >
       <div ref="terminalRef" class="w-full h-full log-terminal"></div>
     </div>
