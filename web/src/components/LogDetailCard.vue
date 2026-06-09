@@ -120,9 +120,9 @@ function getStatusBadgeClass(status: string) {
     <!-- 头部菜单 (响应式两行布局) -->
     <div class="flex flex-col border-b bg-muted/20 shrink-0">
       <!-- 第一行: 标题与核心控制按钮 -->
-      <div class="flex items-center justify-between px-4 h-11 gap-4">
+      <div class="flex items-center justify-between px-4 h-[28px] gap-4">
         <div class="flex items-center gap-2 min-w-0">
-          <span class="text-sm font-medium text-foreground whitespace-nowrap truncate">{{ title }}</span>
+          <span class="text-xs font-medium text-foreground whitespace-nowrap truncate">{{ title }}</span>
           
           <!-- Simple 模式下的状态显示 -->
           <Badge v-if="variant === 'simple'" variant="outline" :class="[
@@ -147,18 +147,18 @@ function getStatusBadgeClass(status: string) {
           </Button>
 
           <div class="flex items-center">
-            <Button v-if="variant === 'simple'" variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground"
+            <Button v-if="variant === 'simple'" variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground"
               title="全屏切换" @click="$emit('maximize')">
-              <Maximize2 class="h-4 w-4" />
+              <Maximize2 class="h-3.5 w-3.5" />
             </Button>
 
-            <Button variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground hover:text-destructive"
+            <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:text-destructive"
               title="删除该日志" @click="$emit('delete', log.id)">
-              <Trash2 class="h-4 w-4" />
+              <Trash2 class="h-3.5 w-3.5" />
             </Button>
             
-            <Button v-if="showClose" variant="ghost" size="icon" class="h-8 w-8" @click="$emit('close')" title="关闭">
-              <X class="h-4 w-4" />
+            <Button v-if="showClose" variant="ghost" size="icon" class="h-6 w-6" @click="$emit('close')" title="关闭">
+              <X class="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>
@@ -277,15 +277,3 @@ function getStatusBadgeClass(status: string) {
   </div>
 </template>
 
-<style scoped>
-:deep(code) {
-  display: block;
-  padding: 0 !important;
-  margin: 0 !important;
-  background: transparent !important;
-}
-
-:deep(span) {
-  vertical-align: top;
-}
-</style>

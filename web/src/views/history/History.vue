@@ -378,7 +378,7 @@ watch(() => route.query, (newQuery) => {
       <div class="flex-1 min-w-0 rounded-lg border bg-card overflow-hidden flex flex-col">
         <!-- 小屏表头 -->
         <div
-          class="flex sm:hidden items-center gap-2 px-3 py-2 border-b bg-muted/20 text-xs text-muted-foreground font-medium">
+          class="flex sm:hidden items-center gap-2 px-3 h-[28px] border-b bg-muted/20 text-xs text-muted-foreground font-medium">
           <span class="w-14 shrink-0 pl-1">序号</span>
           <span class="w-8 shrink-0 text-center">类型</span>
           <span class="flex-1 min-w-0">任务名称</span>
@@ -387,7 +387,7 @@ watch(() => route.query, (newQuery) => {
         </div>
         <!-- 大屏表头 -->
         <div
-          class="hidden sm:flex items-center gap-4 px-4 h-11 border-b bg-muted/20 text-sm text-muted-foreground font-medium">
+          class="hidden sm:flex items-center gap-4 px-4 h-[28px] border-b bg-muted/20 text-xs text-muted-foreground font-medium">
           <span class="w-16 shrink-0 pl-1">序号</span>
           <span class="w-12 shrink-0 text-center">类型</span>
           <span class="w-36 shrink-0">任务名称</span>
@@ -503,15 +503,3 @@ watch(() => route.query, (newQuery) => {
   </div>
 </template>
 
-<style scoped>
-:deep(.log-pre code) {
-  display: block;
-  padding: 0 !important;
-  margin: 0 !important;
-  background: transparent !important;
-}
-
-:deep(.log-pre span) {
-  vertical-align: top;
-}
-</style>
