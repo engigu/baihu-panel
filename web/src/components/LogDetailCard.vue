@@ -120,7 +120,8 @@ function getStatusBadgeClass(status: string) {
     <!-- 头部菜单 (响应式两行布局) -->
     <div class="flex flex-col border-b bg-muted/20 shrink-0">
       <!-- 第一行: 标题与核心控制按钮 -->
-      <div class="flex items-center justify-between px-4 h-[28px] gap-4">
+      <div class="flex items-center justify-between px-4 gap-4"
+        :class="variant === 'full' ? 'h-[28px]' : 'h-11'">
         <div class="flex items-center gap-2 min-w-0">
           <span class="text-xs font-medium text-foreground whitespace-nowrap truncate">{{ title }}</span>
           
