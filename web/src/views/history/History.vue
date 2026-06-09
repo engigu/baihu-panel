@@ -373,9 +373,10 @@ watch(() => route.query, (newQuery) => {
       </div>
     </div>
 
-    <div class="flex flex-col lg:flex-row gap-4" style="height: 520px;">
+    <div class="flex flex-col lg:flex-row gap-4 lg:h-[520px]">
       <!-- 日志列表 -->
-      <div class="flex-1 min-w-0 rounded-lg border bg-card overflow-hidden flex flex-col">
+      <div class="flex-1 min-w-0 rounded-lg border bg-card overflow-hidden flex-col"
+        :class="selectedLog ? 'hidden lg:flex' : 'flex'">
         <!-- 小屏表头 -->
         <div
           class="flex sm:hidden items-center gap-2 px-3 h-[28px] border-b bg-muted/20 text-xs text-muted-foreground font-medium">
