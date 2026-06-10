@@ -35,6 +35,7 @@ type FileNode struct {
 	Name     string      `json:"name"`
 	Path     string      `json:"path"`
 	IsDir    bool        `json:"isDir"`
+	ModTime  int64       `json:"modTime"`
 	Children []*FileNode `json:"children,omitempty"`
 }
 
@@ -84,6 +85,12 @@ func (fc *FileController) GetFileTree(c *gin.Context) {
 		relPath, _ := filepath.Rel(fc.workDir, path)
 		parts := strings.Split(relPath, string(filepath.Separator))
 
+		info, err := d.Info()
+		var modTime int64
+		if err == nil {
+			modTime = info.ModTime().UnixMilli()
+		}
+
 		current := root
 		for i, part := range parts {
 			found := false
@@ -98,9 +105,10 @@ func (fc *FileController) GetFileTree(c *gin.Context) {
 				isLast := i == len(parts)-1
 				isDir := !isLast || d.IsDir()
 				node := &FileNode{
-					Name:  part,
-					Path:  strings.Join(parts[:i+1], "/"),
-					IsDir: isDir,
+					Name:    part,
+					Path:    strings.Join(parts[:i+1], "/"),
+					IsDir:   isDir,
+					ModTime: modTime,
 				}
 				if isDir {
 					node.Children = []*FileNode{}

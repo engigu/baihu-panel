@@ -377,6 +377,7 @@ export interface FileNode {
   name: string
   path: string
   isDir: boolean
+  modTime: number
   children?: FileNode[]
 }
 

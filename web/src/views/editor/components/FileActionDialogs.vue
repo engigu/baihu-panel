@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import DirSelect from './DirSelect.vue'
+import DirTreeSelect from '@/components/DirTreeSelect.vue'
 import type { FileNode } from '@/api'
 
 const props = defineProps<{
@@ -67,7 +67,7 @@ defineExpose({ openCreate, openDelete, openRename, closeCreate: () => showCreate
       <div class="space-y-3 py-2">
         <div class="space-y-1">
           <Label class="text-xs">位置</Label>
-          <DirSelect v-model="createInDir" :file-tree="fileTree" :default-expand="createParent" />
+          <DirTreeSelect v-model="createInDir" :file-tree="fileTree" :default-expand="createParent" root-label="根目录" />
         </div>
         <RadioGroup v-model="newItemType" class="flex gap-4">
           <div class="flex items-center gap-2">

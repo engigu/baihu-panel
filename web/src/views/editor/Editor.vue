@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, onUnmounted, nextTick, shallowRef } from 'vue'
+import { ref, onMounted, computed, onUnmounted, nextTick, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -23,21 +23,6 @@ const router = useRouter()
 const fileTree = ref<FileNode[]>([])
 const expandedDirs = ref<Set<string>>(new Set())
 const selectedPath = ref<string | null>(null)
-
-const allDirs = computed(() => {
-  const dirs: string[] = []
-  function traverse(nodes: FileNode[]) {
-    for (const node of nodes) {
-      if (node.isDir) {
-        dirs.push(node.path)
-        if (node.children) traverse(node.children)
-      }
-    }
-  }
-  traverse(fileTree.value)
-  return dirs
-})
-
 
 // State for Editor
 const selectedFile = ref<string | null>(null)
@@ -131,10 +116,54 @@ function handleResize() {
   isSmallScreen.value = window.innerWidth < 1024
 }
 
+// Sorting state
+type SortMethod = 'name_asc' | 'name_desc' | 'time_desc' | 'time_asc'
+const sortMethod = ref<SortMethod>('name_asc')
+
+function sortTree(nodes: FileNode[]) {
+  nodes.sort((a, b) => {
+    if (a.isDir && !b.isDir) return -1
+    if (!a.isDir && b.isDir) return 1
+    
+    switch (sortMethod.value) {
+      case 'name_asc':
+        return a.name.localeCompare(b.name)
+      case 'name_desc':
+        return b.name.localeCompare(a.name)
+      case 'time_desc':
+        return (b.modTime || 0) - (a.modTime || 0)
+      case 'time_asc':
+        return (a.modTime || 0) - (b.modTime || 0)
+      default:
+        return 0
+    }
+  })
+  
+  for (const node of nodes) {
+    if (node.children) sortTree(node.children)
+  }
+}
+
+watch(sortMethod, (newVal) => {
+  sortTree(fileTree.value)
+  api.settings.setSection('ui', { file_sort_method: newVal }).catch(() => {})
+})
+
+async function initSortMethod() {
+  try {
+    const val = await api.settings.get('ui', 'file_sort_method')
+    if (val && ['name_asc', 'name_desc', 'time_desc', 'time_asc'].includes(val)) {
+      sortMethod.value = val as SortMethod
+    }
+  } catch {}
+}
+
 async function loadTree() {
   isRefreshing.value = true
   try {
-    fileTree.value = await api.files.tree()
+    const nodes = await api.files.tree()
+    sortTree(nodes)
+    fileTree.value = nodes
   } catch {
     toast.error('加载文件树失败')
   } finally {
@@ -415,8 +444,11 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
-  initFromUrl(); fetchPaths(); fetchInstalledLangs()
+onMounted(async () => {
+  await initSortMethod()
+  initFromUrl()
+  fetchPaths()
+  fetchInstalledLangs()
   window.addEventListener('resize', handleResize)
   window.addEventListener('keydown', handleGlobalKeydown)
 })
@@ -434,6 +466,7 @@ onUnmounted(() => {
       :expanded-dirs="expandedDirs"
       :selected-path="selectedPath"
       :is-refreshing="isRefreshing"
+      v-model:sortMethod="sortMethod"
       @refresh="loadTree"
       @select="handleSelect"
       @delete="(path: string) => dialogsRef?.openDelete(path)"

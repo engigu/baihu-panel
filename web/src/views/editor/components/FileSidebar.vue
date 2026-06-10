@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, FileUp, FileArchive, Plus, AlertCircle } from 'lucide-vue-next'
+import { RefreshCw, FileUp, FileArchive, Plus, ArrowDownAZ, ArrowUpZA, Clock, AlertCircle } from 'lucide-vue-next'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import FileTreeNode from '@/components/FileTreeNode.vue'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
 import { type FileNode } from '@/api'
@@ -11,9 +12,11 @@ const props = defineProps<{
   expandedDirs: Set<string>
   selectedPath: string | null
   isRefreshing?: boolean
+  sortMethod: 'name_asc' | 'name_desc' | 'time_desc' | 'time_asc'
 }>()
 
 const emit = defineEmits<{
+  'update:sortMethod': [method: 'name_asc' | 'name_desc' | 'time_desc' | 'time_asc']
   refresh: []
   create: [path: string]
   select: [node: FileNode]
@@ -133,6 +136,36 @@ function handleFilesUpload(e: Event) {
     <div class="flex items-center justify-between p-2 border-b">
       <span class="text-xs font-medium">脚本文件</span>
       <div class="flex gap-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button variant="ghost" size="icon" class="h-6 w-6" title="排序">
+              <ArrowDownAZ class="h-3 w-3" v-if="sortMethod === 'name_asc'" />
+              <ArrowUpZA class="h-3 w-3" v-else-if="sortMethod === 'name_desc'" />
+              <Clock class="h-3 w-3" v-else-if="sortMethod === 'time_desc'" />
+              <Clock class="h-3 w-3 rotate-180" v-else />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" class="w-auto min-w-[8rem]">
+            <DropdownMenuRadioGroup :model-value="sortMethod" @update:model-value="v => emit('update:sortMethod', v as any)">
+              <DropdownMenuRadioItem value="name_asc" class="text-xs">
+                <ArrowDownAZ class="h-3.5 w-3.5 mr-2" />
+                名称 (A-Z)
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="name_desc" class="text-xs">
+                <ArrowUpZA class="h-3.5 w-3.5 mr-2" />
+                名称 (Z-A)
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="time_desc" class="text-xs">
+                <Clock class="h-3.5 w-3.5 mr-2" />
+                修改时间 (最新)
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="time_asc" class="text-xs">
+                <Clock class="h-3.5 w-3.5 mr-2 rotate-180" />
+                修改时间 (最旧)
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button variant="ghost" size="icon" class="h-6 w-6" @click="emit('refresh')" :disabled="isRefreshing" title="刷新">
           <RefreshCw class="h-3 w-3" :class="{ 'animate-spin': isRefreshing }" />
         </Button>

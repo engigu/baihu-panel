@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, shallowRef } from 'vue'
+import { ref, onMounted, computed, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,9 @@ import { RefreshCw, FolderPlus, FilePlus, Save } from 'lucide-vue-next'
 import { api, type FileNode } from '@/api'
 import { VueMonacoEditor } from '@guolao/vue-monaco-editor'
 import FileTreeNode from '@/components/FileTreeNode.vue'
+import DirTreeSelect from '@/components/DirTreeSelect.vue'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { ArrowDownAZ, ArrowUpZA, Clock } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 const route = useRoute()
@@ -78,10 +81,57 @@ function expandParentDirs(filePath: string) {
   }
 }
 
+// Sorting state
+type SortMethod = 'name_asc' | 'name_desc' | 'time_desc' | 'time_asc'
+const sortMethod = ref<SortMethod>('name_asc')
+
+function sortTree(nodes: FileNode[]) {
+  nodes.sort((a, b) => {
+    // 文件夹始终排在前面
+    if (a.isDir && !b.isDir) return -1
+    if (!a.isDir && b.isDir) return 1
+    
+    switch (sortMethod.value) {
+      case 'name_asc':
+        return a.name.localeCompare(b.name)
+      case 'name_desc':
+        return b.name.localeCompare(a.name)
+      case 'time_desc':
+        return (b.modTime || 0) - (a.modTime || 0)
+      case 'time_asc':
+        return (a.modTime || 0) - (b.modTime || 0)
+      default:
+        return 0
+    }
+  })
+  
+  for (const node of nodes) {
+    if (node.children) {
+      sortTree(node.children)
+    }
+  }
+}
+
+watch(sortMethod, (newVal) => {
+  sortTree(fileTree.value)
+  api.settings.setSection('ui', { file_sort_method: newVal }).catch(() => {})
+})
+
+async function initSortMethod() {
+  try {
+    const val = await api.settings.get('ui', 'file_sort_method')
+    if (val && ['name_asc', 'name_desc', 'time_desc', 'time_asc'].includes(val)) {
+      sortMethod.value = val as SortMethod
+    }
+  } catch {}
+}
+
 async function loadTree() {
   loading.value = true
   try {
-    fileTree.value = await api.files.tree()
+    const nodes = await api.files.tree()
+    sortTree(nodes)
+    fileTree.value = nodes
 
     // 仅在首次加载时从 URL 恢复状态
     if (expandedDirs.value.size === 0 && selectedFile.value === null && selectedDir.value === null) {
@@ -307,7 +357,10 @@ async function handleCopyFile(path: string) {
   }
 }
 
-onMounted(loadTree)
+onMounted(async () => {
+  await initSortMethod()
+  loadTree()
+})
 </script>
 
 <template>
@@ -317,6 +370,36 @@ onMounted(loadTree)
       <div class="p-2 border-b flex items-center justify-between">
         <span class="text-sm font-medium pl-1">脚本文件</span>
         <div class="flex gap-0.5">
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button variant="ghost" size="icon" class="h-6 w-6" title="排序">
+                <ArrowDownAZ class="h-3 w-3" v-if="sortMethod === 'name_asc'" />
+                <ArrowUpZA class="h-3 w-3" v-else-if="sortMethod === 'name_desc'" />
+                <Clock class="h-3 w-3" v-else-if="sortMethod === 'time_desc'" />
+                <Clock class="h-3 w-3 rotate-180" v-else />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" class="w-auto min-w-[8rem]">
+              <DropdownMenuRadioGroup v-model="sortMethod">
+                <DropdownMenuRadioItem value="name_asc" class="text-xs">
+                  <ArrowDownAZ class="h-3.5 w-3.5 mr-2" />
+                  名称 (A-Z)
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="name_desc" class="text-xs">
+                  <ArrowUpZA class="h-3.5 w-3.5 mr-2" />
+                  名称 (Z-A)
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="time_desc" class="text-xs">
+                  <Clock class="h-3.5 w-3.5 mr-2" />
+                  修改时间 (最新)
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="time_asc" class="text-xs">
+                  <Clock class="h-3.5 w-3.5 mr-2 rotate-180" />
+                  修改时间 (最旧)
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="ghost" size="icon" class="h-6 w-6" title="新建文件" @click="openCreateDialog('file')">
             <FilePlus class="h-3 w-3" />
           </Button>
@@ -379,8 +462,9 @@ onMounted(loadTree)
           </DialogTitle>
         </DialogHeader>
         <div class="py-2 space-y-2">
-          <div v-if="selectedDir" class="text-xs text-muted-foreground">
-            位置: {{ selectedDir }}/
+          <div class="space-y-1">
+            <div class="text-xs text-muted-foreground mb-1">选择目录</div>
+            <DirTreeSelect v-model="selectedDir" :file-tree="fileTree" :default-expand="selectedDir || ''" root-label="根目录" />
           </div>
           <Input v-model="createName" class="h-9 text-sm"
             :placeholder="createType === 'file' ? 'example.js' : 'folder-name'" @keyup.enter="createItem" />

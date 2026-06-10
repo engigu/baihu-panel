@@ -6,8 +6,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { api, type FileNode } from '@/api'
 
 const props = defineProps<{
-  modelValue?: string
+  modelValue?: string | null
   placeholder?: string
+  fileTree?: FileNode[]
+  defaultExpand?: string
+  rootLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -16,8 +19,20 @@ const emit = defineEmits<{
 
 const open = ref(false)
 const loading = ref(false)
-const fileTree = ref<FileNode[]>([])
+const internalFileTree = ref<FileNode[]>([])
+const fileTree = computed(() => props.fileTree || internalFileTree.value)
 const expandedDirs = ref<Set<string>>(new Set())
+
+watch(() => props.defaultExpand, (newVal) => {
+  if (newVal) {
+    const parts = newVal.split('/')
+    let current = ''
+    for (const part of parts) {
+      current = current ? `${current}/${part}` : part
+      expandedDirs.value.add(current)
+    }
+  }
+}, { immediate: true })
 
 interface FlatDir {
   path: string
@@ -48,12 +63,13 @@ function flattenDirs(nodes: FileNode[], depth = 0): FlatDir[] {
 const flatDirs = computed(() => flattenDirs(fileTree.value))
 
 async function loadTree() {
-  if (fileTree.value.length > 0) return
+  if (props.fileTree) return
+  if (internalFileTree.value.length > 0) return
   loading.value = true
   try {
-    fileTree.value = await api.files.tree()
+    internalFileTree.value = await api.files.tree()
   } catch {
-    fileTree.value = []
+    internalFileTree.value = []
   } finally {
     loading.value = false
   }
@@ -88,9 +104,13 @@ function isSelected(dirPath: string): boolean {
   return false
 }
 
+function getRootLabel() {
+  return props.rootLabel || 'scripts (默认)'
+}
+
 // 检查是否是默认目录
 function isDefaultSelected(): boolean {
-  if (!props.modelValue) return true
+  if (!props.modelValue || props.modelValue === '/') return true
   // 绝对路径以 /scripts 结尾且没有子目录
   if (props.modelValue.endsWith('/scripts') || props.modelValue.endsWith('/data/scripts')) return true
   return false
@@ -101,21 +121,17 @@ watch(open, (val) => {
 })
 
 const displayValue = computed(() => {
-  if (!props.modelValue) return props.placeholder || 'scripts (默认)'
-  // 如果是绝对路径，只显示最后部分
-  const parts = props.modelValue.split('/')
-  const lastPart = parts[parts.length - 1]
-  // 如果是 scripts 目录本身
-  if (lastPart === 'scripts') return 'scripts (默认)'
-  return lastPart || props.modelValue
+  if (!props.modelValue || props.modelValue === '/') return props.placeholder || getRootLabel()
+  if (isDefaultSelected() && !props.rootLabel) return 'scripts (默认)'
+  return props.modelValue
 })
 </script>
 
 <template>
   <Popover v-model:open="open">
     <PopoverTrigger as-child>
-      <Button variant="outline" class="w-full justify-start text-sm h-9">
-        <Folder class="h-4 w-4 mr-2 text-yellow-500 shrink-0" />
+      <Button variant="outline" class="w-full justify-start text-xs h-8 font-normal">
+        <Folder class="h-3.5 w-3.5 mr-2 text-yellow-500 shrink-0" />
         <span class="truncate">{{ displayValue }}</span>
       </Button>
     </PopoverTrigger>
@@ -125,13 +141,13 @@ const displayValue = computed(() => {
         <!-- 根目录选项 -->
         <div
           :class="[
-            'flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer text-sm',
+            'flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer text-xs',
             isDefaultSelected() ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
           ]"
           @click="selectRoot"
         >
-          <FolderOpen class="h-4 w-4 text-yellow-500" />
-          <span>scripts (默认)</span>
+          <FolderOpen class="h-3.5 w-3.5 text-yellow-500" />
+          <span>{{ getRootLabel() }}</span>
         </div>
         
         <!-- 扁平化的目录列表 -->
@@ -139,7 +155,7 @@ const displayValue = computed(() => {
           v-for="dir in flatDirs"
           :key="dir.path"
           :class="[
-            'flex items-center gap-1 py-1 px-2 rounded cursor-pointer text-sm',
+            'flex items-center gap-1 py-1 px-2 rounded cursor-pointer text-xs',
             isSelected(dir.path) ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
           ]"
           :style="{ paddingLeft: (dir.depth * 12 + 8) + 'px' }"
@@ -154,7 +170,7 @@ const displayValue = computed(() => {
             <ChevronRight v-else class="h-3 w-3" />
           </span>
           <span v-else class="w-3 shrink-0" />
-          <Folder class="h-4 w-4 text-yellow-500 shrink-0" />
+          <Folder class="h-3.5 w-3.5 text-yellow-500 shrink-0" />
           <span class="truncate">{{ dir.name }}</span>
         </div>
         
