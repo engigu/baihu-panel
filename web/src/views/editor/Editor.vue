@@ -24,6 +24,21 @@ const fileTree = ref<FileNode[]>([])
 const expandedDirs = ref<Set<string>>(new Set())
 const selectedPath = ref<string | null>(null)
 
+const allDirs = computed(() => {
+  const dirs: string[] = []
+  function traverse(nodes: FileNode[]) {
+    for (const node of nodes) {
+      if (node.isDir) {
+        dirs.push(node.path)
+        if (node.children) traverse(node.children)
+      }
+    }
+  }
+  traverse(fileTree.value)
+  return dirs
+})
+
+
 // State for Editor
 const selectedFile = ref<string | null>(null)
 const fileContent = ref('')
@@ -479,6 +494,7 @@ onUnmounted(() => {
 
     <FileActionDialogs
       ref="dialogsRef"
+      :file-tree="fileTree"
       @create="createItem"
       @delete="deleteItem"
       @rename="renameItem"
