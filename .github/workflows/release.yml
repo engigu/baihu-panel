@@ -11,7 +11,7 @@ env:
 
 jobs:
   build-binaries:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     permissions:
       contents: write
     steps:

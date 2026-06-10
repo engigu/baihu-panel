@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build:
     if: github.event.repository.fork == false
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
