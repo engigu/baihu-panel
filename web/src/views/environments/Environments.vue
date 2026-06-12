@@ -3,7 +3,7 @@ import { ref, watch, onMounted } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
-import { Plus, Pencil, Trash2, Eye, EyeOff, Search, AlertTriangle, Terminal, Zap, ZapOff, Shield, Tag } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Eye, EyeOff, Search, AlertTriangle, Terminal, Zap, ZapOff, Shield, Tag, Link } from 'lucide-vue-next'
 import TextOverflow from '@/components/TextOverflow.vue'
 import TagInput from '@/components/TagInput.vue'
 import { api, type EnvVar } from '@/api'
@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge'
 
 import EditEnvDialog from './components/EditEnvDialog.vue'
 import DeleteEnvDialog from './components/DeleteEnvDialog.vue'
+import DependentTasksDialog from './components/DependentTasksDialog.vue'
 
 function formatDate(dateStr?: string) {
   if (!dateStr) return '-'
@@ -41,6 +42,7 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const editDialogRef = ref<InstanceType<typeof EditEnvDialog> | null>(null)
 const deleteDialogRef = ref<InstanceType<typeof DeleteEnvDialog> | null>(null)
+const dependentTasksDialogRef = ref<InstanceType<typeof DependentTasksDialog> | null>(null)
 
 async function checkSecretStatus() {
   try {
@@ -98,6 +100,10 @@ function openCreate() {
 
 function openEdit(env: EnvVar) {
   editDialogRef.value?.openEdit(env)
+}
+
+function openDependentTasks(env: EnvVar) {
+  dependentTasksDialogRef.value?.open(env)
 }
 
 function confirmDelete(id: string) {
@@ -239,16 +245,19 @@ onMounted(() => {
               </span>
             </div>
 
-            <div class="w-24 shrink-0 flex items-center justify-center gap-1">
-              <Button variant="ghost" size="icon" class="h-7 w-7" @click="toggleShow(env.id)" :title="showValues[env.id] ? '隐藏' : '显示'">
-                <Eye v-if="!showValues[env.id]" class="h-3.5 w-3.5" />
-                <EyeOff v-else class="h-3.5 w-3.5" />
+            <div class="w-24 shrink-0 flex justify-center">
+              <Button variant="ghost" size="icon" class="h-6 w-6" @click="toggleShow(env.id)" :title="showValues[env.id] ? '隐藏' : '显示'">
+                <Eye v-if="!showValues[env.id]" class="h-3 w-3" />
+                <EyeOff v-else class="h-3 w-3" />
               </Button>
-              <Button variant="ghost" size="icon" class="h-7 w-7" @click="openEdit(env)" title="编辑">
-                <Pencil class="h-3.5 w-3.5" />
+              <Button variant="ghost" size="icon" class="h-6 w-6" @click="openDependentTasks(env)" title="依赖任务">
+                <Link class="h-3 w-3" />
               </Button>
-              <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive" @click="confirmDelete(env.id)" title="删除">
-                <Trash2 class="h-3.5 w-3.5" />
+              <Button variant="ghost" size="icon" class="h-6 w-6" @click="openEdit(env)" title="编辑">
+                <Pencil class="h-3 w-3" />
+              </Button>
+              <Button variant="ghost" size="icon" class="h-6 w-6 text-destructive" @click="confirmDelete(env.id)" title="删除">
+                <Trash2 class="h-3 w-3" />
               </Button>
             </div>
           </div>
@@ -296,16 +305,19 @@ onMounted(() => {
               </span>
             </div>
 
-            <div class="w-24 shrink-0 flex items-center justify-center gap-1">
-              <Button variant="ghost" size="icon" class="h-7 w-7" @click="toggleShow(env.id)">
-                <Eye v-if="!showValues[env.id]" class="h-3.5 w-3.5" />
-                <EyeOff v-else class="h-3.5 w-3.5" />
+            <div class="w-24 shrink-0 flex justify-center">
+              <Button variant="ghost" size="icon" class="h-6 w-6" @click="toggleShow(env.id)">
+                <Eye v-if="!showValues[env.id]" class="h-3 w-3" />
+                <EyeOff v-else class="h-3 w-3" />
               </Button>
-              <Button variant="ghost" size="icon" class="h-7 w-7" @click="openEdit(env)">
-                <Pencil class="h-3.5 w-3.5" />
+              <Button variant="ghost" size="icon" class="h-6 w-6" @click="openDependentTasks(env)" title="依赖任务">
+                <Link class="h-3 w-3" />
               </Button>
-              <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive" @click="confirmDelete(env.id)">
-                <Trash2 class="h-3.5 w-3.5" />
+              <Button variant="ghost" size="icon" class="h-6 w-6" @click="openEdit(env)">
+                <Pencil class="h-3 w-3" />
+              </Button>
+              <Button variant="ghost" size="icon" class="h-6 w-6 text-destructive" @click="confirmDelete(env.id)">
+                <Trash2 class="h-3 w-3" />
               </Button>
             </div>
           </div>
@@ -353,11 +365,14 @@ onMounted(() => {
             </div>
           </div>
 
-          <div class="grid grid-cols-3 items-center pt-2 mt-2 border-t border-border/40 -mx-1">
+          <div class="grid grid-cols-4 items-center pt-2 mt-2 border-t border-border/40 -mx-1">
             <Button variant="ghost" class="h-9 px-0 text-xs gap-1.5 hover:bg-primary/5 rounded-none" @click="toggleShow(env.id)">
               <Eye v-if="!showValues[env.id]" class="h-3.5 w-3.5" />
               <EyeOff v-else class="h-3.5 w-3.5" />
               {{ showValues[env.id] ? '隐藏' : '显示' }}
+            </Button>
+            <Button variant="ghost" class="h-9 px-0 text-xs gap-1.5 hover:bg-primary/5 rounded-none border-l border-border/10" @click="openDependentTasks(env)">
+              <Link class="h-3.5 w-3.5" />任务
             </Button>
             <Button variant="ghost" class="h-9 px-0 text-xs gap-1.5 hover:bg-primary/5 rounded-none border-l border-border/10" @click="openEdit(env)">
               <Pencil class="h-3.5 w-3.5" />编辑
@@ -377,5 +392,6 @@ onMounted(() => {
 
     <EditEnvDialog ref="editDialogRef" @saved="loadEnvVars" />
     <DeleteEnvDialog ref="deleteDialogRef" @deleted="loadEnvVars" />
+    <DependentTasksDialog ref="dependentTasksDialogRef" />
   </Tabs>
 </template>
