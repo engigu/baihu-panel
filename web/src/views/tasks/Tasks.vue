@@ -779,18 +779,19 @@ watch(() => route.query.agent_id, (newVal: any) => {
             <div v-else-if="task.running_status === 'queued' || task.running_status === 'pending'" class="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse shrink-0" />
             <div v-else class="h-1 w-1 rounded-full bg-muted-foreground/20 shrink-0" />
             <div class="w-12 shrink-0 text-muted-foreground tabular-nums text-[10px]">#{{ total - (currentPage - 1) * pageSize - index }}</div>
-            <div class="w-48 shrink-0 flex items-center gap-2 overflow-hidden">
+            <div class="w-48 shrink-0 flex items-center gap-2 overflow-hidden" :title="getTaskNameTitle(task)">
               <span class="shrink-0" :title="getTaskTypeTitle(task.type || 'task')">
                 <div class="relative">
                   <GitBranch v-if="task.type === TASK_TYPE.REPO" class="h-3.5 w-3.5 text-primary" />
                   <Terminal v-else class="h-3.5 w-3.5 text-primary" />
                 </div>
               </span>
-              <div class="flex flex-col min-w-0">
+              <div class="flex flex-col min-w-0 overflow-hidden">
                 <div class="flex items-center gap-1.5 overflow-hidden">
-                  <span class="font-medium truncate">{{ task.name }}</span>
+                  <span class="font-medium truncate cursor-help">{{ task.name }}</span>
                   <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
                 </div>
+                <span v-if="task.remark" class="text-[10px] leading-tight text-muted-foreground truncate">{{ task.remark }}</span>
                 <span v-if="task.schedule" class="text-[10px] text-muted-foreground font-mono truncate">{{ task.schedule }}</span>
               </div>
             </div>
