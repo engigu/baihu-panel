@@ -17,6 +17,17 @@ export interface MonitorStats {
     num_cpu: number
     goroutines: number
   }
+  host: {
+    cpu_percent: number
+    mem_total: number
+    mem_used: number
+    mem_percent: number
+    disk_total: number
+    disk_used: number
+    disk_percent: number
+    uptime: number
+    platform: string
+  }
   mem: {
     alloc: number
     total_alloc: number

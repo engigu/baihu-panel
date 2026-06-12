@@ -3,6 +3,7 @@ package controllers
 import (
 	"net/http"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/services/tasks"
@@ -10,10 +11,22 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/disk"
+	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 type MonitorController struct {
 	executorService *tasks.ExecutorService
+
+	// 缓存物理机状态
+	hostMu     sync.RWMutex
+	lastUpdate time.Time
+	cpuPercent float64
+	vMem       *mem.VirtualMemoryStat
+	diskUsage  *disk.UsageStat
+	hostInfo   *host.InfoStat
 }
 
 func NewMonitorController(executorService *tasks.ExecutorService) *MonitorController {
@@ -69,9 +82,49 @@ func (mc *MonitorController) sendMonitorData(ws *websocket.Conn) error {
 	})
 }
 
+func (mc *MonitorController) updateHostMetrics() {
+	mc.hostMu.Lock()
+	defer mc.hostMu.Unlock()
+
+	// 缓存 2 秒
+	if time.Since(mc.lastUpdate) < 2*time.Second && mc.vMem != nil {
+		return
+	}
+
+	cpuPercents, _ := cpu.Percent(0, false)
+	if len(cpuPercents) > 0 {
+		mc.cpuPercent = cpuPercents[0]
+	}
+	mc.vMem, _ = mem.VirtualMemory()
+	mc.diskUsage, _ = disk.Usage("/")
+	mc.hostInfo, _ = host.Info()
+	mc.lastUpdate = time.Now()
+}
+
 func (mc *MonitorController) getMonitorData() gin.H {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
+
+	// 更新并读取缓存的物理主机指标
+	mc.updateHostMetrics()
+	
+	mc.hostMu.RLock()
+	cpuPercent := mc.cpuPercent
+	vMem := mc.vMem
+	diskUsage := mc.diskUsage
+	hostInfo := mc.hostInfo
+	mc.hostMu.RUnlock()
+
+	// 提供默认值防空指针
+	if vMem == nil {
+		vMem = &mem.VirtualMemoryStat{}
+	}
+	if diskUsage == nil {
+		diskUsage = &disk.UsageStat{}
+	}
+	if hostInfo == nil {
+		hostInfo = &host.InfoStat{}
+	}
 
 	return gin.H{
 		"env": gin.H{
@@ -80,6 +133,17 @@ func (mc *MonitorController) getMonitorData() gin.H {
 			"go_version": runtime.Version(),
 			"num_cpu":    runtime.NumCPU(),
 			"goroutines": runtime.NumGoroutine(),
+		},
+		"host": gin.H{
+			"cpu_percent":  cpuPercent,
+			"mem_total":    vMem.Total,
+			"mem_used":     vMem.Used,
+			"mem_percent":  vMem.UsedPercent,
+			"disk_total":   diskUsage.Total,
+			"disk_used":    diskUsage.Used,
+			"disk_percent": diskUsage.UsedPercent,
+			"uptime":       hostInfo.Uptime,
+			"platform":     hostInfo.Platform + " " + hostInfo.PlatformVersion,
 		},
 		"mem": gin.H{
 			"alloc":       m.Alloc,

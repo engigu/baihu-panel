@@ -4,7 +4,8 @@ import type { MonitorStats } from '@/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { RefreshCw } from 'lucide-vue-next'
+import StatusDot from '@/components/StatusDot.vue'
+import { RefreshCw, Zap, LayoutList, FileText, Server, Cpu, MemoryStick, HardDrive } from 'lucide-vue-next'
 
 import {
   Chart as ChartJS,
@@ -298,7 +299,61 @@ const schedulerChartData = computed(() => ({
     </div>
 
     <TabsContent value="dashboard" class="mt-0 space-y-4">
-      <div v-if="stats" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      
+
+
+      <!-- 物理主机监控环形图 -->
+      <div v-if="stats" class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        <Card>
+          <CardHeader class="pb-2">
+            <CardTitle class="text-base font-medium text-muted-foreground flex items-center"><Cpu class="w-4 h-4 mr-2" /> CPU 使用率</CardTitle>
+          </CardHeader>
+          <CardContent class="flex flex-col items-center">
+            <div class="relative w-32 h-32 flex items-center justify-center mt-2">
+              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                <path class="text-muted/20" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path :class="stats.host.cpu_percent > 80 ? 'text-red-500' : 'text-blue-500'" stroke-dasharray="100, 100" :stroke-dashoffset="100 - stats.host.cpu_percent" stroke-width="3" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" style="transition: stroke-dashoffset 0.5s ease 0s;" />
+              </svg>
+              <div class="absolute text-2xl font-bold" :class="stats.host.cpu_percent > 80 ? 'text-red-500' : 'text-foreground'">{{ stats.host.cpu_percent.toFixed(1) }}%</div>
+            </div>
+            <div class="text-xs text-muted-foreground mt-4">宿主机物理核心负载</div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader class="pb-2">
+            <CardTitle class="text-base font-medium text-muted-foreground flex items-center"><MemoryStick class="w-4 h-4 mr-2" /> 内存使用率</CardTitle>
+          </CardHeader>
+          <CardContent class="flex flex-col items-center">
+            <div class="relative w-32 h-32 flex items-center justify-center mt-2">
+              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                <path class="text-muted/20" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path :class="stats.host.mem_percent > 80 ? 'text-red-500' : 'text-emerald-500'" stroke-dasharray="100, 100" :stroke-dashoffset="100 - stats.host.mem_percent" stroke-width="3" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" style="transition: stroke-dashoffset 0.5s ease 0s;" />
+              </svg>
+              <div class="absolute text-2xl font-bold" :class="stats.host.mem_percent > 80 ? 'text-red-500' : 'text-foreground'">{{ stats.host.mem_percent.toFixed(1) }}%</div>
+            </div>
+            <div class="text-xs text-muted-foreground mt-4">{{ formatBytes(stats.host.mem_used) }} / {{ formatBytes(stats.host.mem_total) }}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader class="pb-2">
+            <CardTitle class="text-base font-medium text-muted-foreground flex items-center"><HardDrive class="w-4 h-4 mr-2" /> 磁盘使用率</CardTitle>
+          </CardHeader>
+          <CardContent class="flex flex-col items-center">
+            <div class="relative w-32 h-32 flex items-center justify-center mt-2">
+              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                <path class="text-muted/20" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path :class="stats.host.disk_percent > 80 ? 'text-red-500' : 'text-purple-500'" stroke-dasharray="100, 100" :stroke-dashoffset="100 - stats.host.disk_percent" stroke-width="3" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" style="transition: stroke-dashoffset 0.5s ease 0s;" />
+              </svg>
+              <div class="absolute text-2xl font-bold" :class="stats.host.disk_percent > 80 ? 'text-red-500' : 'text-foreground'">{{ stats.host.disk_percent.toFixed(1) }}%</div>
+            </div>
+            <div class="text-xs text-muted-foreground mt-4">{{ formatBytes(stats.host.disk_used) }} / {{ formatBytes(stats.host.disk_total) }}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div v-if="stats" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           <Card>
             <CardHeader class="pb-2">
               <CardTitle class="text-base text-blue-600">执行环境</CardTitle>
@@ -339,10 +394,12 @@ const schedulerChartData = computed(() => ({
                   <div class="flex items-center justify-between mb-2">
                     <span class="font-semibold text-sm">Worker #{{ worker.id }}</span>
                     <span v-if="worker.status === 'idle'" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
-                      🟢 空闲 (Idle)
+                      <StatusDot state="online" class="mr-1.5" />
+                      空闲 (Idle)
                     </span>
                     <span v-else class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                      ⚡ 执行中 (Running)
+                      <StatusDot state="running" class="mr-1.5" />
+                      执行中 (Running)
                     </span>
                   </div>
                   <div v-if="worker.status === 'running'" class="text-xs text-muted-foreground mt-1 space-y-1">
@@ -356,7 +413,9 @@ const schedulerChartData = computed(() => ({
               </div>
             </CardContent>
         </Card>
+      </div>
 
+      <div v-if="stats" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
           <Card>
             <CardHeader class="pb-2">
               <CardTitle class="text-base text-emerald-600">内存概览</CardTitle>
@@ -395,9 +454,9 @@ const schedulerChartData = computed(() => ({
             </CardHeader>
             <CardContent>
               <dl class="space-y-1 text-sm">
-                <div class="flex justify-between border-b border-border/50 pb-1"><dt class="text-muted-foreground">下次 GC 目标 (NextGC)</dt><dd class="font-medium">{{ formatBytes(stats.gc.next_gc) }}</dd></div>
-                <div class="flex justify-between border-b border-border/50 pb-1"><dt class="text-muted-foreground">上次 GC 时间 (LastGC)</dt><dd class="font-medium">{{ stats.gc.last_gc ? new Date(stats.gc.last_gc / 1000000).toLocaleString() : '-' }}</dd></div>
-                <div class="flex justify-between border-b border-border/50 pb-1"><dt class="text-muted-foreground">GC 总停顿时间 (PauseTotalNs)</dt><dd class="font-medium">{{ formatNs(stats.gc.pause_total_ns) }}</dd></div>
+                <div class="flex justify-between border-b border-border/50 pb-1"><dt class="text-muted-foreground">下次 GC目标 (NextGC)</dt><dd class="font-medium">{{ formatBytes(stats.gc.next_gc) }}</dd></div>
+                <div class="flex justify-between border-b border-border/50 pb-1"><dt class="text-muted-foreground">上次 GC时间 (LastGC)</dt><dd class="font-medium">{{ stats.gc.last_gc ? new Date(stats.gc.last_gc / 1000000).toLocaleString() : '-' }}</dd></div>
+                <div class="flex justify-between border-b border-border/50 pb-1"><dt class="text-muted-foreground">GC停顿总时 (PauseTotal)</dt><dd class="font-medium">{{ formatNs(stats.gc.pause_total_ns) }}</dd></div>
                 <div class="flex justify-between border-b border-border/50 pb-1"><dt class="text-muted-foreground">执行次数 (NumGC)</dt><dd class="font-medium">{{ stats.gc.num_gc }}</dd></div>
               </dl>
             </CardContent>
