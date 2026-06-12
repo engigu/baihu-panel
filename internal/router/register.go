@@ -64,6 +64,7 @@ func RegisterControllers() *Controllers {
 		AppLog:       controllers.NewAppLogController(),
 		SystemWS:     controllers.NewSystemWSController(),
 		WebUI:        controllers.NewWebUIController(services.NewWebUIService(settingsService)),
+		Monitor:      controllers.NewMonitorController(executorService),
 	}
 }
 

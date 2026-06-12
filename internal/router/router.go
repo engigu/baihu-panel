@@ -31,6 +31,7 @@ type Controllers struct {
 	AppLog       *controllers.AppLogController
 	SystemWS     *controllers.SystemWSController
 	WebUI        *controllers.WebUIController
+	Monitor      *controllers.MonitorController
 }
 
 func Setup(c *Controllers) *gin.Engine {

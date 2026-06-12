@@ -174,6 +174,16 @@ func (h *schedulerHooksAdapter) OnHeartbeat(ctx context.Context, logID string, d
 // TaskExecutor 定义任务执行函数签名
 type TaskExecutor func(ctx context.Context, req *ExecutionRequest, stdout, stderr io.Writer) (*Result, error)
 
+// WorkerStatus 定义并发池中单个 Worker 的状态
+type WorkerStatus struct {
+	ID        int    `json:"id"`
+	Status    string `json:"status"` // 状态: "idle" 或 "running"
+	TaskID    string `json:"task_id,omitempty"`
+	TaskName  string `json:"task_name,omitempty"`
+	StartTime int64  `json:"start_time,omitempty"` // 开始时间戳 (秒)
+	Duration  int64  `json:"duration,omitempty"`   // 已运行时长 (秒)
+}
+
 // Scheduler 统一调度器（独立组件，可在主服务和 Agent 中复用）
 // 调度器本身只负责队列管理和任务调度，具体的执行逻辑和事件处理由 Handler 实现
 type Scheduler struct {
@@ -188,6 +198,9 @@ type Scheduler struct {
 	logger       SchedulerLogger
 	runningTasks map[string]context.CancelFunc // 记录运行中的任务，用于停止 (TaskID -> CancelFunc)
 	runningExecs map[string]context.CancelFunc // 记录运行中的执行，用于停止 (LogID -> CancelFunc)
+
+	workers      []WorkerStatus
+	workerMu     sync.RWMutex
 }
 
 // NewScheduler 创建调度器
@@ -224,6 +237,14 @@ func NewScheduler(config SchedulerConfig, handler SchedulerEventHandler) *Schedu
 		logger:       &DefaultLogger{},
 		runningTasks: make(map[string]context.CancelFunc),
 		runningExecs: make(map[string]context.CancelFunc),
+		workers:      make([]WorkerStatus, config.WorkerCount),
+	}
+
+	for i := 0; i < config.WorkerCount; i++ {
+		s.workers[i] = WorkerStatus{
+			ID:     i,
+			Status: "idle",
+		}
 	}
 
 	return s
@@ -332,7 +353,32 @@ func (s *Scheduler) worker(id int) {
 				}()
 				// 速率限制
 				<-s.rateLimiter
-				s.executeTask(req)
+
+				func() {
+					// 恢复 worker 状态为空闲
+					defer func() {
+						s.workerMu.Lock()
+						if id >= 0 && id < len(s.workers) {
+							s.workers[id].Status = "idle"
+							s.workers[id].TaskID = ""
+							s.workers[id].TaskName = ""
+							s.workers[id].StartTime = 0
+						}
+						s.workerMu.Unlock()
+					}()
+
+					// 更新 worker 状态为运行中
+					s.workerMu.Lock()
+					if id >= 0 && id < len(s.workers) {
+						s.workers[id].Status = "running"
+						s.workers[id].TaskID = req.TaskID
+						s.workers[id].TaskName = req.Name
+						s.workers[id].StartTime = time.Now().Unix()
+					}
+					s.workerMu.Unlock()
+
+					s.executeTask(req)
+				}()
 			}()
 		}
 	}
@@ -614,4 +660,25 @@ func (s *Scheduler) GetConfig() SchedulerConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.config
+}
+
+// GetWorkerStatuses 获取所有 Worker 的状态
+func (s *Scheduler) GetWorkerStatuses() []WorkerStatus {
+	s.workerMu.RLock()
+	defer s.workerMu.RUnlock()
+	// 返回副本防止外部修改
+	statuses := make([]WorkerStatus, len(s.workers))
+	now := time.Now().Unix()
+	for i, w := range s.workers {
+		statuses[i] = w
+		// 在服务端计算运行时间，彻底避免客户端与服务端时钟不一致导致的计算偏差
+		if w.Status == "running" && w.StartTime > 0 {
+			duration := now - w.StartTime
+			if duration < 0 {
+				duration = 0
+			}
+			statuses[i].Duration = duration
+		}
+	}
+	return statuses
 }

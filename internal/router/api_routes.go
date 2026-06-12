@@ -65,6 +65,7 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 			registerAppLogRoutes(adminOnly, c)
 			registerSystemWSRoutes(adminOnly, c)
 			registerWebUIRoutes(adminOnly, c)
+			registerMonitorRoutes(adminOnly, c)
 		}
 	}
 
@@ -266,6 +267,14 @@ func registerAppLogRoutes(g *gin.RouterGroup, c *Controllers) {
 
 func registerSystemWSRoutes(g *gin.RouterGroup, c *Controllers) {
 	g.GET("/ws/events", c.SystemWS.HandleEvents)
+}
+
+func registerMonitorRoutes(g *gin.RouterGroup, c *Controllers) {
+	monitor := g.Group("/monitor")
+	{
+		monitor.GET("", c.Monitor.GetSystemMonitor)
+		monitor.GET("/ws", c.Monitor.MonitorWS)
+	}
 }
 
 func initAgentAPIRoutes(root *gin.RouterGroup, c *Controllers) {

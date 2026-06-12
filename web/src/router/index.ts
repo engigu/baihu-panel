@@ -54,6 +54,7 @@ const router = createRouter({
         { path: 'logs', name: 'logs', component: () => import('@/views/logs/MessageLogs.vue') },
         { path: 'terminal', name: 'terminal', component: () => import('@/views/terminal/Terminal.vue') },
         { path: 'notify', name: 'notify', component: () => import('@/views/notify/Notify.vue') },
+        { path: 'monitor', name: 'monitor', component: () => import('@/views/monitor/Monitor.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/views/settings/Settings.vue') }
       ]
     },

@@ -9,6 +9,52 @@ interface ApiResponse<T> {
   data: T
 }
 
+export interface MonitorStats {
+  env: {
+    os: string
+    arch: string
+    go_version: string
+    num_cpu: number
+    goroutines: number
+  }
+  mem: {
+    alloc: number
+    total_alloc: number
+    sys: number
+    lookups: number
+    mallocs: number
+    frees: number
+  }
+  heap: {
+    heap_alloc: number
+    heap_sys: number
+    heap_idle: number
+    heap_inuse: number
+    heap_released: number
+    heap_objects: number
+  }
+  gc: {
+    next_gc: number
+    last_gc: number
+    pause_total_ns: number
+    num_gc: number
+  }
+  scheduler: {
+    scheduled: number
+    running: number
+    queue_size: number
+    worker_count: number
+    workers: {
+      id: number
+      status: string
+      task_id?: string
+      task_name?: string
+      start_time?: number
+      duration?: number
+    }[]
+  }
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${url}`, {
     ...options,
@@ -145,6 +191,7 @@ export const api = {
     taskStats: (days?: number) => request<TaskStatsItem[]>(`/taskstats${days ? `?days=${days}` : ''}`)
   },
   settings: {
+    getMonitor: () => request<MonitorStats>('/monitor'),
     changePassword: (data: { old_username?: string; username?: string; old_password: string; new_password?: string }) =>
       request('/settings/password', { method: 'POST', body: JSON.stringify(data) }),
     getSite: () => request<SiteSettings>('/settings/site'),
