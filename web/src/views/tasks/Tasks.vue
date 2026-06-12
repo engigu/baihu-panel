@@ -86,6 +86,10 @@ function getExecutorStatus(task: Task): 'local' | 'online' | 'offline' {
   return agent?.status === AGENT_STATUS.ONLINE ? 'online' : 'offline'
 }
 
+function getTaskNameTitle(task: Task): string {
+  return task.remark ? `${task.name}\n备注: ${task.remark}` : task.name
+}
+
 async function loadTasks() {
   loading.value = true
   try {
@@ -679,11 +683,12 @@ watch(() => route.query.agent_id, (newVal: any) => {
                 <Terminal v-else class="h-4 w-4 text-primary" />
               </div>
             </span>
-            <div class="w-56 shrink-0 flex flex-col justify-center gap-0.5 overflow-hidden">
+            <div class="w-56 shrink-0 flex flex-col justify-center gap-0.5 overflow-hidden" :title="getTaskNameTitle(task)">
               <div class="flex items-center gap-1.5 overflow-hidden">
-                <span class="font-medium truncate cursor-help" :title="task.name">{{ task.name }}</span>
+                <span class="font-medium truncate cursor-help">{{ task.name }}</span>
                 <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
               </div>
+              <span v-if="task.remark" class="text-[11px] leading-tight text-muted-foreground truncate">{{ task.remark }}</span>
               <div v-if="task.tags" class="flex items-center gap-1 overflow-hidden">
                 <span v-for="tag in task.tags.split(',').filter(Boolean).slice(0, 3)" :key="tag"
                   class="truncate text-[10px] leading-none px-1 py-0.5 bg-secondary text-secondary-foreground rounded border">{{ tag }}</span>
