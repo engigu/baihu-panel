@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/engigu/baihu-panel/internal/utils"
 
@@ -47,7 +48,7 @@ func (mc *MonitorController) GetSystemMonitor(c *gin.Context) {
 	utils.Success(c, data)
 }
 
-// MonitorWS WebSocket实时推送系统监控信息
+// MonitorWS WebSocket 获取系统监控数据
 func (mc *MonitorController) MonitorWS(c *gin.Context) {
 	ws, err := monitorUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -55,11 +56,13 @@ func (mc *MonitorController) MonitorWS(c *gin.Context) {
 	}
 	defer ws.Close()
 
+	// 初始发送一次数据
+	if err := mc.sendMonitorData(ws); err != nil {
+		return
+	}
+
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
-
-	// 先立即发送一次
-	mc.sendMonitorData(ws)
 
 	for {
 		select {
@@ -88,6 +91,15 @@ func (mc *MonitorController) updateHostMetrics() {
 
 	// 缓存 2 秒
 	if time.Since(mc.lastUpdate) < 2*time.Second && mc.vMem != nil {
+		return
+	}
+
+	if constant.DemoMode {
+		mc.cpuPercent = 0
+		mc.vMem = &mem.VirtualMemoryStat{}
+		mc.diskUsage = &disk.UsageStat{}
+		mc.hostInfo = &host.InfoStat{Platform: "Demo Environment", Uptime: 0}
+		mc.lastUpdate = time.Now()
 		return
 	}
 
