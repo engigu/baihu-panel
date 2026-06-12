@@ -490,7 +490,7 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 	// 远程任务
 	if task.AgentID != nil && *task.AgentID != "" {
 		// 将请求中已包含的环境变量（已合并）传递给 Agent
-		return es.ExecuteRemoteForScheduler(task, req.LogID, executor.FormatEnvVars(req.Envs), req.Secrets)
+		return es.ExecuteRemoteForScheduler(ctx, task, req.LogID, executor.FormatEnvVars(req.Envs), req.Secrets)
 	}
 
 	// 本地任务
@@ -1042,7 +1042,7 @@ func (es *ExecutorService) RemoveRunningGo(taskID string, goid int64) {
 }
 
 // ExecuteRemoteForScheduler 供 Scheduler 调用，执行远程任务并等待结果
-func (es *ExecutorService) ExecuteRemoteForScheduler(task *models.Task, logID string, envs string, secrets []string) (*executor.Result, error) {
+func (es *ExecutorService) ExecuteRemoteForScheduler(ctx context.Context, task *models.Task, logID string, envs string, secrets []string) (*executor.Result, error) {
 	agentID := *task.AgentID
 	logger.Infof("[Executor] 远程执行任务 #%s: %s (Agent #%s, LogID: %s)", task.ID, task.Name, agentID, logID)
 
@@ -1079,32 +1079,70 @@ func (es *ExecutorService) ExecuteRemoteForScheduler(task *models.Task, logID st
 
 	// 4. 等待结果或超时
 	timeout := task.Timeout
-	if timeout <= 0 {
-		timeout = 30
-	}
 
 	start := time.Now()
-	select {
-	case agentResult := <-resultChan:
-		return &executor.Result{
-			Output:    agentResult.Output,
-			Error:     agentResult.Error,
-			Status:    agentResult.Status,
-			Duration:  agentResult.Duration,
-			ExitCode:  agentResult.ExitCode,
-			StartTime: time.Unix(agentResult.StartTime, 0),
-			EndTime:   time.Unix(agentResult.EndTime, 0),
-		}, nil
-	case <-time.After(time.Duration(timeout) * time.Minute):
-		end := time.Now()
-		return &executor.Result{
-			Status:    constant.TaskStatusFailed,
-			Error:     "等待 Agent 结果超时",
-			Duration:  end.Sub(start).Milliseconds(),
-			ExitCode:  -1,
-			StartTime: start,
-			EndTime:   end,
-		}, fmt.Errorf("等待 Agent 结果超时")
+
+	var timeoutChan <-chan time.Time
+	if timeout > 0 {
+		timeoutChan = time.After(time.Duration(timeout) * time.Minute)
+	}
+
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case agentResult := <-resultChan:
+			return &executor.Result{
+				Output:    agentResult.Output,
+				Error:     agentResult.Error,
+				Status:    agentResult.Status,
+				Duration:  agentResult.Duration,
+				ExitCode:  agentResult.ExitCode,
+				StartTime: time.Unix(agentResult.StartTime, 0),
+				EndTime:   time.Unix(agentResult.EndTime, 0),
+			}, nil
+
+		case <-timeoutChan:
+			end := time.Now()
+			return &executor.Result{
+				Status:    constant.TaskStatusFailed,
+				Error:     "等待 Agent 结果超时",
+				Duration:  end.Sub(start).Milliseconds(),
+				ExitCode:  -1,
+				StartTime: start,
+				EndTime:   end,
+			}, fmt.Errorf("等待 Agent 结果超时")
+
+		case <-ctx.Done():
+			// 收到取消信号，向 Agent 发送停止指令
+			_ = es.agentWSManager.SendToAgent(agentID, constant.WSTypeStop, map[string]interface{}{
+				"log_id": logID,
+			})
+			end := time.Now()
+			return &executor.Result{
+				Status:    constant.TaskStatusCancelled,
+				Error:     "任务被手动停止或删除",
+				Duration:  end.Sub(start).Milliseconds(),
+				ExitCode:  -1,
+				StartTime: start,
+				EndTime:   end,
+			}, fmt.Errorf("任务被主动停止")
+
+		case <-ticker.C:
+			// 定期检查 Agent 是否在线
+			if !es.agentWSManager.IsAgentOnline(agentID) {
+				end := time.Now()
+				return &executor.Result{
+					Status:    constant.TaskStatusFailed,
+					Error:     "Agent 离线，任务被迫终止",
+					Duration:  end.Sub(start).Milliseconds(),
+					ExitCode:  -1,
+					StartTime: start,
+					EndTime:   end,
+				}, fmt.Errorf("Agent 离线")
+			}
+		}
 	}
 }
 

@@ -362,6 +362,7 @@ func (tc *TaskController) DeleteTask(c *gin.Context) {
 	}
 
 	tc.executorService.RemoveCronTask(id)
+	tc.executorService.GetScheduler().StopTask(id)
 
 	success := tc.taskService.DeleteTask(id)
 	if !success {
@@ -460,6 +461,7 @@ func (tc *TaskController) BatchDeleteTasks(c *gin.Context) {
 
 		// 移除 cron 调度
 		tc.executorService.RemoveCronTask(id)
+		tc.executorService.GetScheduler().StopTask(id)
 	}
 
 	// 执行批量删除
@@ -513,6 +515,7 @@ func (tc *TaskController) BatchDeleteByQuery(c *gin.Context) {
 		}
 		// 移除 cron 调度
 		tc.executorService.RemoveCronTask(task.ID)
+		tc.executorService.GetScheduler().StopTask(task.ID)
 	}
 
 	// 执行批量删除

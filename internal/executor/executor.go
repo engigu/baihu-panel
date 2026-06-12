@@ -112,10 +112,14 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 
 	// 2. 执行命令
 	timeout := req.Timeout
-	if timeout <= 0 {
-		timeout = 30
+	var execCtx context.Context
+	var cancel context.CancelFunc
+
+	if timeout > 0 {
+		execCtx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Minute)
+	} else {
+		execCtx, cancel = context.WithCancel(ctx)
 	}
-	execCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Minute)
 	defer cancel()
 
 	// 如果指定使用 mise，则预先构建好带 mise 的命令，这样 PreExecute 记录的就是完整命令
