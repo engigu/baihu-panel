@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import StatusDot from '@/components/StatusDot.vue'
-import { RefreshCw, Zap, LayoutList, FileText, Server, Cpu, MemoryStick, HardDrive } from 'lucide-vue-next'
+import { RefreshCw, Cpu, MemoryStick, HardDrive } from 'lucide-vue-next'
 
 import {
   Chart as ChartJS,
