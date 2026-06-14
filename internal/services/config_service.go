@@ -28,6 +28,7 @@ type DatabaseConfig struct {
 	Path        string `ini:"path"`
 	DSN         string `ini:"dsn"`
 	TablePrefix string `ini:"table_prefix"`
+	SSLMode     string `ini:"ssl_mode"`
 }
 
 type SecurityConfig struct {
@@ -135,6 +136,7 @@ func LoadConfig(path string) (*AppConfig, error) {
 	constant.RuntimeDBPath = Config.Database.Path
 	constant.RuntimeDBDSN = Config.Database.DSN
 	constant.RuntimeDBTablePrefix = Config.Database.TablePrefix
+	constant.RuntimeDBSSLMode = Config.Database.SSLMode
 
 	// 暂存旧的 Secret，不再直接给 constant 赋值（改为到 settings 初始化时判断）
 	// constant.Secret = Config.Security.Secret
@@ -178,6 +180,7 @@ func applyEnvOverrides() {
 	getEnvStr("BH_DB_PATH", &Config.Database.Path)
 	getEnvStr("BH_DB_DSN", &Config.Database.DSN)
 	getEnvStr("BH_DB_TABLE_PREFIX", &Config.Database.TablePrefix)
+	getEnvStr("BH_DB_SSL_MODE", &Config.Database.SSLMode)
 
 	// Security
 	getEnvStr("BH_SECRET", &Config.Security.Secret)

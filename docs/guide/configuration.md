@@ -22,6 +22,7 @@
 | `BH_DB_PATH` | database.path | SQLite 物理文件存储路径 | ./data/baihu.db |
 | `BH_DB_DSN` | database.dsn | 数据库 DSN (仅 mysql/postgres, 优先级高。**需对应设置 type**) | - |
 | `BH_DB_TABLE_PREFIX` | database.table_prefix | 数据库表前缀 | baihu_ |
+| `BH_DB_SSL_MODE` | database.ssl_mode | SSL 模式: postgres 支持 disable/require/verify-ca/verify-full; mysql 支持 true/skip-verify | - |
 | `BAIHU_SECRET_KEY` | - | 系统加密秘钥，用于机密变量功能（**注：仅支持环境变量设置，不支持配置文件**） | - |
 
 ---
