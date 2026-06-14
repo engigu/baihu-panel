@@ -173,12 +173,22 @@ const chartOptions = {
   },
   scales: {
     x: {
-      grid: { display: false }
+      grid: { display: false },
+      ticks: {
+        maxTicksLimit: 8, // 限制 X 轴显示的标签数量，避免拥挤
+        maxRotation: 0,   // 禁止标签旋转，保持水平整洁
+        color: 'rgba(156, 163, 175, 0.8)', // 调整颜色更柔和 (gray-400)
+        font: { size: 11 }
+      }
     },
     y: {
       beginAtZero: true,
       border: { dash: [4, 4] },
-      grid: { color: 'rgba(0, 0, 0, 0.05)' }
+      grid: { color: 'rgba(156, 163, 175, 0.1)' },
+      ticks: {
+        color: 'rgba(156, 163, 175, 0.8)',
+        font: { size: 11 }
+      }
     }
   }
 }
@@ -465,15 +475,15 @@ const schedulerChartData = computed(() => ({
     </TabsContent>
 
     <TabsContent value="charts" class="mt-0 space-y-4">
-      <div class="grid grid-cols-1 gap-4">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <!-- Scheduler 图表 -->
           <Card>
-            <CardHeader class="py-4">
-              <CardTitle class="text-base text-indigo-600">任务调度 (Scheduler)</CardTitle>
-              <CardDescription>跟踪当前节点上正在运行和调度的任务数量</CardDescription>
+            <CardHeader class="pt-4 pb-1 px-4">
+              <CardTitle class="text-sm font-semibold text-indigo-600">任务调度 (Scheduler)</CardTitle>
+              <CardDescription class="text-xs">当前节点上正在运行和调度的任务数</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div class="h-64 w-full">
+            <CardContent class="px-4 pb-4 pt-0">
+              <div class="h-52 w-full mt-2">
                 <Line :data="schedulerChartData" :options="chartOptions" />
               </div>
             </CardContent>
@@ -481,12 +491,12 @@ const schedulerChartData = computed(() => ({
 
           <!-- Goroutines 图表 -->
           <Card>
-            <CardHeader class="py-4">
-              <CardTitle class="text-base text-blue-600">并发协程 (Goroutines)</CardTitle>
-              <CardDescription>跟踪系统中轻量级线程的创建与销毁情况</CardDescription>
+            <CardHeader class="pt-4 pb-1 px-4">
+              <CardTitle class="text-sm font-semibold text-blue-600">并发协程 (Goroutines)</CardTitle>
+              <CardDescription class="text-xs">轻量级线程的并发数量跟踪</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div class="h-64 w-full">
+            <CardContent class="px-4 pb-4 pt-0">
+              <div class="h-52 w-full mt-2">
                 <Line :data="goroutineChartData" :options="chartOptions" />
               </div>
             </CardContent>
@@ -494,12 +504,12 @@ const schedulerChartData = computed(() => ({
 
           <!-- Memory 图表 -->
           <Card>
-            <CardHeader class="py-4">
-              <CardTitle class="text-base text-emerald-600">内存分配 (Memory Alloc vs Sys)</CardTitle>
-              <CardDescription>真实使用的内存 (Alloc) 与向系统申请的内存上限 (Sys)</CardDescription>
+            <CardHeader class="pt-4 pb-1 px-4">
+              <CardTitle class="text-sm font-semibold text-emerald-600">内存分配 (Memory Alloc vs Sys)</CardTitle>
+              <CardDescription class="text-xs">实际使用内存与系统申请上限对比</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div class="h-64 w-full">
+            <CardContent class="px-4 pb-4 pt-0">
+              <div class="h-52 w-full mt-2">
                 <Line :data="memChartData" :options="chartOptions" />
               </div>
             </CardContent>
@@ -507,12 +517,12 @@ const schedulerChartData = computed(() => ({
 
           <!-- GC 图表 -->
           <Card>
-            <CardHeader class="py-4">
-              <CardTitle class="text-base text-orange-600">垃圾回收停顿 (GC Pauses)</CardTitle>
-              <CardDescription>每次探针周期内发生的垃圾回收暂停总耗时（毫秒）</CardDescription>
+            <CardHeader class="pt-4 pb-1 px-4">
+              <CardTitle class="text-sm font-semibold text-orange-600">垃圾回收停顿 (GC Pauses)</CardTitle>
+              <CardDescription class="text-xs">探针周期内 GC 暂停总耗时（ms）</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div class="h-64 w-full">
+            <CardContent class="px-4 pb-4 pt-0">
+              <div class="h-52 w-full mt-2">
                 <Bar :data="gcChartData" :options="chartOptions" />
               </div>
             </CardContent>
