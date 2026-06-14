@@ -107,6 +107,7 @@ func (a *App) initDatabase() {
 		DBName:   a.Config.Database.DBName,
 		Path:     a.Config.Database.Path,
 		DSN:      a.Config.Database.DSN,
+		SSLMode:  a.Config.Database.SSLMode,
 	}
 
 	if err := database.Init(dbCfg); err != nil {

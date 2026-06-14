@@ -193,6 +193,7 @@ var (
 	RuntimeDBPath        string
 	RuntimeDBDSN         string
 	RuntimeDBTablePrefix string
+	RuntimeDBSSLMode     string
 )
 
 // Secret JWT和密码salt密钥，运行中自动从数据库加载

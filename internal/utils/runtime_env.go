@@ -35,6 +35,7 @@ func BuildRuntimeProcessEnv() []string {
 	appendEnvIfSet(&envs, "BH_DB_PATH", constant.RuntimeDBPath)
 	appendEnvIfSet(&envs, "BH_DB_DSN", constant.RuntimeDBDSN)
 	appendEnvIfSet(&envs, "BH_DB_TABLE_PREFIX", constant.RuntimeDBTablePrefix)
+	appendEnvIfSet(&envs, "BH_DB_SSL_MODE", constant.RuntimeDBSSLMode)
 
 	return envs
 }
