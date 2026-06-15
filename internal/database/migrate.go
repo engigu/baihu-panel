@@ -60,6 +60,7 @@ func Migrate() error {
 	}
 
 	// 执行后置数据迁移，依赖完整的表结构
+	logger.Info("[Database] 正在执行后置数据迁移...")
 	if err := postMigrations(); err != nil {
 		logger.Warnf("[Database] 后置数据迁移警告: %v", err)
 	}
