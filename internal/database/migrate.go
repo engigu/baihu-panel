@@ -39,6 +39,11 @@ func Migrate() error {
 		res := DB.Where(&models.Setting{Section: "system", Key: "schema_signature"}).Limit(1).Find(&sigSetting)
 		if res.RowsAffected > 0 && string(sigSetting.Value) == sig {
 			logger.Info("[Database] 模型指纹一致，跳过自动表结构同步")
+			
+			// 即使表结构一致，也要执行后置数据迁移（内部有幂等检查），防止有漏网之鱼
+			if err := postMigrations(); err != nil {
+				logger.Warnf("[Database] 后置数据迁移警告: %v", err)
+			}
 			return nil
 		}
 	}
