@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"math/rand"
 	"net/http"
 	"runtime"
 	"sync"
@@ -95,11 +96,7 @@ func (mc *MonitorController) updateHostMetrics() {
 	}
 
 	if constant.DemoMode {
-		mc.cpuPercent = 0
-		mc.vMem = &mem.VirtualMemoryStat{}
-		mc.diskUsage = &disk.UsageStat{}
-		mc.hostInfo = &host.InfoStat{Platform: "Demo Environment", Uptime: 0}
-		mc.lastUpdate = time.Now()
+		mc.updateDemoMetrics()
 		return
 	}
 
@@ -110,6 +107,33 @@ func (mc *MonitorController) updateHostMetrics() {
 	mc.vMem, _ = mem.VirtualMemory()
 	mc.diskUsage, _ = disk.Usage("/")
 	mc.hostInfo, _ = host.Info()
+	mc.lastUpdate = time.Now()
+}
+
+func (mc *MonitorController) updateDemoMetrics() {
+	mc.cpuPercent = 10 + rand.Float64()*40 // 10% - 50% 的随机 CPU 波动
+
+	totalMem := uint64(8 * 1024 * 1024 * 1024) // 8GB 内存
+	usedMem := uint64(float64(totalMem) * (0.3 + rand.Float64()*0.3)) // 30% - 60% 随机使用率
+	mc.vMem = &mem.VirtualMemoryStat{
+		Total:       totalMem,
+		Used:        usedMem,
+		UsedPercent: float64(usedMem) / float64(totalMem) * 100,
+	}
+
+	totalDisk := uint64(500 * 1024 * 1024 * 1024) // 500GB 硬盘
+	usedDisk := uint64(float64(totalDisk) * (0.4 + rand.Float64()*0.1)) // 40% - 50% 随机使用率
+	mc.diskUsage = &disk.UsageStat{
+		Total:       totalDisk,
+		Used:        usedDisk,
+		UsedPercent: float64(usedDisk) / float64(totalDisk) * 100,
+	}
+
+	mc.hostInfo = &host.InfoStat{
+		Platform: "Demo Environment", 
+		OS:       "linux",
+		Uptime:   uint64(time.Now().Unix() - 1700000000), // 生成一个较长且持续增加的运行时间
+	}
 	mc.lastUpdate = time.Now()
 }
 
