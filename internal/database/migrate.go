@@ -41,6 +41,7 @@ func Migrate() error {
 			logger.Info("[Database] 模型指纹一致，跳过自动表结构同步")
 			
 			// 即使表结构一致，也要执行后置数据迁移（内部有幂等检查），防止有漏网之鱼
+			logger.Info("[Database] 正在执行后置数据迁移...")
 			if err := postMigrations(); err != nil {
 				logger.Warnf("[Database] 后置数据迁移警告: %v", err)
 			}
