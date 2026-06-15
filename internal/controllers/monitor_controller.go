@@ -122,7 +122,7 @@ func (mc *MonitorController) updateDemoMetrics() {
 	}
 
 	totalDisk := uint64(500 * 1024 * 1024 * 1024) // 500GB 硬盘
-	usedDisk := uint64(float64(totalDisk) * (0.4 + rand.Float64()*0.1)) // 40% - 50% 随机使用率
+	usedDisk := uint64(float64(totalDisk) * 0.45) // 固定 45% 使用率
 	mc.diskUsage = &disk.UsageStat{
 		Total:       totalDisk,
 		Used:        usedDisk,
