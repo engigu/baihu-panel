@@ -43,15 +43,20 @@ func Migrate() error {
 		}
 	}
 
-	// 执行自定义迁移
-	logger.Info("[Database] 正在执行自定义迁移与表结构同步...")
-	if err := customMigrations(); err != nil {
-		logger.Warnf("[Database] 自定义迁移警告: %v", err)
+	// 执行前置结构迁移
+	logger.Info("[Database] 正在执行前置结构迁移与表结构同步...")
+	if err := preMigrations(); err != nil {
+		logger.Warnf("[Database] 前置结构迁移警告: %v", err)
 	}
 
 	logger.Infof("[Database] 正在同步 %d 个数据模型的表结构...", len(allModels))
 	if err := AutoMigrate(allModels...); err != nil {
 		return err
+	}
+
+	// 执行后置数据迁移，依赖完整的表结构
+	if err := postMigrations(); err != nil {
+		logger.Warnf("[Database] 后置数据迁移警告: %v", err)
 	}
 
 	// 3. 更新指纹记录
@@ -98,8 +103,8 @@ func getModelSignature(models []interface{}) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// customMigrations 自定义迁移，处理 AutoMigrate 无法自动解决的变更
-func customMigrations() error {
+// preMigrations 前置结构迁移，处理 AutoMigrate 无法自动解决的变更
+func preMigrations() error {
 	// 检查 ql_tokens 表是否存在
 	if DB.Migrator().HasTable("ql_tokens") {
 		// 如果 code 列存在，且 token 列不存在，则重命名
@@ -118,9 +123,15 @@ func customMigrations() error {
 		}
 	}
 
-	migrateTaskTags()
-	migrateTaskEnvs()
+	return nil
+}
 
+// postMigrations 数据后置迁移，用于需要依赖完整表结构的数据搬运
+func postMigrations() error {
+	// 迁移任务标签到通用的数据关联表中
+	migrateTaskTags()
+	// 迁移任务绑定的环境变量到通用的数据关联表中
+	migrateTaskEnvs()
 	return nil
 }
 
@@ -129,7 +140,7 @@ func migrateTaskEnvs() {
 	// 检查 settings 表中是否已经记录了迁移状态
 	if DB.Migrator().HasTable(&models.Setting{}) {
 		var setting models.Setting
-		res := DB.Where(&models.Setting{Section: "system", Key: "task_envs_migrated"}).Limit(1).Find(&setting)
+		res := DB.Where(&models.Setting{Section: "system", Key: "task_envs_migrated_v2"}).Limit(1).Find(&setting)
 		if res.RowsAffected > 0 && string(setting.Value) == "true" {
 			return
 		}
@@ -185,14 +196,14 @@ func markTaskEnvsMigrated() {
 		return
 	}
 	var setting models.Setting
-	res := DB.Where(&models.Setting{Section: "system", Key: "task_envs_migrated"}).Limit(1).Find(&setting)
+	res := DB.Where(&models.Setting{Section: "system", Key: "task_envs_migrated_v2"}).Limit(1).Find(&setting)
 	if res.RowsAffected > 0 {
 		DB.Model(&setting).Update("value", models.BigText("true"))
 	} else {
 		DB.Create(&models.Setting{
 			ID:      xid.New().String(),
 			Section: "system",
-			Key:     "task_envs_migrated",
+			Key:     "task_envs_migrated_v2",
 			Value:   models.BigText("true"),
 		})
 	}
@@ -203,7 +214,7 @@ func migrateTaskTags() {
 	// 检查 settings 表中是否已经记录了迁移状态
 	if DB.Migrator().HasTable(&models.Setting{}) {
 		var setting models.Setting
-		res := DB.Where(&models.Setting{Section: "system", Key: "task_tags_migrated"}).Limit(1).Find(&setting)
+		res := DB.Where(&models.Setting{Section: "system", Key: "task_tags_migrated_v2"}).Limit(1).Find(&setting)
 		if res.RowsAffected > 0 && string(setting.Value) == "true" {
 			return
 		}
@@ -271,14 +282,14 @@ func markTaskTagsMigrated() {
 		return
 	}
 	var setting models.Setting
-	res := DB.Where(&models.Setting{Section: "system", Key: "task_tags_migrated"}).Limit(1).Find(&setting)
+	res := DB.Where(&models.Setting{Section: "system", Key: "task_tags_migrated_v2"}).Limit(1).Find(&setting)
 	if res.RowsAffected > 0 {
 		DB.Model(&setting).Update("value", models.BigText("true"))
 	} else {
 		DB.Create(&models.Setting{
 			ID:      xid.New().String(),
 			Section: "system",
-			Key:     "task_tags_migrated",
+			Key:     "task_tags_migrated_v2",
 			Value:   models.BigText("true"),
 		})
 	}
