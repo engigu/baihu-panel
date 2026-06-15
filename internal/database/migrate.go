@@ -36,7 +36,7 @@ func Migrate() error {
 	sig := getModelSignature(allModels)
 	if DB.Migrator().HasTable(&models.Setting{}) {
 		var sigSetting models.Setting
-		res := DB.Where(&models.Setting{Section: "system", Key: "schema_signature"}).Limit(1).Find(&sigSetting)
+		res := DB.Where(&models.Setting{Section: constant.SectionSystem, Key: constant.KeySchemaSignature}).Limit(1).Find(&sigSetting)
 		if res.RowsAffected > 0 && string(sigSetting.Value) == sig {
 			logger.Info("[Database] 模型指纹一致，跳过自动表结构同步")
 			
@@ -69,14 +69,14 @@ func Migrate() error {
 	// 3. 更新指纹记录
 	if DB.Migrator().HasTable(&models.Setting{}) {
 		var sigSetting models.Setting
-		res := DB.Where(&models.Setting{Section: "system", Key: "schema_signature"}).Limit(1).Find(&sigSetting)
+		res := DB.Where(&models.Setting{Section: constant.SectionSystem, Key: constant.KeySchemaSignature}).Limit(1).Find(&sigSetting)
 		if res.RowsAffected > 0 {
 			DB.Model(&sigSetting).Update("value", models.BigText(sig))
 		} else {
 			DB.Create(&models.Setting{
-				ID:      "sys_schema_sig",
-				Section: "system",
-				Key:     "schema_signature",
+				ID:      constant.IDSchemaSignature,
+				Section: constant.SectionSystem,
+				Key:     constant.KeySchemaSignature,
 				Value:   models.BigText(sig),
 			})
 		}
@@ -113,17 +113,17 @@ func getModelSignature(models []interface{}) string {
 // preMigrations 前置结构迁移，处理 AutoMigrate 无法自动解决的变更
 func preMigrations() error {
 	// 检查 ql_tokens 表是否存在
-	if DB.Migrator().HasTable("ql_tokens") {
+	if DB.Migrator().HasTable(constant.TableMigrateQlTokens) {
 		// 如果 code 列存在，且 token 列不存在，则重命名
-		if DB.Migrator().HasColumn(&models.AgentToken{}, "code") {
-			if err := DB.Migrator().RenameColumn(&models.AgentToken{}, "code", "token"); err != nil {
+		if DB.Migrator().HasColumn(&models.AgentToken{}, constant.ColumnMigrateQlTokenCode) {
+			if err := DB.Migrator().RenameColumn(&models.AgentToken{}, constant.ColumnMigrateQlTokenCode, constant.ColumnMigrateQlTokenToken); err != nil {
 				logger.Debugf("[Database] 重命名 ql_tokens.code 失败: %v", err)
 			}
 		}
 	}
 	// 移除 deps 表中的 type 字段（如果存在）
-	if DB.Migrator().HasColumn(&models.Dependency{}, "type") {
-		if err := DB.Migrator().DropColumn(&models.Dependency{}, "type"); err != nil {
+	if DB.Migrator().HasColumn(&models.Dependency{}, constant.ColumnMigrateDependencyType) {
+		if err := DB.Migrator().DropColumn(&models.Dependency{}, constant.ColumnMigrateDependencyType); err != nil {
 			logger.Debugf("[Database] 移除 deps.type 字段失败: %v", err)
 		} else {
 			logger.Infof("[Database] 已成功移除 deps 表中的 type 字段")
@@ -147,7 +147,7 @@ func migrateTaskEnvs() {
 	// 检查 settings 表中是否已经记录了迁移状态
 	if DB.Migrator().HasTable(&models.Setting{}) {
 		var setting models.Setting
-		res := DB.Where(&models.Setting{Section: "system", Key: "task_envs_migrated_v2"}).Limit(1).Find(&setting)
+		res := DB.Where(&models.Setting{Section: constant.SectionSystem, Key: constant.KeyTaskEnvsMigrated}).Limit(1).Find(&setting)
 		if res.RowsAffected > 0 && string(setting.Value) == "true" {
 			return
 		}
@@ -203,14 +203,14 @@ func markTaskEnvsMigrated() {
 		return
 	}
 	var setting models.Setting
-	res := DB.Where(&models.Setting{Section: "system", Key: "task_envs_migrated_v2"}).Limit(1).Find(&setting)
+	res := DB.Where(&models.Setting{Section: constant.SectionSystem, Key: constant.KeyTaskEnvsMigrated}).Limit(1).Find(&setting)
 	if res.RowsAffected > 0 {
 		DB.Model(&setting).Update("value", models.BigText("true"))
 	} else {
 		DB.Create(&models.Setting{
 			ID:      xid.New().String(),
-			Section: "system",
-			Key:     "task_envs_migrated_v2",
+			Section: constant.SectionSystem,
+			Key:     constant.KeyTaskEnvsMigrated,
 			Value:   models.BigText("true"),
 		})
 	}
@@ -221,7 +221,7 @@ func migrateTaskTags() {
 	// 检查 settings 表中是否已经记录了迁移状态
 	if DB.Migrator().HasTable(&models.Setting{}) {
 		var setting models.Setting
-		res := DB.Where(&models.Setting{Section: "system", Key: "task_tags_migrated_v2"}).Limit(1).Find(&setting)
+		res := DB.Where(&models.Setting{Section: constant.SectionSystem, Key: constant.KeyTaskTagsMigrated}).Limit(1).Find(&setting)
 		if res.RowsAffected > 0 && string(setting.Value) == "true" {
 			return
 		}
@@ -289,14 +289,14 @@ func markTaskTagsMigrated() {
 		return
 	}
 	var setting models.Setting
-	res := DB.Where(&models.Setting{Section: "system", Key: "task_tags_migrated_v2"}).Limit(1).Find(&setting)
+	res := DB.Where(&models.Setting{Section: constant.SectionSystem, Key: constant.KeyTaskTagsMigrated}).Limit(1).Find(&setting)
 	if res.RowsAffected > 0 {
 		DB.Model(&setting).Update("value", models.BigText("true"))
 	} else {
 		DB.Create(&models.Setting{
 			ID:      xid.New().String(),
-			Section: "system",
-			Key:     "task_tags_migrated_v2",
+			Section: constant.SectionSystem,
+			Key:     constant.KeyTaskTagsMigrated,
 			Value:   models.BigText("true"),
 		})
 	}
