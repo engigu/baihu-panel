@@ -361,6 +361,8 @@ port = 8052
 host = 0.0.0.0
 # 可选：配置 URL 前缀用于反向代理，例如 /baihu
 url_prefix = 
+# 全局会话 Cookie 名称
+cookie_name = BHToken
 
 [database]
 type = sqlite
@@ -676,6 +678,7 @@ table_prefix = baihu_
 | `BH_SERVER_PORT` | server.port | 服务端口 | 8052 |
 | `BH_SERVER_HOST` | server.host | 监听地址 | 0.0.0.0 |
 | `BH_SERVER_URL_PREFIX` | server.url_prefix | URL 前缀，用于反向代理子路径部署 | - |
+| `BH_COOKIE_NAME` | server.cookie_name | 全局会话 Cookie 名称 | BHToken |
 | `BH_DB_TYPE` | database.type | 数据库类型 (sqlite/mysql) | sqlite |
 | `BH_DB_HOST` | database.host | 数据库地址 | localhost |
 | `BH_DB_PORT` | database.port | 数据库端口 | 3306 |

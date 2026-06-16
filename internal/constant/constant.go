@@ -10,9 +10,6 @@ const (
 	// AdminRole 管理员角色
 	AdminRole = "admin"
 
-	// CookieName Cookie 名称
-	CookieName = "BHToken"
-
 	// DefaultTaskTimeout 默认任务超时时间（分钟）
 	DefaultTaskTimeout = 30
 
@@ -177,6 +174,9 @@ const (
 	// ScriptsDirPlaceholder 脚本目录占位符
 	ScriptsDirPlaceholder = "$SCRIPTS_DIR$"
 )
+
+// CookieName Cookie 名称
+var CookieName = "BHToken"
 
 // TablePrefix 表前缀，从配置文件读取
 var TablePrefix string

@@ -16,6 +16,7 @@ type ServerConfig struct {
 	Host         string `ini:"host"`
 	URLPrefix    string `ini:"url_prefix"`
 	PprofEnabled bool   `ini:"pprof_enabled"`
+	CookieName   string `ini:"cookie_name"`
 }
 
 type DatabaseConfig struct {
@@ -87,6 +88,7 @@ func LoadConfig(path string) (*AppConfig, error) {
 			Port:         8052,
 			Host:         "0.0.0.0",
 			PprofEnabled: false,
+			CookieName:   "BHToken",
 		},
 		Database: DatabaseConfig{
 			Type:        "sqlite",
@@ -125,7 +127,10 @@ func LoadConfig(path string) (*AppConfig, error) {
 		Config.Database.Path = constant.DefaultDBPath
 	}
 
-	// 设置表前缀到 constant 包
+	// 设置配置到 constant 包
+	if Config.Server.CookieName != "" {
+		constant.CookieName = Config.Server.CookieName
+	}
 	constant.TablePrefix = Config.Database.TablePrefix
 	constant.RuntimeDBType = Config.Database.Type
 	constant.RuntimeDBHost = Config.Database.Host
@@ -169,6 +174,7 @@ func applyEnvOverrides() {
 	getEnvStr("BH_SERVER_HOST", &Config.Server.Host)
 	getEnvStr("BH_SERVER_URL_PREFIX", &Config.Server.URLPrefix)
 	getEnvBool("BH_SERVER_PPROF", &Config.Server.PprofEnabled)
+	getEnvStr("BH_COOKIE_NAME", &Config.Server.CookieName)
 
 	// Database
 	getEnvStr("BH_DB_TYPE", &Config.Database.Type)
