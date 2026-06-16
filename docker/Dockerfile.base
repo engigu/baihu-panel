@@ -14,7 +14,7 @@ RUN sed -i 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.li
     && ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-         tzdata git curl wget vim htop ca-certificates rsync \
+         tzdata git curl wget vim htop ca-certificates rsync openssh-client \
     && BUILD_DEPS="gcc build-essential libssl-dev zlib1g-dev libbz2-dev \
          libreadline-dev libsqlite3-dev libncursesw5-dev \
          xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev" \
