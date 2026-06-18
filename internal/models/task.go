@@ -59,7 +59,7 @@ type RepoConfig struct {
 	AutoAddCron    bool   `json:"auto_add_cron"`   // 自动解析脚本注释添加定时任务
 	CommentToTask  string `json:"commenttotask"`   // 兼容 QL 格式任务脚本注释解析
 	RepoSource     string `json:"repo_source"`     // 仓库来源，如果是选择了这个 ql 导入的仓库，= ql
-	DirName        string `json:"dir_name"`        // 自定义仓库目录名 (可填 "." 表示不追加子目录)
+	RepoDirName    string `json:"repo_dir_name"`   // 自定义仓库目录名
 }
 
 // TaskConfig  任务配置  RepoConfig+TaskConfig=task.config

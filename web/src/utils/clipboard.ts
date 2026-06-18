@@ -28,14 +28,15 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     textarea.style.opacity = '0'
     textarea.style.left = '-9999px'
     
-    document.body.appendChild(textarea)
+    const parent = document.activeElement?.parentNode || document.body
+    parent.appendChild(textarea)
     
     // 兼容 iOS 的选中方式
     textarea.select()
     textarea.setSelectionRange(0, 99999) 
     
     const success = document.execCommand('copy')
-    document.body.removeChild(textarea)
+    parent.removeChild(textarea)
     
     if (success) {
       return true

@@ -59,7 +59,7 @@ func resolveWorkDir(workDir string) string {
 
 // isValidDirName 校验目录名是否合法
 func isValidDirName(dirName string) bool {
-	if strings.Contains(dirName, "/") || strings.Contains(dirName, "\\") || strings.Contains(dirName, "..") {
+	if dirName == "." || strings.Contains(dirName, "/") || strings.Contains(dirName, "\\") || strings.Contains(dirName, "..") {
 		return false
 	}
 	for _, ch := range dirName {
@@ -141,35 +141,39 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 	// 如果是仓库同步任务，根据 URL 生成 SourceID 用于去重
 	if req.Type == constant.TaskTypeRepo && req.Config != "" {
 		var repoCfg struct {
-			SourceURL  string `json:"source_url"`
-			Branch     string `json:"branch"`
-			DirName    string `json:"dir_name"`
-			TargetPath string `json:"target_path"`
+			SourceURL   string `json:"source_url"`
+			Branch      string `json:"branch"`
+			RepoDirName string `json:"repo_dir_name"`
+			TargetPath  string `json:"target_path"`
 		}
 		if err := json.Unmarshal([]byte(req.Config), &repoCfg); err == nil && repoCfg.SourceURL != "" {
-			if repoCfg.DirName != "" && repoCfg.DirName != "." {
-				if !isValidDirName(repoCfg.DirName) {
-					utils.BadRequest(c, "自定义目录名只能包含字母、数字、下划线、短划线和点，且不能包含路径逻辑")
+			if repoCfg.RepoDirName != "" {
+				if !isValidDirName(repoCfg.RepoDirName) {
+					utils.BadRequest(c, "自定义目录名只能包含字母、数字、下划线、短划线和点，不能只有点，且不能包含路径逻辑")
 					return
 				}
 			}
 
 			// 如果配置了自定义名字，使用配置的名字。没有配置的话，使用以前的username_reponame
-			if repoCfg.DirName != "" && repoCfg.DirName != "." {
-				sourceID = "repo_" + repoCfg.DirName
+			if repoCfg.RepoDirName != "" {
+				sourceID = "repo_" + repoCfg.RepoDirName
 			} else {
 				sourceID = "repo_" + utils.GetRepoIdentifier(repoCfg.SourceURL, repoCfg.Branch)
 			}
 
-			// 如果是全新任务，校验物理目录是否存在
+			// 校验 SourceID 是否已存在（任务唯一性）
 			existingTask := tc.taskService.GetTaskBySourceID(sourceID)
-			if existingTask == nil {
-				newAbsPath := getRepoPhysicalPath(repoCfg.TargetPath, repoCfg.DirName, repoCfg.SourceURL, repoCfg.Branch)
-				if newAbsPath != "" {
-					if info, err := os.Stat(newAbsPath); err == nil && info.IsDir() {
-						utils.BadRequest(c, "本地已存在同名仓库文件夹，请更换自定义目录名或清理残留文件")
-						return
-					}
+			if existingTask != nil {
+				utils.BadRequest(c, "当前任务已存在，请检查或更换仓库目录名称")
+				return
+			}
+
+			// 校验物理目录是否存在
+			newAbsPath := getRepoPhysicalPath(repoCfg.TargetPath, repoCfg.RepoDirName, repoCfg.SourceURL, repoCfg.Branch)
+			if newAbsPath != "" {
+				if info, err := os.Stat(newAbsPath); err == nil && info.IsDir() {
+					utils.BadRequest(c, "本地已存在同名仓库文件夹，请更换自定义目录名或清理残留文件")
+					return
 				}
 			}
 		}
@@ -331,39 +335,48 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 	var sourceID string
 	if req.Type == constant.TaskTypeRepo && req.Config != "" {
 		var repoCfg struct {
-			SourceURL  string `json:"source_url"`
-			Branch     string `json:"branch"`
-			DirName    string `json:"dir_name"`
-			TargetPath string `json:"target_path"`
+			SourceURL   string `json:"source_url"`
+			Branch      string `json:"branch"`
+			RepoDirName string `json:"repo_dir_name"`
+			TargetPath  string `json:"target_path"`
 		}
 		if err := json.Unmarshal([]byte(req.Config), &repoCfg); err == nil && repoCfg.SourceURL != "" {
-			if repoCfg.DirName != "" && repoCfg.DirName != "." {
-				if !isValidDirName(repoCfg.DirName) {
-					utils.BadRequest(c, "自定义目录名只能包含字母、数字、下划线、短划线和点，且不能包含路径逻辑")
+			if repoCfg.RepoDirName != "" {
+				if !isValidDirName(repoCfg.RepoDirName) {
+					utils.BadRequest(c, "自定义目录名只能包含字母、数字、下划线、短划线和点，不能只有点，且不能包含路径逻辑")
 					return
 				}
 			}
 
 			// 如果配置了自定义名字，使用配置的名字。没有配置的话，使用以前的username_reponame
-			if repoCfg.DirName != "" && repoCfg.DirName != "." {
-				sourceID = "repo_" + repoCfg.DirName
+			if repoCfg.RepoDirName != "" {
+				sourceID = "repo_" + repoCfg.RepoDirName
 			} else {
 				sourceID = "repo_" + utils.GetRepoIdentifier(repoCfg.SourceURL, repoCfg.Branch)
 			}
 
+			// 验证更新后的 SourceID 是否和别的任务冲突
+			if sourceID != oldTask.SourceID {
+				existingTask := tc.taskService.GetTaskBySourceID(sourceID)
+				if existingTask != nil && existingTask.ID != oldTask.ID {
+					utils.BadRequest(c, "当前任务已存在，请检查或更换仓库目录名称")
+					return
+				}
+			}
+
 			// 计算新的物理路径
-			newAbsPath := getRepoPhysicalPath(repoCfg.TargetPath, repoCfg.DirName, repoCfg.SourceURL, repoCfg.Branch)
+			newAbsPath := getRepoPhysicalPath(repoCfg.TargetPath, repoCfg.RepoDirName, repoCfg.SourceURL, repoCfg.Branch)
 
 			var oldAbsPath string
 			if oldTask != nil && oldTask.Type == constant.TaskTypeRepo && oldTask.Config != "" {
 				var oldCfg struct {
-					SourceURL  string `json:"source_url"`
-					Branch     string `json:"branch"`
-					DirName    string `json:"dir_name"`
-					TargetPath string `json:"target_path"`
+					SourceURL   string `json:"source_url"`
+					Branch      string `json:"branch"`
+					RepoDirName string `json:"repo_dir_name"`
+					TargetPath  string `json:"target_path"`
 				}
 				if json.Unmarshal([]byte(oldTask.Config), &oldCfg) == nil {
-					oldAbsPath = getRepoPhysicalPath(oldCfg.TargetPath, oldCfg.DirName, oldCfg.SourceURL, oldCfg.Branch)
+					oldAbsPath = getRepoPhysicalPath(oldCfg.TargetPath, oldCfg.RepoDirName, oldCfg.SourceURL, oldCfg.Branch)
 				}
 			}
 

@@ -127,7 +127,7 @@ export function parseBaihuCommand(command: string): ParsedRepoResult | null {
         }
         break
       case '--repo-name':
-        repoConfig.dir_name = value
+        repoConfig.repo_dir_name = value
         break
       case '--pre-command':
         task.pre_command = value
@@ -216,8 +216,8 @@ export function generateBaihuCommand(task: Task): string {
     if (config.branch) {
       args.push('--branch', config.branch)
     }
-    if (config.dir_name) {
-      args.push('--repo-name', config.dir_name)
+    if (config.repo_dir_name) {
+      args.push('--repo-name', config.repo_dir_name)
     }
     if (config.sparse_path) {
       args.push('--path', config.sparse_path)

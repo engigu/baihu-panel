@@ -63,7 +63,7 @@ const repoConfig = ref<RepoConfig>({
   concurrency: 1,
   repo_source: '',
   proxy: '',
-  dir_name: ''
+  repo_dir_name: ''
 })
 
 const allAgents = ref<Agent[]>([])
@@ -99,7 +99,7 @@ function exportBaihuCommand() {
   if (repoConfig.value.source_url) parts.push(`--source-url "${repoConfig.value.source_url}"`)
   if (repoConfig.value.target_path) parts.push(`--target-path "${repoConfig.value.target_path}"`)
   if (repoConfig.value.branch) parts.push(`--branch "${repoConfig.value.branch}"`)
-  if (repoConfig.value.dir_name) parts.push(`--repo-name "${repoConfig.value.dir_name}"`)
+  if (repoConfig.value.repo_dir_name) parts.push(`--repo-name "${repoConfig.value.repo_dir_name}"`)
   if (repoConfig.value.sparse_path) parts.push(`--path "${repoConfig.value.sparse_path}"`)
   if (repoConfig.value.single_file) parts.push(`--single-file`)
   if (repoConfig.value.proxy && repoConfig.value.proxy !== 'none') parts.push(`--proxy ${repoConfig.value.proxy}`)
@@ -231,7 +231,7 @@ watch(() => props.open, async (val: boolean) => {
       commenttotask: 'false',
       concurrency: 1,
       repo_source: '',
-      dir_name: ''
+      repo_dir_name: ''
     }
     const configStr = props.task?.config
     if (configStr) {
@@ -308,7 +308,11 @@ async function save() {
     }
     emit('update:open', false)
     emit('saved')
-  } catch { toast.error('保存失败') }
+  } catch (error: any) {
+    toast.error('保存失败', {
+      description: error.response?.data?.error || error.response?.data?.message || error.message || '未知错误'
+    })
+  }
 }
 </script>
 
@@ -419,7 +423,7 @@ async function save() {
                 <div v-if="repoConfig.source_type === 'git'" class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
                   <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-medium">目录名定制</Label>
                   <div class="sm:col-span-3 relative">
-                    <Input v-model="repoConfig.dir_name" placeholder="自定义生成目录名 (输入 . 表示不追加子目录)" class="h-9 bg-muted/30 border-muted-foreground/20 focus:bg-background transition-all" autocomplete="off" />
+                    <Input v-model="repoConfig.repo_dir_name" placeholder="留空则默认为 username_reponame 拼接" class="h-9 bg-muted/30 border-muted-foreground/20 focus:bg-background transition-all" autocomplete="off" />
                   </div>
                 </div>
                 <div v-if="repoConfig.source_type === 'git'" class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
