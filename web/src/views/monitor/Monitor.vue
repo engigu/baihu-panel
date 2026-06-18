@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import StatusDot from '@/components/StatusDot.vue'
-import { RefreshCw, Cpu, MemoryStick, HardDrive } from 'lucide-vue-next'
+import { RefreshCw, Cpu, MemoryStick, HardDrive, Activity, LayoutDashboard } from 'lucide-vue-next'
 
 import {
   Chart as ChartJS,
@@ -298,9 +298,15 @@ const schedulerChartData = computed(() => ({
         <p class="text-muted-foreground text-sm">实时监控面板资源、内存分配和垃圾回收状态</p>
       </div>
       <div class="flex items-center gap-2 w-full sm:w-auto">
-        <TabsList class="grid flex-1 sm:flex-none sm:w-[240px] grid-cols-2 h-9 p-1">
-          <TabsTrigger value="charts" class="text-xs sm:text-sm">实时图表</TabsTrigger>
-          <TabsTrigger value="dashboard" class="text-xs sm:text-sm">数据视图</TabsTrigger>
+        <TabsList class="h-9 p-0.5 bg-muted/20 border border-border/40 rounded-lg w-full sm:w-[240px] flex">
+          <TabsTrigger value="charts" class="px-3 h-8 text-xs gap-1.5 font-medium transition-all flex-1">
+            <Activity class="w-3.5 h-3.5 opacity-70" />
+            <span>实时图表</span>
+          </TabsTrigger>
+          <TabsTrigger value="dashboard" class="px-3 h-8 text-xs gap-1.5 font-medium transition-all flex-1">
+            <LayoutDashboard class="w-3.5 h-3.5 opacity-70" />
+            <span>数据视图</span>
+          </TabsTrigger>
         </TabsList>
         <Button variant="outline" size="icon" class="h-9 w-9 shrink-0" @click="() => { disconnectWS(); connectWS() }" :disabled="loading" title="刷新并重连">
           <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': loading }" />
