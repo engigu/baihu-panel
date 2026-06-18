@@ -3,10 +3,11 @@ import { ref, onMounted } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Plus, Loader2, Terminal as TerminalIcon, X, AlertCircle, Boxes, Zap } from 'lucide-vue-next'
+import { Plus, Loader2, Terminal as TerminalIcon, X, AlertCircle, Boxes, Zap, Info } from 'lucide-vue-next'
 import { api, type MiseLanguage } from '@/api'
 import { toast } from 'vue-sonner'
 import XTerminal from '@/components/XTerminal.vue'
+import { useStorage } from '@vueuse/core'
 
 // Import components
 import RuntimeListTab from './components/RuntimeListTab.vue'
@@ -20,6 +21,7 @@ interface DisplayLanguage extends Omit<MiseLanguage, 'source'> {
 }
 
 const activeTab = ref('runtimes')
+const showExtensionTip = useStorage('baihu_show_mise_extension_tip', true)
 
 // Shared State
 const languages = ref<DisplayLanguage[]>([])
@@ -171,12 +173,26 @@ onMounted(() => {
             </div>
         </div>
 
-        <div
-            class="flex items-center gap-2.5 text-[13px] text-amber-600 dark:text-amber-500 bg-amber-500/10 px-4 py-2.5 rounded-lg border border-amber-500/20 leading-relaxed shadow-sm select-none">
-            <AlertCircle class="h-4 w-4 shrink-0" />
-            <span>
-                <b class="font-bold">设为默认</b>：将选定版本设为系统全局默认 (mise use -g)，生效后所有未通过高级配置指定特定环境的任务将默认调用此环境。
-            </span>
+        <div class="flex flex-col gap-2.5">
+            <div
+                class="flex items-center gap-2.5 text-[13px] text-amber-600 dark:text-amber-500 bg-amber-500/10 px-4 py-2.5 rounded-lg border border-amber-500/20 leading-relaxed shadow-sm select-none">
+                <AlertCircle class="h-4 w-4 shrink-0" />
+                <span>
+                    <b class="font-bold">设为默认</b>：将选定版本设为系统全局默认 (mise use -g)，生效后所有未通过高级配置指定特定环境的任务将默认调用此环境。
+                </span>
+            </div>
+            <div v-if="showExtensionTip"
+                class="flex items-start sm:items-center justify-between gap-2.5 text-[13px] text-blue-600 dark:text-blue-500 bg-blue-500/10 px-4 py-2.5 rounded-lg border border-blue-500/20 leading-relaxed shadow-sm select-none">
+                <div class="flex items-start sm:items-center gap-2.5">
+                    <Info class="h-4 w-4 shrink-0 mt-0.5 sm:mt-0" />
+                    <span>
+                        <b class="font-bold">扩展支持</b>：虽然本界面主要专注于编程语言环境，但 Mise 本质上也可以管理各类系统包和工具插件。若有需要，您可以直接在终端中执行命令安装其他依赖包，此处将会自动同步并展示您的最新环境。
+                    </span>
+                </div>
+                <button @click="showExtensionTip = false" class="text-blue-500/60 hover:text-blue-500 transition-colors shrink-0 outline-none p-0.5 mt-0.5 sm:mt-0">
+                    <X class="h-4 w-4" />
+                </button>
+            </div>
         </div>
 
         <Tabs v-model="activeTab" class="w-full">
