@@ -197,7 +197,7 @@ const goroutineChartData = computed(() => ({
   labels: [...timeLabels.value],
   datasets: [
     {
-      label: 'Goroutines (协程并发数)',
+      label: 'Goroutines(协程数)',
       backgroundColor: 'rgba(37, 99, 235, 0.1)',
       borderColor: '#2563eb', // blue-600
       borderWidth: 2,
@@ -214,7 +214,7 @@ const memChartData = computed(() => ({
   labels: [...timeLabels.value],
   datasets: [
     {
-      label: 'Alloc (MB) 当前分配',
+      label: 'Alloc(MB) 当前分配',
       backgroundColor: 'rgba(5, 150, 105, 0.1)',
       borderColor: '#059669', // emerald-600
       borderWidth: 2,
@@ -225,7 +225,7 @@ const memChartData = computed(() => ({
       pointHitRadius: 10
     },
     {
-      label: 'Sys (MB) 系统申请上限',
+      label: 'Sys(MB) 系统申请上限',
       backgroundColor: 'transparent',
       borderColor: '#d97706', // amber-600
       borderWidth: 2,
@@ -242,7 +242,7 @@ const gcChartData = computed(() => ({
   labels: [...timeLabels.value],
   datasets: [
     {
-      label: 'GC Pause (ms) 垃圾回收停顿时间',
+      label: 'GC Pause(ms) 垃圾回收停顿',
       backgroundColor: '#ea580c', // orange-600
       data: [...gcPausesData.value],
       borderRadius: 4
