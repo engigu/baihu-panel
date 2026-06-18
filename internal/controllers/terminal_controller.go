@@ -138,14 +138,40 @@ func (tc *TerminalController) handlePtyMode(conn *websocket.Conn, userID string)
 	go func() {
 		defer wg.Done()
 		buf := make([]byte, 4096)
+		var remainder []byte
 		for {
 			n, err := ptmx.Read(buf)
-			if err != nil {
-				return
-			}
 			if n > 0 {
-				text := toUTF8(buf[:n])
-				writeMessage([]byte(text))
+				chunk := append(remainder, buf[:n]...)
+				lastSafe := len(chunk)
+				for i := len(chunk); i > 0 && i > len(chunk)-4; i-- {
+					if utf8.RuneStart(chunk[i-1]) {
+						if !utf8.FullRune(chunk[i-1 : len(chunk)]) {
+							lastSafe = i - 1
+						}
+						break
+					}
+				}
+				safe := chunk[:lastSafe]
+				
+				if len(safe) == 0 && len(chunk) >= 4 {
+					safe = chunk
+					remainder = nil
+				} else {
+					remainder = make([]byte, len(chunk[lastSafe:]))
+					copy(remainder, chunk[lastSafe:])
+				}
+
+				if len(safe) > 0 {
+					text := toUTF8(safe)
+					writeMessage([]byte(text))
+				}
+			}
+			if err != nil {
+				if len(remainder) > 0 {
+					writeMessage([]byte(toUTF8(remainder)))
+				}
+				return
 			}
 		}
 	}()
@@ -259,14 +285,40 @@ func (tc *TerminalController) handlePipeMode(conn *websocket.Conn, userID string
 		defer wg.Done()
 		defer func() { recover() }()
 		buf := make([]byte, 4096)
+		var remainder []byte
 		for {
 			n, err := reader.Read(buf)
-			if err != nil {
-				return
-			}
 			if n > 0 {
-				text := toUTF8(buf[:n])
-				writeMessage([]byte(text))
+				chunk := append(remainder, buf[:n]...)
+				lastSafe := len(chunk)
+				for i := len(chunk); i > 0 && i > len(chunk)-4; i-- {
+					if utf8.RuneStart(chunk[i-1]) {
+						if !utf8.FullRune(chunk[i-1 : len(chunk)]) {
+							lastSafe = i - 1
+						}
+						break
+					}
+				}
+				safe := chunk[:lastSafe]
+				
+				if len(safe) == 0 && len(chunk) >= 4 {
+					safe = chunk
+					remainder = nil
+				} else {
+					remainder = make([]byte, len(chunk[lastSafe:]))
+					copy(remainder, chunk[lastSafe:])
+				}
+
+				if len(safe) > 0 {
+					text := toUTF8(safe)
+					writeMessage([]byte(text))
+				}
+			}
+			if err != nil {
+				if len(remainder) > 0 {
+					writeMessage([]byte(toUTF8(remainder)))
+				}
+				return
 			}
 		}
 	}
