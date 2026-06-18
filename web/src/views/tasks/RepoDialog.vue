@@ -62,7 +62,8 @@ const repoConfig = ref<RepoConfig>({
   commenttotask: 'false',
   concurrency: 1,
   repo_source: '',
-  proxy: ''
+  proxy: '',
+  dir_name: ''
 })
 
 const allAgents = ref<Agent[]>([])
@@ -98,6 +99,7 @@ function exportBaihuCommand() {
   if (repoConfig.value.source_url) parts.push(`--source-url "${repoConfig.value.source_url}"`)
   if (repoConfig.value.target_path) parts.push(`--target-path "${repoConfig.value.target_path}"`)
   if (repoConfig.value.branch) parts.push(`--branch "${repoConfig.value.branch}"`)
+  if (repoConfig.value.dir_name) parts.push(`--repo-name "${repoConfig.value.dir_name}"`)
   if (repoConfig.value.sparse_path) parts.push(`--path "${repoConfig.value.sparse_path}"`)
   if (repoConfig.value.single_file) parts.push(`--single-file`)
   if (repoConfig.value.proxy && repoConfig.value.proxy !== 'none') parts.push(`--proxy ${repoConfig.value.proxy}`)
@@ -228,7 +230,8 @@ watch(() => props.open, async (val: boolean) => {
       auto_add_cron: false,
       commenttotask: 'false',
       concurrency: 1,
-      repo_source: ''
+      repo_source: '',
+      dir_name: ''
     }
     const configStr = props.task?.config
     if (configStr) {
@@ -410,6 +413,13 @@ async function save() {
                     <DirTreeSelect v-if="selectedAgentId === 'local'" :model-value="repoConfig.target_path || ''"
                       @update:model-value="v => repoConfig.target_path = v" class="h-9" />
                     <Input v-else v-model="repoConfig.target_path" placeholder="Agent 上的目标路径" class="h-9 bg-muted/30 border-muted-foreground/20" />
+                  </div>
+                </div>
+
+                <div v-if="repoConfig.source_type === 'git'" class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-medium">目录名定制</Label>
+                  <div class="sm:col-span-3 relative">
+                    <Input v-model="repoConfig.dir_name" placeholder="自定义生成目录名 (输入 . 表示不追加子目录)" class="h-9 bg-muted/30 border-muted-foreground/20 focus:bg-background transition-all" autocomplete="off" />
                   </div>
                 </div>
                 <div v-if="repoConfig.source_type === 'git'" class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">

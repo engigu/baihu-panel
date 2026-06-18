@@ -40,6 +40,7 @@ type Config struct {
 	CommentToTask  string
 	PreCommand     string
 	PostCommand    string
+	RepoName       string
 }
 
 func Run(args []string) {
@@ -66,6 +67,7 @@ func Run(args []string) {
 	fs.StringVar(&cfg.CommentToTask, "commenttotask", "false", "Compatible with QL format script comment parsing (true/false)")
 	fs.StringVar(&cfg.PreCommand, "pre-command", "", "Default pre-command for discovered tasks")
 	fs.StringVar(&cfg.PostCommand, "post-command", "", "Default post-command for discovered tasks")
+	fs.StringVar(&cfg.RepoName, "repo-name", "", "Custom repository directory name")
 
 	printHelp := func() {
 		fmt.Fprintf(os.Stderr, "\n白虎面板仓库同步工具 (Reposync)\n\n")
@@ -162,7 +164,13 @@ func Run(args []string) {
 
 func getActualRepoDir(cfg Config) string {
 	if cfg.SourceType == "git" {
-		repoName := utils.GetRepoIdentifier(cfg.SourceURL, cfg.Branch)
+		repoName := cfg.RepoName
+		if repoName == "" {
+			repoName = utils.GetRepoIdentifier(cfg.SourceURL, cfg.Branch)
+		}
+		if repoName == "." {
+			return cfg.TargetPath
+		}
 		return filepath.Join(cfg.TargetPath, repoName)
 	}
 	return cfg.TargetPath
@@ -208,10 +216,17 @@ func syncGit(cfg Config) {
 
 	gitDir := filepath.Join(dest, ".git")
 	if isDir(dest) && !pathExists(gitDir) {
-		repoName := utils.GetRepoIdentifier(cfg.SourceURL, cfg.Branch)
-		dest = filepath.Join(dest, repoName)
-		fmt.Printf("目标路径自动追加仓库名: %s\n", dest)
-		gitDir = filepath.Join(dest, ".git")
+		repoName := cfg.RepoName
+		if repoName == "" {
+			repoName = utils.GetRepoIdentifier(cfg.SourceURL, cfg.Branch)
+		}
+		if repoName != "." {
+			dest = filepath.Join(dest, repoName)
+			fmt.Printf("目标路径自动追加仓库名: %s\n", dest)
+			gitDir = filepath.Join(dest, ".git")
+		} else {
+			fmt.Printf("目标路径使用当前目录 (不追加仓库名): %s\n", dest)
+		}
 	}
 
 	restore := preserve(dest, cfg.WhitelistPaths)

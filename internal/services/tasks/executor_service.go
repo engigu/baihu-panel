@@ -1267,6 +1267,9 @@ func BuildRepoCommand(task *models.Task) (string, string) {
 	if config.Extensions != "" {
 		args = append(args, "--extensions", config.Extensions)
 	}
+	if config.DirName != "" {
+		args = append(args, "--repo-name", config.DirName)
+	}
 	if string(task.PreCommand) != "" {
 		args = append(args, "--pre-command", string(task.PreCommand))
 	}
