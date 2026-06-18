@@ -487,6 +487,7 @@ export interface RepoConfig {
   commenttotask?: string
   concurrency?: number
   repo_source?: string
+  dir_name?: string
 }
 
 export interface ExecutionResult {

@@ -126,6 +126,9 @@ export function parseBaihuCommand(command: string): ParsedRepoResult | null {
           console.error('Parse task-langs failed', e)
         }
         break
+      case '--repo-name':
+        repoConfig.dir_name = value
+        break
       case '--pre-command':
         task.pre_command = value
         break
@@ -212,6 +215,9 @@ export function generateBaihuCommand(task: Task): string {
 
     if (config.branch) {
       args.push('--branch', config.branch)
+    }
+    if (config.dir_name) {
+      args.push('--repo-name', config.dir_name)
     }
     if (config.sparse_path) {
       args.push('--path', config.sparse_path)
