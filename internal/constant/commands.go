@@ -32,4 +32,8 @@ var Commands = []CommandInfo{
 		Name:        "task",
 		Description: "系统级任务的列表查询、触发运行、启停控制及状态查看",
 	},
+	{
+		Name:        "version",
+		Description: "查看当前系统版本号 (同 -v, -V)",
+	},
 }

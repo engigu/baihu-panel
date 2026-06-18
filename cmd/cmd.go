@@ -6,6 +6,7 @@ import (
 	"github.com/engigu/baihu-panel/cmd/resetpwd"
 	"github.com/engigu/baihu-panel/cmd/restore"
 	"github.com/engigu/baihu-panel/cmd/task"
+	"github.com/engigu/baihu-panel/cmd/version"
 	"github.com/engigu/baihu-panel/cmd/webui"
 	// "github.com/engigu/baihu-panel/cmd/migrate"
 )
@@ -21,5 +22,8 @@ var Handlers = map[string]CommandHandler{
 	"builtininstall": builtininstall.Run,
 	"task":           task.Run,
 	"webui":          webui.Run,
+	"version":        version.Run,
+	"-v":             version.Run,
+	"-V":             version.Run,
 	// "migrate":  migrate.Run,
 }

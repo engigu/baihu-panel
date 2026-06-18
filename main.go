@@ -52,7 +52,9 @@ func main() {
 	}
 
 	if handler, ok := cmd.Handlers[commandName]; ok {
-		bootstrap.InitBasicForCmd() // 专为命令行工具定制启动基础环境，屏蔽后台启动刷屏日志
+		if commandName != "-v" && commandName != "-V" && commandName != "version" {
+			bootstrap.InitBasicForCmd() // 专为命令行工具定制启动基础环境，屏蔽后台启动刷屏日志
+		}
 		handler(os.Args[2:])
 		return
 	}
