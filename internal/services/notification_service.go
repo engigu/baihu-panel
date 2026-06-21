@@ -431,8 +431,9 @@ func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 			if output, ok := payload["output"].(string); ok {
 				// 如果输出包含了压缩后的 Base64 (以 "base64:" 开头)，由于是推送到通知，我们尽量不发大段 Base64
 				// 这里简单处理：如果过长则截断，或者如果是压缩的则记录一下
-				if len(output) > 1000 {
-					payload["output"] = output[len(output)-1000:] + "\n...(截断)"
+				trimmed := utils.TrimLastRunes(output, 1000)
+				if len(trimmed) < len(output) {
+					payload["output"] = trimmed + "\n...(截断)"
 				}
 			}
 
@@ -500,9 +501,14 @@ func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 				if output, ok := payload["output"].(string); ok && output != "" {
 					// 仅保留指定字数的日志内容并移除 ANSI 颜色代码
 					logSnippet := stripAnsi(output)
-					if len(logSnippet) > extra.LogLimit {
-						logSnippet = "...\n" + logSnippet[len(logSnippet)-extra.LogLimit:]
+					
+					trimmed := utils.TrimLastRunes(logSnippet, extra.LogLimit)
+					if len(trimmed) < len(logSnippet) {
+						logSnippet = "...\n" + trimmed
+					} else {
+						logSnippet = trimmed
 					}
+					
 					currentText += "\n\n[执行日志]\n" + logSnippet
 				}
 			}
