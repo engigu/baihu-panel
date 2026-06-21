@@ -1,9 +1,15 @@
 name: Build-Docker-ARM64
 
+# on:
+#   # push:
+#   #   tags: [ 'v*' ]
+#   workflow_dispatch:
+
 on:
-  # push:
-  #   tags: [ 'v*' ]
+  push:
+    branches: [ main ]
   workflow_dispatch:
+
 
 env:
   REGISTRY: ghcr.io
