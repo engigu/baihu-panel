@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import type { MonitorStats } from '@/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -33,7 +33,12 @@ ChartJS.register(
   Filler
 )
 
-const activeTab = ref('charts')
+const activeTab = ref(localStorage.getItem('monitor_active_tab') || 'charts')
+
+watch(activeTab, (newVal) => {
+  localStorage.setItem('monitor_active_tab', newVal)
+})
+
 const stats = ref<MonitorStats | null>(null)
 const loading = ref(false)
 let timer: any = null
