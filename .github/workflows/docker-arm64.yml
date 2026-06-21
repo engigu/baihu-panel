@@ -65,8 +65,6 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=semver,pattern={{version}}-arm64${{ matrix.tag_suffix }}
-            type=raw,value=latest-arm64${{ matrix.tag_suffix }},enable={{is_default_branch}}
             type=ref,event=branch,suffix=-arm64${{ matrix.tag_suffix }}
 
       - name: Get build time
