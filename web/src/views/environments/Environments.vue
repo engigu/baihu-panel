@@ -3,7 +3,7 @@ import { ref, watch, onMounted } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
-import { Plus, Pencil, Trash2, Eye, EyeOff, Search, AlertTriangle, Terminal, Zap, ZapOff, Shield, Tag, Link } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Eye, EyeOff, Search, AlertTriangle, Terminal, Zap, ZapOff, Shield, Tag, Link, X } from 'lucide-vue-next'
 import TextOverflow from '@/components/TextOverflow.vue'
 import TagInput from '@/components/TagInput.vue'
 import { api, type EnvVar } from '@/api'
@@ -38,6 +38,12 @@ const currentPage = ref(1)
 const total = ref(0)
 const activeTab = ref<string>(ENV_TYPE.NORMAL)
 const isSecretSet = ref(true)
+const showSecretTip = ref(localStorage.getItem('bhp_hide_secret_tip') !== 'true')
+
+function closeSecretTip() {
+  showSecretTip.value = false
+  localStorage.setItem('bhp_hide_secret_tip', 'true')
+}
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const editDialogRef = ref<InstanceType<typeof EditEnvDialog> | null>(null)
@@ -178,6 +184,16 @@ onMounted(() => {
           </TabsTrigger>
         </TabsList>
       </div>
+    </div>
+
+    <div v-if="activeTab === ENV_TYPE.SECRET && isSecretSet && showSecretTip" class="bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs px-4 py-2.5 rounded-lg flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <AlertTriangle class="h-4 w-4 shrink-0" />
+        <span><strong>使用说明：</strong>机密数据仅在正式任务执行中被解密并注入为环境变量，<strong>测试运行及临时终端无法获取</strong>。</span>
+      </div>
+      <Button variant="ghost" size="icon" class="h-5 w-5 rounded-full hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0" @click="closeSecretTip">
+        <X class="h-3 w-3" />
+      </Button>
     </div>
 
     <div v-if="activeTab === 'secret' && !isSecretSet" class="flex flex-col items-center justify-center p-12 text-center rounded-lg border bg-card border-dashed">
