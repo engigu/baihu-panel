@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/cache"
@@ -15,6 +16,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/systime"
+	"github.com/rs/xid"
 	"gorm.io/gorm"
 )
 
@@ -320,7 +322,7 @@ func (s *BackupService) restoreFromZipFile(tx *gorm.DB, f *zip.File, filename st
 	case "users.json":
 		return restoreStreamBatch[models.User](tx, decoder)
 	case "tasks.json":
-		return restoreStreamBatch[models.Task](tx, decoder)
+		return s.restoreTasks(tx, decoder)
 	case "task_logs.json":
 		return restoreStreamBatch[models.TaskLog](tx, decoder)
 	case "envs.json":
@@ -351,6 +353,104 @@ func (s *BackupService) restoreFromZipFile(tx *gorm.DB, f *zip.File, filename st
 	default:
 		return nil
 	}
+}
+
+func (s *BackupService) restoreTasks(tx *gorm.DB, decoder *json.Decoder) error {
+	batchSize := 1000
+	var batch []*models.Task
+
+	for decoder.More() {
+		var m models.Task
+		if err := decoder.Decode(&m); err != nil {
+			return err
+		}
+		batch = append(batch, &m)
+
+		if len(batch) >= batchSize {
+			if err := s.insertTasksBatch(tx, batch); err != nil {
+				return err
+			}
+			batch = nil // reset
+		}
+	}
+
+	if len(batch) > 0 {
+		return s.insertTasksBatch(tx, batch)
+	}
+
+	return nil
+}
+
+func (s *BackupService) insertTasksBatch(tx *gorm.DB, batch []*models.Task) error {
+	if err := tx.Select("*").CreateInBatches(batch, len(batch)).Error; err != nil {
+		return err
+	}
+
+	// [COMPATIBILITY CODE - TEMPORARY]
+	// 为旧版备份数据做向下兼容（在旧版本中 tags/envs 还是直接存储在 tasks.json 中）。
+	// 此段代码将旧数据迁移到新的 data_relations 和 data_storages 中，确保旧备份包能正常恢复。
+	// 由于新版本的备份中 tasks.json 已不再包含这些字段，未来某次大版本更新后，这段兼容代码将被移除。
+	for _, t := range batch {
+		if t.Tags != "" {
+			tags := strings.Split(t.Tags, ",")
+			for _, tag := range tags {
+				tag = strings.TrimSpace(tag)
+				if tag == "" {
+					continue
+				}
+				var storage models.DataStorage
+				res := tx.Where("type = ? AND name = ?", constant.RelationTypeTaskTag, tag).Limit(1).Find(&storage)
+				if res.RowsAffected == 0 {
+					storage = models.DataStorage{
+						ID:        xid.New().String(),
+						Type:      constant.RelationTypeTaskTag,
+						Name:      tag,
+						CreatedAt: models.Now(),
+						UpdatedAt: models.Now(),
+					}
+					tx.Create(&storage)
+				}
+				
+				var count int64
+				tx.Model(&models.DataRelation{}).Where("data_id = ? AND relate_id = ? AND type = ?", t.ID, storage.ID, constant.RelationTypeTaskTag).Count(&count)
+				if count == 0 {
+					relation := models.DataRelation{
+						ID:        xid.New().String(),
+						DataID:    t.ID,
+						RelateID:  storage.ID,
+						Type:      constant.RelationTypeTaskTag,
+						CreatedAt: models.Now(),
+						UpdatedAt: models.Now(),
+					}
+					tx.Create(&relation)
+				}
+			}
+		}
+
+		if string(t.Envs) != "" {
+			envs := strings.Split(string(t.Envs), ",")
+			for _, envID := range envs {
+				envID = strings.TrimSpace(envID)
+				if envID == "" {
+					continue
+				}
+				var count int64
+				tx.Model(&models.DataRelation{}).Where("data_id = ? AND relate_id = ? AND type = ?", t.ID, envID, constant.RelationTypeTaskEnv).Count(&count)
+				if count == 0 {
+					relation := models.DataRelation{
+						ID:        xid.New().String(),
+						DataID:    t.ID,
+						RelateID:  envID,
+						Type:      constant.RelationTypeTaskEnv,
+						CreatedAt: models.Now(),
+						UpdatedAt: models.Now(),
+					}
+					tx.Create(&relation)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // insertRecords, restoreFromData 方法已合并入 restoreFromZipFile，此处删除冗余方法
