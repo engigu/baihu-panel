@@ -7,5 +7,5 @@ import (
 )
 
 func Run(args []string) {
-	fmt.Printf("白虎面板 (Baihu Panel) v%s (Build time: %s)\n", constant.Version, constant.BuildTime)
+	fmt.Printf("白虎面板 (Baihu Panel) %s (Build time: %s)\n", constant.Version, constant.BuildTime)
 }
