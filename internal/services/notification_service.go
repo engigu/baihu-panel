@@ -375,6 +375,88 @@ func (s *NotificationService) getDefaultMessage(eventType string, payload map[st
 	return title, text
 }
 
+// resolveEvent 解析不同事件类型，返回对应的模板Key、静态内容（非模板事件）和原始任务输出
+func (s *NotificationService) resolveEvent(eventType string, payload map[string]interface{}) (tmplTitleKey, tmplTextKey, title, text, rawOutput string, ok bool) {
+	switch eventType {
+	case constant.EventUserLogin:
+		tmplTitleKey = constant.KeyNotifyTemplateUserLoginTitle
+		tmplTextKey = constant.KeyNotifyTemplateUserLoginText
+		// 特殊处理登录状态
+		status, _ := payload["status"].(string)
+		if status == "success" {
+			payload["status_label"] = "成功"
+		} else {
+			payload["status_label"] = "失败"
+		}
+
+	case constant.EventBruteForceLogin:
+		tmplTitleKey = constant.KeyNotifyTemplateBruteForceLoginTitle
+		tmplTextKey = constant.KeyNotifyTemplateBruteForceLoginText
+
+	case constant.EventPasswordChanged:
+		tmplTitleKey = constant.KeyNotifyTemplatePasswordChangedTitle
+		tmplTextKey = constant.KeyNotifyTemplatePasswordChangedText
+
+	case constant.EventTaskSuccess, constant.EventTaskFailed, constant.EventTaskTimeout:
+		switch eventType {
+		case constant.EventTaskSuccess:
+			tmplTitleKey = constant.KeyNotifyTemplateTaskSuccessTitle
+			tmplTextKey = constant.KeyNotifyTemplateTaskSuccessText
+		case constant.EventTaskFailed:
+			tmplTitleKey = constant.KeyNotifyTemplateTaskFailedTitle
+			tmplTextKey = constant.KeyNotifyTemplateTaskFailedText
+		case constant.EventTaskTimeout:
+			tmplTitleKey = constant.KeyNotifyTemplateTaskTimeoutTitle
+			tmplTextKey = constant.KeyNotifyTemplateTaskTimeoutText
+		}
+
+		// 处理输出内容，避免过长
+		if output, ok := payload["output"].(string); ok {
+			rawOutput = output
+			// trimmed := utils.TrimLastRunes(output, 1000)
+			// if len(trimmed) < len(output) {
+			// 	payload["output"] = trimmed + "\n...(截断)"
+			// }
+		}
+
+	case constant.EventSystemNotice:
+		title, _ = payload["title"].(string)
+		text, _ = payload["content"].(string)
+	default:
+		return "", "", "", "", "", false
+	}
+	return tmplTitleKey, tmplTextKey, title, text, rawOutput, true
+}
+
+// buildMessage 匹配并解析模板内容，提供兜底消息并拼接全局前缀
+func (s *NotificationService) buildMessage(eventType string, tmplTitleKey, tmplTextKey, defaultTitle, defaultText, prefix string, payload map[string]interface{}) (title, text string) {
+	title = defaultTitle
+	text = defaultText
+
+	if tmplTitleKey != "" {
+		tmplTitle := s.settingsService.Get(constant.SectionNotify, tmplTitleKey)
+		tmplText := s.settingsService.Get(constant.SectionNotify, tmplTextKey)
+
+		if tmplTitle != "" {
+			title = s.parseTemplate(tmplTitle, payload)
+		}
+		if tmplText != "" {
+			text = s.parseTemplate(tmplText, payload)
+		}
+
+		// 如果模板为空，使用兜底默认逻辑（保持向上兼容）
+		if title == "" || text == "" {
+			title, text = s.getDefaultMessage(eventType, payload)
+		}
+	}
+
+	// 添加全局前缀
+	if prefix != "" && title != "" {
+		title = fmt.Sprintf("%s %s", prefix, title)
+	}
+	return title, text
+}
+
 // handleEvent 处理事件订阅并发送通知
 func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 	return func(e eventbus.Event) {
@@ -388,87 +470,25 @@ func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 			dataID = id
 		}
 
-		var title, text string
-
-		// 获取全局前缀和模板配置
+		// 获取全局前缀并解析事件数据
 		prefix := s.settingsService.Get(constant.SectionNotify, constant.KeyNotifyPrefix)
-		var tmplTitleKey, tmplTextKey string
-
-		switch e.Type {
-		case constant.EventUserLogin:
-			tmplTitleKey = constant.KeyNotifyTemplateUserLoginTitle
-			tmplTextKey = constant.KeyNotifyTemplateUserLoginText
-			// 特殊处理登录状态
-			status, _ := payload["status"].(string)
-			if status == "success" {
-				payload["status_label"] = "成功"
-			} else {
-				payload["status_label"] = "失败"
-			}
-
-		case constant.EventBruteForceLogin:
-			tmplTitleKey = constant.KeyNotifyTemplateBruteForceLoginTitle
-			tmplTextKey = constant.KeyNotifyTemplateBruteForceLoginText
-
-		case constant.EventPasswordChanged:
-			tmplTitleKey = constant.KeyNotifyTemplatePasswordChangedTitle
-			tmplTextKey = constant.KeyNotifyTemplatePasswordChangedText
-
-		case constant.EventTaskSuccess, constant.EventTaskFailed, constant.EventTaskTimeout:
-			switch e.Type {
-			case constant.EventTaskSuccess:
-				tmplTitleKey = constant.KeyNotifyTemplateTaskSuccessTitle
-				tmplTextKey = constant.KeyNotifyTemplateTaskSuccessText
-			case constant.EventTaskFailed:
-				tmplTitleKey = constant.KeyNotifyTemplateTaskFailedTitle
-				tmplTextKey = constant.KeyNotifyTemplateTaskFailedText
-			case constant.EventTaskTimeout:
-				tmplTitleKey = constant.KeyNotifyTemplateTaskTimeoutTitle
-				tmplTextKey = constant.KeyNotifyTemplateTaskTimeoutText
-			}
-
-			// 处理输出内容，避免过长
-			if output, ok := payload["output"].(string); ok {
-				// 如果输出包含了压缩后的 Base64 (以 "base64:" 开头)，由于是推送到通知，我们尽量不发大段 Base64
-				// 这里简单处理：如果过长则截断，或者如果是压缩的则记录一下
-				trimmed := utils.TrimLastRunes(output, 1000)
-				if len(trimmed) < len(output) {
-					payload["output"] = trimmed + "\n...(截断)"
-				}
-			}
-
-		case constant.EventSystemNotice:
-			title, _ = payload["title"].(string)
-			text, _ = payload["content"].(string)
-		default:
+		tmplTitleKey, tmplTextKey, title, text, rawOutput, ok := s.resolveEvent(e.Type, payload)
+		if !ok {
 			return
 		}
 
-		if tmplTitleKey != "" {
-			tmplTitle := s.settingsService.Get(constant.SectionNotify, tmplTitleKey)
-			tmplText := s.settingsService.Get(constant.SectionNotify, tmplTextKey)
-
-			if tmplTitle != "" {
-				title = s.parseTemplate(tmplTitle, payload)
-			}
-			if tmplText != "" {
-				text = s.parseTemplate(tmplText, payload)
-			}
-
-			// 如果模板为空，使用兜底默认逻辑（保持向上兼容）
-			if title == "" || text == "" {
-				title, text = s.getDefaultMessage(e.Type, payload)
-			}
-		}
-
-		// 添加全局前缀
-		if prefix != "" {
-			title = fmt.Sprintf("%s %s", prefix, title)
-		}
+		// 构建最终的通知标题和正文文本
+		title, text = s.buildMessage(e.Type, tmplTitleKey, tmplTextKey, title, text, prefix, payload)
 
 		bindings := s.GetBindingsByEvent(bindingType, e.Type, dataID)
 		if len(bindings) == 0 {
 			return
+		}
+
+		var cleanLog string
+		if rawOutput != "" {
+			// cleanLog = stripAnsi(rawOutput)
+			cleanLog = rawOutput
 		}
 
 		channels := s.GetChannels()
@@ -498,18 +518,12 @@ func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 
 			// 如果开启了日志推送
 			if extra.EnableLog {
-				if output, ok := payload["output"].(string); ok && output != "" {
-					// 仅保留指定字数的日志内容并移除 ANSI 颜色代码
-					logSnippet := stripAnsi(output)
-					
-					trimmed := utils.TrimLastRunes(logSnippet, extra.LogLimit)
-					if len(trimmed) < len(logSnippet) {
-						logSnippet = "...\n" + trimmed
-					} else {
-						logSnippet = trimmed
+				if cleanLog != "" {
+					trimmed := utils.TrimLastRunes(cleanLog, extra.LogLimit)
+					if len(trimmed) < len(cleanLog) {
+						trimmed = "...\n" + trimmed
 					}
-					
-					currentText += "\n\n[执行日志]\n" + logSnippet
+					currentText += "\n\n[执行日志]\n" + trimmed
 				}
 			}
 
