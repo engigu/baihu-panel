@@ -37,7 +37,7 @@ RUN VERSION_VAL="${VERSION:-dev-$(TZ=Asia/Shanghai date '+%Y%m%d%H%M%S')}" && \
 # ================================
 # Stage 2: Build backend
 # ================================
-FROM --platform=$BUILDPLATFORM golang:1.25 AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.26 AS backend-builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -80,7 +80,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # ================================
 # Stage 3: Build Agent (all platforms)
 # ================================
-FROM --platform=$BUILDPLATFORM golang:1.25 AS agent-builder
+FROM --platform=$BUILDPLATFORM golang:1.26 AS agent-builder
 
 
 WORKDIR /app
