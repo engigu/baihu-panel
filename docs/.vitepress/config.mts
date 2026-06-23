@@ -7,7 +7,7 @@ export default defineConfig({
     base: '/baihu-panel/',
     lang: 'zh-CN',
     head: [
-        ['link', { rel: 'stylesheet', href: 'https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap' }],
+        ['link', { rel: 'stylesheet', href: 'https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@400;500;700&family=Ubuntu+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap' }],
         ['script', {}, `if (navigator.userAgent.indexOf('Windows') !== -1) document.documentElement.classList.add('is-windows');`]
     ],
     themeConfig: {
