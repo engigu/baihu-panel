@@ -6,6 +6,10 @@ export default defineConfig({
     description: '轻量易用的定时任务面板，支持多语言脚本、依赖管理与日志查看',
     base: '/baihu-panel/',
     lang: 'zh-CN',
+    head: [
+        ['link', { rel: 'stylesheet', href: 'https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap' }],
+        ['script', {}, `if (navigator.userAgent.indexOf('Windows') !== -1) document.documentElement.classList.add('is-windows');`]
+    ],
     themeConfig: {
         logo: '/logo.svg',
         nav: [
