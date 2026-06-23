@@ -3,7 +3,7 @@
 layout: home
 
 hero:
-  name: "白虎面板"
+  name: "baihu-panel"
   text: "极致轻量、高性能的自动化任务调度平台"
   tagline: "采用 Go + Vue3 架构，专注于高性能与低系统开销。"
   image:

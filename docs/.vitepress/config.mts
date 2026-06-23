@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-    title: '白虎面板',
+    title: 'baihu-panel',
     description: '轻量易用的定时任务面板，支持多语言脚本、依赖管理与日志查看',
     base: '/baihu-panel/',
     lang: 'zh-CN',
@@ -43,7 +43,8 @@ export default defineConfig({
                         link: '/guide/examples/',
                         items: [
                             { text: '浏览器示例', link: '/guide/examples/browser' },
-                            { text: '内置库示例', link: '/guide/examples/builtin' }
+                            { text: '内置库示例', link: '/guide/examples/builtin' },
+                            { text: 'Linux 环境依赖', link: '/guide/examples/linux-deps' }
                         ]
                     }
                 ]

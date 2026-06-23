@@ -13,21 +13,11 @@ set -e
 
 echo "正在检测 PHP 编译依赖..."
 
-# 根据系统定义包列表
-if [ -f /etc/debian_version ]; then
-    PACKAGES="autoconf bison build-essential libssl-dev libxml2-dev pkg-config libsqlite3-dev zlib1g-dev libcurl4-openssl-dev libpng-dev libjpeg-dev libonig-dev libzip-dev"
-    CHECK_CMD="dpkg -l"
-    INSTALL_CMD="apt-get install -y"
-    UPDATE_CMD="apt-get update"
-elif [ -f /etc/alpine-release ]; then
-    PACKAGES="autoconf bison build-base openssl-dev libxml2-dev pkgconfig sqlite-dev zlib-dev curl-dev libpng-dev libjpeg-turbo-dev oniguruma-dev libzip-dev"
-    CHECK_CMD="apk info -e"
-    INSTALL_CMD="apk add --no-cache"
-    UPDATE_CMD=""
-else
-    echo "未检测到支持的包管理器 (APT/APK)，请手动安装依赖。"
-    exit 1
-fi
+# Debian 系统依赖包列表
+PACKAGES="autoconf bison build-essential libssl-dev libxml2-dev pkg-config libsqlite3-dev zlib1g-dev libcurl4-openssl-dev libpng-dev libjpeg-dev libonig-dev libzip-dev"
+CHECK_CMD="dpkg -l"
+INSTALL_CMD="apt-get install -y"
+UPDATE_CMD="apt-get update"
 
 MISSING_PACKAGES=""
 for pkg in $PACKAGES; do

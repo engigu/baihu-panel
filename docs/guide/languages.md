@@ -1,10 +1,10 @@
 # 语言依赖
 
-白虎面板深度集成了 **Mise** 运行时管理器，这使得它具备多版本语言环境的高灵活性和隔离性。
+baihu-panel深度集成了 **Mise** 运行时管理器，这使得它具备多版本语言环境的高灵活性和隔离性。
 
 ## 脚本运行环境
 
-白虎面板原生支持以下脚本的定时执行：
+baihu-panel原生支持以下脚本的定时执行：
 - **Python3**, **Node.js**, **Bash** (标准版镜像内置环境)
 - 通过 **Mise** 扩展：支持几乎所有主流编程语言的动态安装与切换。
 
@@ -51,7 +51,7 @@
 
 ### 安装 Ansible
 
-白虎面板推荐通过 `mise` 结合 `pipx` 安装 Ansible，以保持环境隔离且全局可用：
+baihu-panel推荐通过 `mise` 结合 `pipx` 安装 Ansible，以保持环境隔离且全局可用：
 
 ```bash
 # 首先安装 pipx
@@ -63,19 +63,12 @@ mise use -g ansible@latest
 
 安装完成后，您可以在「脚本管理」或「定时任务」中直接调用 `ansible` 或 `ansible-playbook` 命令。
 
-## PHP 环境特别说明
 
-在 Docker 容器或精简版 Linux 环境中，通过 `mise` 安装某些 PHP 版本时，如果官方没有提供预编译的二进制包，系统会尝试从源码编译。这需要额外的系统级构建依赖（如 `autoconf`, `bison`, `pkg-config` 等）。
-
-如果您在安装 PHP 时遇到 `autoconf not found` 或 `buildconf failed` 等错误，请参考以下方案：
-
-1. **运行预设脚本**: 我们在项目根目录提供了示例脚本 [install_php_env_deps.sh](file:///example/deps/install_php_env_deps.sh)，它会自动安装所需的系统库。
-2. **配置为开机任务**: 由于 Docker 容器层通常是只读的或在重启后重置（非挂载目录），建议在面板中创建一个 **触发类型为 `baihu_startup`** 的定时任务，命令填写 `bash example/deps/install_php_env_deps.sh`。这样可以确保每次容器启动时都会自动准备好 PHP 编译环境。
 
 ---
 
 ## 隔离机制说明
 
--   白虎面板通过动态注入 `PATH` 环境和 `mise shims` 将语言环境暴露给系统。
+-   baihu-panel通过动态注入 `PATH` 环境和 `mise shims` 将语言环境暴露给系统。
 -   每个任务在执行前都会根据任务配置自动加载对应的运行时环境变量。
 -   **运行时激活**：自动将 `MISE_DATA_DIR` 等环境变量指向宿主机的持久化挂载目录，确保护持久化可用。

@@ -24,3 +24,4 @@ example/
 
 - [浏览器示例](./browser.md)
 - [内置库示例](./builtin.md)
+- [Linux 环境依赖示例](./linux-deps.md)

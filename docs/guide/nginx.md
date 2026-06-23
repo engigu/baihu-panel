@@ -1,6 +1,6 @@
 # Nginx 反向代理配置
 
-如果您需要通过域名和 HTTPS 访问白虎面板，推荐使用 Nginx 作为反向代理并配置 WebSocket 负载均衡。
+如果您需要通过域名和 HTTPS 访问baihu-panel，推荐使用 Nginx 作为反向代理并配置 WebSocket 负载均衡。
 
 ## Nginx 反向代理配置示例
 
@@ -31,7 +31,7 @@ server {
     error_log  /var/log/nginx/example.error.log warn;
     
     location / {
-        proxy_pass http://127.0.0.1:8052; # 指定白虎面板宿主机 IP 和端口
+        proxy_pass http://127.0.0.1:8052; # 指定baihu-panel宿主机 IP 和端口
         proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

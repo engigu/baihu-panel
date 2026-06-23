@@ -1,6 +1,6 @@
 # 系统配置手册
 
-白虎面板支持通过环境变量和配置文件两种核心方式进行系统参数微调。
+baihu-panel支持通过环境变量和配置文件两种核心方式进行系统参数微调。
 
 ## 环境变量配置 (优先级最高)
 
@@ -72,7 +72,7 @@ table_prefix = baihu_
 
 ## 机密管理 (Secret Management)
 
-白虎面板提供了一套基于 **AES-GCM** 工业级标准的安全机密管理系统，其设计理念参考了 GitHub Actions Secrets。
+baihu-panel提供了一套基于 **AES-GCM** 工业级标准的安全机密管理系统，其设计理念参考了 GitHub Actions Secrets。
 
 ### 核心特性
 
