@@ -27,7 +27,7 @@ import (
 // @description Type "Bearer" followed by a space and the API token.
 
 func printHelp() {
-	fmt.Println("\n白虎面板 (Baihu Panel) - 现代化的服务器管理面板")
+	fmt.Println("\nBaihu Panel - 极致轻量、高性能的自动化任务调度平台")
 	fmt.Println("用法:")
 	fmt.Println("  baihu <命令> [参数]")
 	fmt.Println("可用命令:")

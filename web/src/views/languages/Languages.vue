@@ -185,9 +185,17 @@ onMounted(() => {
                 class="flex items-start sm:items-center justify-between gap-2.5 text-[13px] text-blue-600 dark:text-blue-500 bg-blue-500/10 px-4 py-2.5 rounded-lg border border-blue-500/20 leading-relaxed shadow-sm select-none">
                 <div class="flex items-start sm:items-center gap-2.5">
                     <Info class="h-4 w-4 shrink-0 mt-0.5 sm:mt-0" />
-                    <span>
-                        <b class="font-bold">扩展支持</b>：虽然本界面主要专注于编程语言环境，但 Mise 本质上也可以管理各类系统包和工具插件。若有需要，您可以直接在终端中执行命令安装其他依赖包，此处将会自动同步并展示您的最新环境。
-                    </span>
+                    <div class="flex flex-col gap-1">
+                        <span>
+                            <b class="font-bold">扩展支持</b>：虽然本界面主要专注于编程语言环境，但 Mise 本质上也可以管理各类系统包和工具插件。若有需要，您可以直接在终端中执行命令安装其他依赖包，此处将会自动同步并展示您的最新环境。
+                        </span>
+                        <span class="text-blue-600/80 dark:text-blue-400/80">
+                            如果需要安装 apt 系统级底层依赖 (如 C++编译库、无头浏览器动态库等)，请参考 
+                            <a href="https://engigu.github.io/baihu-panel/guide/examples/linux-deps.html" target="_blank" class="underline hover:text-blue-600 dark:hover:text-blue-400 font-medium transition-colors">
+                                Linux 系统依赖处理
+                            </a>
+                        </span>
+                    </div>
                 </div>
                 <button @click="showExtensionTip = false" class="text-blue-500/60 hover:text-blue-500 transition-colors shrink-0 outline-none p-0.5 mt-0.5 sm:mt-0">
                     <X class="h-4 w-4" />
