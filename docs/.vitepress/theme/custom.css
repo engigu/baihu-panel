@@ -1,5 +1,5 @@
 :root {
-  --vp-font-family-mono: "Ubuntu Mono", "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --vp-font-family-mono: "Ubuntu Mono", "Noto Sans SC", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
   --vp-code-font-size: 14px;
 }
 
