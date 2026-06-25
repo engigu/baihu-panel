@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import StatusDot from '@/components/StatusDot.vue'
-import { Plus, Edit2, Trash2, RefreshCw, ExternalLink, Eye, Copy } from 'lucide-vue-next'
+import { Edit2, Trash2, RefreshCw, ExternalLink, Eye, Copy } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
