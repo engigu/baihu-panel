@@ -232,7 +232,7 @@ func (ic *InterconnectController) SyncScript(c *gin.Context) {
 			continue
 		}
 
-		client, apiURL, err := ic.getClientAndURL(&node, "/api/v1/scripts/save")
+		client, apiURL, err := ic.getClientAndURL(node, "/api/v1/scripts/save")
 		if err != nil {
 			results = append(results, map[string]interface{}{"node_id": nodeID, "success": false, "msg": "反向隧道未连接"})
 			continue
@@ -291,7 +291,7 @@ func (ic *InterconnectController) SyncEnv(c *gin.Context) {
 			continue
 		}
 
-		client, apiURL, err := ic.getClientAndURL(&node, "/api/v1/env")
+		client, apiURL, err := ic.getClientAndURL(node, "/api/v1/env")
 		if err != nil {
 			results = append(results, map[string]interface{}{"node_id": nodeID, "success": false, "msg": "反向隧道未连接"})
 			continue
@@ -355,7 +355,7 @@ func (ic *InterconnectController) SyncTask(c *gin.Context) {
 			continue
 		}
 
-		client, apiURL, err := ic.getClientAndURL(&node, "/api/v1/tasks/bulk_save")
+		client, apiURL, err := ic.getClientAndURL(node, "/api/v1/tasks/bulk_save")
 		if err != nil {
 			results = append(results, map[string]interface{}{"node_id": nodeID, "success": false, "msg": "反向隧道未连接"})
 			continue
