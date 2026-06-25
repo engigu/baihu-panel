@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/constant"
@@ -31,6 +32,47 @@ func AuthRequired() gin.HandlerFunc {
 				utils.Forbidden(c, "CSRF 校验失败: 非法的请求来源")
 				c.Abort()
 				return
+			}
+		}
+
+		// 检查是否携带互联 Token（支持跨面板远程全接口调用）
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" {
+			tokenStr := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+			if tokenStr != "" {
+				settingsSvc := services.NewSettingsService()
+				interconnectToken := settingsSvc.Get(constant.SectionSite, constant.KeyInterconnectToken)
+				parentToken := settingsSvc.Get(constant.SectionInterconnect, constant.KeyInterconnectParentToken)
+				
+				isMatched := false
+				h1 := sha256.Sum256([]byte(tokenStr))
+				
+				if interconnectToken != "" {
+					h2 := sha256.Sum256([]byte(interconnectToken))
+					if subtle.ConstantTimeCompare(h1[:], h2[:]) == 1 {
+						isMatched = true
+					}
+				}
+				
+				if !isMatched && parentToken != "" {
+					h2 := sha256.Sum256([]byte(parentToken))
+					if subtle.ConstantTimeCompare(h1[:], h2[:]) == 1 {
+						isMatched = true
+					}
+				}
+
+				if isMatched {
+					// 模拟 Admin 角色
+					var adminUser models.User
+					res := database.DB.Where("role = ?", constant.AdminRole).Limit(1).Find(&adminUser)
+					if res.Error == nil && res.RowsAffected > 0 {
+						c.Set("userID", adminUser.ID)
+						c.Set("username", adminUser.Username)
+						c.Set("role", adminUser.Role)
+						c.Next()
+						return
+					}
+				}
 			}
 		}
 
