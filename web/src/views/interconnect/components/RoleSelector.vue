@@ -1,9 +1,31 @@
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import { Network } from 'lucide-vue-next'
+import { api } from '@/api'
+import { toast } from 'vue-sonner'
 
 const emit = defineEmits<{
   (e: 'select', role: 'master' | 'child'): void
 }>()
+
+const demoMode = ref(false)
+
+onMounted(async () => {
+  try {
+    const publicSite = await api.settings.getPublicSite()
+    demoMode.value = publicSite.demo_mode || false
+  } catch (e) {
+    // ignore
+  }
+})
+
+function handleSelect(role: 'master' | 'child') {
+  if (demoMode.value) {
+    toast.error('演示模式下禁止修改互联角色')
+    return
+  }
+  emit('select', role)
+}
 </script>
 
 <template>
@@ -19,7 +41,7 @@ const emit = defineEmits<{
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-3xl px-4 mt-2">
       <!-- Master Card -->
-      <div class="border rounded-xl p-5 hover:border-amber-500 hover:ring-1 hover:ring-amber-500/30 cursor-pointer transition-all hover:shadow-sm bg-card space-y-2.5 group" @click="emit('select', 'master')">
+      <div class="border rounded-xl p-5 hover:border-amber-500 hover:ring-1 hover:ring-amber-500/30 cursor-pointer transition-all hover:shadow-sm bg-card space-y-2.5 group" @click="handleSelect('master')">
         <div class="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform duration-300">
           <Network class="h-5 w-5" />
         </div>
@@ -29,7 +51,7 @@ const emit = defineEmits<{
         </p>
       </div>
       <!-- Child Card -->
-      <div class="border rounded-xl p-5 hover:border-green-500 hover:ring-1 hover:ring-green-500/30 cursor-pointer transition-all hover:shadow-sm bg-card space-y-2.5 group" @click="emit('select', 'child')">
+      <div class="border rounded-xl p-5 hover:border-green-500 hover:ring-1 hover:ring-green-500/30 cursor-pointer transition-all hover:shadow-sm bg-card space-y-2.5 group" @click="handleSelect('child')">
         <div class="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center text-green-500 group-hover:scale-110 transition-transform duration-300">
           <Network class="h-5 w-5" />
         </div>

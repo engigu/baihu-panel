@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Plus, RefreshCw, Search } from 'lucide-vue-next'
+import { Plus, RefreshCw, Search, Server, ArrowRightLeft } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-// import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'vue-sonner'
 import * as interconnectApi from '@/api/interconnect'
 
-// import SyncPanel from './SyncPanel.vue'
+import SyncPanel from './SyncPanel.vue'
 import MasterList from './MasterList.vue'
 
 const emit = defineEmits<{
@@ -71,8 +71,7 @@ onMounted(() => {
             <Plus class="h-4 w-4 md:mr-1.5" /> <span class="hidden md:inline">添加子节点</span>
           </Button>
           
-          <!-- Tabs 切换 (暂时隐藏同步功能) -->
-          <!--
+          <!-- Tabs 切换 -->
           <Tabs :model-value="activeTab" @update:model-value="(v: string | number) => activeTab = String(v)" class="shrink-0 flex-1 sm:flex-none min-w-[120px]">
              <TabsList class="h-9 p-0.5 bg-muted/20 border border-border/40 rounded-lg w-full flex">
                 <TabsTrigger value="nodes" class="flex-1 sm:flex-none px-3 h-8 text-xs gap-1.5 font-medium transition-all">
@@ -85,13 +84,12 @@ onMounted(() => {
                 </TabsTrigger>
              </TabsList>
           </Tabs>
-          -->
         </div>
       </div>
     </div>
 
     <!-- 内容区域 -->
     <MasterList v-if="activeTab === 'nodes'" ref="masterListRef" :nodes="nodes" :loading="loading" :search-query="searchQuery" @refresh="fetchNodes" />
-    <!-- <SyncPanel v-if="activeTab === 'sync'" :nodes="nodes" /> -->
+    <SyncPanel v-if="activeTab === 'sync'" :nodes="nodes" />
   </div>
 </template>
