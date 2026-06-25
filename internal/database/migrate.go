@@ -29,6 +29,7 @@ var allModels = []interface{}{
 	&models.NotifyBinding{},
 	&models.DataRelation{},
 	&models.DataStorage{},
+	&models.InterconnectNode{},
 }
 
 func Migrate() error {

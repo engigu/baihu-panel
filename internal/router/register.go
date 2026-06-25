@@ -29,6 +29,7 @@ func RegisterControllers() *Controllers {
 	// 创建任务执行服务（需要依赖注入）
 	notifyService := services.NewNotificationService()
 	appLogService := services.NewAppLogService()
+	interconnectService := services.NewInterconnectService()
 
 	// 清理 task 运行状态的任务可以直接由 executorService 承担或在此处通过 Database 直接清理
 	// 简单期间，我们使用一个新方法 tasks.CleanupRunningTasks() 或者让 executorService 启动时清理
@@ -42,7 +43,7 @@ func RegisterControllers() *Controllers {
 
 	// 初始化所有关注系统总线的服务
 	setupEventHandlers(appLogService, notifyService, loginLogService, systemWSManager)
-	go startAppLogCleanup(appLogService)
+	startAppLogCleanup(appLogService)
 
 	// 初始化并返回控制器
 	return &Controllers{
@@ -65,6 +66,7 @@ func RegisterControllers() *Controllers {
 		SystemWS:     controllers.NewSystemWSController(),
 		WebUI:        controllers.NewWebUIController(services.NewWebUIService(settingsService)),
 		Monitor:      controllers.NewMonitorController(executorService),
+		Interconnect: controllers.NewInterconnectController(interconnectService),
 	}
 }
 

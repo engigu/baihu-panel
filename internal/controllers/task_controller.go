@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
@@ -225,6 +226,87 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 	}
 
 	utils.Success(c, vo.ToTaskVO(task))
+}
+
+// BulkSaveTask 批量保存/导入任务配置（用于主节点下发同步）
+// @Summary 批量保存任务
+// @Description 批量导入任务配置，如果ID或同名存在则更新，不存在则创建
+// @Tags 任务管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Router /tasks/bulk_save [post]
+func (tc *TaskController) BulkSaveTask(c *gin.Context) {
+	var reqs []vo.TaskVO
+
+	if err := c.ShouldBindJSON(&reqs); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	for _, req := range reqs {
+		param := tasks.TaskParam{
+			Name:          req.Name,
+			Remark:        req.Remark,
+			Command:       req.Command,
+			PreCommand:    req.PreCommand,
+			PostCommand:   req.PostCommand,
+			Tags:          req.Tags,
+			Type:          req.Type,
+			Config:        req.Config,
+			Schedule:      req.Schedule,
+			Timeout:       req.Timeout,
+			WorkDir:       req.WorkDir,
+			CleanConfig:   req.CleanConfig,
+			Envs:          req.Envs,
+			Languages:     req.Languages,
+			AgentID:       req.AgentID,
+			TriggerType:   req.TriggerType,
+			RetryCount:    req.RetryCount,
+			RetryInterval: req.RetryInterval,
+			RandomRange:   req.RandomRange,
+			PinType:       req.PinType,
+			Enabled:       req.Enabled,
+			SourceID:      "", // 不直接覆盖
+		}
+
+		var existingTask *models.Task
+		// 优先按 ID 匹配
+		if req.ID != "" {
+			existingTask = tc.taskService.GetTaskByID(req.ID)
+		}
+		// 如果 ID 没找到，尝试按 Name 匹配
+		if existingTask == nil {
+			var t models.Task
+			res := database.DB.Where("name = ?", req.Name).First(&t)
+			if res.Error == nil {
+				existingTask = &t
+			}
+		}
+
+		var savedTask *models.Task
+		if existingTask != nil {
+			savedTask = tc.taskService.UpdateTask(existingTask.ID, &param)
+		} else {
+			savedTask = tc.taskService.CreateTask(&param)
+			// 如果原始有 ID，强制覆盖更新 ID 保持强同步一致性
+			if req.ID != "" && savedTask != nil {
+				database.DB.Model(savedTask).Update("id", req.ID)
+				savedTask.ID = req.ID
+			}
+		}
+
+		// 如果是 Agent 任务，通知 Agent；否则添加到本地 cron
+		if savedTask != nil {
+			if savedTask.AgentID != nil && *savedTask.AgentID != "" {
+				tc.agentWSManager.BroadcastTasks(*savedTask.AgentID)
+			} else {
+				tc.executorService.AddCronTask(savedTask)
+			}
+		}
+	}
+
+	utils.Success(c, nil)
 }
 
 // GetTasks 获取任务列表

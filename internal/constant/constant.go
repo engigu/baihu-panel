@@ -14,20 +14,20 @@ const (
 	DefaultTaskTimeout = 30
 
 	// Settings Section 常量
-	SectionSite      = "site"
-	SectionSystem    = "system"
-	SectionScheduler = "scheduler"
-	SectionSecurity  = "security"
-	SectionNotify    = "notify"
+	SectionSite         = "site"
+	SectionSystem       = "system"
+	SectionScheduler    = "scheduler"
+	SectionSecurity     = "security"
+	SectionNotify       = "notify"
 
 	// Site Settings Key 常量
 	KeyTitle        = "title"
 	KeySubtitle     = "subtitle"
 	KeyIcon         = "icon"
-	KeyPageSize     = "page_size"
-	KeyCookieDays   = "cookie_days"
-	KeyOpenapiToken = "openapi_token"
-	KeyActiveWebUI  = "active_webui"
+	KeyPageSize          = "page_size"
+	KeyCookieDays        = "cookie_days"
+	KeyOpenapiToken      = "openapi_token"
+	KeyActiveWebUI       = "active_webui"
 
 	// Security Settings Key 常量
 	KeySecret = "secret"

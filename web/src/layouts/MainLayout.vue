@@ -2,10 +2,11 @@
 import { ref, onMounted, computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { resetAuthCache } from '@/router'
-import { LayoutDashboard, ListTodo, FileCode, Settings, LogOut, ScrollText, Terminal, Variable, KeyRound, Menu, X, Server, Globe, Bell, Activity } from 'lucide-vue-next'
+import { LayoutDashboard, ListTodo, FileCode, Settings, LogOut, ScrollText, Terminal, Variable, KeyRound, Menu, X, Server, Globe, Bell, Activity, Network } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import SystemNotice from '@/components/SystemNotice.vue'
+import NodeSwitcher from '@/components/NodeSwitcher.vue'
 import { api } from '@/api'
 import { useSiteSettings } from '@/composables/useSiteSettings'
 
@@ -64,6 +65,7 @@ const navItems = [
   { to: '/notify', icon: Bell, label: '消息推送', exact: true },
   { to: '/logs', icon: KeyRound, label: '运行日志', exact: true },
   { to: '/monitor', icon: Activity, label: '系统监控', exact: true },
+  { to: '/interconnect', icon: Network, label: '互联管理', exact: true },
   { to: '/settings', icon: Settings, label: '系统设置', exact: true },
 ]
 
@@ -164,7 +166,7 @@ onMounted(() => {
             <Button variant="ghost" size="icon" class="h-9 w-9 lg:hidden shrink-0" @click="mobileMenuOpen = true">
               <Menu class="h-5 w-5 text-muted-foreground" />
             </Button>
-            <div class="flex flex-col sm:flex-row sm:items-baseline sm:gap-2 truncate">
+            <div class="flex flex-col sm:flex-row sm:items-baseline sm:gap-2 truncate min-w-0 flex-1">
               <span class="text-sm text-muted-foreground truncate font-normal poem-sentence" :title="sentence">
                 <span class="hidden sm:inline">{{ sentence }}</span>
                 <span class="sm:hidden">{{ sentenceContent }}</span>
@@ -172,6 +174,7 @@ onMounted(() => {
             </div>
           </div>
           <div class="flex items-center gap-1 sm:gap-2.5 shrink-0">
+            <NodeSwitcher />
             <SystemNotice />
             <ThemeToggle />
           </div>

@@ -272,9 +272,6 @@ onMounted(() => {
               <Button variant="ghost" size="icon" class="h-6 w-6" @click="openEdit(env)" title="编辑">
                 <Pencil class="h-3 w-3" />
               </Button>
-              <Button variant="ghost" size="icon" class="h-6 w-6 text-destructive" @click="confirmDelete(env.id)" title="删除">
-                <Trash2 class="h-3 w-3" />
-              </Button>
             </div>
           </div>
         </div>
@@ -381,7 +378,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <div class="grid grid-cols-4 items-center pt-2 mt-2 border-t border-border/40 -mx-1">
+          <div class="grid grid-cols-5 items-center pt-2 mt-2 border-t border-border/40 -mx-1">
             <Button variant="ghost" class="h-9 px-0 text-xs gap-1.5 hover:bg-primary/5 rounded-none" @click="toggleShow(env.id)">
               <Eye v-if="!showValues[env.id]" class="h-3.5 w-3.5" />
               <EyeOff v-else class="h-3.5 w-3.5" />

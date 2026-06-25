@@ -120,12 +120,12 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8052',
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8052',
         changeOrigin: true,
         ws: true
       },
       '/openapi': {
-        target: 'http://localhost:8052',
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8052',
         changeOrigin: true
       }
     }

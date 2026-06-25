@@ -2,13 +2,13 @@ package router
 
 import (
 	// "fmt"
-	"time"
 
 	// "github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/eventbus"
 	// "github.com/engigu/baihu-panel/internal/logger"
 	// "github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/services"
+	"github.com/engigu/baihu-panel/internal/executor"
 )
 
 func setupEventHandlers(subscribers ...eventbus.Subscriber) {
@@ -21,12 +21,8 @@ func setupEventHandlers(subscribers ...eventbus.Subscriber) {
 }
 
 func startAppLogCleanup(appLogSvc *services.AppLogService) {
-	// 初始化时执行一次清理
-	appLogSvc.CleanUp()
-
-	// 定期清理（每隔1小时执行一次巡检）
-	ticker := time.NewTicker(1 * time.Hour)
-	for range ticker.C {
+	// 注册到内部系统定时器（并立即执行第一次）
+	executor.GetSysCron().AddJobWithRun("@every 1h", func() {
 		appLogSvc.CleanUp()
-	}
+	})
 }

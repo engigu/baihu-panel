@@ -77,3 +77,8 @@ export const TASK_EVENTS = {
 export const LOG_EVENTS = {
   ADDED: 'app_log_added',
 } as const
+
+// 系统事件类型 (对应后端的 system_ws_service.go)
+export const SYSTEM_EVENTS = {
+  INTERCONNECT_CHILD_STATUS: 'interconnect_child_status',
+} as const

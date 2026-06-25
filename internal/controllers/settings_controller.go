@@ -19,6 +19,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/services/tasks"
+	"github.com/engigu/baihu-panel/internal/tunnel"
 	"github.com/engigu/baihu-panel/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -134,6 +135,20 @@ func (sc *SettingsController) ChangePassword(c *gin.Context) {
 func (sc *SettingsController) GetSiteSettings(c *gin.Context) {
 	settings := sc.settingsService.GetSection(constant.SectionSite)
 
+	// 纠正数据库中的空值，防止因配置冲突被意外置空
+	if settings[constant.KeyTitle] == "" {
+		settings[constant.KeyTitle] = "白虎面板"
+		sc.settingsService.Set(constant.SectionSite, constant.KeyTitle, "白虎面板")
+	}
+	if settings[constant.KeySubtitle] == "" {
+		settings[constant.KeySubtitle] = "极致轻量、高性能的自动化任务调度平台"
+		sc.settingsService.Set(constant.SectionSite, constant.KeySubtitle, "极致轻量、高性能的自动化任务调度平台")
+	}
+	if settings[constant.KeyIcon] == "" {
+		settings[constant.KeyIcon] = constant.DefaultIcon
+		sc.settingsService.Set(constant.SectionSite, constant.KeyIcon, constant.DefaultIcon)
+	}
+
 	// 解析 JSON 格式的 OpenAPI Token
 	if tokenJson, ok := settings[constant.KeyOpenapiToken]; ok && tokenJson != "" {
 		var tokenConfig vo.TokenConfig
@@ -164,11 +179,25 @@ func (sc *SettingsController) GetSiteSettings(c *gin.Context) {
 // GetPublicSiteSettings 获取公开的站点设置（无需认证）
 func (sc *SettingsController) GetPublicSiteSettings(c *gin.Context) {
 	settings := sc.settingsService.GetSection(constant.SectionSite)
+	
+	title := settings[constant.KeyTitle]
+	if title == "" {
+		title = "白虎面板"
+	}
+	subtitle := settings[constant.KeySubtitle]
+	if subtitle == "" {
+		subtitle = "极致轻量、高性能的自动化任务调度平台"
+	}
+	icon := settings[constant.KeyIcon]
+	if icon == "" {
+		icon = constant.DefaultIcon
+	}
+
 	// 只返回公开信息
 	utils.Success(c, gin.H{
-		constant.KeyTitle:    settings[constant.KeyTitle],
-		constant.KeySubtitle: settings[constant.KeySubtitle],
-		constant.KeyIcon:     settings[constant.KeyIcon],
+		constant.KeyTitle:    title,
+		constant.KeySubtitle: subtitle,
+		constant.KeyIcon:     icon,
 		"demo_mode":          constant.DemoMode,
 	})
 }
@@ -528,6 +557,13 @@ func (sc *SettingsController) UpdateSectionSettings(c *gin.Context) {
 	if err := sc.settingsService.SetSection(section, values); err != nil {
 		utils.ServerError(c, "更新失败")
 		return
+	}
+
+	// 当互联配置发生改变时，通知 tunnel 模块立刻应用新角色，启动或停止相关的后台协程
+	if section == constant.SectionInterconnect {
+		if role, ok := values[constant.KeyInterconnectRole]; ok {
+			tunnel.ApplyRole(role)
+		}
 	}
 
 	utils.SuccessMsg(c, "保存成功")

@@ -41,7 +41,6 @@ watch(activeTab, (newVal) => {
 
 const stats = ref<MonitorStats | null>(null)
 const loading = ref(false)
-let timer: any = null
 
 // --- 时序数据池 ---
 const historySize = 60 // 保存最近60次请求（约3分钟@3s）
@@ -55,23 +54,25 @@ const runningData = ref<number[]>([])
 const queueData = ref<number[]>([])
 let lastPauseNs = 0
 
-const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+let ws: EventSource | null = null
+
+const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
 const baseUrl = (window as any).__BASE_URL__ || ''
 const apiVersion = (window as any).__API_VERSION__ || '/api/v1'
 
 const connectWS = () => {
-  if (timer) return
+  if (ws) return
   loading.value = true
   const host = window.location.host
-  const wsUrl = `${protocol}//${host}${baseUrl}${apiVersion}/monitor/ws`
+  const sseUrl = `${protocol}//${host}${baseUrl}${apiVersion}/monitor/sse`
 
-  timer = new WebSocket(wsUrl)
+  ws = new EventSource(sseUrl, { withCredentials: true })
   
-  timer.onopen = () => {
+  ws.onopen = () => {
     loading.value = false
   }
 
-  timer.onmessage = (event: MessageEvent) => {
+  ws.onmessage = (event: MessageEvent) => {
     try {
       const payload = JSON.parse(event.data)
       if (payload.code === 200 && payload.data) {
@@ -110,24 +111,16 @@ const connectWS = () => {
     }
   }
   
-  timer.onclose = () => {
+  ws.onerror = () => {
     loading.value = false
-    timer = null
-    // 断线后2秒自动重连
-    setTimeout(connectWS, 2000)
-  }
-  
-  timer.onerror = () => {
-    loading.value = false
+    // EventSource 会自动指数退避重连，无需我们手动控制
   }
 }
 
 const disconnectWS = () => {
-  if (timer) {
-    // 置空 onclose 避免触发自动重连
-    timer.onclose = null
-    timer.close()
-    timer = null
+  if (ws) {
+    ws.close()
+    ws = null
   }
 }
 

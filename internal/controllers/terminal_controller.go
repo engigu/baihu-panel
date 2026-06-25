@@ -224,6 +224,7 @@ func (tc *TerminalController) handlePtyMode(conn *websocket.Conn, userID string)
 	close(pingDone)
 	cmd.Process.Kill()
 	cmd.Wait()
+	ptmx.Close() // Force close PTY to interrupt the blocking ptmx.Read() in the goroutine
 	wg.Wait()
 }
 
@@ -369,9 +370,19 @@ func (tc *TerminalController) handlePipeMode(conn *websocket.Conn, userID string
 	}
 
 	close(pingDone)
-	stdin.Close()
 	cmd.Process.Kill()
 	cmd.Wait()
+
+	if stdinCloser, ok := stdin.(io.Closer); ok {
+		stdinCloser.Close()
+	}
+	if stdoutCloser, ok := stdout.(io.Closer); ok {
+		stdoutCloser.Close()
+	}
+	if stderrCloser, ok := stderr.(io.Closer); ok {
+		stderrCloser.Close()
+	}
+
 	wg.Wait()
 }
 
