@@ -32,6 +32,7 @@ type Controllers struct {
 	SystemWS     *controllers.SystemWSController
 	WebUI        *controllers.WebUIController
 	Monitor      *controllers.MonitorController
+	Interconnect *controllers.InterconnectController
 }
 
 func Setup(c *Controllers) *gin.Engine {
@@ -40,6 +41,7 @@ func Setup(c *Controllers) *gin.Engine {
 	}
 	router := gin.New()
 	router.Use(middleware.GinLogger(), middleware.GinRecovery())
+	router.Use(middleware.TravelProxyMiddleware())
 
 	// 获取 URL 前缀
 	cfg := services.GetConfig()

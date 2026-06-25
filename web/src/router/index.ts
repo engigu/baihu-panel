@@ -55,6 +55,7 @@ const router = createRouter({
         { path: 'terminal', name: 'terminal', component: () => import('@/views/terminal/Terminal.vue') },
         { path: 'notify', name: 'notify', component: () => import('@/views/notify/Notify.vue') },
         { path: 'monitor', name: 'monitor', component: () => import('@/views/monitor/Monitor.vue') },
+        { path: 'interconnect', name: 'interconnect', component: () => import('@/views/interconnect/index.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/views/settings/Settings.vue') }
       ]
     },

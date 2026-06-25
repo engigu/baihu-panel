@@ -65,6 +65,7 @@ const showTerminalDialog = ref(false)
 const runCommand = ref('')
 const scriptsDir = ref('')
 
+
 async function fetchInstalledLangs() {
   try {
     installedLangs.value = await api.mise.list()

@@ -1,34 +1,20 @@
 package controllers
 
 import (
-	"math/rand"
 	"net/http"
 	"runtime"
-	"sync"
 	"time"
 
-	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/engigu/baihu-panel/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/disk"
-	"github.com/shirou/gopsutil/v3/host"
-	"github.com/shirou/gopsutil/v3/mem"
 )
 
 type MonitorController struct {
 	executorService *tasks.ExecutorService
-
-	// 缓存物理机状态
-	hostMu     sync.RWMutex
-	lastUpdate time.Time
-	cpuPercent float64
-	vMem       *mem.VirtualMemoryStat
-	diskUsage  *disk.UsageStat
-	hostInfo   *host.InfoStat
 }
 
 func NewMonitorController(executorService *tasks.ExecutorService) *MonitorController {
@@ -49,118 +35,52 @@ func (mc *MonitorController) GetSystemMonitor(c *gin.Context) {
 	utils.Success(c, data)
 }
 
-// MonitorWS WebSocket 获取系统监控数据
-func (mc *MonitorController) MonitorWS(c *gin.Context) {
-	ws, err := monitorUpgrader.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		return
-	}
-	defer ws.Close()
+// MonitorSSE Server-Sent Events 获取系统监控数据
+func (mc *MonitorController) MonitorSSE(c *gin.Context) {
+	// 设置 SSE 响应头
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("Transfer-Encoding", "chunked")
 
 	// 初始发送一次数据
-	if err := mc.sendMonitorData(ws); err != nil {
+	if err := mc.sendMonitorDataSSE(c); err != nil {
 		return
 	}
 
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			if err := mc.sendMonitorData(ws); err != nil {
+			if err := mc.sendMonitorDataSSE(c); err != nil {
 				return // 客户端断开连接或发送失败
 			}
 		case <-c.Request.Context().Done():
-			return
+			return // 连接已断开，立即退出
 		}
 	}
 }
 
-func (mc *MonitorController) sendMonitorData(ws *websocket.Conn) error {
+func (mc *MonitorController) sendMonitorDataSSE(c *gin.Context) error {
 	data := mc.getMonitorData()
-	return ws.WriteJSON(gin.H{
+	// 使用 Gin 提供的 SSE 方法
+	c.SSEvent("message", gin.H{
 		"code": 200,
 		"data": data,
 		"msg":  "success",
 	})
-}
-
-func (mc *MonitorController) updateHostMetrics() {
-	mc.hostMu.Lock()
-	defer mc.hostMu.Unlock()
-
-	// 缓存 2 秒
-	if time.Since(mc.lastUpdate) < 2*time.Second && mc.vMem != nil {
-		return
-	}
-
-	if constant.DemoMode {
-		mc.updateDemoMetrics()
-		return
-	}
-
-	cpuPercents, _ := cpu.Percent(0, false)
-	if len(cpuPercents) > 0 {
-		mc.cpuPercent = cpuPercents[0]
-	}
-	mc.vMem, _ = mem.VirtualMemory()
-	mc.diskUsage, _ = disk.Usage("/")
-	mc.hostInfo, _ = host.Info()
-	mc.lastUpdate = time.Now()
-}
-
-func (mc *MonitorController) updateDemoMetrics() {
-	mc.cpuPercent = 10 + rand.Float64()*40 // 10% - 50% 的随机 CPU 波动
-
-	totalMem := uint64(8 * 1024 * 1024 * 1024) // 8GB 内存
-	usedMem := uint64(float64(totalMem) * (0.3 + rand.Float64()*0.3)) // 30% - 60% 随机使用率
-	mc.vMem = &mem.VirtualMemoryStat{
-		Total:       totalMem,
-		Used:        usedMem,
-		UsedPercent: float64(usedMem) / float64(totalMem) * 100,
-	}
-
-	totalDisk := uint64(500 * 1024 * 1024 * 1024) // 500GB 硬盘
-	usedDisk := uint64(float64(totalDisk) * 0.45) // 固定 45% 使用率
-	mc.diskUsage = &disk.UsageStat{
-		Total:       totalDisk,
-		Used:        usedDisk,
-		UsedPercent: float64(usedDisk) / float64(totalDisk) * 100,
-	}
-
-	mc.hostInfo = &host.InfoStat{
-		Platform: "Demo Environment", 
-		OS:       "linux",
-		Uptime:   uint64(time.Now().Unix() - 1700000000), // 生成一个较长且持续增加的运行时间
-	}
-	mc.lastUpdate = time.Now()
+	c.Writer.Flush()
+	return nil
 }
 
 func (mc *MonitorController) getMonitorData() gin.H {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
+	rt := services.GetMonitorService().GetRuntimeMetrics()
+	m := rt.MemStats
 
-	// 更新并读取缓存的物理主机指标
-	mc.updateHostMetrics()
-	
-	mc.hostMu.RLock()
-	cpuPercent := mc.cpuPercent
-	vMem := mc.vMem
-	diskUsage := mc.diskUsage
-	hostInfo := mc.hostInfo
-	mc.hostMu.RUnlock()
-
-	// 提供默认值防空指针
-	if vMem == nil {
-		vMem = &mem.VirtualMemoryStat{}
-	}
-	if diskUsage == nil {
-		diskUsage = &disk.UsageStat{}
-	}
-	if hostInfo == nil {
-		hostInfo = &host.InfoStat{}
-	}
+	// 调用统一的监控服务获取物理机指标
+	metrics := services.GetMonitorService().GetHostMetrics()
 
 	return gin.H{
 		"env": gin.H{
@@ -168,18 +88,18 @@ func (mc *MonitorController) getMonitorData() gin.H {
 			"arch":       runtime.GOARCH,
 			"go_version": runtime.Version(),
 			"num_cpu":    runtime.NumCPU(),
-			"goroutines": runtime.NumGoroutine(),
+			"goroutines": rt.NumGoroutine,
 		},
 		"host": gin.H{
-			"cpu_percent":  cpuPercent,
-			"mem_total":    vMem.Total,
-			"mem_used":     vMem.Used,
-			"mem_percent":  vMem.UsedPercent,
-			"disk_total":   diskUsage.Total,
-			"disk_used":    diskUsage.Used,
-			"disk_percent": diskUsage.UsedPercent,
-			"uptime":       hostInfo.Uptime,
-			"platform":     hostInfo.Platform + " " + hostInfo.PlatformVersion,
+			"cpu_percent":  metrics.CPUPercent,
+			"mem_total":    metrics.VMem.Total,
+			"mem_used":     metrics.VMem.Used,
+			"mem_percent":  metrics.VMem.UsedPercent,
+			"disk_total":   metrics.DiskUsage.Total,
+			"disk_used":    metrics.DiskUsage.Used,
+			"disk_percent": metrics.DiskUsage.UsedPercent,
+			"uptime":       metrics.HostInfo.Uptime,
+			"platform":     metrics.HostInfo.Platform + " " + metrics.HostInfo.PlatformVersion,
 		},
 		"mem": gin.H{
 			"alloc":       m.Alloc,

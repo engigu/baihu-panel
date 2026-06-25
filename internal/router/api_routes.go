@@ -1,9 +1,9 @@
 package router
 
 import (
-	// "github.com/engigu/baihu-panel/internal/controllers"
-	"github.com/engigu/baihu-panel/internal/middleware"
+	"runtime"
 
+	"github.com/engigu/baihu-panel/internal/middleware"
 	"github.com/gin-gonic/gin"
 )
 
@@ -11,6 +11,12 @@ func initPublicAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 	// Health check (无需认证)
 	api.GET("/ping", func(ctx *gin.Context) {
 		ctx.JSON(200, gin.H{"message": "pong"})
+	})
+
+	api.GET("/debug/goroutines", func(ctx *gin.Context) {
+		buf := make([]byte, 1024*1024)
+		n := runtime.Stack(buf, true)
+		ctx.Data(200, "text/plain; charset=utf-8", buf[:n])
 	})
 
 	// Authentication routes (无需认证)
@@ -23,6 +29,11 @@ func initPublicAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 
 	// 公开的站点设置（无需认证）
 	api.GET("/settings/public", c.Settings.GetPublicSiteSettings)
+
+	// 隧道模式 (被控端反向连入，使用独立 Token 做 WebSocket 鉴权)
+	api.GET("/interconnect/tunnel", c.Interconnect.HandleTunnel)
+	// 子节点主动上报监控数据 (无中间件鉴权，内部鉴权)
+	api.POST("/interconnect/report", c.Interconnect.ReportMonitorData)
 
 	// 内部使用的 API（仅限本地调用，无需 Bearer 认证）
 	internalAPI := api.Group("/internal")
@@ -66,6 +77,7 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 			registerSystemWSRoutes(adminOnly, c)
 			registerWebUIRoutes(adminOnly, c)
 			registerMonitorRoutes(adminOnly, c)
+			registerInterconnectRoutes(adminOnly, c)
 		}
 	}
 
@@ -83,6 +95,7 @@ func registerTaskRoutes(g *gin.RouterGroup, c *Controllers) {
 		tasks.POST("", c.Task.CreateTask)
 		tasks.GET("", c.Task.GetTasks)
 		tasks.GET("/:id", c.Task.GetTask)
+		tasks.POST("/bulk_save", c.Task.BulkSaveTask)
 		tasks.PUT("/:id", c.Task.UpdateTask)
 		tasks.DELETE("/:id", c.Task.DeleteTask)
 		tasks.POST("/batch-delete", c.Task.BatchDeleteTasks)
@@ -273,7 +286,7 @@ func registerMonitorRoutes(g *gin.RouterGroup, c *Controllers) {
 	monitor := g.Group("/monitor")
 	{
 		monitor.GET("", c.Monitor.GetSystemMonitor)
-		monitor.GET("/ws", c.Monitor.MonitorWS)
+		monitor.GET("/sse", c.Monitor.MonitorSSE)
 	}
 }
 
@@ -296,5 +309,24 @@ func registerWebUIRoutes(g *gin.RouterGroup, c *Controllers) {
 		webuiGroup.POST("/upload", c.WebUI.UploadWebUI)
 		webuiGroup.PUT("/active", c.WebUI.SetActiveWebUI)
 		webuiGroup.DELETE("/:name", c.WebUI.DeleteWebUI)
+	}
+}
+
+func registerInterconnectRoutes(g *gin.RouterGroup, c *Controllers) {
+	interconnect := g.Group("/interconnect")
+	{
+		interconnect.GET("/nodes", c.Interconnect.GetNodes)
+		interconnect.POST("/nodes", c.Interconnect.CreateNode)
+		interconnect.PUT("/nodes/:id", c.Interconnect.UpdateNode)
+		interconnect.DELETE("/nodes/:id", c.Interconnect.DeleteNode)
+		interconnect.GET("/nodes/:id/status", c.Interconnect.GetNodeStatus)
+		interconnect.POST("/sync/script", c.Interconnect.SyncScript)
+		interconnect.POST("/sync/env", c.Interconnect.SyncEnv)
+		interconnect.POST("/sync/task", c.Interconnect.SyncTask)
+		
+		interconnect.GET("/child/status", c.Interconnect.GetChildStatus)
+		
+		// 代理模式 (面板穿越)
+		interconnect.Any("/proxy/:node_id/*path", c.Interconnect.ProxyRequest)
 	}
 }

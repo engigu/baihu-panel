@@ -65,16 +65,34 @@ export interface MonitorStats {
     }[]
   }
 }
+export let activeInterconnectNodeId = localStorage.getItem('activeInterconnectNodeId') || ''
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${url}`, {
-    ...options,
-    credentials: 'include', // 携带 Cookie
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers
-    }
-  })
+export function setActiveInterconnectNodeId(id: string) {
+  activeInterconnectNodeId = id
+  localStorage.removeItem('site_settings_cache')
+  if (id) {
+    localStorage.setItem('activeInterconnectNodeId', id)
+    document.cookie = `active_interconnect_node_id=${id}; path=/; max-age=${7 * 24 * 3600}`
+  } else {
+    localStorage.removeItem('activeInterconnectNodeId')
+    document.cookie = `active_interconnect_node_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC`
+  }
+}
+
+export async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE_URL}${url}`, {
+      ...options,
+      credentials: 'include', // 携带 Cookie
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers
+      }
+    })
+  } catch (err: any) {
+    throw err
+  }
 
   const json: ApiResponse<T> = await res.json()
 

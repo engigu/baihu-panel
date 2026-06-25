@@ -10,9 +10,11 @@ import (
 
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
+	"github.com/engigu/baihu-panel/internal/executor"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/router"
 	"github.com/engigu/baihu-panel/internal/services"
+	"github.com/engigu/baihu-panel/internal/tunnel"
 	"github.com/engigu/baihu-panel/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -26,8 +28,19 @@ type App struct {
 func New() *App {
 	app := InitBasic()
 	app.initRouter()
+	
+	// 初始化完成后将路由引擎注入到隧道模块，以支持高性能的纯内存代理
+	tunnel.SetLocalEngine(app.Router)
+	
+	// 初始化隧道后台服务 (读取配置决定角色并启动服务)
+	tunnel.Init()
+	
+	// 启动系统级后台定时任务调度器
+	executor.InitSysCron()
+
 	// 初始化完成后回收一次内存
 	utils.FreeMemory()
+
 	return app
 }
 
@@ -45,6 +58,7 @@ func InitBasic() *App {
 		// 自动加载配置 (内部会自动处理 BH_CONFIG_PATH 环境变量与默认路径的优先级)
 		app.initConfigWithPath("")
 		app.initDatabase()
+		
 		logger.Infof("[System] 低于1.0.11版本升级最新版本错误指引: https://github.com/engigu/baihu-panel/issues/64")
 		globalApp = app
 	})
