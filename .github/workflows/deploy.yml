@@ -2,7 +2,7 @@ name: Build-Deploy-Server
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
   workflow_dispatch:
 
 concurrency:
