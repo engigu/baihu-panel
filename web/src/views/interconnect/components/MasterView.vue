@@ -62,12 +62,12 @@ onMounted(() => {
           </Button>
 
           <!-- 取消主控角色按钮 -->
-          <Button variant="outline" class="shrink-0 px-2 md:px-3 h-9 shadow-sm text-destructive border-destructive/20 hover:bg-destructive/10" @click="emit('cancel')">
+          <Button variant="outline" class="flex-1 sm:flex-none shrink-0 px-2 md:px-3 h-9 shadow-sm text-destructive border-destructive/20 hover:bg-destructive/10" @click="emit('cancel')">
             取消主控
           </Button>
 
           <!-- 添加子节点按钮 -->
-          <Button v-if="activeTab === 'nodes'" @click="masterListRef?.openAddDialog()" class="shrink-0 px-2 md:px-3 h-9 shadow-sm font-medium" title="添加子节点">
+          <Button v-if="activeTab === 'nodes'" @click="masterListRef?.openAddDialog()" class="flex-1 sm:flex-none shrink-0 px-2 md:px-3 h-9 shadow-sm font-medium" title="添加子节点">
             <Plus class="h-4 w-4 md:mr-1.5" /> <span class="hidden md:inline">添加子节点</span>
           </Button>
           
