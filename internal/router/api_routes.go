@@ -13,11 +13,11 @@ func initPublicAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 		ctx.JSON(200, gin.H{"message": "pong"})
 	})
 
-	api.GET("/debug/goroutines", func(ctx *gin.Context) {
-		buf := make([]byte, 1024*1024)
-		n := runtime.Stack(buf, true)
-		ctx.Data(200, "text/plain; charset=utf-8", buf[:n])
-	})
+	// api.GET("/debug/goroutines", func(ctx *gin.Context) {
+	// 	buf := make([]byte, 1024*1024)
+	// 	n := runtime.Stack(buf, true)
+	// 	ctx.Data(200, "text/plain; charset=utf-8", buf[:n])
+	// })
 
 	// Authentication routes (无需认证)
 	auth := api.Group("/auth")
