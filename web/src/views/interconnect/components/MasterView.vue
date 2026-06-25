@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Plus, RefreshCw, Search, Server, ArrowRightLeft } from 'lucide-vue-next'
+import { Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+// import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'vue-sonner'
 import * as interconnectApi from '@/api/interconnect'
 
-import SyncPanel from './SyncPanel.vue'
+// import SyncPanel from './SyncPanel.vue'
 import MasterList from './MasterList.vue'
 
 const emit = defineEmits<{
