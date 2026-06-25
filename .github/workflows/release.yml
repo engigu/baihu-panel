@@ -50,8 +50,8 @@ jobs:
           tar -czvf baihu-linux-arm64.tar.gz baihu-linux-arm64
           CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -tags web -ldflags="$LDFLAGS" -o baihu-android-arm64 main.go
           tar -czvf baihu-android-arm64.tar.gz baihu-android-arm64
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -tags web -ldflags="$LDFLAGS" -o baihu-android-arm64 main.go
-          tar -czvf baihu-android-armv7.tar.gz baihu-android-armv7
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -tags web -ldflags="$LDFLAGS" -o baihu-linux-armv7 main.go
+          tar -czvf baihu-linux-armv7.tar.gz baihu-linux-armv7
 
       - name: Build Agent Binaries
         run: |
