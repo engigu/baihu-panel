@@ -50,6 +50,8 @@ jobs:
           tar -czvf baihu-linux-arm64.tar.gz baihu-linux-arm64
           CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -tags web -ldflags="$LDFLAGS" -o baihu-android-arm64 main.go
           tar -czvf baihu-android-arm64.tar.gz baihu-android-arm64
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -tags web -ldflags="$LDFLAGS" -o baihu-android-arm64 main.go
+          tar -czvf baihu-android-armv7.tar.gz baihu-android-armv7
 
       - name: Build Agent Binaries
         run: |
@@ -82,7 +84,6 @@ jobs:
           # Android ARM64
           cd agent && CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -ldflags="$AGENT_LDFLAGS" -o ../data/agent/baihu-agent-android-arm64 . && cd ..
           cd data/agent && tar -czvf baihu-agent-android-arm64.tar.gz baihu-agent-android-arm64 config.example.ini && rm baihu-agent-android-arm64 && cd ../..
-
       - name: Prepare Release Notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -103,6 +104,7 @@ jobs:
           files: |
             baihu-linux-amd64.tar.gz
             baihu-linux-arm64.tar.gz
+            baihu-android-armv7.tar.gz
             baihu-android-arm64.tar.gz
             data/agent/baihu-agent-*.tar.gz
             data/agent/baihu-agent-*.zip
