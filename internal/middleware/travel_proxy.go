@@ -28,14 +28,8 @@ func TravelProxyMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		path := c.Request.URL.Path
-		// 1.5 只拦截 API 请求，静态资源文件等必须从主节点本地加载
-		if !strings.HasPrefix(path, "/api/v1/") {
-			c.Next()
-			return
-		}
-
 		// 2. 白名单放行：反向隧道建立连接端点必须直达本机，不能二次代理
+		path := c.Request.URL.Path
 		if strings.HasPrefix(path, "/api/v1/interconnect/tunnel") {
 			c.Next()
 			return

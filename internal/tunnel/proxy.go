@@ -75,12 +75,8 @@ func serveLocalProxy(session *yamux.Session) {
 			return
 		}
 
-		// 安全规则 2：严格限制只能访问本机的 /api/v1/ 接口
-		if !strings.HasPrefix(r.URL.Path, "/api/v1/") {
-			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte("Tunnel access is strictly restricted to /api/v1/ endpoints"))
-			return
-		}
+		// 安全规则已放宽：允许访问所有路径 (包括前端静态资源和 API)，以支持主从版本不一致时的完整穿透。
+		// 由 LocalEngine (Gin) 自行决定哪些接口需要认证。
 
 		// 确保保留 X-Tunnel-Proxy 请求头，以防后续逻辑需要判定
 		r.Header.Set("X-Tunnel-Proxy", "true")
