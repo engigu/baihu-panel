@@ -1,8 +1,6 @@
 package router
 
 import (
-	"runtime"
-
 	"github.com/engigu/baihu-panel/internal/middleware"
 	"github.com/gin-gonic/gin"
 )
