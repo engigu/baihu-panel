@@ -198,6 +198,14 @@ async function handleDelete() {
   }
 }
 
+const getCpuPercent = (node: any) => {
+  return nodeStatuses.value[node.id]?.host?.cpu_percent ?? node.metrics?.cpu_percent
+}
+
+const getMemPercent = (node: any) => {
+  return nodeStatuses.value[node.id]?.host?.mem_percent ?? node.metrics?.mem_percent
+}
+
 defineExpose({
   openAddDialog
 })
@@ -242,9 +250,9 @@ defineExpose({
                 <div class="flex items-center gap-1.5" v-if="nodeStatuses[node.id]?.version">
                   <span class="text-xs text-muted-foreground font-normal">v{{ nodeStatuses[node.id].version }}</span>
                 </div>
-                <div class="flex items-center gap-2 text-[10px]" v-if="node.metrics?.cpu_percent !== undefined && node.metrics?.mem_percent !== undefined && node.metrics?.cpu_percent !== 0">
-                  <span :class="getLoadColor(node.metrics?.cpu_percent)">CPU: {{ node.metrics?.cpu_percent.toFixed(1) }}%</span>
-                  <span :class="getLoadColor(node.metrics?.mem_percent)">Mem: {{ node.metrics?.mem_percent.toFixed(1) }}%</span>
+                <div class="flex items-center gap-2 text-[10px]" v-if="getCpuPercent(node) !== undefined && getMemPercent(node) !== undefined && getCpuPercent(node) !== 0">
+                  <span :class="getLoadColor(getCpuPercent(node))">CPU: {{ getCpuPercent(node).toFixed(1) }}%</span>
+                  <span :class="getLoadColor(getMemPercent(node))">Mem: {{ getMemPercent(node).toFixed(1) }}%</span>
                 </div>
               </template>
               <template v-else>
@@ -308,9 +316,9 @@ defineExpose({
                 <div class="flex items-center gap-1.5" v-if="nodeStatuses[node.id]?.version">
                   <span class="text-[10px] text-muted-foreground font-normal">v{{ nodeStatuses[node.id].version }}</span>
                 </div>
-                <div class="flex items-center gap-1 text-[9px]" v-if="node.metrics?.cpu_percent !== undefined && node.metrics?.mem_percent !== undefined && node.metrics?.cpu_percent !== 0">
-                  <span :class="getLoadColor(node.metrics?.cpu_percent)">C:{{ node.metrics?.cpu_percent.toFixed(0) }}%</span>
-                  <span :class="getLoadColor(node.metrics?.mem_percent)">M:{{ node.metrics?.mem_percent.toFixed(0) }}%</span>
+                <div class="flex items-center gap-1 text-[9px]" v-if="getCpuPercent(node) !== undefined && getMemPercent(node) !== undefined && getCpuPercent(node) !== 0">
+                  <span :class="getLoadColor(getCpuPercent(node))">C:{{ getCpuPercent(node).toFixed(0) }}%</span>
+                  <span :class="getLoadColor(getMemPercent(node))">M:{{ getMemPercent(node).toFixed(0) }}%</span>
                 </div>
               </template>
               <template v-else>
@@ -365,8 +373,8 @@ defineExpose({
                 </template>
                 <template v-else-if="nodeStatuses[node.id]?.status === 'online' || node.status === 'online'">
                   <span v-if="nodeStatuses[node.id]?.version" class="text-muted-foreground">v{{ nodeStatuses[node.id].version }}</span>
-                  <span v-if="node.metrics?.cpu_percent !== undefined && node.metrics?.cpu_percent !== 0" :class="getLoadColor(node.metrics?.cpu_percent)">CPU: {{ node.metrics?.cpu_percent.toFixed(1) }}%</span>
-                  <span v-if="node.metrics?.mem_percent !== undefined && node.metrics?.mem_percent !== 0" :class="getLoadColor(node.metrics?.mem_percent)">Mem: {{ node.metrics?.mem_percent.toFixed(1) }}%</span>
+                  <span v-if="getCpuPercent(node) !== undefined && getCpuPercent(node) !== 0" :class="getLoadColor(getCpuPercent(node))">CPU: {{ getCpuPercent(node).toFixed(1) }}%</span>
+                  <span v-if="getMemPercent(node) !== undefined && getMemPercent(node) !== 0" :class="getLoadColor(getMemPercent(node))">Mem: {{ getMemPercent(node).toFixed(1) }}%</span>
                 </template>
                 <template v-else>
                   <span class="text-destructive font-medium">离线</span>
