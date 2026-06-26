@@ -272,6 +272,9 @@ onMounted(() => {
               <Button variant="ghost" size="icon" class="h-6 w-6" @click="openEdit(env)" title="编辑">
                 <Pencil class="h-3 w-3" />
               </Button>
+              <Button variant="ghost" size="icon" class="h-6 w-6 text-destructive" @click="confirmDelete(env.id)" title="删除">
+                <Trash2 class="h-3 w-3" />
+              </Button>
             </div>
           </div>
         </div>
