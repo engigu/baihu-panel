@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
@@ -271,15 +272,40 @@ func (ic *InterconnectController) SyncEnv(c *gin.Context) {
 	var req struct {
 		NodeIDs []string `json:"node_ids" binding:"required"`
 		Envs    []struct {
-			Name   string `json:"name"`
-			Value  string `json:"value"`
-			Remark string `json:"remark"`
+			ID      string `json:"id"`
+			Name    string `json:"name"`
+			Value   string `json:"value"`
+			Remark  string `json:"remark"`
+			Type    string `json:"type"`
+			Hidden  *bool  `json:"hidden"`
+			Enabled *bool  `json:"enabled"`
 		} `json:"envs" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
+	}
+
+	// Filter out secret variables securely using the database
+	var safeEnvs []interface{}
+	for _, envReq := range req.Envs {
+		var env models.EnvironmentVariable
+		query := database.DB
+		if envReq.ID != "" {
+			query = query.Where("id = ? OR name = ?", envReq.ID, envReq.Name)
+		} else {
+			query = query.Where("name = ?", envReq.Name)
+		}
+		if err := query.First(&env).Error; err == nil {
+			if env.Type == "secret" {
+				continue // 坚决阻断下发机密数据
+			}
+		}
+		if envReq.Type == "secret" {
+			continue // 坚决阻断下发机密数据
+		}
+		safeEnvs = append(safeEnvs, envReq)
 	}
 
 	results := make([]map[string]interface{}, 0)
@@ -291,44 +317,31 @@ func (ic *InterconnectController) SyncEnv(c *gin.Context) {
 			continue
 		}
 
-		client, apiURL, err := ic.getClientAndURL(node, "/api/v1/env")
+		client, apiURL, err := ic.getClientAndURL(node, "/api/v1/env/bulk_save")
 		if err != nil {
 			results = append(results, map[string]interface{}{"node_id": nodeID, "success": false, "msg": "反向隧道未连接"})
 			continue
 		}
 		
-		successCount := 0
-		for _, env := range req.Envs {
-			payload := map[string]interface{}{
-				"name":   env.Name,
-				"value":  env.Value,
-				"remark": env.Remark,
-				"type":   "normal",
-			}
-			payloadBytes, _ := json.Marshal(payload)
+		payloadBytes, _ := json.Marshal(safeEnvs)
 
-			httpReq, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(payloadBytes))
-			if err != nil {
-				continue
-			}
-			httpReq.Header.Set("Authorization", "Bearer "+node.Token)
-			httpReq.Header.Set("Content-Type", "application/json")
-
-			resp, err := client.Do(httpReq)
-			if err == nil && resp.StatusCode == 200 {
-				successCount++
-			}
-			if resp != nil {
-				resp.Body.Close()
-			}
+		httpReq, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(payloadBytes))
+		if err != nil {
+			results = append(results, map[string]interface{}{"node_id": nodeID, "success": false, "msg": "构建请求失败"})
+			continue
 		}
+		httpReq.Header.Set("Authorization", "Bearer "+node.Token)
+		httpReq.Header.Set("Content-Type", "application/json")
 
-		results = append(results, map[string]interface{}{
-			"node_id": nodeID, 
-			"success": true, 
-			"msg":     "同步完成", 
-			"count":   successCount,
-		})
+		resp, err := client.Do(httpReq)
+		if err != nil || resp.StatusCode != 200 {
+			results = append(results, map[string]interface{}{"node_id": nodeID, "success": false, "msg": "同步请求失败或超时"})
+		} else {
+			results = append(results, map[string]interface{}{"node_id": nodeID, "success": true, "msg": "同步成功"})
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
 	}
 
 	utils.Success(c, results)

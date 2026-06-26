@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/database"
+	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/services/relation"
@@ -299,4 +301,89 @@ func (ec *EnvController) GetTags(c *gin.Context) {
 		return
 	}
 	utils.Success(c, tags)
+}
+
+// BulkSaveEnv 批量保存环境变量
+func (ec *EnvController) BulkSaveEnv(c *gin.Context) {
+	var reqs []struct {
+		ID      string `json:"id"`
+		Name    string `json:"name" binding:"required"`
+		Value   string `json:"value" binding:"required"`
+		Remark  string `json:"remark"`
+		Type    string `json:"type"`
+		Hidden  *bool  `json:"hidden"`
+		Enabled *bool  `json:"enabled"`
+	}
+
+	if err := c.ShouldBindJSON(&reqs); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	userID := c.GetString("userID")
+
+	for _, req := range reqs {
+		if req.Type == "secret" {
+			continue // 二次严苛拦截，机密变量不应下发/保存
+		}
+
+		hidden := true
+		if req.Hidden != nil {
+			hidden = *req.Hidden
+		}
+		enabled := true
+		if req.Enabled != nil {
+			enabled = *req.Enabled
+		}
+
+		var existingEnv *models.EnvironmentVariable
+		// 优先按 ID 匹配
+		if req.ID != "" {
+			var e models.EnvironmentVariable
+			if err := database.DB.Where("id = ?", req.ID).First(&e).Error; err == nil {
+				existingEnv = &e
+			}
+		}
+		// 如果 ID 没找到，按 Name 匹配
+		if existingEnv == nil {
+			var e models.EnvironmentVariable
+			if err := database.DB.Where("name = ?", req.Name).First(&e).Error; err == nil {
+				existingEnv = &e
+			}
+		}
+
+		if existingEnv != nil {
+			existingEnv.Name = req.Name
+			existingEnv.Value = models.BigText(req.Value)
+			existingEnv.Remark = req.Remark
+			existingEnv.Type = req.Type
+			existingEnv.Hidden = &hidden
+			existingEnv.Enabled = &enabled
+			database.DB.Save(existingEnv)
+			
+			if req.ID != "" && existingEnv.ID != req.ID {
+				database.DB.Model(existingEnv).Update("id", req.ID)
+			}
+		} else {
+			envVar := &models.EnvironmentVariable{
+				ID:        req.ID,
+				Name:      req.Name,
+				Value:     models.BigText(req.Value),
+				Remark:    req.Remark,
+				Type:      req.Type,
+				Hidden:    &hidden,
+				Enabled:   &enabled,
+				UserID:    userID,
+				CreatedAt: models.Now(),
+				UpdatedAt: models.Now(),
+			}
+			if envVar.ID == "" {
+				envVar.ID = utils.GenerateID()
+			}
+			database.DB.Create(envVar)
+		}
+	}
+
+	services.GetAgentWSManager().BroadcastTasksToAll()
+	utils.Success(c, nil)
 }

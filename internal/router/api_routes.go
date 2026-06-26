@@ -116,6 +116,7 @@ func registerEnvRoutes(g *gin.RouterGroup, c *Controllers) {
 		env.GET("/secret-status", c.Env.GetSecretStatus)
 		env.GET("/tags", c.Env.GetTags)
 		env.POST("", c.Env.CreateEnvVar)
+		env.POST("/bulk_save", c.Env.BulkSaveEnv)
 		env.GET("", c.Env.GetEnvVars)
 		env.GET("/all", c.Env.GetAllEnvVars)
 		env.GET("/:id", c.Env.GetEnvVar)
