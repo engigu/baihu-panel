@@ -293,6 +293,24 @@ func (sc *SettingsController) UpdateSchedulerSettings(c *gin.Context) {
 		return
 	}
 
+	var workerCount int
+	if _, err := fmt.Sscanf(req.WorkerCount, "%d", &workerCount); err != nil || workerCount < 1 || workerCount > 1000 {
+		utils.BadRequest(c, "工作线程数必须在 1 至 1000 之间")
+		return
+	}
+
+	var queueSize int
+	if _, err := fmt.Sscanf(req.QueueSize, "%d", &queueSize); err != nil || queueSize < 1 || queueSize > 50000 {
+		utils.BadRequest(c, "等待队列容量必须在 1 至 50000 之间")
+		return
+	}
+
+	var rateInterval int
+	if _, err := fmt.Sscanf(req.RateInterval, "%d", &rateInterval); err != nil || rateInterval < 1 {
+		utils.BadRequest(c, "限频间隔必须为正整数")
+		return
+	}
+
 	values := map[string]string{
 		constant.KeyWorkerCount:  req.WorkerCount,
 		constant.KeyQueueSize:    req.QueueSize,

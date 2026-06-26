@@ -208,8 +208,14 @@ func NewScheduler(config SchedulerConfig, handler SchedulerEventHandler) *Schedu
 	if config.WorkerCount <= 0 {
 		config.WorkerCount = 4
 	}
+	if config.WorkerCount > 1000 {
+		config.WorkerCount = 1000
+	}
 	if config.QueueSize <= 0 {
 		config.QueueSize = 100
+	}
+	if config.QueueSize > 50000 {
+		config.QueueSize = 50000
 	}
 	if config.RateInterval <= 0 {
 		config.RateInterval = 200 * time.Millisecond
