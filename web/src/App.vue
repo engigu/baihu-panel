@@ -3,7 +3,7 @@ import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import { Toaster } from '@/components/ui/sonner'
 import { LogOut } from 'lucide-vue-next'
-import { activeInterconnectNodeId, setActiveInterconnectNodeId } from '@/api'
+import { activeInterconnectNodeId, activeInterconnectNodeName, setActiveInterconnectNodeId } from '@/api'
 
 function exitTravel() {
   setActiveInterconnectNodeId('')
@@ -37,7 +37,7 @@ onMounted(() => {
              hover:scale-105 active:scale-95 cursor-pointer"
     >
       <LogOut class="h-3 w-3 transition-transform group-hover:-translate-x-0.5" />
-      <span>返回主节点</span>
+      <span>返回主节点 <template v-if="activeInterconnectNodeName">当前:({{ activeInterconnectNodeName }})</template></span>
     </button>
   </div>
 </template>

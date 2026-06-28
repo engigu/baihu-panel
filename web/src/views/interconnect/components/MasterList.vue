@@ -143,8 +143,8 @@ async function showDetail(node: interconnectApi.InterconnectNode) {
   }
 }
 
-function handleTravel(nodeId: string) {
-  setActiveInterconnectNodeId(nodeId)
+function handleTravel(node: interconnectApi.InterconnectNode) {
+  setActiveInterconnectNodeId(node.id, node.name)
   window.location.href = '/'
 }
 
@@ -268,7 +268,7 @@ defineExpose({
               <Button variant="ghost" size="icon" class="h-7 w-7" @click="showDetail(node)" title="查看详情">
                 <Eye class="h-3.5 w-3.5" />
               </Button>
-              <Button variant="ghost" size="icon" class="h-7 w-7" @click="handleTravel(node.id)" title="穿越到此子节点">
+              <Button variant="ghost" size="icon" class="h-7 w-7" @click="handleTravel(node)" title="穿越到此子节点">
                 <ExternalLink class="h-3.5 w-3.5" />
               </Button>
               <Button variant="ghost" size="icon" class="h-7 w-7" @click="openEditDialog(node)" title="编辑">
@@ -329,7 +329,7 @@ defineExpose({
             </div>
             <div class="w-36 shrink-0 flex justify-center gap-0.5">
               <Button variant="ghost" size="icon" class="h-7 w-7" @click="showDetail(node)" title="查看详情"><Eye class="h-3.5 w-3.5" /></Button>
-              <Button variant="ghost" size="icon" class="h-7 w-7" @click="handleTravel(node.id)" title="穿越到此子节点"><ExternalLink class="h-3.5 w-3.5" /></Button>
+              <Button variant="ghost" size="icon" class="h-7 w-7" @click="handleTravel(node)" title="穿越到此子节点"><ExternalLink class="h-3.5 w-3.5" /></Button>
               <Button variant="ghost" size="icon" class="h-7 w-7" @click="openEditDialog(node)" title="编辑"><Edit2 class="h-3.5 w-3.5" /></Button>
               <Button variant="ghost" size="icon" class="h-7 w-7" @click="confirmDelete(node.id)" title="删除"><Trash2 class="h-3.5 w-3.5" /></Button>
             </div>
@@ -386,7 +386,7 @@ defineExpose({
             <Button variant="ghost" class="h-9 px-0 text-xs gap-1 hover:bg-primary/5 rounded-none" @click="showDetail(node)">
               <Eye class="h-3.5 w-3.5" />详情
             </Button>
-            <Button variant="ghost" class="h-9 px-0 text-xs gap-1 hover:bg-primary/5 rounded-none border-l border-border/10" @click="handleTravel(node.id)">
+            <Button variant="ghost" class="h-9 px-0 text-xs gap-1 hover:bg-primary/5 rounded-none border-l border-border/10" @click="handleTravel(node)">
               <ExternalLink class="h-3.5 w-3.5" />穿越
             </Button>
             <Button variant="ghost" class="h-9 px-0 text-xs gap-1 hover:bg-primary/5 rounded-none border-l border-border/10" @click="openEditDialog(node)">

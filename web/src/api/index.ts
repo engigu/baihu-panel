@@ -66,15 +66,22 @@ export interface MonitorStats {
   }
 }
 export let activeInterconnectNodeId = localStorage.getItem('activeInterconnectNodeId') || ''
+export let activeInterconnectNodeName = localStorage.getItem('activeInterconnectNodeName') || ''
 
-export function setActiveInterconnectNodeId(id: string) {
+export function setActiveInterconnectNodeId(id: string, name?: string) {
   activeInterconnectNodeId = id
+  if (name !== undefined) {
+    activeInterconnectNodeName = name
+  }
   localStorage.removeItem('site_settings_cache')
   if (id) {
     localStorage.setItem('activeInterconnectNodeId', id)
+    if (name) localStorage.setItem('activeInterconnectNodeName', name)
     document.cookie = `active_interconnect_node_id=${id}; path=/; max-age=${7 * 24 * 3600}`
   } else {
     localStorage.removeItem('activeInterconnectNodeId')
+    localStorage.removeItem('activeInterconnectNodeName')
+    activeInterconnectNodeName = ''
     document.cookie = `active_interconnect_node_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC`
   }
 }

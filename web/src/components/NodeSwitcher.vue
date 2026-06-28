@@ -28,7 +28,8 @@ function handleNodeChange(val: any) {
   if (strVal === 'local') {
     setActiveInterconnectNodeId('')
   } else {
-    setActiveInterconnectNodeId(strVal)
+    const nodeName = nodes.value.find(n => n.id === strVal)?.name || ''
+    setActiveInterconnectNodeId(strVal, nodeName)
   }
   // Refresh the current page to reload data from the new node
   window.location.reload()
