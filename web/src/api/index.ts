@@ -438,6 +438,9 @@ export const api = {
     },
     setActive: (name: string) => request<{ message: string }>('/webui/active', { method: 'PUT', body: JSON.stringify({ name }) }),
     delete: (name: string) => request<{ message: string }>(`/webui/${name}`, { method: 'DELETE' })
+  },
+  system: {
+    export: (data: { task_ids?: string[], env_ids?: string[] }) => request<any>('/system/export', { method: 'POST', body: JSON.stringify(data) })
   }
 }
 
@@ -483,6 +486,7 @@ export interface Task {
   last_run: string
   next_run: string
   running_status?: string
+  repo_task_id?: string
   created_at?: string
   updated_at?: string
 }

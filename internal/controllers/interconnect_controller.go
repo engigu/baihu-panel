@@ -11,9 +11,7 @@ import (
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/constant"
-	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
-	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/tunnel"
 	"github.com/engigu/baihu-panel/internal/utils"
@@ -271,15 +269,7 @@ func (ic *InterconnectController) SyncScript(c *gin.Context) {
 func (ic *InterconnectController) SyncEnv(c *gin.Context) {
 	var req struct {
 		NodeIDs []string `json:"node_ids" binding:"required"`
-		Envs    []struct {
-			ID      string `json:"id"`
-			Name    string `json:"name"`
-			Value   string `json:"value"`
-			Remark  string `json:"remark"`
-			Type    string `json:"type"`
-			Hidden  *bool  `json:"hidden"`
-			Enabled *bool  `json:"enabled"`
-		} `json:"envs" binding:"required"`
+		Envs    []struct{ ID string `json:"id"` } `json:"envs" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -287,26 +277,13 @@ func (ic *InterconnectController) SyncEnv(c *gin.Context) {
 		return
 	}
 
-	// Filter out secret variables securely using the database
-	var safeEnvs []interface{}
-	for _, envReq := range req.Envs {
-		var env models.EnvironmentVariable
-		query := database.DB
-		if envReq.ID != "" {
-			query = query.Where("id = ? OR name = ?", envReq.ID, envReq.Name)
-		} else {
-			query = query.Where("name = ?", envReq.Name)
-		}
-		if err := query.First(&env).Error; err == nil {
-			if env.Type == "secret" {
-				continue // 坚决阻断下发机密数据
-			}
-		}
-		if envReq.Type == "secret" {
-			continue // 坚决阻断下发机密数据
-		}
-		safeEnvs = append(safeEnvs, envReq)
+	var envIDs []string
+	for _, e := range req.Envs {
+		envIDs = append(envIDs, e.ID)
 	}
+
+	dataService := services.NewDataService()
+	exportData := dataService.ExportBusinessData(nil, envIDs)
 
 	results := make([]map[string]interface{}, 0)
 
@@ -317,13 +294,13 @@ func (ic *InterconnectController) SyncEnv(c *gin.Context) {
 			continue
 		}
 
-		client, apiURL, err := ic.getClientAndURL(node, "/api/v1/env/bulk_save")
+		client, apiURL, err := ic.getClientAndURL(node, "/api/v1/system/import")
 		if err != nil {
 			results = append(results, map[string]interface{}{"node_id": nodeID, "success": false, "msg": "反向隧道未连接"})
 			continue
 		}
-		
-		payloadBytes, _ := json.Marshal(safeEnvs)
+
+		payloadBytes, _ := json.Marshal(exportData)
 
 		httpReq, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(payloadBytes))
 		if err != nil {
@@ -335,7 +312,11 @@ func (ic *InterconnectController) SyncEnv(c *gin.Context) {
 
 		resp, err := client.Do(httpReq)
 		if err != nil || resp.StatusCode != 200 {
-			results = append(results, map[string]interface{}{"node_id": nodeID, "success": false, "msg": "同步请求失败或超时"})
+			msg := "同步失败"
+			if err != nil {
+				msg = err.Error()
+			}
+			results = append(results, map[string]interface{}{"node_id": nodeID, "success": false, "msg": msg})
 		} else {
 			results = append(results, map[string]interface{}{"node_id": nodeID, "success": true, "msg": "同步成功"})
 		}
@@ -350,14 +331,22 @@ func (ic *InterconnectController) SyncEnv(c *gin.Context) {
 // SyncTask 将任务同步到指定的节点列表
 func (ic *InterconnectController) SyncTask(c *gin.Context) {
 	var req struct {
-		NodeIDs []string    `json:"node_ids" binding:"required"`
-		Tasks   []vo.TaskVO `json:"tasks" binding:"required"`
+		NodeIDs []string `json:"node_ids" binding:"required"`
+		Tasks   []struct{ ID string `json:"id"` } `json:"tasks" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
+
+	var taskIDs []string
+	for _, t := range req.Tasks {
+		taskIDs = append(taskIDs, t.ID)
+	}
+
+	dataService := services.NewDataService()
+	exportData := dataService.ExportBusinessData(taskIDs, nil)
 
 	results := make([]map[string]interface{}, 0)
 
@@ -368,13 +357,13 @@ func (ic *InterconnectController) SyncTask(c *gin.Context) {
 			continue
 		}
 
-		client, apiURL, err := ic.getClientAndURL(node, "/api/v1/tasks/bulk_save")
+		client, apiURL, err := ic.getClientAndURL(node, "/api/v1/system/import")
 		if err != nil {
 			results = append(results, map[string]interface{}{"node_id": nodeID, "success": false, "msg": "反向隧道未连接"})
 			continue
 		}
-		
-		payloadBytes, _ := json.Marshal(req.Tasks)
+
+		payloadBytes, _ := json.Marshal(exportData)
 
 		httpReq, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(payloadBytes))
 		if err != nil {
@@ -386,7 +375,11 @@ func (ic *InterconnectController) SyncTask(c *gin.Context) {
 
 		resp, err := client.Do(httpReq)
 		if err != nil || resp.StatusCode != 200 {
-			results = append(results, map[string]interface{}{"node_id": nodeID, "success": false, "msg": "同步请求失败或超时"})
+			msg := "同步失败"
+			if err != nil {
+				msg = err.Error()
+			}
+			results = append(results, map[string]interface{}{"node_id": nodeID, "success": false, "msg": msg})
 		} else {
 			results = append(results, map[string]interface{}{"node_id": nodeID, "success": true, "msg": "同步成功"})
 		}

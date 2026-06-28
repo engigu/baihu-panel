@@ -76,6 +76,7 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 			registerWebUIRoutes(adminOnly, c)
 			registerMonitorRoutes(adminOnly, c)
 			registerInterconnectRoutes(adminOnly, c)
+			registerSystemRoutes(adminOnly, c)
 		}
 	}
 
@@ -327,5 +328,13 @@ func registerInterconnectRoutes(g *gin.RouterGroup, c *Controllers) {
 		
 		// 代理模式 (面板穿越)
 		interconnect.Any("/proxy/:node_id/*path", c.Interconnect.ProxyRequest)
+	}
+}
+
+func registerSystemRoutes(g *gin.RouterGroup, c *Controllers) {
+	systemAPI := g.Group("/system")
+	{
+		systemAPI.POST("/export", c.Data.ExportBusinessData)
+		systemAPI.POST("/import", c.Data.ImportBusinessData)
 	}
 }

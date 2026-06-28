@@ -33,6 +33,7 @@ type Controllers struct {
 	WebUI        *controllers.WebUIController
 	Monitor      *controllers.MonitorController
 	Interconnect *controllers.InterconnectController
+	Data         *controllers.DataController
 }
 
 func Setup(c *Controllers) *gin.Engine {

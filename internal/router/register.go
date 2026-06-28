@@ -45,11 +45,14 @@ func RegisterControllers() *Controllers {
 	setupEventHandlers(appLogService, notifyService, loginLogService, systemWSManager)
 	startAppLogCleanup(appLogService)
 
+	taskController := controllers.NewTaskController(taskService, executorService)
+	envController := controllers.NewEnvController(envService)
+
 	// 初始化并返回控制器
 	return &Controllers{
-		Task:         controllers.NewTaskController(taskService, executorService),
+		Task:         taskController,
 		Auth:         controllers.NewAuthController(userService, settingsService, loginLogService),
-		Env:          controllers.NewEnvController(envService),
+		Env:          envController,
 		Script:       controllers.NewScriptController(scriptService),
 		Executor:     controllers.NewExecutorController(executorService),
 		File:         controllers.NewFileController(constant.ScriptsWorkDir),
@@ -67,6 +70,7 @@ func RegisterControllers() *Controllers {
 		WebUI:        controllers.NewWebUIController(services.NewWebUIService(settingsService)),
 		Monitor:      controllers.NewMonitorController(executorService),
 		Interconnect: controllers.NewInterconnectController(interconnectService),
+		Data:         controllers.NewDataController(taskController, envController),
 	}
 }
 

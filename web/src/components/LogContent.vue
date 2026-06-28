@@ -59,6 +59,24 @@ function initTerminal() {
   terminal.loadAddon(fitAddon)
   terminal.open(terminalRef.value)
 
+  // 禁用手机端点击弹出键盘
+  const textarea = terminalRef.value.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement
+  if (textarea) {
+    textarea.readOnly = true
+  }
+
+  // 支持 Ctrl+C 复制选中内容
+  terminal.attachCustomKeyEventHandler((e) => {
+    if (e.ctrlKey && e.code === 'KeyC' && e.type === 'keydown') {
+      const selection = terminal?.getSelection()
+      if (selection) {
+        navigator.clipboard.writeText(selection)
+        return false
+      }
+    }
+    return true
+  })
+
   requestAnimationFrame(() => {
     try {
       fitAddon?.fit()
@@ -183,6 +201,8 @@ watch(
 .log-terminal :deep(.xterm-viewport) {
   scrollbar-width: thin;
   scrollbar-color: rgba(150, 150, 150, 0.3) transparent;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 .log-terminal :deep(.xterm-viewport::-webkit-scrollbar) {

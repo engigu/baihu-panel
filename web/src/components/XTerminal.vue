@@ -94,6 +94,18 @@ function initTerminal(forceConnect = false) {
     }
   }, 50)
 
+  // 支持 Ctrl+C 复制选中内容
+  terminal.attachCustomKeyEventHandler((e) => {
+    if (e.ctrlKey && e.code === 'KeyC' && e.type === 'keydown') {
+      const selection = terminal?.getSelection()
+      if (selection) {
+        navigator.clipboard.writeText(selection)
+        return false // 阻止默认的终端 Ctrl+C 行为
+      }
+    }
+    return true
+  })
+
   terminal.focus()
 
   // autoConnect 或者强制连接时才连接
@@ -302,6 +314,8 @@ onUnmounted(() => {
   scrollbar-width: thin;
   scrollbar-color: #4a4a4a #1e1e1e;
   background: #1e1e1e !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 .terminal-container :deep(.xterm-screen) {

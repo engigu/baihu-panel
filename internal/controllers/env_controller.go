@@ -61,7 +61,7 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 	}
 
 	if req.Type == "" {
-		req.Type = "normal"
+		req.Type = constant.EnvTypeNormal
 	}
 
 	hidden := true
@@ -187,7 +187,7 @@ func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
 	}
 
 	if req.Type == "" {
-		req.Type = "normal"
+		req.Type = constant.EnvTypeNormal
 	}
 
 	// 对于更新，获取现有数据
@@ -323,7 +323,7 @@ func (ec *EnvController) BulkSaveEnv(c *gin.Context) {
 	userID := c.GetString("userID")
 
 	for _, req := range reqs {
-		if req.Type == "secret" {
+		if req.Type == constant.EnvTypeSecret {
 			continue // 二次严苛拦截，机密变量不应下发/保存
 		}
 
