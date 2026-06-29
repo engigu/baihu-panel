@@ -2,10 +2,20 @@
 import { ref, onMounted } from 'vue'
 import { api } from '@/api'
 import { toast } from 'vue-sonner'
+import { Plus, RefreshCw, Search, Server, Network, Ticket, Download } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import * as nodeApi from '@/api/node'
 
 import RoleSelector from './components/RoleSelector.vue'
 import MasterView from './components/MasterView.vue'
 import ChildView from './components/ChildView.vue'
+import MasterList from './components/MasterList.vue'
+import TokenListTab from './components/TokenListTab.vue'
+import DownloadAgentDialog from './components/DownloadAgentDialog.vue'
+import EditTokenDialog from './components/EditTokenDialog.vue'
+
 import { useEventBus } from '@vueuse/core'
 import {
   AlertDialog,
@@ -22,16 +32,63 @@ const interconnectRole = ref<'master' | 'child' | 'none'>('none')
 const loadingRole = ref(true)
 const roleBus = useEventBus<string>('interconnect-role-changed')
 
+// Tabs & State for Child mode Runner management
+const activeTab = ref('connection')
+const searchQuery = ref('')
+const loading = ref(false)
+const nodes = ref<nodeApi.NodeDTO[]>([])
+const tokens = ref<nodeApi.NodeToken[]>([])
+const agentVersion = ref('')
+const platforms = ref<{ os: string; arch: string; filename: string }[]>([])
+
+const masterListRef = ref<InstanceType<typeof MasterList> | null>(null)
+const downloadAgentDialogRef = ref<InstanceType<typeof DownloadAgentDialog> | null>(null)
+const editTokenDialogRef = ref<InstanceType<typeof EditTokenDialog> | null>(null)
+
 async function fetchRole() {
   loadingRole.value = true
   try {
     const role = await api.settings.get('interconnect', 'interconnect_role') as string
     interconnectRole.value = (role === 'master' || role === 'child') ? role : 'none'
+    if (interconnectRole.value === 'child') {
+      await fetchNodes()
+    }
   } catch (error) {
     interconnectRole.value = 'none'
   } finally {
     loadingRole.value = false
   }
+}
+
+async function fetchNodes() {
+  loading.value = true
+  try {
+    const [nodeList, tokenList, versionInfo] = await Promise.all([
+      nodeApi.getNodes(),
+      nodeApi.getTokens(),
+      nodeApi.getVersion().catch(() => ({ version: '', platforms: [] }))
+    ])
+    nodes.value = nodeList
+    tokens.value = tokenList
+    agentVersion.value = versionInfo.version || ''
+    platforms.value = versionInfo.platforms || []
+  } catch (error: any) {
+    toast.error('获取 Runner 数据失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+function openDownloadDialog() {
+  downloadAgentDialogRef.value?.openDialog()
+}
+
+function openCreateToken() {
+  editTokenDialogRef.value?.openCreate()
+}
+
+function openEditToken(token: nodeApi.NodeToken) {
+  editTokenDialogRef.value?.openEdit(token)
 }
 
 async function setRole(role: 'master' | 'child' | 'none') {
@@ -45,6 +102,9 @@ async function setRole(role: 'master' | 'child' | 'none') {
         interconnect_parent_url: '',
         interconnect_parent_token: ''
       })
+    } else if (role === 'child') {
+      activeTab.value = 'connection'
+      await fetchNodes()
     }
   } catch (error: any) {
     toast.error('角色设置失败')

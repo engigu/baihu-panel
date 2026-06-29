@@ -76,6 +76,7 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 			registerWebUIRoutes(adminOnly, c)
 			registerMonitorRoutes(adminOnly, c)
 			registerInterconnectRoutes(adminOnly, c)
+			registerNodeRoutes(adminOnly, c)
 			registerSystemRoutes(adminOnly, c)
 		}
 	}
@@ -336,5 +337,20 @@ func registerSystemRoutes(g *gin.RouterGroup, c *Controllers) {
 	{
 		systemAPI.POST("/export", c.Data.ExportBusinessData)
 		systemAPI.POST("/import", c.Data.ImportBusinessData)
+	}
+}
+
+func registerNodeRoutes(g *gin.RouterGroup, c *Controllers) {
+	nodes := g.Group("/nodes")
+	{
+		nodes.GET("", c.Node.List)
+		nodes.POST("", c.Node.Create)
+		nodes.PUT("/:id", c.Node.Update)
+		nodes.DELETE("/:id", c.Node.Delete)
+		
+		// Runner Token management
+		nodes.GET("/tokens", c.Node.ListTokens)
+		nodes.POST("/tokens", c.Node.CreateToken)
+		nodes.DELETE("/tokens/:id", c.Node.DeleteToken)
 	}
 }

@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { api, type AgentToken } from '@/api'
+import * as nodeApi from '@/api/node'
 import { toast } from 'vue-sonner'
 
 const emit = defineEmits<{
@@ -13,12 +13,13 @@ const emit = defineEmits<{
 
 const isOpen = ref(false)
 const isEdit = ref(false)
-const editingToken = ref<AgentToken | null>(null)
+const editingToken = ref<nodeApi.NodeToken | null>(null)
 const formData = ref({ remark: '', max_uses: 0, expires_at: '' })
 
 const title = computed(() => isEdit.value ? '编辑令牌' : '生成令牌')
 const description = computed(() => isEdit.value ? '修改令牌的备注、使用次数和过期时间' : '创建一个新的注册令牌，用于 Agent 认证')
 
+// 仅提供创建，因为后端未实现 Token 更新接口，但保留存根以防编译错误
 function openCreate() {
   isEdit.value = false
   editingToken.value = null
@@ -26,7 +27,7 @@ function openCreate() {
   isOpen.value = true
 }
 
-function openEdit(token: AgentToken) {
+function openEdit(token: nodeApi.NodeToken) {
   isEdit.value = true
   editingToken.value = token
   const rawExpires = token.expires_at?.replace(' ', 'T').slice(0, 16) || ''
@@ -42,14 +43,10 @@ async function handleSave() {
     }
 
     if (isEdit.value && editingToken.value) {
-      await api.agents.updateToken(editingToken.value.id, {
-        remark: formData.value.remark,
-        max_uses: formData.value.max_uses,
-        expires_at: expiresAt || undefined
-      })
-      toast.success('更新成功')
+      // 后端不支持更新，弹友好提示
+      toast.error('当前版本不支持修改令牌')
     } else {
-      await api.agents.createToken({
+      await nodeApi.createToken({
         remark: formData.value.remark,
         max_uses: formData.value.max_uses,
         expires_at: expiresAt || undefined
