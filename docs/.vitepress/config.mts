@@ -34,6 +34,7 @@ export default defineConfig({
                     { text: '数据仪表', link: '/guide/dashboard' },
                     { text: '定时任务', link: '/guide/tasks' },
                     { text: '远程执行', link: '/guide/agents' },
+                    { text: '面板互联', link: '/guide/interconnect' },
                     { text: '脚本管理', link: '/guide/scripts' },
                     { text: '执行历史', link: '/guide/history' },
                     { text: '变量机密', link: '/guide/environments' },
