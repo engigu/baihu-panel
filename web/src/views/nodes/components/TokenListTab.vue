@@ -1,27 +1,27 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button'
 import { Plus, Ticket, Check, X, Copy, Pencil, Trash2 } from 'lucide-vue-next'
-import { type AgentToken, api } from '@/api'
+import * as nodeApi from '@/api/node'
 import { toast } from 'vue-sonner'
 import { copyToClipboard } from '@/utils/clipboard'
 
 const props = defineProps<{
-  tokens: AgentToken[]
+  tokens: nodeApi.NodeToken[]
 }>()
 
 const emit = defineEmits<{
   (e: 'create-token'): void
-  (e: 'edit-token', token: AgentToken): void
+  (e: 'edit-token', token: nodeApi.NodeToken): void
   (e: 'refresh'): void
 }>()
 
-function isTokenExpired(token: AgentToken) {
+function isTokenExpired(token: nodeApi.NodeToken) {
   if (!token.expires_at) return false
   const dateStr = token.expires_at.replace(' ', 'T')
   return new Date(dateStr) < new Date()
 }
 
-function isTokenExhausted(token: AgentToken) {
+function isTokenExhausted(token: nodeApi.NodeToken) {
   return token.max_uses > 0 && token.used_count >= token.max_uses
 }
 
@@ -35,13 +35,13 @@ function openTokenDialog() {
   emit('create-token')
 }
 
-function openEditToken(token: AgentToken) {
+function openEditToken(token: nodeApi.NodeToken) {
   emit('edit-token', token)
 }
 
 async function deleteToken(id: string) {
   try {
-    await api.agents.deleteToken(id)
+    await nodeApi.deleteToken(id)
     emit('refresh')
     toast.success('删除成功')
   } catch (e: unknown) {
@@ -51,7 +51,14 @@ async function deleteToken(id: string) {
 </script>
 
 <template>
-  <div class="rounded-lg border bg-card overflow-hidden">
+  <div class="space-y-4">
+    <!-- 说明 Banner -->
+    <div class="bg-blue-500/10 text-blue-600 dark:text-blue-400 p-3.5 rounded-lg text-xs border border-blue-500/20 leading-relaxed shadow-sm">
+      <!-- <p class="font-semibold mb-1">💡 令牌使用说明：</p> -->
+      <p class="opacity-90">这里的注册令牌仅用于 **Runner (远程执行)** 节点的接入和身份认证。子面板 (Panel) 节点互联不需要此令牌（子面板直接在“节点”标签页下点击“添加”并保存生成的专属接入密钥）。</p>
+    </div>
+
+    <div class="rounded-lg border bg-card overflow-hidden">
     <!-- 表头 -->
     <div class="flex items-center gap-4 px-4 py-1.5 border-b bg-muted/20 text-xs text-muted-foreground font-medium">
       <span class="w-8 shrink-0">状态</span>
@@ -109,4 +116,5 @@ async function deleteToken(id: string) {
       </div>
     </div>
   </div>
+</div>
 </template>

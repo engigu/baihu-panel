@@ -56,7 +56,7 @@ const sentenceContent = computed(() => {
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: '数据仪表', exact: true },
   { to: '/tasks', icon: ListTodo, label: '定时任务', exact: true },
-  { to: '/agents', icon: Server, label: '远程执行', exact: true },
+  { to: '/nodes', icon: Network, label: '节点互联', exact: true },
   { to: '/editor', icon: FileCode, label: '脚本编辑', exact: false },
   { to: '/history', icon: ScrollText, label: '执行历史', exact: true },
   { to: '/environments', icon: Variable, label: '变量机密', exact: true },
@@ -65,7 +65,6 @@ const navItems = [
   { to: '/notify', icon: Bell, label: '消息推送', exact: true },
   { to: '/logs', icon: KeyRound, label: '运行日志', exact: true },
   { to: '/monitor', icon: Activity, label: '系统监控', exact: true },
-  { to: '/interconnect', icon: Network, label: '互联管理', exact: true },
   { to: '/settings', icon: Settings, label: '系统设置', exact: true },
 ]
 

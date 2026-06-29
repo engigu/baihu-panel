@@ -70,6 +70,7 @@ func RegisterControllers() *Controllers {
 		WebUI:        controllers.NewWebUIController(services.NewWebUIService(settingsService)),
 		Monitor:      controllers.NewMonitorController(executorService),
 		Interconnect: controllers.NewInterconnectController(interconnectService),
+		Node:         controllers.NewNodeController(),
 		Data:         controllers.NewDataController(taskController, envController),
 	}
 }

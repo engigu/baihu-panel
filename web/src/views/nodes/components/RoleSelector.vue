@@ -47,7 +47,7 @@ function handleSelect(role: 'master' | 'child') {
         </div>
         <h3 class="text-base font-semibold">我是主节点 (Master)</h3>
         <p class="text-xs text-muted-foreground leading-relaxed">
-          集中监控其他面板的状态，并可无缝穿越到子节点进行管理。<strong class="font-medium text-foreground">即使子节点处于无公网 IP 的深层内网，主节点依然可以通过反向隧道直连穿透。</strong>选择此项后，您将可以生成专属密钥并添加多个子节点。
+          集中监控其他面板的状态，并可无缝穿越到子节点进行管理。<strong class="font-medium text-foreground">节点分为子面板与 Runner (原 Agent)，主节点作为核心控制端，负责对子面板与 Runner 进行集中管理与任务调度。</strong>即使子节点处于无公网 IP 的深层内网，主节点依然可以通过反向隧道直连穿透。
         </p>
       </div>
       <!-- Child Card -->
@@ -57,7 +57,7 @@ function handleSelect(role: 'master' | 'child') {
         </div>
         <h3 class="text-base font-semibold">我是子节点 (Child)</h3>
         <p class="text-xs text-muted-foreground leading-relaxed">
-          向主节点报告运行状态，并允许主节点穿越到本面板进行管理。<strong class="font-medium text-foreground">非常适合部署在家庭宽带或企业内网等无公网 IP 环境中。</strong>选择此项后，本机将主动连接到主节点建立安全的反向穿透隧道。
+          向主节点报告运行状态，并允许主节点穿越到本面板进行管理。<strong class="font-medium text-foreground">互联遵循单机选主与角色互斥原则，子面板不能配置作为 Runner 的控制端。</strong>所有 Runner 节点需统一连接至主面板。非常适合部署在无公网 IP 的受控环境中。
         </p>
       </div>
     </div>
