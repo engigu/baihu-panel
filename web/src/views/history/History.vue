@@ -54,10 +54,16 @@ useEventBus(Object.values(TASK_EVENTS), (payload, type) => {
       if (duration !== undefined) selectedLog.value.duration = duration
       if (end_time !== undefined) selectedLog.value.end_time = end_time
       
-      // 如果任务完成了，停止详情页的轮询定时器
-      if (status !== TASK_STATUS.RUNNING && durationTimer) {
-        clearInterval(durationTimer)
-        durationTimer = null
+      // 如果任务完成了，停止详情页的轮询定时器并断开 SSE
+      if (status !== TASK_STATUS.RUNNING) {
+        if (durationTimer) {
+          clearInterval(durationTimer)
+          durationTimer = null
+        }
+        if (logSource) {
+          logSource.close()
+          logSource = null
+        }
       }
     }
   } else if (type === TASK_EVENTS.RUNNING) {
@@ -149,36 +155,29 @@ async function selectLog(log: TaskLog) {
 
   selectedLog.value = log
 
-  // 如果是运行中状态，启动定时器轮询最新日志信息（主要是更新耗时）
+  // 如果是运行中状态，启动定时器本地更新耗时，状态变更依靠 EventBus
   if (log.status === TASK_STATUS.RUNNING) {
-    const updateLog = async () => {
-      try {
-        const res = await api.logs.get(log.id)
-        if (res && selectedLog.value && selectedLog.value.id === log.id) {
-          // 只更新需要变动的字段
-          selectedLog.value.duration = res.duration
-          // 同步更新列表中的数据
-          const listItem = logs.value.find(l => l.id === log.id)
-          if (listItem) {
-            listItem.duration = res.duration
+    const updateLog = () => {
+      if (selectedLog.value && selectedLog.value.id === log.id && selectedLog.value.status === TASK_STATUS.RUNNING) {
+        if (selectedLog.value.start_time) {
+          const startMs = new Date(selectedLog.value.start_time).getTime()
+          if (!isNaN(startMs)) {
+            selectedLog.value.duration = Date.now() - startMs
+          } else {
+            selectedLog.value.duration += 1000
           }
-          // 如果状态变了，更新状态并停止轮询
-          if (res.status !== TASK_STATUS.RUNNING) {
-            selectedLog.value.status = res.status
-            selectedLog.value.end_time = res.end_time
-            if (listItem) {
-              listItem.status = res.status
-              listItem.end_time = res.end_time
-            }
-            if (durationTimer) {
-              clearInterval(durationTimer)
-              durationTimer = null
-            }
-          }
+        } else {
+          selectedLog.value.duration += 1000
         }
-      } catch { /* ignore */ }
+        
+        // 同步更新列表中的数据
+        const listItem = logs.value.find(l => l.id === log.id)
+        if (listItem) {
+          listItem.duration = selectedLog.value.duration
+        }
+      }
     }
-    durationTimer = setInterval(updateLog, 3000)
+    durationTimer = setInterval(updateLog, 1000)
   }
 
   wsContent.value = ''

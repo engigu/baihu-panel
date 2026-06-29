@@ -96,19 +96,19 @@ watch(() => props.log?.duration, (newVal) => {
 function getStatusBadgeClass(status: string) {
   switch (status) {
     case TASK_STATUS.SUCCESS:
-      return 'bg-green-500/10 text-green-600 border-green-500/20 dark:bg-green-500/20 dark:text-green-400 dark:border-green-500/30 shadow-[0_0_8px_-2px_rgba(34,197,94,0.15)]'
+      return 'bg-emerald-500/5 text-emerald-500 border-emerald-500/15 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
     case TASK_STATUS.FAILED:
-      return 'bg-red-500/10 text-red-600 border-red-500/20 dark:bg-red-500/20 dark:text-red-400 dark:border-red-500/30'
+      return 'bg-rose-500/5 text-rose-500 border-rose-500/15 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20'
     case TASK_STATUS.RUNNING:
-      return 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30'
+      return 'bg-sky-500/5 text-sky-500 border-sky-500/15 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20'
     case TASK_STATUS.PENDING:
-      return 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30'
+      return 'bg-amber-500/5 text-amber-500 border-amber-500/15 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
     case TASK_STATUS.TIMEOUT:
-      return 'bg-orange-500/10 text-orange-600 border-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30'
+      return 'bg-orange-500/5 text-orange-500 border-orange-500/15 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20'
     case TASK_STATUS.CANCELLED:
-      return 'bg-muted/50 text-muted-foreground border-muted-foreground/10'
+      return 'bg-zinc-500/5 text-zinc-400 border-zinc-500/15 dark:bg-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/20'
     case 'UNEXECUTED':
-      return 'bg-muted/30 text-muted-foreground/60 border-dashed border-muted-foreground/20 shadow-none'
+      return 'bg-zinc-500/5 text-zinc-400 border-zinc-500/15 border-dashed dark:bg-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/20'
     default:
       return 'bg-secondary text-secondary-foreground border-transparent'
   }
@@ -135,7 +135,7 @@ function getStatusBadgeClass(status: string) {
 
           <!-- 详情模式下的停止按钮 (始终在第一行进入) -->
           <Button v-if="log.status === TASK_STATUS.RUNNING && variant === 'full'" variant="destructive" size="sm"
-            class="h-6 px-2 text-[10px] shrink-0" :disabled="isStopping" @click="$emit('stop')">
+            class="h-5 px-1.5 text-[9px] shrink-0 rounded-sm" :disabled="isStopping" @click="$emit('stop')">
             {{ isStopping ? '停止中' : '停止任务' }}
           </Button>
         </div>
@@ -143,7 +143,7 @@ function getStatusBadgeClass(status: string) {
         <div class="flex items-center gap-1.5 shrink-0">
           <!-- 极简模式桌面端显示的停止按钮 -->
           <Button v-if="log.status === TASK_STATUS.RUNNING && variant === 'simple'" variant="destructive" size="sm"
-            class="h-7 px-2 text-[10px] hidden sm:flex" :disabled="isStopping" @click="$emit('stop')">
+            class="h-5 px-1.5 text-[9px] rounded-sm hidden sm:flex" :disabled="isStopping" @click="$emit('stop')">
             {{ isStopping ? '停止中' : '停止任务' }}
           </Button>
 
@@ -171,8 +171,8 @@ function getStatusBadgeClass(status: string) {
         
         <!-- 极简模式移动端停止按钮 -->
         <Button v-if="log.status === TASK_STATUS.RUNNING" variant="destructive" size="sm"
-          class="h-8 px-3 text-xs gap-1.5 flex-1 max-w-[120px]" :disabled="isStopping" @click="$emit('stop')">
-          <Ban class="h-3.5 w-3.5" />
+          class="h-6 px-2 text-[10px] gap-1 flex-1 max-w-[100px] rounded-sm" :disabled="isStopping" @click="$emit('stop')">
+          <Ban class="h-3 w-3" />
           {{ isStopping ? '停止中' : '停止' }}
         </Button>
 
@@ -202,19 +202,21 @@ function getStatusBadgeClass(status: string) {
       <div class="flex justify-between items-center h-8">
         <span class="text-sm font-normal text-muted-foreground">状态</span>
         <Badge variant="outline" :class="[
-          'capitalize px-3 py-1 font-normal rounded-full border shadow-sm transition-all duration-300 ring-4 ring-transparent hover:ring-primary/5',
+          'capitalize px-2.5 py-0.5 font-normal rounded-full border transition-all duration-300',
           getStatusBadgeClass(log.status)
         ]">
-          <div class="flex items-center gap-1.5">
-            <CheckCircle2 v-if="log.status === TASK_STATUS.SUCCESS" class="h-3.5 w-3.5 fill-green-500/20" />
-            <XCircle v-else-if="log.status === TASK_STATUS.FAILED" class="h-3.5 w-3.5 fill-red-500/20" />
-            <ZapIcon v-else-if="log.status === TASK_STATUS.RUNNING"
-              class="h-3.5 w-3.5 fill-current animate-pulse text-blue-500" />
-            <Clock v-else-if="log.status === TASK_STATUS.PENDING" class="h-3.5 w-3.5 fill-amber-500/20" />
-            <AlertCircle v-else-if="log.status === TASK_STATUS.TIMEOUT" class="h-3.5 w-3.5 fill-orange-500/20" />
-            <Ban v-else-if="log.status === TASK_STATUS.CANCELLED" class="h-3.5 w-3.5" />
-            <MinusCircle v-else-if="log.status === 'UNEXECUTED'" class="h-3.5 w-3.5 opacity-40" />
-            <span class="text-[10px] font-normal">
+          <div class="flex items-center gap-1">
+            <CheckCircle2 v-if="log.status === TASK_STATUS.SUCCESS" class="h-3 w-3 fill-emerald-500/10" />
+            <XCircle v-else-if="log.status === TASK_STATUS.FAILED" class="h-3 w-3 fill-rose-500/10" />
+            <span v-else-if="log.status === TASK_STATUS.RUNNING" class="relative flex h-1.5 w-1.5 mr-0.5">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-sky-500"></span>
+            </span>
+            <Clock v-else-if="log.status === TASK_STATUS.PENDING" class="h-3 w-3 fill-amber-500/10" />
+            <AlertCircle v-else-if="log.status === TASK_STATUS.TIMEOUT" class="h-3 w-3 fill-orange-500/10" />
+            <Ban v-else-if="log.status === TASK_STATUS.CANCELLED" class="h-3 w-3" />
+            <MinusCircle v-else-if="log.status === 'UNEXECUTED'" class="h-3 w-3 opacity-40" />
+            <span class="text-[10px] font-normal tracking-wide">
               {{ TASK_STATUS_TEXT[log.status] || log.status }}
             </span>
           </div>

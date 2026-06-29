@@ -71,6 +71,7 @@ export const TASK_EVENTS = {
   TIMEOUT: 'task_timeout',
   RUNNING: 'task_running',
   QUEUED: 'task_queued',
+  CANCELLED: 'task_cancelled',
 } as const
 
 // 日志事件类型

@@ -376,25 +376,23 @@ async function viewLogs(taskId: string) {
         cleanupLogSocket()
       }
 
-      // 启动状态轮询
+      // 优化：本地定时更新耗时，不再发请求轮询状态，状态变更依赖 EventBus 推送
       cleanupDurationTimer()
-      const updateLogStatus = async () => {
-        try {
-          const res = await api.logs.get(latestLog.id)
-          if (res && selectedLog.value && selectedLog.value.id === latestLog.id) {
-            selectedLog.value.duration = res.duration
-            selectedLog.value.status = res.status
-            selectedLog.value.end_time = res.end_time
-            
-            // 如果任务结束，停止轮询
-            if (res.status !== TASK_STATUS.RUNNING) {
-              cleanupDurationTimer()
-              loadTasks() // 同时刷新列表状态
+      const updateLogStatus = () => {
+        if (selectedLog.value && selectedLog.value.status === TASK_STATUS.RUNNING) {
+          if (selectedLog.value.start_time && selectedLog.value.start_time !== '-') {
+            const startMs = new Date(selectedLog.value.start_time).getTime()
+            if (!isNaN(startMs)) {
+              selectedLog.value.duration = Date.now() - startMs
+            } else {
+              selectedLog.value.duration += 1000
             }
+          } else {
+            selectedLog.value.duration += 1000
           }
-        } catch { /* ignore */ }
+        }
       }
-      durationTimer = setInterval(updateLogStatus, 3000)
+      durationTimer = setInterval(updateLogStatus, 1000)
     } else {
       // 如果没有日志，构造一个基础的任务信息对象用于展示弹窗
       const task = tasks.value.find(t => t.id === taskId)
@@ -507,10 +505,23 @@ onMounted(async () => {
 })
 
 // 订阅任务状态实时更新
-useEventBus(['task_running', 'task_queued', 'task_success', 'task_failed', 'task_timeout'], (payload) => {
+useEventBus(['task_running', 'task_queued', 'task_success', 'task_failed', 'task_timeout', 'task_cancelled'], (payload) => {
   const task = tasks.value.find(t => t.id === payload.task_id)
   if (task) {
     task.running_status = payload.status
+  }
+  
+  // 同步更新打开的日志弹窗状态
+  if (selectedLog.value && selectedLog.value.id === payload.log_id) {
+    selectedLog.value.status = payload.status
+    if (payload.duration !== undefined) selectedLog.value.duration = payload.duration
+    if (payload.end_time !== undefined) selectedLog.value.end_time = payload.end_time
+    
+    if (payload.status !== TASK_STATUS.RUNNING) {
+      cleanupDurationTimer()
+      cleanupLogSocket()
+      loadTasks()
+    }
   }
 })
 
