@@ -80,7 +80,7 @@ const deleteLogId = ref<string | null>(null)
 
 const wsContent = ref('')
 const isWsLoading = ref(false)
-let logSocket: WebSocket | null = null
+let logSource: EventSource | null = null
 
 
 import { decompressFromBase64 } from '@/utils/decompress'
@@ -136,12 +136,9 @@ function handlePageChange(page: number) {
 }
 
 async function selectLog(log: TaskLog) {
-  if (logSocket) {
-    logSocket.onopen = null
-    logSocket.onmessage = null
-    logSocket.onerror = null
-    logSocket.onclose = null
-    logSocket.close()
+  if (logSource) {
+    logSource.close()
+    logSource = null
   }
 
   // 清理旧定时器
@@ -198,23 +195,28 @@ async function selectLog(log: TaskLog) {
     }
     return
   }
-
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  
+  const protocol = window.location.protocol
   const host = window.location.host
   const baseUrl = (window as any).__BASE_URL__ || ''
   const apiVersion = (window as any).__API_VERSION__ || '/api/v1'
-  const wsUrl = `${protocol}//${host}${baseUrl}${apiVersion}/logs/ws?log_id=${log.id}`
+  const sseUrl = `${protocol}//${host}${baseUrl}${apiVersion}/logs/sse?log_id=${log.id}`
 
-  logSocket = new WebSocket(wsUrl)
+  logSource = new EventSource(sseUrl)
 
-  logSocket.onopen = () => {
+  logSource.onopen = () => {
     isWsLoading.value = false
-    console.log('[LogWS] Connection opened')
+    console.log('[LogSSE] Connection opened')
   }
 
-  logSocket.onmessage = (event) => {
+  logSource.onmessage = (event) => {
     isWsLoading.value = false
-    wsContent.value += event.data
+    try {
+      const data = JSON.parse(event.data)
+      wsContent.value += data.text || ''
+    } catch {
+      wsContent.value += event.data
+    }
     // 自动滚动到底部
     nextTick(() => {
       const pre = document.querySelector('.log-pre')
@@ -222,15 +224,13 @@ async function selectLog(log: TaskLog) {
     })
   }
 
-  logSocket.onerror = (e) => {
+  logSource.onerror = (e) => {
     isWsLoading.value = false
-    console.error('[LogWS] Connection error', e)
-    toast.error('日志连接异常')
-  }
-
-  logSocket.onclose = (e) => {
-    isWsLoading.value = false
-    console.log('[LogWS] Connection closed', e.code, e.reason)
+    console.error('[LogSSE] Connection error/closed', e)
+    if (logSource) {
+      logSource.close()
+      logSource = null
+    }
   }
 }
 
@@ -239,13 +239,9 @@ function closeDetail() {
     clearInterval(durationTimer)
     durationTimer = null
   }
-  if (logSocket) {
-    logSocket.onopen = null
-    logSocket.onmessage = null
-    logSocket.onerror = null
-    logSocket.onclose = null
-    logSocket.close()
-    logSocket = null
+  if (logSource) {
+    logSource.close()
+    logSource = null
   }
   selectedLog.value = null
   wsContent.value = ''

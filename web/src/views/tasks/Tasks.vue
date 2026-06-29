@@ -295,19 +295,13 @@ const selectedLog = ref<TaskLog | null>(null)
 const logContent = ref('')
 const logEmptyTitle = ref<string | undefined>(undefined)
 const logEmptyDesc = ref<string | undefined>(undefined)
-let logSocket: WebSocket | null = null
+let logSource: EventSource | null = null
 let durationTimer: ReturnType<typeof setInterval> | null = null
 
 function cleanupLogSocket() {
-  if (logSocket) {
-    logSocket.onopen = null
-    logSocket.onmessage = null
-    logSocket.onerror = null
-    logSocket.onclose = null
-    if (logSocket.readyState === WebSocket.CONNECTING || logSocket.readyState === WebSocket.OPEN) {
-      logSocket.close()
-    }
-    logSocket = null
+  if (logSource) {
+    logSource.close()
+    logSource = null
   }
 }
 
@@ -360,17 +354,26 @@ async function viewLogs(taskId: string) {
         return
       }
 
-      // Connect WebSocket to load log content for running tasks
+      // Connect SSE to load log content for running tasks
       cleanupLogSocket()
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const protocol = window.location.protocol
       const host = window.location.host
       const baseUrl = (window as any).__BASE_URL__ || ''
       const apiVersion = (window as any).__API_VERSION__ || '/api/v1'
-      const wsUrl = `${protocol}//${host}${baseUrl}${apiVersion}/logs/ws?log_id=${latestLog.id}`
+      const sseUrl = `${protocol}//${host}${baseUrl}${apiVersion}/logs/sse?log_id=${latestLog.id}`
 
-      logSocket = new WebSocket(wsUrl)
-      logSocket.onmessage = (event) => {
-        logContent.value += event.data
+      logSource = new EventSource(sseUrl)
+      logSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          logContent.value += data.text || ''
+        } catch {
+          logContent.value += event.data
+        }
+      }
+      logSource.onerror = (e) => {
+        console.error('[LogSSE] Connection error/closed', e)
+        cleanupLogSocket()
       }
 
       // 启动状态轮询
