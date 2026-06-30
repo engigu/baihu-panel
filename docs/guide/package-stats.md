@@ -32,18 +32,20 @@ const parseVersion = (tag) => {
   }
 }
 
-// 提取最近发布的主语义版本（例如1.1.15，过滤掉架构与latest），用于折线图趋势展示
+// 提取最近发布的主语义版本（包含 latest，过滤掉架构），用于折线图趋势展示
 const chartPoints = computed(() => {
   const list = [...pullStatsList.value]
-    .filter(item => /^\d+\.\d+\.\d+$/.test(item.tag) && item.downloads !== 0)
+    .filter(item => (/^\d+\.\d+\.\d+$/.test(item.tag) || item.tag === 'latest') && item.downloads !== 0)
     .sort((a, b) => {
+      if (a.tag === 'latest') return 1
+      if (b.tag === 'latest') return -1
       const va = parseVersion(a.tag)
       const vb = parseVersion(b.tag)
       if (va.major !== vb.major) return va.major - vb.major
       if (va.minor !== vb.minor) return va.minor - vb.minor
       return va.patch - vb.patch
     })
-    .slice(-12) // 展示最近的 12 个正式版本
+    .slice(-20) // 展示最近的 20 个正式版本
 
   if (list.length === 0) return []
 
