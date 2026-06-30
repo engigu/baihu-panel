@@ -9,6 +9,9 @@ import { api, type AppLog, LOG_CATEGORY, LOG_STATUS } from '@/api'
 import { toast } from 'vue-sonner'
 import { format } from 'date-fns'
 
+import { eventBus } from '@/utils/event-bus'
+import { LOG_EVENTS } from '@/constants'
+
 const notices = ref<AppLog[]>([])
 const unreadCount = ref(0)
 const loading = ref(false)
@@ -56,12 +59,27 @@ async function markAllAsRead() {
 }
 
 let timer: number
+let unsubscribe: () => void
+
 onMounted(() => {
   fetchNotices()
-  timer = window.setInterval(fetchNotices, 60000) // 每分钟拉取一次
+  
+  // 订阅 WebSocket 实时事件，在收到新系统日志通知时主动刷新
+  unsubscribe = eventBus.subscribe((msg) => {
+    if (msg.type === LOG_EVENTS.ADDED) {
+      const log = msg.payload
+      if (log && log.category === LOG_CATEGORY.SYSTEM_NOTICE) {
+        fetchNotices()
+      }
+    }
+  })
+
+  // 10 分钟一次的长轮询作为断连兜底
+  timer = window.setInterval(fetchNotices, 10 * 60 * 1000)
 })
 
 onUnmounted(() => {
+  if (unsubscribe) unsubscribe()
   if (timer) clearInterval(timer)
 })
 
