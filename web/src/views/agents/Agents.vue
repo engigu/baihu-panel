@@ -64,6 +64,16 @@ async function loadAgents() {
   }
 }
 
+async function refreshAgentsOnly() {
+  if (document.visibilityState === 'hidden') return
+  try {
+    const agentList = await api.agents.list()
+    agents.value = agentList
+  } catch (e) {
+    console.error('Failed to poll agent status', e)
+  }
+}
+
 // Handler functions for Agent
 function viewDetail(agent: Agent) {
   agentDetailDialogRef.value?.openDialog(agent)
@@ -103,13 +113,37 @@ function openEditToken(token: AgentToken) {
   editTokenDialogRef.value?.openEdit(token)
 }
 
+function startPolling() {
+  stopPolling()
+  if (document.visibilityState === 'hidden') return
+  refreshTimer = setInterval(refreshAgentsOnly, 30000) // 仅轮询 Agent 在线状态，频率放宽至 30s
+}
+
+function stopPolling() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    refreshAgentsOnly()
+    startPolling()
+  } else {
+    stopPolling()
+  }
+}
+
 onMounted(() => {
   loadAgents()
-  refreshTimer = setInterval(loadAgents, 10000)
+  startPolling()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onUnmounted(() => {
-  if (refreshTimer) clearInterval(refreshTimer)
+  stopPolling()
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>
 
