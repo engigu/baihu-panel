@@ -58,7 +58,7 @@ func RegisterControllers() *Controllers {
 		File:         controllers.NewFileController(constant.ScriptsWorkDir),
 		Dashboard:    controllers.NewDashboardController(executorService),
 		Log:          controllers.NewLogController(),
-		LogWS:        controllers.NewLogWSController(),
+		LogSSE:       controllers.NewLogSSEController(),
 		Terminal:     controllers.NewTerminalController(envService),
 		Settings:     controllers.NewSettingsController(userService, loginLogService, executorService),
 		Dependency:   controllers.NewDependencyController(),

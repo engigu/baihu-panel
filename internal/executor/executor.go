@@ -161,6 +161,9 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	shell, args := utils.GetShellCommand(req.Command)
 	cmd := exec.CommandContext(execCtx, shell, args...)
 
+	usePty := runtime.GOOS != "windows" && stdout != nil && (stdout == stderr || stdout == io.Discard)
+	SetProcessGroupAndCancel(cmd, usePty)
+
 	// 设置工作目录
 	// 设置工作目录
 	workDir := strings.TrimSpace(req.WorkDir)

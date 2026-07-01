@@ -73,7 +73,7 @@ async function fetchNodes() {
     agentVersion.value = versionInfo.version || ''
     platforms.value = versionInfo.platforms || []
   } catch (error: any) {
-    toast.error('获取 Runner 数据失败')
+    toast.error('获取 Agent 数据失败')
   } finally {
     loading.value = false
   }

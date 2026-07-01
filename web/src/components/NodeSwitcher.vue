@@ -37,14 +37,25 @@ function handleNodeChange(val: any) {
 
 function startPolling() {
   stopPolling()
+  if (document.visibilityState === 'hidden') return
   loadNodes()
-  timer = setInterval(loadNodes, 30000)
+  timer = setInterval(loadNodes, 120000) // 放宽至 2 分钟一次
 }
 
 function stopPolling() {
   if (timer) {
     clearInterval(timer)
     timer = null
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    if (isMaster.value) {
+      startPolling()
+    }
+  } else {
+    stopPolling()
   }
 }
 
@@ -86,10 +97,12 @@ roleBus.on((newRole) => {
 
 onMounted(async () => {
   await checkRoleAndInit()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onUnmounted(() => {
   stopPolling()
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>
 

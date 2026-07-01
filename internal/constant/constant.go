@@ -81,11 +81,12 @@ const (
 	EventPasswordChanged = "password_changed"
 
 	// 任务事件类型
-	EventTaskSuccess = "task_success"
-	EventTaskFailed  = "task_failed"
-	EventTaskTimeout = "task_timeout"
-	EventTaskRunning = "task_running"
-	EventTaskQueued  = "task_queued"
+	EventTaskSuccess   = "task_success"
+	EventTaskFailed    = "task_failed"
+	EventTaskTimeout   = "task_timeout"
+	EventTaskRunning   = "task_running"
+	EventTaskQueued    = "task_queued"
+	EventTaskCancelled = "task_cancelled"
 
 	// 其他事件类型
 	EventSystemNotice = "system_notice"

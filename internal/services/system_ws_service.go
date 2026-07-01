@@ -100,6 +100,7 @@ func (m *SystemWSManager) SubscribeEvents(bus *eventbus.EventBus) {
 		constant.EventTaskTimeout,
 		constant.EventTaskRunning,
 		constant.EventTaskQueued,
+		constant.EventTaskCancelled,
 	}
 
 	for _, evt := range taskEvents {

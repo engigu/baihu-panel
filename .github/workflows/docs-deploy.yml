@@ -4,6 +4,8 @@ on:
   push:
     branches: [main, docs]
   workflow_dispatch:
+  schedule:
+    - cron: '0 1 * * *'
 
 permissions:
   contents: read
@@ -46,6 +48,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
         working-directory: docs
+
+      - name: Fetch Package Download Stats
+        run: node docs/fetch-stats.js
 
       - name: Build with VitePress
         run: npm run docs:build

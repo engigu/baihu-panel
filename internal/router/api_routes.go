@@ -162,7 +162,7 @@ func registerLogRoutes(g *gin.RouterGroup, c *Controllers) {
 	{
 		logs.GET("", c.Log.GetLogs)
 		logs.POST("/clear", c.Log.ClearLogs)
-		logs.GET("/ws", c.LogWS.StreamLog)
+		logs.GET("/sse", c.LogSSE.StreamLog)
 		logs.GET("/:id", c.Log.GetLogDetail)
 		logs.DELETE("/:id", c.Log.DeleteLog)
 	}

@@ -21,7 +21,7 @@ type Controllers struct {
 	File         *controllers.FileController
 	Dashboard    *controllers.DashboardController
 	Log          *controllers.LogController
-	LogWS        *controllers.LogWSController
+	LogSSE       *controllers.LogSSEController
 	Terminal     *controllers.TerminalController
 	Settings     *controllers.SettingsController
 	Dependency   *controllers.DependencyController

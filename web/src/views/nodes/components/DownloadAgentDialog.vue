@@ -33,7 +33,7 @@ defineExpose({ openDialog })
   <Dialog v-model:open="isOpen">
     <DialogContent class="sm:max-w-lg">
       <DialogHeader>
-        <DialogTitle>下载Runner（原Agent）</DialogTitle>
+        <DialogTitle>下载 Agent</DialogTitle>
         <DialogDescription>当前版本: {{ agentVersion }}</DialogDescription>
       </DialogHeader>
       <div class="space-y-4">

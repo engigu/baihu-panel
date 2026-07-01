@@ -304,6 +304,8 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 			eventType = constant.EventTaskFailed
 		case constant.TaskStatusTimeout:
 			eventType = constant.EventTaskTimeout
+		case constant.TaskStatusCancelled:
+			eventType = constant.EventTaskCancelled
 		}
 		if eventType != "" {
 			eventbus.DefaultBus.Publish(eventbus.Event{

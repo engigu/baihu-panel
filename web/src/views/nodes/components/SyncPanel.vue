@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { toast } from 'vue-sonner'
 import * as interconnectApi from '@/api/interconnect'
 import { api, type EnvVar, type Task } from '@/api'
+import type { NodeDTO } from '@/api/node'
 import { Network, Search, HardDrive, Check, AlertCircle, RefreshCw, ChevronDown, ChevronRight } from 'lucide-vue-next'
 import {
   Dialog,
@@ -16,7 +17,7 @@ import {
 } from '@/components/ui/dialog'
 
 const props = defineProps<{
-  nodes: interconnectApi.InterconnectNode[]
+  nodes: NodeDTO[]
 }>()
 
 const activeSyncType = ref<'task' | 'env'>('task')

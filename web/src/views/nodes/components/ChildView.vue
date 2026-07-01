@@ -105,9 +105,9 @@ async function handleSaveParentConfig() {
     <div class="bg-blue-500/10 text-blue-600 dark:text-blue-400 p-3.5 rounded-xl text-xs border border-blue-500/20 leading-relaxed shadow-sm space-y-1">
       <p class="font-bold mb-1">💡 节点配置规则提醒：</p>
       <ul class="list-disc list-inside space-y-1 text-[11px] opacity-90 pl-1">
-        <li><strong>节点类型划分</strong>：节点分为 **受控子面板 (Panel)** 与 **任务执行器 (Runner)**。</li>
-        <li><strong>主控权限限制</strong>：本机当前作为受控子节点运行，**不能作为 Runner (原 Agent) 的主控端**。</li>
-        <li><strong>集中管理调度</strong>：所有 Runner 必须统一连接到主控端面板进行集中管理。如果这台机器之前配置过 Runner，请修改配置将其重新连接到主面板。</li>
+        <li><strong>节点类型划分</strong>：节点分为 **受控子面板 (Panel)** 与 **任务代理 (Agent)**。</li>
+        <li><strong>主控权限限制</strong>：本机当前作为受控子节点运行，**不能作为 Agent 的主控端**。</li>
+        <li><strong>集中管理调度</strong>：所有 Agent 必须统一连接到主控端面板进行集中管理。如果这台机器之前配置过 Agent，请修改配置将其重新连接到主面板。</li>
       </ul>
     </div>
 

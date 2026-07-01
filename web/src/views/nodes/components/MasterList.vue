@@ -277,7 +277,7 @@ defineExpose({
               <span class="font-medium truncate" :title="node.name">{{ node.name }}</span>
             </div>
             <div class="w-24 shrink-0">
-              <span v-if="node.type === 'runner'" class="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-500 border border-blue-500/20">Runner</span>
+              <span v-if="node.type === 'runner'" class="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-500 border border-blue-500/20">Agent</span>
               <span v-else class="px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">Panel</span>
             </div>
             <div class="flex-1 min-w-0 text-muted-foreground truncate text-xs bg-muted/40 px-2 py-1 rounded" style="font-family: Inter, sans-serif;" :title="node.type === 'panel' ? node.url : node.ip">
@@ -359,7 +359,7 @@ defineExpose({
               <div class="flex flex-col min-w-0">
                 <div class="flex items-center gap-1">
                   <span class="font-medium truncate text-sm">{{ node.name }}</span>
-                  <span class="text-[9px] px-1 rounded-sm scale-90 border" :class="node.type === 'runner' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'">{{ node.type === 'runner' ? 'Runner' : 'Panel' }}</span>
+                   <span class="text-[9px] px-1 rounded-sm scale-90 border" :class="node.type === 'runner' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'">{{ node.type === 'runner' ? 'Agent' : 'Panel' }}</span>
                 </div>
                 <span v-if="node.remark" class="text-[10px] text-muted-foreground truncate">{{ node.remark }}</span>
               </div>
@@ -420,7 +420,7 @@ defineExpose({
               <span class="text-[10px] text-muted-foreground tabular-nums flex-shrink-0">#{{ index + 1 }}</span>
               <div class="flex items-center gap-1.5 min-w-0 flex-1">
                 <span class="font-bold text-sm truncate">{{ node.name }}</span>
-                <span class="text-[9px] px-1 rounded-sm scale-90 border flex-shrink-0" :class="node.type === 'runner' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'">{{ node.type === 'runner' ? 'Runner' : 'Panel' }}</span>
+                 <span class="text-[9px] px-1 rounded-sm scale-90 border flex-shrink-0" :class="node.type === 'runner' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'">{{ node.type === 'runner' ? 'Agent' : 'Panel' }}</span>
               </div>
             </div>
           </div>
@@ -482,7 +482,7 @@ defineExpose({
     <Dialog :open="dialogOpen" @update:open="dialogOpen = $event">
       <DialogContent class="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>{{ isEditing ? (currentForm.type === 'runner' ? '编辑 Runner 节点' : '编辑子面板节点') : '生成子节点专属接入密钥' }}</DialogTitle>
+          <DialogTitle>{{ isEditing ? (currentForm.type === 'runner' ? '编辑 Agent 节点' : '编辑子面板节点') : '生成子节点专属接入密钥' }}</DialogTitle>
           <DialogDescription>
             {{ isEditing ? '修改节点的备注名称与设置信息。' : '保存后请将此密钥粘贴到子节点的配置界面中建立连接。' }}
           </DialogDescription>
@@ -512,7 +512,7 @@ defineExpose({
           <!-- 仅在编辑 Runner 节点时显示启用/禁用 -->
           <div class="flex items-center space-x-2 py-1" v-if="isEditing && currentForm.type === 'runner'">
             <input type="checkbox" id="enabled" v-model="currentForm.enabled" class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
-            <Label for="enabled" class="cursor-pointer text-sm font-medium">启用该节点 (Runner)</Label>
+            <Label for="enabled" class="cursor-pointer text-sm font-medium">启用该节点 (Agent)</Label>
           </div>
         </div>
         <DialogFooter>

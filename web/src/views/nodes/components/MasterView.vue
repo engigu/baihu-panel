@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Plus, RefreshCw, Search, Server, ArrowRightLeft, Ticket, Download, Network } from 'lucide-vue-next'
+import { Plus, RefreshCw, Search, Server, Download, Network } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'vue-sonner'
@@ -80,14 +80,14 @@ onMounted(() => {
             :class="['px-3 sm:px-4 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer', 
               mainTab === 'interconnect' ? 'bg-background shadow-sm text-foreground border border-border/20' : 'text-muted-foreground hover:text-foreground']">
             <Network class="w-3.5 h-3.5" />
-            <span>节点互联</span>
+            <span>面板节点</span>
           </button>
           <button 
             @click="mainTab = 'runner'; subTab = 'runners'"
             :class="['px-3 sm:px-4 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer', 
               mainTab === 'runner' ? 'bg-background shadow-sm text-foreground border border-border/20' : 'text-muted-foreground hover:text-foreground']">
             <Server class="w-3.5 h-3.5" />
-            <span>Runner节点(原Agent)</span>
+            <span>Agent 节点</span>
           </button>
         </div>
         <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">主节点 (Master)</span>
@@ -117,7 +117,7 @@ onMounted(() => {
         <!-- Runner Sub Tabs -->
         <div v-if="mainTab === 'runner'" class="flex p-0.5 bg-muted/15 border border-border/10 rounded-lg gap-0.5 w-full sm:w-auto">
           <button @click="subTab = 'runners'" :class="['flex-1 sm:flex-none px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer text-center', subTab === 'runners' ? 'bg-background shadow-sm text-foreground border border-border/10' : 'text-muted-foreground hover:text-foreground']">
-            Runner 列表
+            Agent 列表
           </button>
           <button @click="subTab = 'tokens'" :class="['px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer text-center', subTab === 'tokens' ? 'bg-background shadow-sm text-foreground border border-border/10' : 'text-muted-foreground hover:text-foreground']">
             注册令牌
@@ -133,7 +133,7 @@ onMounted(() => {
           <Input v-model="searchQuery" placeholder="搜索节点..." class="h-8 pl-8 w-full bg-muted/20 border-muted-foreground/10 focus:bg-background text-xs" />
         </div>
 
-        <div class="flex items-center gap-1.5 shrink-0">
+        <div class="flex items-center gap-1.5 shrink-0 ml-auto sm:ml-0">
           <!-- Refresh button -->
           <Button variant="outline" size="icon" class="h-8 w-8" @click="fetchNodes" :disabled="loading" title="刷新">
             <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': loading }" />
@@ -148,7 +148,7 @@ onMounted(() => {
 
           <template v-if="mainTab === 'runner'">
             <Button variant="outline" class="h-8 px-3 text-xs gap-1.5" @click="openDownloadDialog" v-if="subTab === 'runners'">
-              <Download class="h-3.5 w-3.5" /><span>下载 Runner</span>
+              <Download class="h-3.5 w-3.5" /><span>下载 Agent</span>
             </Button>
             <Button @click="openCreateToken" class="h-8 px-3 text-xs font-medium gap-1" title="生成令牌" v-if="subTab === 'tokens'">
               <Plus class="h-3.5 w-3.5" /><span>生成令牌</span>
