@@ -104,7 +104,7 @@ jobs:
           files: |
             baihu-linux-amd64.tar.gz
             baihu-linux-arm64.tar.gz
-            baihu-android-armv7.tar.gz
+            baihu-linux-armv7.tar.gz
             baihu-android-arm64.tar.gz
             data/agent/baihu-agent-*.tar.gz
             data/agent/baihu-agent-*.zip

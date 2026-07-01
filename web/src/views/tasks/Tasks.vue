@@ -295,19 +295,13 @@ const selectedLog = ref<TaskLog | null>(null)
 const logContent = ref('')
 const logEmptyTitle = ref<string | undefined>(undefined)
 const logEmptyDesc = ref<string | undefined>(undefined)
-let logSocket: WebSocket | null = null
+let logSource: EventSource | null = null
 let durationTimer: ReturnType<typeof setInterval> | null = null
 
 function cleanupLogSocket() {
-  if (logSocket) {
-    logSocket.onopen = null
-    logSocket.onmessage = null
-    logSocket.onerror = null
-    logSocket.onclose = null
-    if (logSocket.readyState === WebSocket.CONNECTING || logSocket.readyState === WebSocket.OPEN) {
-      logSocket.close()
-    }
-    logSocket = null
+  if (logSource) {
+    logSource.close()
+    logSource = null
   }
 }
 
@@ -360,38 +354,45 @@ async function viewLogs(taskId: string) {
         return
       }
 
-      // Connect WebSocket to load log content for running tasks
+      // Connect SSE to load log content for running tasks
       cleanupLogSocket()
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const protocol = window.location.protocol
       const host = window.location.host
       const baseUrl = (window as any).__BASE_URL__ || ''
       const apiVersion = (window as any).__API_VERSION__ || '/api/v1'
-      const wsUrl = `${protocol}//${host}${baseUrl}${apiVersion}/logs/ws?log_id=${latestLog.id}`
+      const sseUrl = `${protocol}//${host}${baseUrl}${apiVersion}/logs/sse?log_id=${latestLog.id}`
 
-      logSocket = new WebSocket(wsUrl)
-      logSocket.onmessage = (event) => {
-        logContent.value += event.data
-      }
-
-      // 启动状态轮询
-      cleanupDurationTimer()
-      const updateLogStatus = async () => {
+      logSource = new EventSource(sseUrl)
+      logSource.onmessage = (event) => {
         try {
-          const res = await api.logs.get(latestLog.id)
-          if (res && selectedLog.value && selectedLog.value.id === latestLog.id) {
-            selectedLog.value.duration = res.duration
-            selectedLog.value.status = res.status
-            selectedLog.value.end_time = res.end_time
-            
-            // 如果任务结束，停止轮询
-            if (res.status !== TASK_STATUS.RUNNING) {
-              cleanupDurationTimer()
-              loadTasks() // 同时刷新列表状态
-            }
-          }
-        } catch { /* ignore */ }
+          const data = JSON.parse(event.data)
+          logContent.value += data.text || ''
+        } catch {
+          logContent.value += event.data
+        }
       }
-      durationTimer = setInterval(updateLogStatus, 3000)
+      logSource.onerror = (e) => {
+        console.error('[LogSSE] Connection error/closed', e)
+        cleanupLogSocket()
+      }
+
+      // 优化：本地定时更新耗时，不再发请求轮询状态，状态变更依赖 EventBus 推送
+      cleanupDurationTimer()
+      const updateLogStatus = () => {
+        if (selectedLog.value && selectedLog.value.status === TASK_STATUS.RUNNING) {
+          if (selectedLog.value.start_time && selectedLog.value.start_time !== '-') {
+            const startMs = new Date(selectedLog.value.start_time).getTime()
+            if (!isNaN(startMs)) {
+              selectedLog.value.duration = Date.now() - startMs
+            } else {
+              selectedLog.value.duration += 1000
+            }
+          } else {
+            selectedLog.value.duration += 1000
+          }
+        }
+      }
+      durationTimer = setInterval(updateLogStatus, 1000)
     } else {
       // 如果没有日志，构造一个基础的任务信息对象用于展示弹窗
       const task = tasks.value.find(t => t.id === taskId)
@@ -504,10 +505,23 @@ onMounted(async () => {
 })
 
 // 订阅任务状态实时更新
-useEventBus(['task_running', 'task_queued', 'task_success', 'task_failed', 'task_timeout'], (payload) => {
+useEventBus(['task_running', 'task_queued', 'task_success', 'task_failed', 'task_timeout', 'task_cancelled'], (payload) => {
   const task = tasks.value.find(t => t.id === payload.task_id)
   if (task) {
     task.running_status = payload.status
+  }
+  
+  // 同步更新打开的日志弹窗状态
+  if (selectedLog.value && selectedLog.value.id === payload.log_id) {
+    selectedLog.value.status = payload.status
+    if (payload.duration !== undefined) selectedLog.value.duration = payload.duration
+    if (payload.end_time !== undefined) selectedLog.value.end_time = payload.end_time
+    
+    if (payload.status !== TASK_STATUS.RUNNING) {
+      cleanupDurationTimer()
+      cleanupLogSocket()
+      loadTasks()
+    }
   }
 })
 

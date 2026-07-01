@@ -36,7 +36,7 @@ func (e *EmailMessage) Init(host string, port int, account string, passwd string
 	e.GM = gomail.NewDialer(host, port, account, passwd)
 }
 
-func (e *EmailMessage) SendTextMessage(toEmail string, title string, content string) string {
+func (e *EmailMessage) sendMessage(toEmail string, title string, content string, contentType string) string {
 	m := gomail.NewMessage()
 	if e.FromName != "" {
 		m.SetAddressHeader("From", e.Account, e.FromName)
@@ -45,7 +45,7 @@ func (e *EmailMessage) SendTextMessage(toEmail string, title string, content str
 	}
 	m.SetHeader("To", toEmail)
 	m.SetHeader("Subject", title)
-	m.SetBody("text/html", content)
+	m.SetBody(contentType, content)
 
 	if err := e.GM.DialAndSend(m); err != nil {
 		return fmt.Sprintf("邮件发送失败: %s", err)
@@ -53,6 +53,10 @@ func (e *EmailMessage) SendTextMessage(toEmail string, title string, content str
 	return ""
 }
 
+func (e *EmailMessage) SendTextMessage(toEmail string, title string, content string) string {
+	return e.sendMessage(toEmail, title, content, "text/plain")
+}
+
 func (e *EmailMessage) SendHtmlMessage(toEmail string, title string, content string) string {
-	return e.SendTextMessage(toEmail, title, content)
+	return e.sendMessage(toEmail, title, content, "text/html")
 }

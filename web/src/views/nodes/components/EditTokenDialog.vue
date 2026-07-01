@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import DateTimePicker from '@/components/ui/DateTimePicker.vue'
 import * as nodeApi from '@/api/node'
 import { toast } from 'vue-sonner'
 
@@ -71,18 +72,22 @@ defineExpose({ openCreate, openEdit })
         <DialogTitle>{{ title }}</DialogTitle>
         <DialogDescription class="sr-only">{{ description }}</DialogDescription>
       </DialogHeader>
-      <div class="space-y-4">
-        <div>
-          <Label>备注</Label>
-          <Input v-model="formData.remark" placeholder="备注信息（可选）" />
+      <div class="grid gap-4 py-2">
+        <div class="grid gap-1.5">
+          <Label for="remark" class="text-xs font-medium text-muted-foreground">备注</Label>
+          <Input id="remark" v-model="formData.remark" placeholder="备注信息（可选，例如部署环境名称）" class="h-9 text-xs" />
         </div>
-        <div>
-          <Label>最大使用次数</Label>
-          <Input v-model.number="formData.max_uses" type="number" placeholder="0 表示无限制" />
-        </div>
-        <div>
-          <Label>过期时间</Label>
-          <Input v-model="formData.expires_at" type="datetime-local" />
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="grid gap-1.5">
+            <Label for="max_uses" class="text-xs font-medium text-muted-foreground">最大使用次数</Label>
+            <Input id="max_uses" v-model.number="formData.max_uses" type="number" min="0" placeholder="0" class="h-9 text-xs" />
+            <span class="text-[10px] text-muted-foreground/80">0 表示此令牌无限制重复使用</span>
+          </div>
+          <div class="grid gap-1.5">
+            <Label for="expires_at" class="text-xs font-medium text-muted-foreground">过期时间</Label>
+            <DateTimePicker id="expires_at" v-model="formData.expires_at" placeholder="永久有效" />
+            <span class="text-[10px] text-muted-foreground/80">不填写表示令牌永久有效</span>
+          </div>
         </div>
       </div>
       <DialogFooter>

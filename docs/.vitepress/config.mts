@@ -65,6 +65,7 @@ export default defineConfig({
             {
                 text: '其他',
                 items: [
+                    { text: '镜像下载量', link: '/guide/package-stats' },
                     { text: '更新日志', link: '/guide/changelog' },
                     { text: '免责声明', link: '/guide/disclaimer' }
                 ]

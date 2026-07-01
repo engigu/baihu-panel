@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button'
-import { Plus, Ticket, Check, X, Copy, Pencil, Trash2 } from 'lucide-vue-next'
+import { Ticket, Check, X, Copy, Pencil, Trash2 } from 'lucide-vue-next'
 import * as nodeApi from '@/api/node'
 import { toast } from 'vue-sonner'
 import { copyToClipboard } from '@/utils/clipboard'
@@ -31,9 +31,6 @@ function copyToken(token: string) {
   })
 }
 
-function openTokenDialog() {
-  emit('create-token')
-}
 
 function openEditToken(token: nodeApi.NodeToken) {
   emit('edit-token', token)
@@ -55,7 +52,7 @@ async function deleteToken(id: string) {
     <!-- 说明 Banner -->
     <div class="bg-blue-500/10 text-blue-600 dark:text-blue-400 p-3.5 rounded-lg text-xs border border-blue-500/20 leading-relaxed shadow-sm">
       <!-- <p class="font-semibold mb-1">💡 令牌使用说明：</p> -->
-      <p class="opacity-90">这里的注册令牌仅用于 **Runner (远程执行)** 节点的接入和身份认证。子面板 (Panel) 节点互联不需要此令牌（子面板直接在“节点”标签页下点击“添加”并保存生成的专属接入密钥）。</p>
+      <p class="opacity-90">这里的注册令牌仅用于 **Agent (远程执行)** 节点的接入和身份认证。子面板 (Panel) 节点互联不需要此令牌（子面板直接在“节点”标签页下点击“添加”并保存生成的专属接入密钥）。</p>
     </div>
 
     <div class="rounded-lg border bg-card overflow-hidden">
@@ -66,11 +63,7 @@ async function deleteToken(id: string) {
       <span class="w-32 shrink-0 hidden sm:block">备注</span>
       <span class="w-16 shrink-0 text-center hidden sm:block">次数</span>
       <span class="w-32 shrink-0 hidden md:block">过期时间</span>
-      <span class="w-24 shrink-0 flex justify-end">
-        <Button size="sm" class="h-6 px-2 text-[10px]" @click="openTokenDialog">
-          <Plus class="h-3 w-3 mr-1" />生成
-        </Button>
-      </span>
+      <span class="w-24 shrink-0 text-right pr-2">操作</span>
     </div>
     <!-- 数据行 -->
     <div class="divide-y text-sm">

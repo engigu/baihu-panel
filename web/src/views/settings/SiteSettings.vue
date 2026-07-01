@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import DateTimePicker from '@/components/ui/DateTimePicker.vue'
 import { api, type SiteSettings } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
@@ -293,7 +294,7 @@ onMounted(loadSettings)
 
         <div class="space-y-1.5">
           <Label class="text-xs font-medium text-foreground">截止有效期</Label>
-          <Input v-model="form.openapi_token_expire" type="date" class="w-full dark:[color-scheme:dark] h-9" />
+          <DateTimePicker v-model="form.openapi_token_expire" type="date" placeholder="选择截止有效期" />
           <p class="text-[10px] text-muted-foreground">超过此日期后该 Token 将失效，置空代表该特性完全关闭</p>
         </div>
       </div>

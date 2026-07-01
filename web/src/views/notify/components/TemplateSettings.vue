@@ -91,8 +91,8 @@ async function saveSettings() {
   saving.value = true
   try {
     const data: Record<string, string> = {
-      notify_prefix: prefix.value,
-      ...templates.value
+      ...templates.value,
+      notify_prefix: prefix.value
     }
     await api.settings.setSection('notify', data)
     toast.success('模板配置已保存')
