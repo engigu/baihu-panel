@@ -137,7 +137,7 @@ onMounted(() => {
           <RouterLink v-for="item in navItems" :key="item.to" :to="item.to" custom v-slot="{ navigate }">
             <Button variant="ghost"
               :class="[
-                'justify-center gap-3 h-10 px-3 w-full max-w-[140px] transition-all duration-200',
+                'justify-center gap-3 h-10 px-3 w-full max-w-[140px] transition-all duration-200 menu-item',
                 isItemActive(item) 
                   ? 'bg-secondary text-foreground font-bold' 
                   : 'text-foreground hover:bg-secondary/50'
@@ -220,4 +220,12 @@ onMounted(() => {
     letter-spacing: 0.01em;
   }
 }
+
+@media (min-width: 1200px) {
+  .menu-item {
+    cursor: pointer;
+  }
+}
+  
+  
 </style>
