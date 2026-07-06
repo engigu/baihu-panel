@@ -427,6 +427,12 @@ async function loadViewsFromSettings() {
     const val = res['task_views']
     if (val) {
       taskViews.value = JSON.parse(val)
+      if (!route.query.agent_id) {
+        const defaultView = taskViews.value.find((v: any) => v.isDefault)
+        if (defaultView) {
+          applyViewWithoutSearch(defaultView)
+        }
+      }
     }
   } catch (e) {
     console.error('Failed to load views', e)
@@ -446,7 +452,8 @@ async function saveView() {
       tags: filterTags.value,
       agent_id: filterAgentId.value,
       type: filterType.value
-    }
+    },
+    isDefault: false
   }
   
   const updatedViews = [...taskViews.value, newView]
@@ -465,11 +472,15 @@ async function saveView() {
   }
 }
 
-function applyView(view: any) {
+function applyViewWithoutSearch(view: any) {
   filterName.value = view.query.name || ''
   filterTags.value = view.query.tags || ''
   filterAgentId.value = view.query.agent_id || null
   filterType.value = view.query.type || TASK_TYPE.NORMAL
+}
+
+function applyView(view: any) {
+  applyViewWithoutSearch(view)
   handleSearch()
 }
 
@@ -483,6 +494,27 @@ async function deleteView(index: number) {
     toast.success('视图已删除')
   } catch (e) {
     toast.error('删除失败')
+  }
+}
+
+async function toggleDefaultView(index: number) {
+  const isCurrentlyDefault = !!taskViews.value[index].isDefault
+  const updatedViews = taskViews.value.map((v, i) => ({
+    ...v,
+    isDefault: i === index ? !isCurrentlyDefault : false
+  }))
+  try {
+    await api.settings.setSection('task_qviews', {
+      'task_views': JSON.stringify(updatedViews)
+    })
+    taskViews.value = updatedViews
+    if (!isCurrentlyDefault) {
+      toast.success('已设为默认视图')
+    } else {
+      toast.success('已取消默认视图')
+    }
+  } catch (e) {
+    toast.error('设置失败')
   }
 }
 
@@ -500,8 +532,10 @@ onMounted(async () => {
     filterAgentId.value = String(agentIdParam)
   }
 
+  // 先加载视图配置，若有默认视图且无 URL 显式参数则在此阶段应用
+  await loadViewsFromSettings()
+
   loadTasks()
-  loadViewsFromSettings()
 })
 
 // 订阅任务状态实时更新
@@ -547,7 +581,7 @@ watch(() => route.query.agent_id, (newVal: any) => {
               </div>
             </div>
           </PopoverTrigger>
-          <PopoverContent class="w-64 p-3 shadow-xl border-muted-foreground/10" align="start" :side-offset="8">
+          <PopoverContent class="w-64 p-3 shadow-xl border-muted-foreground/10" align="start" :side-offset="8" @open-autofocus="(e: Event) => e.preventDefault()">
             <div class="space-y-4">
               <div>
                 <div class="flex items-center justify-between mb-2 px-1">
@@ -556,21 +590,36 @@ watch(() => route.query.agent_id, (newVal: any) => {
                 <div v-if="taskViews.length === 0" class="text-xs text-muted-foreground px-1 py-4 text-center border-2 border-dashed rounded-md bg-muted/20">
                   暂无保存的视图
                 </div>
-                <div class="flex flex-wrap gap-2 pr-1 max-h-[200px] overflow-y-auto custom-scrollbar">
+                <div class="space-y-1.5 max-h-[220px] overflow-y-auto custom-scrollbar">
                   <div v-for="(view, index) in taskViews" :key="index" 
-                    class="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 bg-primary/5 text-primary rounded-full text-[12px] font-medium border border-primary/10 hover:bg-primary/10 transition-all cursor-pointer group"
+                    class="flex items-center justify-between pl-2 pr-1 py-1.5 rounded-lg border transition-all cursor-pointer"
+                    :class="view.isDefault 
+                      ? 'bg-primary/5 text-primary border-primary/30' 
+                      : 'bg-muted/10 border-muted-foreground/10 hover:bg-muted/30'"
                     @click="applyView(view)">
-                    <span class="max-w-[120px] truncate">{{ view.name }}</span>
-                    <button type="button" class="p-0.5 rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors"
-                      @click.stop="deleteView(index)">
-                      <X class="h-3 w-3" />
-                    </button>
+                    <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                      <button type="button" 
+                        class="p-0.5 rounded-md transition-colors shrink-0 focus:outline-none"
+                        :class="view.isDefault ? 'text-primary' : 'text-muted-foreground/40 hover:text-primary hover:bg-primary/10'"
+                        :title="view.isDefault ? '取消默认视图' : '设为默认视图'"
+                        @click.stop="toggleDefaultView(index)">
+                        <Pin class="h-3.5 w-3.5" :class="{ 'fill-primary rotate-45': view.isDefault }" />
+                      </button>
+                      <span class="text-xs font-medium truncate max-w-[130px]" :class="{ 'font-semibold': view.isDefault }">{{ view.name }}</span>
+                    </div>
+                    <div class="flex items-center gap-0.5">
+                      <button type="button" 
+                        class="p-1 rounded-md text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive transition-colors focus:outline-none"
+                        @click.stop="deleteView(index)">
+                        <X class="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
               
               <div class="pt-3 border-t space-y-2.5">
-                <h4 class="text-xs font-semibold px-1 text-muted-foreground uppercase tracking-wider">保存当前过滤为新视图</h4>
+                <h4 class="text-xs font-semibold px-1 text-foreground/70 uppercase tracking-wider">保存当前过滤为新视图</h4>
                 <div class="flex gap-2">
                   <Input v-model="newViewName" placeholder="视图名称..." class="h-9 text-xs bg-muted/30 focus:bg-background" @keydown.enter="saveView" />
                   <Button size="sm" class="h-9 px-3" @click="saveView" :disabled="isSavingView">
