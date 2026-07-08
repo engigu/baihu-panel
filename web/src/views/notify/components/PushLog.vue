@@ -311,7 +311,7 @@ function onDialogClose(open: boolean) {
             <!-- 装饰性背景，模拟高级卡片 -->
             <div class="absolute -inset-0.5 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
             <div v-if="detailDialogProps.content"
-              class="relative bg-background/50 dark:bg-muted/10 p-5 rounded-2xl border border-border/40 whitespace-pre-wrap break-all leading-relaxed shadow-[0_2px_15px_-3px_rgba(0,0,0,0.03)] text-[13px] text-foreground/90 font-medium"
+              class="relative bg-background/50 dark:bg-muted/10 p-5 rounded-2xl border border-border/40 whitespace-pre-wrap break-all leading-relaxed shadow-[0_2px_15px_-3px_rgba(0,0,0,0.03)] text-[13px] text-foreground/90 font-medium max-h-[50vh] overflow-y-auto custom-scrollbar"
               v-html="renderedContent">
             </div>
             <div v-else class="relative bg-muted/20 p-6 rounded-2xl border border-dashed border-border/60 text-center text-sm text-muted-foreground">
@@ -326,7 +326,7 @@ function onDialogClose(open: boolean) {
             <div class="w-1 h-3.5 bg-destructive/40 rounded-full" />
             <span class="text-xs font-bold text-destructive/80 uppercase tracking-widest">错误报告</span>
           </div>
-          <div class="bg-destructive/[0.03] p-5 rounded-2xl border border-destructive/10 text-[13px] text-destructive/90 font-mono leading-relaxed break-all">
+          <div class="bg-destructive/[0.03] p-5 rounded-2xl border border-destructive/10 text-[13px] text-destructive/90 font-mono leading-relaxed break-all max-h-[200px] overflow-y-auto custom-scrollbar">
             {{ detailDialogProps.error }}
           </div>
         </div>

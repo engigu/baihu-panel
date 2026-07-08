@@ -277,7 +277,7 @@ function onDialogClose(open: boolean) {
                 <div class="space-y-4">
                     <div class="p-4 rounded-xl bg-muted/20 border border-border/10 space-y-2">
                         <p class="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">事件内容</p>
-                        <div v-if="detailDialogProps.content" class="text-sm leading-relaxed text-foreground/80 break-all whitespace-pre-wrap">
+                        <div v-if="detailDialogProps.content" class="text-sm leading-relaxed text-foreground/80 break-all whitespace-pre-wrap max-h-[30vh] overflow-y-auto custom-scrollbar">
                             {{ detailDialogProps.content }}
                         </div>
                         <div v-else class="text-sm text-muted-foreground italic">无内容</div>
@@ -285,7 +285,7 @@ function onDialogClose(open: boolean) {
 
                     <div v-if="detailDialogProps.error" class="p-4 rounded-xl bg-destructive/5 border border-destructive/10 space-y-2">
                         <p class="text-[10px] uppercase tracking-widest text-destructive font-bold">错误堆栈/信息</p>
-                        <div class="text-sm leading-relaxed text-destructive/90 break-all whitespace-pre-wrap font-mono bg-destructive/5 p-3 rounded-lg border border-destructive/10">
+                        <div class="text-sm leading-relaxed text-destructive/90 break-all whitespace-pre-wrap font-mono bg-destructive/5 p-3 rounded-lg border border-destructive/10 max-h-[30vh] overflow-y-auto custom-scrollbar">
                             {{ detailDialogProps.error }}
                         </div>
                     </div>
