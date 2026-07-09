@@ -91,3 +91,31 @@ func TestEmptyString(t *testing.T) {
 		t.Errorf("Expected empty string for empty input, got: %q", decompressed)
 	}
 }
+
+func TestCompressShortTextRaw(t *testing.T) {
+	shortText := "python secret.py" // 16 bytes
+
+	// 1. 压缩（应转为 raw 前缀）
+	output, err := CompressToBase64(shortText)
+	if err != nil {
+		t.Fatalf("CompressToBase64 short text failed: %v", err)
+	}
+
+	if !strings.HasPrefix(output, "raw:") {
+		t.Errorf("Expected short text output to have 'raw:' prefix, got: %q", output)
+	}
+	if output != "raw:python secret.py" {
+		t.Errorf("Expected output raw:python secret.py, got: %q", output)
+	}
+
+	// 2. 解码解密
+	decompressed, err := DecompressFromBase64(output)
+	if err != nil {
+		t.Fatalf("DecompressFromBase64 short text failed: %v", err)
+	}
+
+	if decompressed != shortText {
+		t.Errorf("Decompressed short text mismatch.\nExpected: %q\nGot: %q", shortText, decompressed)
+	}
+}
+

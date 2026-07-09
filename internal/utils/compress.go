@@ -11,7 +11,10 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-const zstdPrefix = "zstd:"
+const (
+	zstdPrefix = "zstd:"
+	rawPrefix  = "raw:"
+)
 
 var zlibWriterPool = sync.Pool{
 	New: func() interface{} {
@@ -71,21 +74,30 @@ func initZstd() {
 	})
 }
 
-// CompressToBase64 compresses data using zstd and encodes to base64 with a prefix
+// CompressToBase64 compresses data using zstd and encodes to base64 with a prefix (uses raw for data under 128 bytes)
 func CompressToBase64(data string) (string, error) {
 	if data == "" {
 		return "", nil
 	}
-	initZstd()
 
+	// 小于等于 128 字节，不需要压缩，直接前缀明文保存
+	if len(data) <= 128 {
+		return rawPrefix + data, nil
+	}
+
+	initZstd()
 	compressed := zstdEncoder.EncodeAll([]byte(data), nil)
 	return zstdPrefix + base64.StdEncoding.EncodeToString(compressed), nil
 }
 
-// DecompressFromBase64 decodes base64 and decompresses data (supports zstd prefix and falls back to zlib)
+// DecompressFromBase64 decodes base64 and decompresses data (supports raw/zstd prefix and falls back to zlib)
 func DecompressFromBase64(data string) (string, error) {
 	if data == "" {
 		return "", nil
+	}
+
+	if strings.HasPrefix(data, rawPrefix) {
+		return data[len(rawPrefix):], nil
 	}
 
 	if strings.HasPrefix(data, zstdPrefix) {

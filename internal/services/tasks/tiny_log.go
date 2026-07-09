@@ -260,6 +260,22 @@ func (l *TinyLog) CompressAndCleanup() (string, error) {
 		os.Remove(l.path) // Cleanup
 	}()
 
+	// 获取文件大小
+	stat, err := f.Stat()
+	if err != nil {
+		return "", err
+	}
+	size := stat.Size()
+
+	// 如果日志极短，免去压缩和 Base64 编码，直接以 raw: 明文形式返回
+	if size <= 128 {
+		content, err := io.ReadAll(f)
+		if err != nil {
+			return "", err
+		}
+		return "raw:" + string(content), nil
+	}
+
 	// 创建压缩输出缓冲区
 	var buf bytes.Buffer
 	b64Writer := base64.NewEncoder(base64.StdEncoding, &buf)
@@ -268,12 +284,6 @@ func (l *TinyLog) CompressAndCleanup() (string, error) {
 	zw := utils.GetZstdWriter(b64Writer)
 	defer utils.PutZstdWriter(zw)
 
-	// 获取文件大小
-	stat, err := f.Stat()
-	if err != nil {
-		return "", err
-	}
-	size := stat.Size()
 	maxSize := int64(constant.MaxLogSize)
 	if maxSize < 1024*1024 {
 		maxSize = 1024 * 1024

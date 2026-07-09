@@ -4,6 +4,10 @@ import { decompress } from 'fzstd'
 export function decompressFromBase64(compressed: string): string {
   if (!compressed) return ''
   try {
+    if (compressed.startsWith('raw:')) {
+      return compressed.slice(4)
+    }
+
     let isZstd = false
     let dataToDecode = compressed
 
