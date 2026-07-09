@@ -5,8 +5,13 @@ import (
 	"compress/zlib"
 	"encoding/base64"
 	"io"
+	"strings"
 	"sync"
+
+	"github.com/klauspost/compress/zstd"
 )
+
+const zstdPrefix = "zstd:"
 
 var zlibWriterPool = sync.Pool{
 	New: func() interface{} {
@@ -26,30 +31,59 @@ func PutZlibWriter(zw *zlib.Writer) {
 	zlibWriterPool.Put(zw)
 }
 
-// CompressToBase64 compresses data using zlib and encodes to base64
+var (
+	zstdEncoder *zstd.Encoder
+	zstdDecoder *zstd.Decoder
+	zstdOnce    sync.Once
+)
+
+func initZstd() {
+	zstdOnce.Do(func() {
+		var err error
+		// 默认级别适合常规压缩
+		zstdEncoder, err = zstd.NewWriter(nil)
+		if err != nil {
+			panic(err)
+		}
+		zstdDecoder, err = zstd.NewReader(nil)
+		if err != nil {
+			panic(err)
+		}
+	})
+}
+
+// CompressToBase64 compresses data using zstd and encodes to base64 with a prefix
 func CompressToBase64(data string) (string, error) {
 	if data == "" {
 		return "", nil
 	}
-	var buf bytes.Buffer
-	zw := GetZlibWriter(&buf)
-	defer PutZlibWriter(zw)
+	initZstd()
 
-	if _, err := zw.Write([]byte(data)); err != nil {
-		return "", err
-	}
-	if err := zw.Close(); err != nil {
-		return "", err
-	}
-
-	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
+	compressed := zstdEncoder.EncodeAll([]byte(data), nil)
+	return zstdPrefix + base64.StdEncoding.EncodeToString(compressed), nil
 }
 
-// DecompressFromBase64 decodes base64 and decompresses zlib data
+// DecompressFromBase64 decodes base64 and decompresses data (supports zstd prefix and falls back to zlib)
 func DecompressFromBase64(data string) (string, error) {
 	if data == "" {
 		return "", nil
 	}
+
+	if strings.HasPrefix(data, zstdPrefix) {
+		initZstd()
+		encoded := data[len(zstdPrefix):]
+		decoded, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			return "", err
+		}
+		decompressed, err := zstdDecoder.DecodeAll(decoded, nil)
+		if err != nil {
+			return "", err
+		}
+		return string(decompressed), nil
+	}
+
+	// Fallback to legacy zlib
 	decoded, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {
 		return "", err
@@ -65,3 +99,4 @@ func DecompressFromBase64(data string) (string, error) {
 	}
 	return string(result), nil
 }
+
