@@ -25,6 +25,7 @@
     "clsx": "^2.1.1",
     "cronstrue": "^3.14.0",
     "date-fns": "^4.1.0",
+    "fzstd": "^0.1.1",
     "lucide-react": "^0.562.0",
     "lucide-vue-next": "^0.562.0",
     "monaco-editor": "^0.52.0",
