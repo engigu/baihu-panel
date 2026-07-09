@@ -265,8 +265,8 @@ func (l *TinyLog) CompressAndCleanup() (string, error) {
 	b64Writer := base64.NewEncoder(base64.StdEncoding, &buf)
 
 	// 使用 Pool 优化压缩
-	zw := utils.GetZlibWriter(b64Writer)
-	defer utils.PutZlibWriter(zw)
+	zw := utils.GetZstdWriter(b64Writer)
+	defer utils.PutZstdWriter(zw)
 
 	// 获取文件大小
 	stat, err := f.Stat()
@@ -295,7 +295,7 @@ func (l *TinyLog) CompressAndCleanup() (string, error) {
 		}
 	}
 
-	// 流处理: 文件 -> Zlib -> Base64 -> 缓冲区
+	// 流处理: 文件 -> Zstd -> Base64 -> 缓冲区
 	if _, err := io.Copy(zw, f); err != nil {
 		return "", err
 	}
@@ -308,7 +308,7 @@ func (l *TinyLog) CompressAndCleanup() (string, error) {
 		return "", err
 	}
 
-	return buf.String(), nil
+	return "zstd:" + buf.String(), nil
 }
 
 // ReadLastLines 返回日志的最后 n 行

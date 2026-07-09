@@ -31,6 +31,25 @@ func PutZlibWriter(zw *zlib.Writer) {
 	zlibWriterPool.Put(zw)
 }
 
+var zstdEncoderPool = sync.Pool{
+	New: func() interface{} {
+		zw, _ := zstd.NewWriter(nil)
+		return zw
+	},
+}
+
+// GetZstdWriter 从对象池中获取 zstd 写入器并定向到 w
+func GetZstdWriter(w io.Writer) *zstd.Encoder {
+	zw := zstdEncoderPool.Get().(*zstd.Encoder)
+	zw.Reset(w)
+	return zw
+}
+
+// PutZstdWriter 将 zstd 写入器还回对象池
+func PutZstdWriter(zw *zstd.Encoder) {
+	zstdEncoderPool.Put(zw)
+}
+
 var (
 	zstdEncoder *zstd.Encoder
 	zstdDecoder *zstd.Decoder
