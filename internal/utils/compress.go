@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	zstdPrefix = "zstd:"
-	rawPrefix  = "raw:"
+	zstdPrefix      = "zstd:"
+	rawPrefix       = "raw:"
+	MinCompressSize = 128
 )
 
 var zlibWriterPool = sync.Pool{
@@ -74,14 +75,14 @@ func initZstd() {
 	})
 }
 
-// CompressToBase64 compresses data using zstd and encodes to base64 with a prefix (uses raw for data under 128 bytes)
+// CompressToBase64 compresses data using zstd and encodes to base64 with a prefix (uses raw for data under MinCompressSize bytes)
 func CompressToBase64(data string) (string, error) {
 	if data == "" {
 		return "", nil
 	}
 
-	// 小于等于 128 字节，不需要压缩，直接前缀明文保存
-	if len(data) <= 128 {
+	// 小于等于阈值，不需要压缩，直接前缀明文保存
+	if len(data) <= MinCompressSize {
 		return rawPrefix + data, nil
 	}
 

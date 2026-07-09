@@ -268,7 +268,7 @@ func (l *TinyLog) CompressAndCleanup() (string, error) {
 	size := stat.Size()
 
 	// 如果日志极短，免去压缩和 Base64 编码，直接以 raw: 明文形式返回
-	if size <= 128 {
+	if size <= int64(utils.MinCompressSize) {
 		content, err := io.ReadAll(f)
 		if err != nil {
 			return "", err
