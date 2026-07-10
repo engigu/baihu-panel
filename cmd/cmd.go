@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/engigu/baihu-panel/cmd/builtininstall"
+	"github.com/engigu/baihu-panel/cmd/depinstall"
 	"github.com/engigu/baihu-panel/cmd/reposync"
 	"github.com/engigu/baihu-panel/cmd/resetpwd"
 	"github.com/engigu/baihu-panel/cmd/restore"
@@ -25,5 +26,6 @@ var Handlers = map[string]CommandHandler{
 	"version":        version.Run,
 	"-v":             version.Run,
 	"-V":             version.Run,
+	"depinstall":     depinstall.Run,
 	// "migrate":  migrate.Run,
 }

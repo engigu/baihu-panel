@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/models"
@@ -395,5 +397,25 @@ func (c *DependencyController) ParseAndImport(ctx *gin.Context) {
 	utils.Success(ctx, gin.H{
 		"dependencies": vo.ToDependencyVOListFromModels(finalDeps),
 		"command":      cmd,
+	})
+}
+
+// GetDepInstallCommand 获取自动补全的命令，返回给前端执行
+func (c *DependencyController) GetDepInstallCommand(ctx *gin.Context) {
+	logID := ctx.Query("log_id")
+	if logID == "" {
+		utils.BadRequest(ctx, "参数错误: log_id 不能为空")
+		return
+	}
+
+	execPath, err := os.Executable()
+	if err != nil {
+		execPath = "baihu" // 兜底
+	}
+
+	// 构造命令，比如: "F:\workspace\baihu-panel\baihu.exe" depinstall <log_id>
+	cmdStr := fmt.Sprintf("%q depinstall %s", execPath, logID)
+	utils.Success(ctx, gin.H{
+		"command": cmdStr,
 	})
 }

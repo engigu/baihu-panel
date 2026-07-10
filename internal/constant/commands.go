@@ -33,6 +33,10 @@ var Commands = []CommandInfo{
 		Description: "系统级任务的列表查询、触发运行、启停控制及状态查看",
 	},
 	{
+		Name:        "depinstall",
+		Description: "一键补全指定任务执行日志中的缺失依赖包",
+	},
+	{
 		Name:        "version",
 		Description: "查看当前系统版本号 (同 -v, -V)",
 	},

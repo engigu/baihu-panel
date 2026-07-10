@@ -213,6 +213,7 @@ func registerDependencyRoutes(g *gin.RouterGroup, c *Controllers) {
 		deps.POST("/batch-install-cmd", c.Dependency.GetBatchInstallCommand)
 		deps.POST("/import", c.Dependency.ParseAndImport)
 		deps.GET("/installed", c.Dependency.GetInstalled)
+		deps.GET("/install-suggest-cmd", c.Dependency.GetDepInstallCommand)
 	}
 }
 

@@ -2,15 +2,17 @@
 import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
 import { Button } from '@/components/ui/button'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
 import TaskDialog from './TaskDialog.vue'
 import RepoDialog from './RepoDialog.vue'
 import LogViewer from '@/views/history/LogViewer.vue'
-import { Plus, Play, Pencil, Trash2, Search, ScrollText, GitBranch, Terminal, Server, Monitor, X, Loader2, RefreshCw, Wifi, WifiOff, Zap, ZapOff, Copy, Tag, ChevronDown, Pin, PinOff, MoreHorizontal, CalendarClock } from 'lucide-vue-next'
+import { Plus, Play, Pencil, Trash2, Search, ScrollText, GitBranch, Terminal, Server, Monitor, X, Loader2, RefreshCw, Wifi, WifiOff, Zap, ZapOff, Copy, Tag, ChevronDown, Pin, PinOff, MoreHorizontal, CalendarClock, Wrench } from 'lucide-vue-next'
 import TagInput from '@/components/TagInput.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import XTerminal from '@/components/XTerminal.vue'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   DropdownMenu,
@@ -416,6 +418,31 @@ async function viewLogs(taskId: string) {
   }
 }
 
+const showTerminalDialog = ref(false)
+const terminalCmd = ref('')
+
+async function handleTaskDepInstall(task: Task) {
+  try {
+    const res = await api.logs.list({ task_id: task.id, page: 1, page_size: 1 })
+    if (res.data && res.data.length > 0) {
+      const latestLog = res.data[0]
+      if (latestLog) {
+        const cmdRes = await api.deps.getInstallSuggestCmd(latestLog.id)
+        if (cmdRes && cmdRes.command) {
+          terminalCmd.value = cmdRes.command
+          showTerminalDialog.value = true
+        }
+      } else {
+        toast.error('未找到该任务的运行日志，无法分析依赖')
+      }
+    } else {
+      toast.error('该任务尚未运行，无日志可分析')
+    }
+  } catch (err: any) {
+    toast.error(err.message || '获取依赖安装命令失败')
+  }
+}
+
 // 视图管理
 const taskViews = ref<any[]>([])
 const newViewName = ref('')
@@ -797,6 +824,10 @@ watch(() => route.query.agent_id, (newVal: any) => {
                     <PinOff v-else class="h-3.5 w-3.5 mr-2 text-primary" />
                     <span>{{ task.pin_type === 'top' ? '取消置顶' : '置顶任务' }}</span>
                   </DropdownMenuItem>
+                  <DropdownMenuItem @click="handleTaskDepInstall(task)">
+                    <Wrench class="h-3.5 w-3.5 mr-2 text-amber-500" />
+                    <span>补全依赖</span>
+                  </DropdownMenuItem>
                   <DropdownMenuItem @click="duplicateTask(task)">
                     <Copy class="h-3.5 w-3.5 mr-2" />
                     <span>复制任务</span>
@@ -880,6 +911,10 @@ watch(() => route.query.agent_id, (newVal: any) => {
                     <Pin v-if="task.pin_type !== 'top'" class="h-3.5 w-3.5 mr-2" />
                     <PinOff v-else class="h-3.5 w-3.5 mr-2 text-primary" />
                     <span>{{ task.pin_type === 'top' ? '取消置顶' : '置顶任务' }}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem @click="handleTaskDepInstall(task)">
+                    <Wrench class="h-3.5 w-3.5 mr-2 text-amber-500" />
+                    <span>补全依赖</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem @click="duplicateTask(task)">
                     <Copy class="h-3.5 w-3.5 mr-2" />
@@ -1070,5 +1105,20 @@ watch(() => route.query.agent_id, (newVal: any) => {
         </Button>
       </template>
     </BaihuDialog>
+
+    <!-- 依赖补全终端 -->
+    <Dialog v-model:open="showTerminalDialog">
+      <DialogContent class="w-[calc(100%-1rem)] sm:max-w-[90vw] lg:max-w-4xl h-[60vh] sm:h-[80vh] flex flex-col p-0 overflow-hidden bg-[#1e1e1e] border-none shadow-2xl [&>button]:hidden">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-[#3c3c3c]">
+          <span class="text-xs sm:text-sm font-medium text-gray-300">依赖补全终端</span>
+          <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white" @click="showTerminalDialog = false">
+            <X class="h-4 w-4" />
+          </Button>
+        </div>
+        <div class="flex-1 overflow-hidden">
+          <XTerminal v-if="showTerminalDialog" :initial-command="terminalCmd" />
+        </div>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

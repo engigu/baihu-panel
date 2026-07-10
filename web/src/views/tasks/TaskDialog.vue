@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import DirTreeSelect from '@/components/DirTreeSelect.vue'
-import { Plus, X, ChevronDown, Search, AlertCircle, Terminal, Zap, Lock, Variable } from 'lucide-vue-next'
+import { Plus, X, ChevronDown, Search, AlertCircle, Terminal, Zap, Lock, Variable, Wrench } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { api, type Task, type EnvVar, type Agent } from '@/api'
@@ -283,7 +283,7 @@ async function save() {
 
 <template>
   <Dialog :open="open" @update:open="emit('update:open', $event)">
-    <DialogContent class="max-w-[95vw] sm:max-w-[600px] xl:max-w-[850px] p-0 overflow-hidden border-none bg-background shadow-2xl transition-all duration-300" style="text-rendering: optimizeLegibility;" @openAutoFocus.prevent>
+    <DialogContent class="max-w-[95vw] sm:max-w-[600px] xl:max-w-[850px] p-0 overflow-hidden border-none bg-background shadow-2xl transition-all duration-300" style="text-rendering: optimizeLegibility;" @openAutoFocus.prevent @pointerDownOutside.prevent>
       <div class="flex flex-col max-h-[85vh]">
         <DialogHeader class="px-6 pr-12 pt-6 pb-2 shrink-0 border-b border-muted/50">
           <DialogTitle class="text-xl font-bold py-2">
@@ -354,8 +354,15 @@ async function save() {
                   <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
                     <div class="sm:col-span-1" />
                     <div class="sm:col-span-3">
-                      <div class="flex items-center gap-2.5 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] leading-relaxed font-medium">
-                        <AlertCircle class="h-4 w-4 shrink-0 text-amber-500" /><p>请先在<b>「语言依赖」</b>中安装所需的运行时。执行脚本时将自动注入该环境。</p>
+                      <div class="flex flex-col gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] leading-relaxed font-medium">
+                        <div class="flex items-center gap-2.5">
+                          <AlertCircle class="h-4 w-4 shrink-0 text-amber-500" />
+                          <p>请先在<b>「语言依赖」</b>中安装所需的运行时。执行脚本时将自动注入该环境。</p>
+                        </div>
+                        <div class="flex items-center gap-2.5 mt-1 border-t border-amber-500/10 pt-1.5">
+                          <Wrench class="h-4 w-4 shrink-0 text-amber-500" />
+                          <p><b>依赖自动补全：</b>若执行报错提示缺失包（如 requests 等），可在任务列表的<b>「操作菜单」</b>中点击<b>「补全依赖」</b>进行一键安装。</p>
+                        </div>
                       </div>
                     </div>
                   </div>

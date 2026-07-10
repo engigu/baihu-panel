@@ -360,7 +360,8 @@ export const api = {
       const query = new URLSearchParams({ language })
       if (lang_version) query.set('lang_version', lang_version)
       return request<Dependency[]>(`/deps/installed?${query}`)
-    }
+    },
+    getInstallSuggestCmd: (logID: string) => request<{ command: string }>(`/deps/install-suggest-cmd?log_id=${logID}`)
   },
   agents: {
     list: () => request<Agent[]>('/agents'),
