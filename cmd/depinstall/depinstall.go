@@ -22,6 +22,7 @@ func Run(args []string) {
 	}
 
 	logID := args[0]
+	fmt.Println(">> 提示: 依赖自动补全功能目前仅支持 Python 和 Node.js 环境，如有其他环境需求请及时反馈。")
 
 	// 初始化基础环境和数据库连接
 	if err := clibase.InitContext(true); err != nil {
