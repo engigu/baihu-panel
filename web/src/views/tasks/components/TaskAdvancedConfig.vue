@@ -40,8 +40,13 @@ function parseCleanConfig() {
       cleanKeep.value = 30
     }
   } else {
-    cleanType.value = 'none'
-    cleanKeep.value = 30
+    if (!form.value.id) {
+      cleanType.value = 'count'
+      cleanKeep.value = 30
+    } else {
+      cleanType.value = 'none'
+      cleanKeep.value = 30
+    }
   }
 }
 
