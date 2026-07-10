@@ -54,12 +54,7 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 		adminOnly := authorized.Group("")
 		adminOnly.Use(middleware.AdminRequired())
 		{
-			// 仪表盘统计
-			adminOnly.GET("/stats", c.Dashboard.GetStats)
-			adminOnly.GET("/sentence", c.Dashboard.GetSentence)
-			adminOnly.GET("/sendstats", c.Dashboard.GetSendStats)
-			adminOnly.GET("/taskstats", c.Dashboard.GetTaskStats)
-
+			registerDashboardRoutes(adminOnly, c)
 			registerTaskRoutes(adminOnly, c)
 			registerEnvRoutes(adminOnly, c)
 			registerScriptRoutes(adminOnly, c)
@@ -86,6 +81,13 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 	{
 		notifyAPI.POST("/send", c.Notification.SendNotification)
 	}
+}
+
+func registerDashboardRoutes(g *gin.RouterGroup, c *Controllers) {
+	g.GET("/stats", c.Dashboard.GetStats)
+	g.GET("/sentence", c.Dashboard.GetSentence)
+	g.GET("/sendstats", c.Dashboard.GetSendStats)
+	g.GET("/taskstats", c.Dashboard.GetTaskStats)
 }
 
 func registerTaskRoutes(g *gin.RouterGroup, c *Controllers) {
