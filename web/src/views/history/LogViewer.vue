@@ -39,19 +39,28 @@ function toggleBodyScroll(lock: boolean) {
   }
 }
 
+function handleKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && props.open) {
+    close()
+  }
+}
+
 // 监听打开状态
 watch(() => props.open, (val) => {
   if (val) {
     isFullscreen.value = false
     toggleBodyScroll(true)
+    window.addEventListener('keydown', handleKeyDown)
   } else {
     toggleBodyScroll(false)
+    window.removeEventListener('keydown', handleKeyDown)
   }
 }, { immediate: true })
 
-// 确保组件卸载时恢复滚动
+// 确保组件卸载时恢复滚动并注销事件监听
 onUnmounted(() => {
   toggleBodyScroll(false)
+  window.removeEventListener('keydown', handleKeyDown)
 })
 </script>
 

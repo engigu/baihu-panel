@@ -8,7 +8,7 @@ import Pagination from '@/components/Pagination.vue'
 import TaskDialog from './TaskDialog.vue'
 import RepoDialog from './RepoDialog.vue'
 import LogViewer from '@/views/history/LogViewer.vue'
-import { Plus, Play, Pencil, Trash2, Search, ScrollText, GitBranch, Terminal, Server, Monitor, X, Loader2, RefreshCw, Wifi, WifiOff, Zap, ZapOff, Copy, Tag, ChevronDown, Pin, PinOff, MoreHorizontal, CalendarClock, Wrench } from 'lucide-vue-next'
+import { Plus, Play, Pencil, Trash2, Search, ScrollText, GitBranch, Terminal, Server, Monitor, X, Loader2, RefreshCw, Wifi, WifiOff, Zap, ZapOff, Copy, Tag, ChevronDown, Pin, PinOff, MoreHorizontal, CalendarClock, Wrench, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next'
 import TagInput from '@/components/TagInput.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -47,6 +47,28 @@ const showRepoDialog = ref(false)
 const editingTask = ref<Partial<Task>>({})
 const isEdit = ref(false)
 
+const sortBy = ref('created_at')
+const order = ref('desc')
+
+function toggleSort(field: string) {
+  if (sortBy.value === field) {
+    order.value = order.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortBy.value = field
+    order.value = 'desc'
+  }
+  currentPage.value = 1
+  loadTasks()
+}
+
+function handleSortChange(val: string) {
+  const parts = val.split(':')
+  sortBy.value = parts[0] || 'created_at'
+  order.value = parts[1] || 'desc'
+  currentPage.value = 1
+  loadTasks()
+}
+
 const showDeleteDialog = ref(false)
 const deleteTaskId = ref<string | null>(null)
 const deleteFiles = ref(false)
@@ -67,7 +89,7 @@ const agentMap = computed(() => {
   return map
 })
 
-// 当前筛选的 Agent 名称
+// 当前筛选 of Agent 名称
 const filterAgentName = computed(() => {
   if (!filterAgentId.value) return ''
   const agent = agentMap.value[filterAgentId.value]
@@ -97,7 +119,9 @@ async function loadTasks() {
       name: filterName.value || undefined,
       tags: filterTags.value || undefined,
       type: filterType.value === 'all' ? undefined : filterType.value,
-      agent_id: filterAgentId.value || undefined
+      agent_id: filterAgentId.value || undefined,
+      sort_by: sortBy.value || undefined,
+      order: order.value || undefined
     })
     tasks.value = res.data
     total.value = res.total
@@ -478,7 +502,9 @@ async function saveView() {
       name: filterName.value,
       tags: filterTags.value,
       agent_id: filterAgentId.value,
-      type: filterType.value
+      type: filterType.value,
+      sort_by: sortBy.value,
+      order: order.value
     },
     isDefault: false
   }
@@ -504,6 +530,8 @@ function applyViewWithoutSearch(view: any) {
   filterTags.value = view.query.tags || ''
   filterAgentId.value = view.query.agent_id || null
   filterType.value = view.query.type || TASK_TYPE.NORMAL
+  sortBy.value = view.query.sort_by || 'created_at'
+  order.value = view.query.order || 'desc'
 }
 
 function applyView(view: any) {
@@ -675,8 +703,8 @@ watch(() => route.query.agent_id, (newVal: any) => {
         </div>
 
         <div class="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
-          <!-- 移动端类型切换 -->
-          <div class="xl:hidden flex-1 shrink-0">
+          <!-- 移动端类型与排序切换 -->
+          <div class="xl:hidden flex items-center gap-2 flex-1 shrink-0">
              <Select v-model="filterType" @update:model-value="(_v: any) => handleTypeChange()">
                <SelectTrigger class="h-9 w-full text-sm bg-muted/20 border-muted-foreground/10">
                  <SelectValue />
@@ -684,6 +712,21 @@ watch(() => route.query.agent_id, (newVal: any) => {
                <SelectContent>
                  <SelectItem :value="TASK_TYPE.NORMAL">定时任务</SelectItem>
                  <SelectItem :value="TASK_TYPE.REPO">仓库同步</SelectItem>
+               </SelectContent>
+             </Select>
+             <Select :model-value="`${sortBy}:${order}`" @update:model-value="(val: any) => handleSortChange(val)">
+               <SelectTrigger class="h-9 w-full text-sm bg-muted/20 border-muted-foreground/10">
+                 <SelectValue placeholder="排序规则" />
+               </SelectTrigger>
+               <SelectContent>
+                 <SelectItem value="created_at:desc">创建时间 (最晚优先)</SelectItem>
+                 <SelectItem value="created_at:asc">创建时间 (最早优先)</SelectItem>
+                 <SelectItem value="name:asc">名称 (A-Z)</SelectItem>
+                 <SelectItem value="name:desc">名称 (Z-A)</SelectItem>
+                 <SelectItem value="next_run:asc">下次执行 (先-后)</SelectItem>
+                 <SelectItem value="next_run:desc">下次执行 (后-先)</SelectItem>
+                 <SelectItem value="enabled:desc">状态 (启用优先)</SelectItem>
+                 <SelectItem value="enabled:asc">状态 (禁用优先)</SelectItem>
                </SelectContent>
              </Select>
           </div>
@@ -742,7 +785,12 @@ watch(() => route.query.agent_id, (newVal: any) => {
         <div class="flex items-center gap-4 px-4 py-1.5 border-b bg-muted/20 text-xs text-muted-foreground font-medium">
           <span class="w-12 shrink-0 pl-1">序号</span>
           <span class="w-8 shrink-0 text-center">类型</span>
-          <span class="w-56 shrink-0">名称</span>
+          <span class="w-56 shrink-0 flex items-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors" @click="toggleSort('name')">
+            名称
+            <ArrowUpDown v-if="sortBy !== 'name'" class="h-3 w-3 opacity-40 shrink-0" />
+            <ArrowUp v-else-if="order === 'asc'" class="h-3 w-3 text-primary shrink-0" />
+            <ArrowDown v-else class="h-3 w-3 text-primary shrink-0" />
+          </span>
           <span class="w-32 shrink-0">执行位置</span>
           <span class="flex-1 min-w-0 flex items-center gap-1.5 line-clamp-1">
             <GitBranch v-if="filterType === TASK_TYPE.REPO" class="h-3.5 w-3.5 opacity-50" />
@@ -750,8 +798,18 @@ watch(() => route.query.agent_id, (newVal: any) => {
             {{ filterType === TASK_TYPE.REPO ? '仓库地址' : '命令内容' }}
           </span>
           <span class="w-28 shrink-0">{{ filterType === TASK_TYPE.REPO ? '同步周期' : '定时规则' }}</span>
-          <span class="w-40 shrink-0">执行时间</span>
-          <span class="w-8 shrink-0 text-center">状态</span>
+          <span class="w-40 shrink-0 flex items-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors" @click="toggleSort('next_run')">
+            执行时间
+            <ArrowUpDown v-if="sortBy !== 'next_run'" class="h-3 w-3 opacity-40 shrink-0" />
+            <ArrowUp v-else-if="order === 'asc'" class="h-3 w-3 text-primary shrink-0" />
+            <ArrowDown v-else class="h-3 w-3 text-primary shrink-0" />
+          </span>
+          <span class="w-14 shrink-0 text-center flex items-center justify-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors" @click="toggleSort('enabled')">
+            状态
+            <ArrowUpDown v-if="sortBy !== 'enabled'" class="h-3 w-3 opacity-40 shrink-0" />
+            <ArrowUp v-else-if="order === 'asc'" class="h-3 w-3 text-primary shrink-0" />
+            <ArrowDown v-else class="h-3 w-3 text-primary shrink-0" />
+          </span>
           <span class="w-24 shrink-0 text-center">操作</span>
         </div>
         <!-- 列表 -->
@@ -798,7 +856,7 @@ watch(() => route.query.agent_id, (newVal: any) => {
               <span class="truncate">上: {{ task.last_run || '-' }}</span>
               <span class="truncate">下: {{ task.next_run || '-' }}</span>
             </div>
-            <span class="w-8 flex justify-center shrink-0 cursor-pointer group" @click="toggleTask(task, !task.enabled)">
+            <span class="w-14 flex justify-center shrink-0 cursor-pointer group" @click="toggleTask(task, !task.enabled)">
               <div v-if="task.enabled" class="h-6 w-6 rounded-md bg-green-500/10 flex items-center justify-center group-hover:bg-green-500/20">
                 <Zap class="h-3.5 w-3.5 text-green-500 fill-green-500" />
               </div>
@@ -850,14 +908,23 @@ watch(() => route.query.agent_id, (newVal: any) => {
 
       <!-- ========== 2. 中屏布局 (Medium 640px - 1280px) ========== -->
       <div class="hidden sm:block xl:hidden">
-        <!-- 表头 -->
         <div class="flex items-center gap-4 px-4 py-1.5 border-b bg-muted/20 text-xs text-muted-foreground font-medium">
           <span class="w-12 shrink-0 pl-1">序号</span>
-          <span class="w-48 shrink-0">任务信息</span>
+          <span class="w-48 shrink-0 flex items-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors" @click="toggleSort('name')">
+            任务信息
+            <ArrowUpDown v-if="sortBy !== 'name'" class="h-3 w-3 opacity-40 shrink-0" />
+            <ArrowUp v-else-if="order === 'asc'" class="h-3 w-3 text-primary shrink-0" />
+            <ArrowDown v-else class="h-3 w-3 text-primary shrink-0" />
+          </span>
           <span class="flex-1 min-w-0">
             {{ filterType === TASK_TYPE.REPO ? '仓库地址' : '命令内容' }}
           </span>
-          <span class="w-8 shrink-0 text-center">状态</span>
+          <span class="w-14 shrink-0 text-center flex items-center justify-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors" @click="toggleSort('enabled')">
+            状态
+            <ArrowUpDown v-if="sortBy !== 'enabled'" class="h-3 w-3 opacity-40 shrink-0" />
+            <ArrowUp v-else-if="order === 'asc'" class="h-3 w-3 text-primary shrink-0" />
+            <ArrowDown v-else class="h-3 w-3 text-primary shrink-0" />
+          </span>
           <span class="w-24 shrink-0 text-center">操作</span>
         </div>
         <!-- 列表 -->
@@ -886,7 +953,7 @@ watch(() => route.query.agent_id, (newVal: any) => {
             <code class="flex-1 min-w-0 text-[11px] text-muted-foreground bg-muted/20 px-2 py-1 rounded truncate">
               {{ task.command }}
             </code>
-            <span class="w-8 flex justify-center shrink-0 cursor-pointer group" @click="toggleTask(task, !task.enabled)">
+            <span class="w-14 flex justify-center shrink-0 cursor-pointer group" @click="toggleTask(task, !task.enabled)">
               <div v-if="task.enabled" class="h-6 w-6 rounded-md bg-green-500/5 flex items-center justify-center">
                 <Zap class="h-3.5 w-3.5 text-green-500" />
               </div>

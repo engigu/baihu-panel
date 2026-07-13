@@ -140,7 +140,7 @@ export const api = {
       request('/auth/register', { method: 'POST', body: JSON.stringify(data) })
   },
   tasks: {
-    list: (params?: { page?: number; page_size?: number; name?: string; agent_id?: string; tags?: string; type?: string }) => {
+    list: (params?: { page?: number; page_size?: number; name?: string; agent_id?: string; tags?: string; type?: string; sort_by?: string; order?: string }) => {
       const query = new URLSearchParams()
       if (params?.page) query.set('page', String(params.page))
       if (params?.page_size) query.set('page_size', String(params.page_size))
@@ -148,6 +148,8 @@ export const api = {
       if (params?.tags) query.set('tags', params.tags)
       if (params?.agent_id) query.set('agent_id', params.agent_id)
       if (params?.type) query.set('type', params.type)
+      if (params?.sort_by) query.set('sort_by', params.sort_by)
+      if (params?.order) query.set('order', params.order)
       return request<TaskListResponse>(`/tasks?${query}`)
     },
     create: (data: Partial<Task>) => request<Task>('/tasks', { method: 'POST', body: JSON.stringify(data) }),

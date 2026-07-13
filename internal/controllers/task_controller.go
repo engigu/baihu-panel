@@ -337,7 +337,10 @@ func (tc *TaskController) GetTasks(c *gin.Context) {
 		agentID = &agentIDStr
 	}
 
-	tasks, total := tc.taskService.GetTasksWithPagination(p.Page, p.PageSize, name, agentID, tags, taskType)
+	sortBy := c.DefaultQuery("sort_by", "")
+	order := c.DefaultQuery("order", "")
+
+	tasks, total := tc.taskService.GetTasksWithPagination(p.Page, p.PageSize, name, agentID, tags, taskType, sortBy, order)
 	utils.PaginatedResponse(c, vo.ToTaskVOListFromModels(tasks), total, p)
 }
 
@@ -702,7 +705,7 @@ func (tc *TaskController) BatchDeleteByQuery(c *gin.Context) {
 		agentID = &agentIDStr
 	}
 
-	tasks, _ := tc.taskService.GetTasksWithPagination(1, 999999, name, agentID, tags, taskType)
+	tasks, _ := tc.taskService.GetTasksWithPagination(1, 999999, name, agentID, tags, taskType, "", "")
 	if len(tasks) == 0 {
 		utils.Success(c, gin.H{"count": 0})
 		return
