@@ -111,7 +111,7 @@ func (ts *TaskService) GetTasks() []models.Task {
 }
 
 // GetTasksWithPagination 分页获取任务列表
-func (ts *TaskService) GetTasksWithPagination(page, pageSize int, name string, agentID *string, tags string, taskType string) ([]models.Task, int64) {
+func (ts *TaskService) GetTasksWithPagination(page, pageSize int, name string, agentID *string, tags string, taskType string, sortBy string, order string) ([]models.Task, int64) {
 	var tasks []models.Task
 	var total int64
 
@@ -154,8 +154,20 @@ func (ts *TaskService) GetTasksWithPagination(page, pageSize int, name string, a
 		query = query.Where("agent_id = ?", *agentID)
 	}
 
+	sortColumn := "created_at"
+	if sortBy != "" {
+		switch sortBy {
+		case "name", "next_run", "last_run", "created_at", "enabled":
+			sortColumn = sortBy
+		}
+	}
+	sortOrder := "DESC"
+	if strings.ToUpper(order) == "ASC" {
+		sortOrder = "ASC"
+	}
+
 	query.Count(&total)
-	query.Order("pin_type DESC, created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&tasks)
+	query.Order("pin_type DESC, " + sortColumn + " " + sortOrder).Offset((page - 1) * pageSize).Limit(pageSize).Find(&tasks)
 	ts.loadTagsAndEnvs(tasks)
 
 	return tasks, total
