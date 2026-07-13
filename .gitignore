@@ -67,3 +67,5 @@ openapi_docs/
 builtin/**/__pycache__/
 builtin/**/*.pyc
 
+.agents/
+
