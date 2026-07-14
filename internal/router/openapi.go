@@ -35,6 +35,7 @@ func registerOpenAPITaskRoutes(g *gin.RouterGroup, c *Controllers) {
 		tasks.PUT("/:id", c.Task.UpdateTask)
 		tasks.DELETE("/:id", c.Task.DeleteTask)
 		tasks.POST("/stop/:logID", c.Task.StopTask)
+		tasks.GET("/tags", c.Task.GetTags)
 	}
 }
 
