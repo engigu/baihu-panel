@@ -406,7 +406,7 @@ defineExpose({
         <DialogHeader>
           <DialogTitle>{{ isEditing ? '编辑子节点' : '生成子节点专属接入密钥' }}</DialogTitle>
           <DialogDescription>
-            {{ isEditing ? '修改节点的备注名称信息。' : '保存后请将此密钥粘贴到子节点的配置界面中建立连接。' }}
+            {{ isEditing ? '修改节点的备注名称信息。' : '保存后请将此密钥粘贴到子节点的配置界面中建立连接（每个密钥仅限配置一个子节点）。' }}
           </DialogDescription>
         </DialogHeader>
         <div class="grid gap-4 py-4">
