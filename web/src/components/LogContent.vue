@@ -53,6 +53,7 @@ function initTerminal() {
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
     theme: getTheme(),
     allowTransparency: true,
+    scrollback: 5000,
   })
 
   fitAddon = new FitAddon()
