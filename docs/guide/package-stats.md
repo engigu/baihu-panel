@@ -371,12 +371,13 @@ const filteredStats = computed(() => {
 }
 
 .stats-table th {
-  background-color: var(--vp-c-bg-mute);
+  background-color: var(--vp-c-bg-soft);
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 10;
   font-weight: 600;
   color: var(--vp-c-text-2);
+  border-bottom: 2px solid var(--vp-c-border);
 }
 
 .stats-table tr:last-child td {
