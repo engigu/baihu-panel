@@ -1,6 +1,6 @@
-# 更新日志 (v1.1.21)
+# 更新日志 (v1.1.22)
 
-### 2026.07.20 - Windows 平台深度适配、网页终端 Ctrl+C 中止与单文件构建
+### 2026.07.20 - Windows 平台深度适配、网页终端 Ctrl+C 中止与 Linux PTY 回退机制修复
 
 🎉 **新增与优化**
 * **Windows 平台适配包重构**：新建并集成了后端 `internal/windows` 与前端 `web/src/windows` 专有包，统一收拢 Windows 的特异性环境检测、PSReadline 影响规避、PATH 优先级修复 (FixPathEnv) 等底层逻辑，大幅提升了在 Windows 平台直接运行时的环境稳定性与规范度。
@@ -12,6 +12,7 @@
 
 **✨ 修复与改进**
 * **脚本执行参数校验**：修复了在“测试运行” Windows 脚本时，即便不需要运行环境也会强行拼接 `python` / `node` 执行器前缀导致命令无法执行的缺陷。
+* **Linux PTY 回退机制修复**：修复了 Linux 环境下 PTY 分配失败（如 `ioctl` 错误）时，因 `exec.Cmd` 实例被占用重用触发 `already started` 导致的崩溃挂起，同时确保回退后的命令完整保留超时控制。
 
 ---
 
