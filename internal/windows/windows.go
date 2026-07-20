@@ -31,6 +31,11 @@ func InterruptProcessGroup(parentPid int) {
 	_ = cmd.Run()
 }
 
+// GetWindowsShellCmd returns the exec.Cmd configured for pwsh on Windows with proper flags.
+func GetWindowsShellCmd(shell string) *exec.Cmd {
+	return exec.Command(shell, "-NoLogo", "-NoProfile", "-NoExit", "-Command", "function Clear-Host { Write-Host -NoNewline \"$([char]27)[2J$([char]27)[H\" }")
+}
+
 // IsWindows returns true if the current OS is Windows
 func IsWindows() bool {
 	return runtime.GOOS == "windows"

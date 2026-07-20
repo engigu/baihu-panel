@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+
+	"github.com/engigu/baihu-panel/internal/windows"
 )
 
 var (
@@ -17,7 +19,7 @@ var (
 // GetShell 返回当前操作系统的 shell 和参数
 func GetShell() (shell string, args []string) {
 	shellOnce.Do(func() {
-		if runtime.GOOS == "windows" {
+		if windows.IsWindows() {
 			if path, err := exec.LookPath("pwsh"); err == nil {
 				defaultShell = path
 				defaultArgs = []string{}
@@ -71,7 +73,7 @@ func GetShell() (shell string, args []string) {
 // GetShellCommand 返回执行命令的 shell 和参数
 func GetShellCommand(command string) (shell string, args []string) {
 	shell, _ = GetShell()
-	if runtime.GOOS == "windows" {
+	if windows.IsWindows() {
 		return shell, []string{"-NoProfile", "-NonInteractive", "-Command", command}
 	}
 	return shell, []string{"-c", command}
@@ -80,8 +82,8 @@ func GetShellCommand(command string) (shell string, args []string) {
 // NewShellCmd 创建一个交互式 shell 命令
 func NewShellCmd() *exec.Cmd {
 	shell, _ := GetShell()
-	if runtime.GOOS == "windows" {
-		return exec.Command(shell, "-NoLogo", "-NoProfile", "-NoExit", "-Command", "function Clear-Host { Write-Host -NoNewline \"$([char]27)[2J$([char]27)[H\" }")
+	if windows.IsWindows() {
+		return windows.GetWindowsShellCmd(shell)
 	}
 	// Unix 系统使用 -i 启用交互模式
 	return exec.Command(shell, "-i")
