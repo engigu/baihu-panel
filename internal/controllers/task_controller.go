@@ -203,7 +203,6 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		SourceID:      sourceID,
 		PinType:       req.PinType,
 		Enabled:       true,
-		SandboxProfileID: req.SandboxProfileID,
 	}
 
 	var task *models.Task
@@ -501,7 +500,6 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		SourceID:      sourceID,
 		PinType:       req.PinType,
 		Enabled:       req.Enabled,
-		SandboxProfileID: req.SandboxProfileID,
 	}
 
 	task := tc.taskService.UpdateTask(id, &param)
