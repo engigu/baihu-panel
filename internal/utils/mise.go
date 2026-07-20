@@ -2,6 +2,8 @@ package utils
 
 import (
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -23,9 +25,15 @@ func GetMiseNodePath(version string) string {
 	if err == nil {
 		nodeDir := strings.TrimSpace(string(out))
 		if nodeDir != "" {
-			// 采用双路径策略：lib/node_modules 是标准路径，lib 是某些环境（如 mise Docker）下的特殊路径
-			// 通过冒号分隔，让 Node.js 按顺序搜索，保证最大兼容性
-			nodePath := nodeDir + "/lib/node_modules:" + nodeDir + "/lib"
+			var nodePath string
+			if runtime.GOOS == "windows" {
+				// Windows 下, Mise 安装的 Node.js 全局 node_modules 通常位于安装根目录下
+				nodePath = filepath.Join(nodeDir, "node_modules")
+			} else {
+				// 采用双路径策略：lib/node_modules 是标准路径，lib 是某些环境（如 mise Docker）下的特殊路径
+				// 通过冒号分隔，让 Node.js 按顺序搜索，保证最大兼容性
+				nodePath = nodeDir + "/lib/node_modules:" + nodeDir + "/lib"
+			}
 			nodePathCache.Store(version, nodePath)
 			return nodePath
 		}

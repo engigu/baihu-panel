@@ -9,12 +9,13 @@ import { api, type FileNode, type MiseLanguage } from '@/api'
 import { toast } from 'vue-sonner'
 import { PATHS } from '@/constants'
 
-// New component imports
 import FileSidebar from './components/FileSidebar.vue'
 import RunConfigDialog from './components/RunConfigDialog.vue'
 import FileActionDialogs from './components/FileActionDialogs.vue'
 import UnsavedConfirmDialog from './components/UnsavedConfirmDialog.vue'
+import BaihuDialog from '@/components/ui/BaihuDialog.vue'
 import { buildExecutionCommand } from './utils'
+import { checkWindowsScriptWarnings } from '@/windows/scriptCheck'
 
 const route = useRoute()
 const router = useRouter()
@@ -64,6 +65,11 @@ const langGroups = computed(() => {
 const showTerminalDialog = ref(false)
 const runCommand = ref('')
 const scriptsDir = ref('')
+
+// Windows script warning state
+const showScriptWarningDialog = ref(false)
+const scriptWarningMessage = ref('')
+const onWarningConfirm = ref<(() => void) | null>(null)
 
 
 async function fetchInstalledLangs() {
@@ -219,6 +225,24 @@ async function loadFile(path: string) {
 }
 
 async function saveFile() {
+  if (!selectedFile.value) return
+
+  // Windows 脚本执行风险检测
+  const warnings = checkWindowsScriptWarnings(selectedFile.value, fileContent.value)
+  if (warnings.length > 0) {
+    scriptWarningMessage.value = warnings.join('\n\n')
+    showScriptWarningDialog.value = true
+    onWarningConfirm.value = () => {
+      showScriptWarningDialog.value = false
+      executeSave()
+    }
+    return
+  }
+
+  await executeSave()
+}
+
+async function executeSave() {
   if (!selectedFile.value) return
   try {
     await api.files.saveContent(selectedFile.value, fileContent.value)
@@ -407,7 +431,16 @@ function closeTerminal() {
 function getLanguage(path: string): string {
   const ext = path.split('.').pop()?.toLowerCase()
   const langMap: Record<string, string> = {
-    sh: 'shell', js: 'javascript', ts: 'typescript', py: 'python', json: 'json', yaml: 'yaml', md: 'markdown'
+    sh: 'shell', 
+    js: 'javascript', 
+    ts: 'typescript', 
+    py: 'python', 
+    json: 'json', 
+    yaml: 'yaml', 
+    md: 'markdown',
+    bat: 'bat',
+    cmd: 'bat',
+    ps1: 'powershell'
   }
   return langMap[ext || ''] || 'plaintext'
 }
@@ -561,5 +594,31 @@ onUnmounted(() => {
       :path="confirmLeave.path"
       @confirm="confirmLeave.onConfirm()"
     />
+
+    <!-- Windows 脚本保存冲突警告 -->
+    <BaihuDialog
+      v-model:open="showScriptWarningDialog"
+      title="Windows 脚本保存警告"
+      icon="AlertCircle"
+      size="sm"
+    >
+      <div class="flex flex-col sm:flex-row items-center sm:items-start gap-4 p-1">
+        <div class="h-12 w-12 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+          <AlertCircle class="h-6 w-6 text-amber-500" />
+        </div>
+        <div class="flex-1 text-center sm:text-left">
+          <p class="text-sm text-foreground/90 leading-relaxed font-medium">检测到潜在的执行风险命令</p>
+          <div class="text-[13px] text-muted-foreground mt-2 whitespace-pre-line leading-relaxed text-left">
+            {{ scriptWarningMessage }}
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="flex flex-col-reverse sm:flex-row gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+          <Button variant="outline" @click="showScriptWarningDialog = false" class="w-full sm:w-24">取消</Button>
+          <Button variant="destructive" @click="onWarningConfirm?.()" class="w-full sm:w-auto px-6">仍然保存</Button>
+        </div>
+      </template>
+    </BaihuDialog>
   </div>
 </template>

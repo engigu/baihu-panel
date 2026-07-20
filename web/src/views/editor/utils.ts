@@ -15,7 +15,7 @@ export function buildExecutionCommand(
   let cmd = ''
   if (validEnvs.length > 0) {
     const specs = validEnvs.map(e => `${e.plugin}@${e.version}`).join(' ')
-    if (!runner && !['sh', 'bash'].includes(ext)) {
+    if (!runner && !['sh', 'bash', 'bat', 'cmd', 'ps1'].includes(ext)) {
        const first = validEnvs[0]!.plugin
        runner = (first === 'node' ? 'node' : first)
     }

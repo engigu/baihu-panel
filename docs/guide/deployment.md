@@ -179,3 +179,53 @@ services:
 ```
 
 修改完成后，执行 `docker compose up -d` 生效即可。
+
+---
+
+## 方式四：二进制单文件运行 (Linux / Windows)
+
+除了 Docker 容器化部署外，白虎面板也支持以原生单文件二进制的方式直接在宿主机（Linux 或 Windows）运行。
+
+### 🐧 Linux 平台部署
+
+**1. 安装前置依赖 `mise`**
+单文件直接运行依赖宿主机系统环境，请务必先安装 [mise](https://mise.jdx.dev/getting-started.html) 供任务调度及多语言环境管理使用：
+```bash
+curl https://mise.run | sh
+export PATH="~/.local/share/mise/bin:~/.local/share/mise/shims:$PATH"
+```
+
+**2. 运行面板**
+从 GitHub Release 中下载对应架构的 `.tar.gz` 包（例如 `baihu-linux-amd64.tar.gz`），然后使用以下命令解压并运行：
+```bash
+tar -xzvf baihu-linux-amd64.tar.gz
+chmod +x baihu-linux-amd64
+./baihu-linux-amd64 server
+```
+
+---
+
+### 🪟 Windows 平台部署
+
+**1. 安装前置依赖**
+* **安装 `mise`**（用于多语言运行时环境管理）：
+  在 PowerShell 中运行以下命令安装：
+  ```powershell
+  irm https://mise.run | iex
+  ```
+* **安装 `pwsh`**（PowerShell 7.6+，用于执行后台任务）：
+  白虎面板在 Windows 系统下执行任务及依赖检测强依赖 PowerShell 7+（`pwsh.exe`）。请参考 [微软官方 PowerShell 安装文档](https://learn.microsoft.com/zh-cn/powershell/scripting/install/install-powershell-on-windows?view=powershell-7.6) 安装，或在 PowerShell 中通过 `winget` 快捷安装：
+  ```powershell
+  winget install Microsoft.PowerShell
+  ```
+
+**2. 运行面板**
+从 GitHub Release 下载 Windows 部署包（`.zip`），解压后在解压目录中打开 PowerShell 并运行：
+```powershell
+.\baihu.exe server
+```
+
+### 访问面板
+启动成功后，使用浏览器访问：`http://localhost:8052`
+* **默认账号**：用户名 `admin`，初始随机密码会在控制台首次启动日志中打印，登录后请第一时间修改密码。
+

@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/utils"
+	"github.com/engigu/baihu-panel/internal/windows"
 )
 
 // Task 任务基础接口
@@ -161,7 +161,11 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	shell, args := utils.GetShellCommand(req.Command)
 	cmd := exec.CommandContext(execCtx, shell, args...)
 
-	usePty := runtime.GOOS != "windows" && stdout != nil && (stdout == stderr || stdout == io.Discard)
+	// 在 Windows 平台（或非交互式管道下）将 Stdin 重定向到空 Reader
+	// 避免运行 bat 或命令时因为读取 stdin（例如 pause、set /p 等）而无限挂起
+	cmd.Stdin = strings.NewReader("")
+
+	usePty := !windows.IsWindows() && stdout != nil && (stdout == stderr || stdout == io.Discard)
 	SetProcessGroupAndCancel(cmd, usePty)
 
 	// 设置工作目录
@@ -176,6 +180,8 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	if len(req.Envs) > 0 {
 		cmd.Env = append(cmd.Env, req.Envs...)
 	}
+	// 针对 Windows 平台修复 PATH 优先级，避免 GNU/MSYS 命令行冲突
+	cmd.Env = windows.FixPathEnv(cmd.Env)
 	// 强制注入终端环境标识及禁用输出缓冲的标志
 	cmd.Env = append(cmd.Env,
 		"TERM=xterm",
@@ -183,6 +189,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		"NODE_NO_WARNINGS=1",
 	)
 
+	var pipeReader *os.File
 	var pipeWriter *os.File
 	var ptyFile *os.File
 	var copyDone chan struct{}
@@ -190,7 +197,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 
 	var started bool
 	// 尝试开启 PTY 模式（Unix/macOS 且输出合并时）
-	if runtime.GOOS != "windows" && stdout != nil && (stdout == stderr || stdout == io.Discard) {
+	if !windows.IsWindows() && stdout != nil && (stdout == stderr || stdout == io.Discard) {
 		// 强制注入终端环境标识及禁用输出缓冲的标志，确保 PTY 模式下最佳实时性能
 		cmd.Env = append(cmd.Env,
 			"TERM=xterm",
@@ -226,6 +233,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 			if err == nil {
 				cmd.Stdout = pw
 				cmd.Stderr = pw
+				pipeReader = pr
 				pipeWriter = pw
 				copyDone = make(chan struct{})
 				go func() {
@@ -247,6 +255,9 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		if err != nil {
 			if pipeWriter != nil {
 				pipeWriter.Close()
+			}
+			if pipeReader != nil {
+				pipeReader.Close()
 			}
 			// 启动失败的处理
 			end := time.Now()
@@ -298,6 +309,13 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	// PTY 模式下需要显式关闭
 	if ptyFile != nil {
 		ptyFile.Close()
+	}
+
+	// 强制关闭管道读端
+	// 避免子进程如果启动了后台服务进程，继承并保持了 stdout/stderr 句柄不释放，
+	// 导致 io.Copy 处于无限阻塞状态，从而使 copyDone 无法收到信号，整个执行流程卡死。
+	if pipeReader != nil {
+		pipeReader.Close()
 	}
 
 	// 等待日志复制完成

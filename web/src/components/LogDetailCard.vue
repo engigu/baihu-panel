@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { 
-  X, Trash2, Maximize2, Ban, Search
+  X, Trash2, Maximize2, Ban, Search, XCircle
 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

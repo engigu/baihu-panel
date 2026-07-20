@@ -18,9 +18,12 @@ var (
 func GetShell() (shell string, args []string) {
 	shellOnce.Do(func() {
 		if runtime.GOOS == "windows" {
-			defaultShell = "cmd"
-			defaultArgs = []string{}
-			return
+			if path, err := exec.LookPath("pwsh"); err == nil {
+				defaultShell = path
+				defaultArgs = []string{}
+				return
+			}
+			panic("PowerShell 7+ (pwsh.exe) is required on Windows, but was not found in PATH. Please install it first.")
 		}
 
 		// 1. 优先在 PATH 中查找 bash
@@ -69,7 +72,7 @@ func GetShell() (shell string, args []string) {
 func GetShellCommand(command string) (shell string, args []string) {
 	shell, _ = GetShell()
 	if runtime.GOOS == "windows" {
-		return shell, []string{"/c", command}
+		return shell, []string{"-NoProfile", "-NonInteractive", "-Command", command}
 	}
 	return shell, []string{"-c", command}
 }
@@ -78,7 +81,7 @@ func GetShellCommand(command string) (shell string, args []string) {
 func NewShellCmd() *exec.Cmd {
 	shell, _ := GetShell()
 	if runtime.GOOS == "windows" {
-		return exec.Command(shell)
+		return exec.Command(shell, "-NoLogo", "-NoProfile")
 	}
 	// Unix 系统使用 -i 启用交互模式
 	return exec.Command(shell, "-i")
@@ -94,6 +97,11 @@ func NewShellCommandCmd(command string) *exec.Cmd {
 func QuotePath(path string) string {
 	if path == "" {
 		return "''"
+	}
+	if runtime.GOOS == "windows" {
+		// 在 PowerShell / pwsh 中，使用单引号包裹路径。
+		// 单引号内的单引号通过连续两个单引号转义，例如: ' -> ''
+		return "'" + strings.ReplaceAll(path, "'", "''") + "'"
 	}
 	// 在 Unix-like 系统中，单引号包裹是最安全的
 	// 需要将路径中的 ' 替换为 '\'' (结束当前引号，转义一个单引号，重新开启引号)

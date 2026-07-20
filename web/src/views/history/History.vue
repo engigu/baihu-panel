@@ -87,6 +87,20 @@ const deleteLogId = ref<string | null>(null)
 const wsContent = ref('')
 const isWsLoading = ref(false)
 let logSource: EventSource | null = null
+let logBuffer: string[] = []
+let logFlushInterval: ReturnType<typeof setInterval> | null = null
+
+function cleanupLogSocket() {
+  if (logSource) {
+    logSource.close()
+    logSource = null
+  }
+  if (logFlushInterval) {
+    clearInterval(logFlushInterval)
+    logFlushInterval = null
+  }
+  logBuffer = []
+}
 
 
 import { decompressFromBase64 } from '@/utils/decompress'
@@ -142,10 +156,7 @@ function handlePageChange(page: number) {
 }
 
 async function selectLog(log: TaskLog) {
-  if (logSource) {
-    logSource.close()
-    logSource = null
-  }
+  cleanupLogSocket()
 
   // 清理旧定时器
   if (durationTimer) {
@@ -195,6 +206,8 @@ async function selectLog(log: TaskLog) {
     return
   }
   
+  wsContent.value = 'raw:'
+  
   const protocol = window.location.protocol
   const host = window.location.host
   const baseUrl = (window as any).__BASE_URL__ || ''
@@ -210,26 +223,35 @@ async function selectLog(log: TaskLog) {
 
   logSource.onmessage = (event) => {
     isWsLoading.value = false
+    let text = ''
     try {
       const data = JSON.parse(event.data)
-      wsContent.value += data.text || ''
+      text = data.text || ''
     } catch {
-      wsContent.value += event.data
+      text = event.data
     }
-    // 自动滚动到底部
-    nextTick(() => {
-      const pre = document.querySelector('.log-pre')
-      if (pre) pre.scrollTop = pre.scrollHeight
-    })
+    logBuffer.push(text)
+
+    if (!logFlushInterval) {
+      logFlushInterval = setInterval(() => {
+        if (logBuffer.length > 0) {
+          wsContent.value += logBuffer.join('')
+          logBuffer = []
+          
+          // 自动滚动到底部
+          nextTick(() => {
+            const pre = document.querySelector('.log-pre')
+            if (pre) pre.scrollTop = pre.scrollHeight
+          })
+        }
+      }, 150)
+    }
   }
 
   logSource.onerror = (e) => {
     isWsLoading.value = false
     console.error('[LogSSE] Connection error/closed', e)
-    if (logSource) {
-      logSource.close()
-      logSource = null
-    }
+    cleanupLogSocket()
   }
 }
 
@@ -238,10 +260,7 @@ function closeDetail() {
     clearInterval(durationTimer)
     durationTimer = null
   }
-  if (logSource) {
-    logSource.close()
-    logSource = null
-  }
+  cleanupLogSocket()
   selectedLog.value = null
   wsContent.value = ''
 }

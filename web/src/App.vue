@@ -5,6 +5,8 @@ import { Toaster } from '@/components/ui/sonner'
 import { LogOut } from 'lucide-vue-next'
 import { activeInterconnectNodeId, activeInterconnectNodeName, setActiveInterconnectNodeId } from '@/api'
 
+import { isWindowsPlatform } from '@/windows/platform'
+
 function exitTravel() {
   setActiveInterconnectNodeId('')
   window.location.href = '/'
@@ -16,8 +18,7 @@ onMounted(() => {
   document.documentElement.classList.add(isMac ? 'antialiased' : 'subpixel-antialiased')
 
   // Windows 平台检测，用于在 CSS 中调整字体优先级
-  const isWindows = /Win/.test(navigator.userAgent)
-  if (isWindows) {
+  if (isWindowsPlatform()) {
     document.documentElement.classList.add('is-windows')
   }
 })

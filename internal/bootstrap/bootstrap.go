@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/tunnel"
 	"github.com/engigu/baihu-panel/internal/utils"
+	"github.com/engigu/baihu-panel/internal/windows"
 
 	"github.com/gin-gonic/gin"
 )
@@ -51,6 +51,9 @@ var (
 
 func InitBasic() *App {
 	initOnce.Do(func() {
+		// Windows 平台下强校验 pwsh.exe 是否存在
+		windows.VerifyPwsh()
+
 		app := &App{}
 		utils.InitRuntime()
 		utils.InitSecretKey()
@@ -103,9 +106,7 @@ func (a *App) setupBaihuBin() {
 	exe, err := os.Executable()
 	if err == nil {
 		linkPath := filepath.Join(binDir, "baihu")
-		if runtime.GOOS == "windows" {
-			linkPath += ".exe"
-		}
+		linkPath += windows.GetExeExtension()
 		os.Remove(linkPath)
 		_ = os.Symlink(exe, linkPath)
 	}

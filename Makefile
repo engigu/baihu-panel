@@ -68,6 +68,14 @@ release-android:
 	cp -r web/dist internal/static/dist
 	CGO_ENABLED=0 GOOS=android GOARCH=arm64 $(GOBUILD) -trimpath $(LDFLAGS) $(TAGS_WEB) -o bin/baihu-android-arm64 main.go
 
+# Build release version for Windows
+release-windows:
+	cd web && npm run build
+	@mkdir -p bin
+	rm -rf internal/static/dist
+	cp -r web/dist internal/static/dist
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) $(TAGS_WEB) -o bin/baihu.exe main.go
+
 # Build release version (Frontend + Backend with embedded assets)
 release-binary:
 	cd web && npm ci && VITE_RELEASE_OPTIMIZE=true npm run build
@@ -208,6 +216,7 @@ help:
 	@echo "  all              - Build backend only (default)"
 	@echo "  build            - Build backend binary (no UI embedded)"
 	@echo "  release          - Build full release binary (with UI embedded)"
+	@echo "  release-windows  - Build full release binary for Windows"
 	@echo "  build-web        - Build frontend assets only"
 	@echo "  pack-webui       - Build and package custom WebUI tar.gz"
 	@echo "  build-agent      - Build agent packages (tar.gz) for all platforms"

@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/utils"
+	"github.com/engigu/baihu-panel/internal/windows"
 
 	"github.com/creack/pty"
 	"github.com/gin-gonic/gin"
@@ -88,7 +88,7 @@ func (tc *TerminalController) HandleWebSocket(c *gin.Context) {
 	if userID == "" {
 		userID = "1" // 兜底
 	}
-	if runtime.GOOS == "windows" {
+	if windows.IsWindows() {
 		tc.handlePipeMode(conn, userID)
 	} else {
 		tc.handlePtyMode(conn, userID)
@@ -364,6 +364,11 @@ func (tc *TerminalController) handlePipeMode(conn *websocket.Conn, userID string
 			}
 		}
 
+		// 检测是否收到 Ctrl+C (ASCII 3)
+		if len(message) == 1 && message[0] == 3 {
+			windows.InterruptProcessGroup(cmd.Process.Pid)
+		}
+
 		if _, err := stdin.Write(message); err != nil {
 			break
 		}
@@ -452,10 +457,7 @@ func (tc *TerminalController) buildTerminalEnv(userID string, extraEnvs ...strin
 			}
 		}
 		if len(nodePaths) > 0 {
-			sep := ":"
-			if runtime.GOOS == "windows" {
-				sep = ";"
-			}
+			sep := windows.GetPathSeparator()
 			env = append(env, "NODE_PATH="+strings.Join(nodePaths, sep))
 		}
 	}

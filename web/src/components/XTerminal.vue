@@ -71,6 +71,7 @@ function initTerminal(forceConnect = false) {
 
   terminal = new Terminal({
     cursorBlink: true,
+    convertEol: true,
     fontSize: props.fontSize,
     lineHeight: 1.25,
     fontFamily: 'Consolas, Monaco, "Courier New", monospace',
@@ -201,7 +202,7 @@ function connectWebSocket() {
     if (props.initialCommand) {
       setTimeout(() => {
         if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(props.initialCommand + '\r')
+          ws.send(props.initialCommand + '\n')
         }
       }, 100)
     }

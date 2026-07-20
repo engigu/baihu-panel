@@ -323,12 +323,19 @@ const logEmptyTitle = ref<string | undefined>(undefined)
 const logEmptyDesc = ref<string | undefined>(undefined)
 let logSource: EventSource | null = null
 let durationTimer: ReturnType<typeof setInterval> | null = null
+let logBuffer: string[] = []
+let logFlushInterval: ReturnType<typeof setInterval> | null = null
 
 function cleanupLogSocket() {
   if (logSource) {
     logSource.close()
     logSource = null
   }
+  if (logFlushInterval) {
+    clearInterval(logFlushInterval)
+    logFlushInterval = null
+  }
+  logBuffer = []
 }
 
 function cleanupDurationTimer() {
@@ -381,6 +388,7 @@ async function viewLogs(taskId: string) {
       }
 
       // Connect SSE to load log content for running tasks
+      logContent.value = 'raw:'
       cleanupLogSocket()
       const protocol = window.location.protocol
       const host = window.location.host
@@ -390,11 +398,22 @@ async function viewLogs(taskId: string) {
 
       logSource = new EventSource(sseUrl)
       logSource.onmessage = (event) => {
+        let text = ''
         try {
           const data = JSON.parse(event.data)
-          logContent.value += data.text || ''
+          text = data.text || ''
         } catch {
-          logContent.value += event.data
+          text = event.data
+        }
+        logBuffer.push(text)
+
+        if (!logFlushInterval) {
+          logFlushInterval = setInterval(() => {
+            if (logBuffer.length > 0) {
+              logContent.value += logBuffer.join('')
+              logBuffer = []
+            }
+          }, 150)
         }
       }
       logSource.onerror = (e) => {
