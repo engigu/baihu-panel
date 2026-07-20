@@ -212,14 +212,14 @@ const filteredStats = computed(() => {
       <table class="stats-table">
         <thead>
           <tr>
-            <th>序号</th>
-            <th>版本标签 (Tag)</th>
-            <th style="text-align: right;">下载量 (Pulls)</th>
+            <th style="width: 15%; text-align: center;">序号</th>
+            <th style="width: 50%;">版本标签 (Tag)</th>
+            <th style="width: 35%; text-align: right;">下载量 (Pulls)</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="(item, idx) in filteredStats" :key="item.tag">
-            <td>{{ idx + 1 }}</td>
+            <td style="text-align: center;">{{ idx + 1 }}</td>
             <td class="tag-name"><code>{{ item.tag }}</code></td>
             <td style="text-align: right; font-weight: 500;">{{ item.downloads.toLocaleString() }}</td>
           </tr>
@@ -357,6 +357,7 @@ const filteredStats = computed(() => {
 }
 
 .stats-table {
+  display: table;
   width: 100%;
   border-collapse: collapse;
   margin: 0 !important;
