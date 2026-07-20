@@ -28,7 +28,6 @@ type TaskCreateReq struct {
 	RetryInterval int                  `json:"retry_interval" example:"60"`
 	RandomRange   int                  `json:"random_range" example:"10"`
 	PinType       string               `json:"pin_type" example:"time"`
-	SandboxProfileID *string           `json:"sandbox_profile_id" example:"profile-1"`
 }
 
 // TaskUpdateReq 任务更新请求
@@ -54,7 +53,6 @@ type TaskUpdateReq struct {
 	RetryInterval int                  `json:"retry_interval" example:"60"`
 	RandomRange   int                  `json:"random_range" example:"10"`
 	PinType       string               `json:"pin_type" example:"time"`
-	SandboxProfileID *string           `json:"sandbox_profile_id" example:"profile-1"`
 }
 
 // TaskVO 任务视图对象
@@ -82,7 +80,6 @@ type TaskVO struct {
 	RetryInterval int                  `json:"retry_interval"`
 	RandomRange   int                  `json:"random_range"`
 	PinType       string               `json:"pin_type"`
-	SandboxProfileID *string           `json:"sandbox_profile_id"`
 	LastRun       *models.LocalTime    `json:"last_run"`
 	NextRun       *models.LocalTime    `json:"next_run"`
 	CreatedAt     models.LocalTime     `json:"created_at"`
@@ -119,7 +116,6 @@ func ToTaskVO(task *models.Task) *TaskVO {
 		RetryInterval: task.RetryInterval,
 		RandomRange:   task.RandomRange,
 		PinType:       task.PinType,
-		SandboxProfileID: task.SandboxProfileID,
 		LastRun:       task.LastRun,
 		NextRun:       task.NextRun,
 		CreatedAt:     task.CreatedAt,

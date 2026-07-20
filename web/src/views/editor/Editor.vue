@@ -258,10 +258,8 @@ async function deleteItem(path: string) {
     }
     if (selectedPath.value === path) selectedPath.value = null
     await loadTree()
-  } catch (err: any) {
-    toast.error('删除失败', {
-      description: err.message || '未知错误'
-    })
+  } catch {
+    toast.error('删除失败')
   }
   if (dialogsRef.value) dialogsRef.value.closeDelete()
 }

@@ -30,11 +30,6 @@ type AgentWSManager interface {
 	IsAgentOnline(agentID string) bool
 }
 
-// SandboxService 接口定义（避免循环依赖）
-type SandboxService interface {
-	GetSandboxConfig(id *string) *models.SandboxConfig
-}
-
 // SettingsService 接口定义（避免循环依赖）
 type SettingsService interface {
 	Get(section, key string) string
@@ -51,7 +46,6 @@ type EnvService interface {
 type ExecutorService struct {
 	taskService     *TaskService
 	taskLogService  *TaskLogService
-	sandboxService  SandboxService
 	agentWSManager  AgentWSManager
 	settingsService SettingsService
 	envService      EnvService
@@ -70,7 +64,6 @@ func (es *ExecutorService) GetScheduler() *executor.Scheduler {
 func NewExecutorService(
 	taskService *TaskService,
 	taskLogService *TaskLogService,
-	sandboxService SandboxService,
 	agentWSManager AgentWSManager,
 	settingsService SettingsService,
 	envService EnvService,
@@ -81,7 +74,6 @@ func NewExecutorService(
 	es := &ExecutorService{
 		taskService:     taskService,
 		taskLogService:  taskLogService,
-		sandboxService:  sandboxService,
 		agentWSManager:  agentWSManager,
 		settingsService: settingsService,
 		envService:      envService,
@@ -686,9 +678,6 @@ func (es *ExecutorService) CreateExecutionRequest(task *models.Task, triggerType
 	masks = append(masks, utils.GetSystemSecrets()...)
 	maskedCommand := utils.MaskSecrets(command, masks)
 
-	// 4. 加载并装配沙箱配置
-	sandboxConfig := es.sandboxService.GetSandboxConfig(task.SandboxProfileID)
-
 	return &executor.ExecutionRequest{
 		TaskID:        task.ID,
 		Name:          task.Name,
@@ -703,7 +692,6 @@ func (es *ExecutorService) CreateExecutionRequest(task *models.Task, triggerType
 		Timeout:       task.Timeout,
 		Languages:     []map[string]string(task.Languages),
 		UseMise:       useMise,
-		Sandbox:       sandboxConfig,
 	}
 }
 
