@@ -81,7 +81,7 @@ func GetShellCommand(command string) (shell string, args []string) {
 func NewShellCmd() *exec.Cmd {
 	shell, _ := GetShell()
 	if runtime.GOOS == "windows" {
-		return exec.Command(shell, "-NoLogo", "-NoProfile")
+		return exec.Command(shell, "-NoLogo", "-NoProfile", "-NoExit", "-Command", "function Clear-Host { Write-Host -NoNewline \"$([char]27)[2J$([char]27)[H\" }")
 	}
 	// Unix 系统使用 -i 启用交互模式
 	return exec.Command(shell, "-i")
