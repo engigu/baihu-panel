@@ -222,7 +222,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 			logger.Warnf("[Executor] 任务 #%s PTY 启动失败，正在回退至管道(Pipe)模式: %v", logID, ptyErr)
 			// PTY 启动失败时，由于 cmd.Start() 已经在 pty.Start 内部被调用，cmd 状态已变为已启动。
 			// 我们必须在此处重新构建一个新的 cmd 实例，并重新拷贝原 cmd 的所有属性，以便后续 Pipe 模式能正常启动。
-			newCmd := exec.CommandContext(ctx, shell, args...)
+			newCmd := exec.CommandContext(execCtx, shell, args...)
 			newCmd.Stdin = strings.NewReader("")
 			if workDir != "" {
 				newCmd.Dir = workDir
