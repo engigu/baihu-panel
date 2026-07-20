@@ -25,7 +25,7 @@ func GetShell() (shell string, args []string) {
 				defaultArgs = []string{}
 				return
 			}
-			panic("PowerShell 7+ (pwsh.exe) is required on Windows, but was not found in PATH. Please install it first.")
+			panic("Windows 系统上需要安装 PowerShell 7+ (pwsh.exe)，但在环境变量 PATH 中未找到，请先安装它。")
 		}
 
 		// 1. 优先在 PATH 中查找 bash
