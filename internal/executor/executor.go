@@ -161,12 +161,14 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	shell, args := utils.GetShellCommand(req.Command)
 	cmd := exec.CommandContext(execCtx, shell, args...)
 
-	// 在 Windows 平台（或非交互式管道下）将 Stdin 重定向到空 Reader
-	// 避免运行 bat 或命令时因为读取 stdin（例如 pause、set /p 等）而无限挂起
-	cmd.Stdin = strings.NewReader("")
-
 	usePty := !windows.IsWindows() && stdout != nil && (stdout == stderr || stdout == io.Discard)
 	SetProcessGroupAndCancel(cmd, usePty)
+
+	if !usePty {
+		// 在 Windows 平台（或非交互式管道下）将 Stdin 重定向到空 Reader
+		// 避免运行 bat 或命令时因为读取 stdin（例如 pause、set /p 等）而无限挂起
+		cmd.Stdin = strings.NewReader("")
+	}
 
 	// 设置工作目录
 	// 设置工作目录
@@ -217,7 +219,17 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 				f.Close()
 			}()
 		} else {
-			logger.Errorf("[Executor] 任务 #%s PTY 启动失败: %v", logID, ptyErr)
+			logger.Warnf("[Executor] 任务 #%s PTY 启动失败，正在回退至管道(Pipe)模式: %v", logID, ptyErr)
+			// PTY 启动失败时，由于 cmd.Start() 已经在 pty.Start 内部被调用，cmd 状态已变为已启动。
+			// 我们必须在此处重新构建一个新的 cmd 实例，并重新拷贝原 cmd 的所有属性，以便后续 Pipe 模式能正常启动。
+			newCmd := exec.CommandContext(ctx, shell, args...)
+			newCmd.Stdin = strings.NewReader("")
+			if workDir != "" {
+				newCmd.Dir = workDir
+			}
+			newCmd.Env = cmd.Env
+			SetProcessGroupAndCancel(newCmd, false)
+			cmd = newCmd
 		}
 	}
 
