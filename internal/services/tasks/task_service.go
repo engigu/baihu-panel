@@ -34,6 +34,7 @@ type TaskParam struct {
 	SourceID      string
 	PinType       string
 	Enabled       bool
+	SandboxProfileID *string
 }
 
 type TaskService struct {
@@ -88,6 +89,7 @@ func (ts *TaskService) CreateTask(p *TaskParam) *models.Task {
 		RetryInterval: p.RetryInterval,
 		RandomRange:   p.RandomRange,
 		SourceID:      p.SourceID,
+		SandboxProfileID: p.SandboxProfileID,
 		CreatedAt:     models.Now(),
 		UpdatedAt:     models.Now(),
 	}
@@ -208,6 +210,7 @@ func (ts *TaskService) UpdateTask(id string, p *TaskParam) *models.Task {
 	task.RetryCount = p.RetryCount
 	task.RetryInterval = p.RetryInterval
 	task.RandomRange = p.RandomRange
+	task.SandboxProfileID = p.SandboxProfileID
 	if p.Type != "" {
 		task.Type = p.Type
 	}
@@ -223,7 +226,7 @@ func (ts *TaskService) UpdateTask(id string, p *TaskParam) *models.Task {
 		"CleanConfig", "Enabled", "AgentID", "Languages",
 		"RetryCount", "RetryInterval", "RandomRange", "Type",
 		"TriggerType", "Config", "SourceID", "PinType",
-		"PreCommand", "PostCommand",
+		"PreCommand", "PostCommand", "SandboxProfileID",
 	).Updates(&task)
 
 	relation.DataRelation.SaveTags(task.ID, constant.RelationTypeTaskTag, p.Tags)

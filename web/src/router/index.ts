@@ -56,7 +56,8 @@ const router = createRouter({
         { path: 'notify', name: 'notify', component: () => import('@/views/notify/Notify.vue') },
         { path: 'monitor', name: 'monitor', component: () => import('@/views/monitor/Monitor.vue') },
         { path: 'interconnect', name: 'interconnect', component: () => import('@/views/interconnect/index.vue') },
-        { path: 'settings', name: 'settings', component: () => import('@/views/settings/Settings.vue') }
+        { path: 'settings', name: 'settings', component: () => import('@/views/settings/Settings.vue') },
+        { path: 'sandboxes', name: 'sandboxes', component: () => import('@/views/sandboxes/Sandboxes.vue') }
       ]
     },
     {

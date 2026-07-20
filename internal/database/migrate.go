@@ -30,6 +30,7 @@ var allModels = []interface{}{
 	&models.DataRelation{},
 	&models.DataStorage{},
 	&models.InterconnectNode{},
+	&models.SandboxProfile{},
 }
 
 func Migrate() error {

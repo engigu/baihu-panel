@@ -57,6 +57,7 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 			registerDashboardRoutes(adminOnly, c)
 			registerTaskRoutes(adminOnly, c)
 			registerEnvRoutes(adminOnly, c)
+			registerSandboxRoutes(adminOnly, c)
 			registerScriptRoutes(adminOnly, c)
 			registerFileRoutes(adminOnly, c)
 			registerLogRoutes(adminOnly, c)
@@ -126,6 +127,18 @@ func registerEnvRoutes(g *gin.RouterGroup, c *Controllers) {
 		env.GET("/:id/tasks", c.Env.GetAssociatedTasks)
 		env.PUT("/:id", c.Env.UpdateEnvVar)
 		env.DELETE("/:id", c.Env.DeleteEnvVar)
+	}
+}
+
+func registerSandboxRoutes(g *gin.RouterGroup, c *Controllers) {
+	sandboxes := g.Group("/sandboxes")
+	{
+		sandboxes.GET("", c.Sandbox.GetSandboxProfiles)
+		sandboxes.POST("", c.Sandbox.CreateSandboxProfile)
+		sandboxes.POST("/repair", c.Sandbox.RepairSandboxDirectories)
+		sandboxes.GET("/:id", c.Sandbox.GetSandboxProfileByID)
+		sandboxes.PUT("/:id", c.Sandbox.UpdateSandboxProfile)
+		sandboxes.DELETE("/:id", c.Sandbox.DeleteSandboxProfile)
 	}
 }
 

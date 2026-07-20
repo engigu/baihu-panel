@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import DirTreeSelect from '@/components/DirTreeSelect.vue'
-import { Plus, X, ChevronDown, Search, AlertCircle, Terminal, Zap, Lock, Variable, Wrench } from 'lucide-vue-next'
+import { Plus, X, ChevronDown, Search, AlertCircle, Terminal, Zap, Lock, Variable, Wrench, Clock, Play, Shield, ShieldAlert } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { api, type Task, type EnvVar, type Agent } from '@/api'
@@ -47,6 +47,8 @@ const workDirCache = ref<Record<string, string>>({})
 const commentToTaskEnabled = ref(false)
 const allEnvsEnabled = ref(false)
 const scriptsDir = ref<string>(PATHS.SCRIPTS_DIR)
+const allSandboxes = ref<any[]>([])
+const selectedSandboxId = ref<string>('none')
 
 
 
@@ -104,6 +106,7 @@ watch(() => props.open, async (val: boolean) => {
       pin_type: props.task?.pin_type ?? 'none',
       pre_command: props.task?.pre_command ?? '',
       post_command: props.task?.post_command ?? '',
+      sandbox_profile_id: props.task?.sandbox_profile_id ?? 'none',
       ...props.task
     }
     // 配置清理会在 TaskAdvancedConfig 中自动处理
@@ -147,6 +150,8 @@ watch(() => props.open, async (val: boolean) => {
       }))
     }
 
+    selectedSandboxId.value = props.task?.sandbox_profile_id || 'none'
+
     // 解析 Agent 和工作目录
     const agentId = props.task?.agent_id ? String(props.task.agent_id) : 'local'
     selectedAgentId.value = agentId
@@ -172,14 +177,16 @@ watch(() => props.open, async (val: boolean) => {
 
 async function loadData() {
   try {
-    const [envs, agents, paths] = await Promise.all([
+    const [envs, agents, paths, sandboxes] = await Promise.all([
       api.env.all(),
       api.agents.list(),
-      api.settings.getPaths().catch(() => ({ scripts_dir: PATHS.SCRIPTS_DIR }))
+      api.settings.getPaths().catch(() => ({ scripts_dir: PATHS.SCRIPTS_DIR })),
+      api.sandboxes.list().catch(() => [])
     ])
     allEnvVars.value = envs
     allAgents.value = agents
     scriptsDir.value = paths?.scripts_dir || PATHS.SCRIPTS_DIR
+    allSandboxes.value = sandboxes
   } catch { /* ignore */ }
 }
 
@@ -222,11 +229,19 @@ function encodeLocalWorkDir(workDir?: string | null): string {
 }
 
 async function save() {
+  if (!form.value.name || !form.value.name.trim()) {
+    toast.error('保存失败', {
+      description: '任务名称不能为空'
+    })
+    return
+  }
+
   try {
     form.value.envs = selectedEnvIds.value.join(',')
     form.value.type = 'task'
     form.value.trigger_type = selectedTriggerType.value
     form.value.agent_id = selectedAgentId.value === 'local' ? null : selectedAgentId.value
+    form.value.sandbox_profile_id = selectedSandboxId.value === 'none' ? null : selectedSandboxId.value
 
     // 保存语言环境配置
     form.value.languages = selectedLangs.value.map((l: { name: string; version: string }) => ({
@@ -330,11 +345,55 @@ async function save() {
                     <div class="sm:col-span-3 min-w-0">
                       <Select v-model="selectedTriggerType">
                         <SelectTrigger class="h-9 bg-muted/20 border-muted-foreground/15 px-2 sm:px-3 text-[11px] sm:text-sm min-w-0">
-                          <SelectValue class="truncate" />
+                          <div class="flex items-center gap-2">
+                            <Clock v-if="selectedTriggerType === TRIGGER_TYPE.CRON" class="w-3.5 h-3.5 opacity-80" />
+                            <Play v-else-if="selectedTriggerType === TRIGGER_TYPE.BAIHU_STARTUP" class="w-3.5 h-3.5 opacity-80" />
+                            <span>{{ selectedTriggerType === TRIGGER_TYPE.CRON ? '定时周期' : '系统启动' }}</span>
+                          </div>
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem :value="TRIGGER_TYPE.CRON" class="text-xs sm:text-sm">⏳ 定时周期</SelectItem>
-                          <SelectItem :value="TRIGGER_TYPE.BAIHU_STARTUP" class="text-xs sm:text-sm">🚀 系统启动</SelectItem>
+                          <SelectItem :value="TRIGGER_TYPE.CRON" class="text-xs sm:text-sm">
+                            <div class="flex items-center gap-2">
+                              <Clock class="w-3.5 h-3.5 opacity-80" />
+                              <span>定时周期</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem :value="TRIGGER_TYPE.BAIHU_STARTUP" class="text-xs sm:text-sm">
+                            <div class="flex items-center gap-2">
+                              <Play class="w-3.5 h-3.5 opacity-80" />
+                              <span>系统启动</span>
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div class="grid sm:grid-cols-4 items-center gap-1 sm:gap-3 min-w-0" v-if="selectedAgentId === 'local'">
+                    <Label class="sm:text-right text-[11px] sm:text-xs text-foreground/70 uppercase tracking-wider font-semibold truncate">运行沙箱</Label>
+                    <div class="sm:col-span-3 min-w-0">
+                      <Select v-model="selectedSandboxId">
+                        <SelectTrigger class="h-9 bg-muted/20 border-muted-foreground/15 px-2 sm:px-3 text-[11px] sm:text-sm min-w-0">
+                          <div class="flex items-center gap-2">
+                            <ShieldAlert v-if="selectedSandboxId === 'none'" class="w-3.5 h-3.5 text-muted-foreground" />
+                            <Shield v-else class="w-3.5 h-3.5 text-blue-500 fill-blue-500/10" />
+                            <span>
+                              {{ selectedSandboxId === 'none' ? '不使用沙箱 (Root 运行)' : ((allSandboxes && allSandboxes.find(sb => sb.id === selectedSandboxId)?.name) || '沙箱') }}
+                            </span>
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none" class="text-xs sm:text-sm">
+                            <div class="flex items-center gap-2">
+                              <ShieldAlert class="w-3.5 h-3.5 text-muted-foreground" />
+                              <span>不使用沙箱 (Root 运行)</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem v-for="sb in allSandboxes" :key="sb.id" :value="sb.id" class="text-xs sm:text-sm">
+                            <div class="flex items-center gap-2">
+                              <Shield class="w-3.5 h-3.5 text-blue-500 fill-blue-500/10" />
+                              <span>{{ sb.name }}</span>
+                            </div>
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

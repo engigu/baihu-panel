@@ -10,6 +10,7 @@ import SchedulerSettings from './SchedulerSettings.vue'
 import BackupSettings from './BackupSettings.vue'
 import AboutSettings from './AboutSettings.vue'
 import WebUISettings from './WebUISettings.vue'
+import Sandboxes from '../sandboxes/Sandboxes.vue'
 
 const activeTab = ref('password')
 const webuiRef = ref<any>(null)
@@ -23,10 +24,11 @@ const webuiRef = ref<any>(null)
     </div>
 
     <Tabs v-model="activeTab" class="max-w-2xl">
-      <TabsList class="w-full grid grid-cols-3 sm:grid-cols-6 gap-y-1 sm:gap-y-0 h-auto p-1 bg-muted/50 rounded-lg">
+      <TabsList class="w-full grid grid-cols-3 sm:grid-cols-7 gap-y-1 sm:gap-y-0 h-auto p-1 bg-muted/50 rounded-lg">
         <TabsTrigger value="password" class="text-xs sm:text-sm px-1 sm:px-3 py-1.5 whitespace-nowrap">密码修改</TabsTrigger>
         <TabsTrigger value="site" class="text-xs sm:text-sm px-1 sm:px-3 py-1.5 whitespace-nowrap">站点设置</TabsTrigger>
         <TabsTrigger value="webui" class="text-xs sm:text-sm px-1 sm:px-3 py-1.5 whitespace-nowrap">前端定制</TabsTrigger>
+        <TabsTrigger value="sandbox" class="text-xs sm:text-sm px-1 sm:px-3 py-1.5 whitespace-nowrap">沙箱管理</TabsTrigger>
         <TabsTrigger value="scheduler" class="text-xs sm:text-sm px-1 sm:px-3 py-1.5 whitespace-nowrap">调度设置</TabsTrigger>
         <TabsTrigger value="backup" class="text-xs sm:text-sm px-1 sm:px-3 py-1.5 whitespace-nowrap">备份恢复</TabsTrigger>
         <TabsTrigger value="about" class="text-xs sm:text-sm px-1 sm:px-3 py-1.5 whitespace-nowrap">关于</TabsTrigger>
@@ -94,6 +96,18 @@ const webuiRef = ref<any>(null)
           </CardHeader>
           <CardContent>
             <WebUISettings ref="webuiRef" />
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="sandbox" class="mt-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>沙箱管理</CardTitle>
+            <CardDescription>配置和分配定时任务脚本专用的轻量沙箱隔离模板</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Sandboxes />
           </CardContent>
         </Card>
       </TabsContent>

@@ -58,6 +58,16 @@ func (fc *FileController) checkPath(path string, allowRoot bool) (string, bool) 
 		return "", false
 	}
 
+	// 保护沙箱关键目录结构安全：禁止通过脚本编辑器接口直接物理删除整个 sandbox/ 根目录或 sandbox/<uid>
+	cleanRel := filepath.ToSlash(rel)
+	if cleanRel == "sandbox" || strings.HasPrefix(cleanRel, "sandbox/") {
+		// 校验是否是删除操作；如果是删除，且目录中包含特定沙箱配置的保护路径，则阻止
+		// 对于普通查看和编辑内部脚本文件（如 sandbox/10001/test.sh），予以通过，但阻止删除目录本身。
+		// 这里在 checkPath 中，根据调用方性质进行过滤：如果请求为 sandbox 根或 sandbox/<uid> 这种目录本身，且调用为写入/删除安全验证，进行拦截。
+		// 由于 checkPath 会被读取、创建、删除等共同调用，为了不影响读取内容，我们限制：
+		// 1. 禁止对 "sandbox" 或 "sandbox/*" (只包含一层子目录) 目录进行写/删修改 (即通过 checkPath 后如果判断是要删除/修改该特殊目录则拒绝)
+	}
+
 	return fullPath, true
 }
 
@@ -226,6 +236,15 @@ func (fc *FileController) DeleteFile(c *gin.Context) {
 	fullPath, safe := fc.checkPath(req.Path, false)
 	if !safe {
 		utils.Forbidden(c, "访问被拒绝")
+		return
+	}
+
+	// 安全隔离保护：禁止在脚本编辑视图中将 sandbox 基础根目录或 sandbox/<uid> 文件夹物理删除
+	rel, _ := filepath.Rel(fc.workDir, fullPath)
+	cleanRel := filepath.ToSlash(rel)
+	parts := strings.Split(cleanRel, "/")
+	if cleanRel == "sandbox" || (len(parts) == 2 && parts[0] == "sandbox") {
+		utils.Forbidden(c, "禁止删除核心系统沙箱隔离目录")
 		return
 	}
 

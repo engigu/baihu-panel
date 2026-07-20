@@ -20,6 +20,8 @@ func RegisterControllers() *Controllers {
 
 	taskService := tasks.NewTaskService()
 	envService := services.NewEnvService()
+	sandboxService := services.NewSandboxService()
+	sandboxService.InitSandboxDirectories() // 启动时自动初始化与校对所有沙箱专有执行文件夹与属主权限
 	scriptService := services.NewScriptService()
 	sendStatsService := services.NewSendStatsService()
 	agentWSManager := services.GetAgentWSManager()
@@ -34,8 +36,8 @@ func RegisterControllers() *Controllers {
 	// 清理 task 运行状态的任务可以直接由 executorService 承担或在此处通过 Database 直接清理
 	// 简单期间，我们使用一个新方法 tasks.CleanupRunningTasks() 或者让 executorService 启动时清理
 
-	executorService = tasks.NewExecutorService(taskService, taskLogService, agentWSManager, settingsService, envService)
-	// 启动时清理残留的运行状态
+	executorService = tasks.NewExecutorService(taskService, taskLogService, sandboxService, agentWSManager, settingsService, envService)
+	// 启动时清理残留 of 运行状态
 	_ = executorService.CleanupRunningTasks()
 
 	// 启动计划任务
@@ -47,12 +49,14 @@ func RegisterControllers() *Controllers {
 
 	taskController := controllers.NewTaskController(taskService, executorService)
 	envController := controllers.NewEnvController(envService)
+	sandboxController := controllers.NewSandboxController(sandboxService)
 
 	// 初始化并返回控制器
 	return &Controllers{
 		Task:         taskController,
 		Auth:         controllers.NewAuthController(userService, settingsService, loginLogService),
 		Env:          envController,
+		Sandbox:      sandboxController,
 		Script:       controllers.NewScriptController(scriptService),
 		Executor:     controllers.NewExecutorController(executorService),
 		File:         controllers.NewFileController(constant.ScriptsWorkDir),

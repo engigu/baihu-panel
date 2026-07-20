@@ -449,6 +449,13 @@ export const api = {
     setActive: (name: string) => request<{ message: string }>('/webui/active', { method: 'PUT', body: JSON.stringify({ name }) }),
     delete: (name: string) => request<{ message: string }>(`/webui/${name}`, { method: 'DELETE' })
   },
+  sandboxes: {
+    list: () => request<SandboxProfile[]>('/sandboxes'),
+    create: (data: Partial<SandboxProfile>) => request<SandboxProfile>('/sandboxes', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<SandboxProfile>) => request<SandboxProfile>(`/sandboxes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request(`/sandboxes/${id}`, { method: 'DELETE' }),
+    repair: () => request<any>('/sandboxes/repair', { method: 'POST' })
+  },
   system: {
     export: (data: { task_ids?: string[], env_ids?: string[] }) => request<any>('/system/export', { method: 'POST', body: JSON.stringify(data) })
   }
@@ -497,6 +504,7 @@ export interface Task {
   next_run: string
   running_status?: string
   repo_task_id?: string
+  sandbox_profile_id?: string | null
   created_at?: string
   updated_at?: string
 }
@@ -540,6 +548,19 @@ export interface TaskListResponse {
   total: number
   page: number
   page_size: number
+}
+
+export interface SandboxProfile {
+  id: string
+  name: string
+  description: string
+  memory_limit: number
+  nproc_limit: number
+  uid: number
+  gid: number
+  hide_system_etc: boolean
+  created_at?: string
+  updated_at?: string
 }
 
 export interface Script {

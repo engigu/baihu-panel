@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/utils"
 )
 
@@ -77,6 +78,7 @@ type ExecutionRequest struct {
 	Timeout       int                 // 超时时间（分钟）
 	Languages     []map[string]string // 语言环境配置
 	UseMise       bool                // 是否使用 mise
+	Sandbox       *models.SandboxConfig
 	Metadata      ExecutionMetadata   // 额外元数据
 }
 
@@ -233,8 +235,9 @@ func NewScheduler(config SchedulerConfig, handler SchedulerEventHandler) *Schedu
 				WorkDir:     req.WorkDir,
 				Envs:        req.Envs,
 				Timeout:     req.Timeout,
-				Languages:   req.Languages,
-				UseMise:     req.UseMise,
+				Languages:     req.Languages,
+				UseMise:       req.UseMise,
+				Sandbox:       req.Sandbox,
 			}, stdout, stderr, hooks)
 		},
 		taskQueue:    make(chan *ExecutionRequest, config.QueueSize),

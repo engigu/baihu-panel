@@ -87,7 +87,8 @@ type Task struct {
 	CleanConfig    string        `json:"clean_config" gorm:"size:255;default:''"`    // 清理配置 JSON
 	Envs           BigText       `json:"envs" gorm:"-"`                              // 环境变量ID列表，逗号分隔
 	Languages      TaskLanguages `json:"languages" gorm:"type:text"`                 // 针对本地任务的语言配置列表
-	AgentID        *string       `json:"agent_id" gorm:"size:20;index"`              // Agent ID，为空表示本地执行
+	AgentID          *string       `json:"agent_id" gorm:"size:20;index"`              // Agent ID，为空表示本地执行
+	SandboxProfileID *string       `json:"sandbox_profile_id" gorm:"size:20;index"`    // 关联的沙箱 ID，若为空表示直接本地原生运行
 	RetryCount     int           `json:"retry_count" gorm:"default:0"`               // 失败重试次数
 	RetryInterval  int           `json:"retry_interval" gorm:"default:0"`            // 失败重试间隔(秒)
 	RandomRange    int           `json:"random_range" gorm:"default:0"`              // 随机延迟范围(秒)
@@ -164,6 +165,10 @@ func (t *Task) GetUseMise() bool {
 
 func (t *Task) UseMise() bool {
 	return t.GetUseMise()
+}
+
+func (t *Task) GetSandboxProfileID() *string {
+	return t.SandboxProfileID
 }
 
 // CronTask 计划任务接口

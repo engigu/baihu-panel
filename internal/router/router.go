@@ -16,6 +16,7 @@ type Controllers struct {
 	Task         *controllers.TaskController
 	Auth         *controllers.AuthController
 	Env          *controllers.EnvController
+	Sandbox      *controllers.SandboxController
 	Script       *controllers.ScriptController
 	Executor     *controllers.ExecutorController
 	File         *controllers.FileController

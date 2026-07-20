@@ -13,6 +13,8 @@ import (
 	"github.com/creack/pty"
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/sandbox"
 	"github.com/engigu/baihu-panel/internal/utils"
 )
 
@@ -29,6 +31,7 @@ type Task interface {
 	GetEnvVars() []string
 	GetLanguages() []map[string]string
 	GetUseMise() bool
+	GetSandboxProfileID() *string
 }
 
 // CronTask 计划任务接口
@@ -42,14 +45,15 @@ type CronTask interface {
 
 // Request 任务执行请求
 type Request struct {
-	Command     string
-	PreCommand  string
-	PostCommand string
-	WorkDir     string
-	Envs        []string
-	Timeout     int // 任务超时时间（分钟）
-	Languages   []map[string]string
-	UseMise     bool
+	Command        string
+	PreCommand     string
+	PostCommand    string
+	WorkDir        string
+	Envs           []string
+	Timeout        int // 任务超时时间（分钟）
+	Languages      []map[string]string
+	UseMise        bool
+	Sandbox        *models.SandboxConfig
 }
 
 // Result 任务执行结果
@@ -159,12 +163,59 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	}
 
 	shell, args := utils.GetShellCommand(req.Command)
+	
+	// 校验并在 Unix 下使用 chpst 包装命令来实现 100% 稳定的降权与内存、并发限制
+	if runtime.GOOS != "windows" && req.Sandbox != nil && req.Sandbox.UseSandbox {
+		// 检查宿主机上是否存在 chpst 命令
+		if _, chpstErr := exec.LookPath("chpst"); chpstErr == nil {
+			var chpstArgs []string
+			// 1. 降权用户
+			chpstArgs = append(chpstArgs, "-u", fmt.Sprintf("%d:%d", req.Sandbox.UID, req.Sandbox.GID))
+			// 2. 内存限制 (MB 转 Bytes)
+			if req.Sandbox.MemoryLimit > 0 {
+				chpstArgs = append(chpstArgs, "-m", fmt.Sprintf("%d", req.Sandbox.MemoryLimit*1024*1024))
+			}
+			// 3. 最大并发进程数限制
+			if req.Sandbox.NprocLimit > 0 {
+				chpstArgs = append(chpstArgs, "-p", fmt.Sprintf("%d", req.Sandbox.NprocLimit))
+			}
+			
+			// 4. 重组原始执行参数，用 chpst 拉起 shell
+			chpstArgs = append(chpstArgs, shell)
+			chpstArgs = append(chpstArgs, args...)
+			
+			cmd := exec.CommandContext(execCtx, "chpst", chpstArgs...)
+			usePty := stdout != nil && (stdout == stderr || stdout == io.Discard)
+			SetProcessGroupAndCancel(cmd, usePty)
+			
+			// 在 chpst 接管降权后，我们就不需要 Go SysProcAttr 进行二次降权了，只应用命名空间隔离挂载
+			sandbox.Apply(cmd, req.Sandbox)
+			
+			// 设置工作目录
+			workDir := strings.TrimSpace(req.WorkDir)
+			if workDir != "" {
+				cmd.Dir = workDir
+			}
+			// 设置环境变量
+			cmd.Env = os.Environ()
+			if len(req.Envs) > 0 {
+				cmd.Env = append(cmd.Env, req.Envs...)
+			}
+			cmd.Env = append(cmd.Env, "TERM=xterm", "PYTHONUNBUFFERED=1", "NODE_NO_WARNINGS=1")
+			
+			// 将最终实例赋值给原来的变量，继续走后续的 PTY / Pipe 流式日志捕获
+			return executeCmdInstance(execCtx, cmd, logID, start, stdout, stderr, hooks, usePty)
+		}
+	}
+
 	cmd := exec.CommandContext(execCtx, shell, args...)
 
 	usePty := runtime.GOOS != "windows" && stdout != nil && (stdout == stderr || stdout == io.Discard)
 	SetProcessGroupAndCancel(cmd, usePty)
 
-	// 设置工作目录
+	// 应用沙箱配置 (资源与特权控制)
+	sandbox.Apply(cmd, req.Sandbox)
+
 	// 设置工作目录
 	workDir := strings.TrimSpace(req.WorkDir)
 	if workDir != "" {
@@ -183,158 +234,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		"NODE_NO_WARNINGS=1",
 	)
 
-	var pipeWriter *os.File
-	var ptyFile *os.File
-	var copyDone chan struct{}
-	var err error
-
-	var started bool
-	// 尝试开启 PTY 模式（Unix/macOS 且输出合并时）
-	if runtime.GOOS != "windows" && stdout != nil && (stdout == stderr || stdout == io.Discard) {
-		// 强制注入终端环境标识及禁用输出缓冲的标志，确保 PTY 模式下最佳实时性能
-		cmd.Env = append(cmd.Env,
-			"TERM=xterm",
-			"PYTHONUNBUFFERED=1",
-			"NODE_NO_WARNINGS=1",
-		)
-		f, ptyErr := pty.Start(cmd)
-		if ptyErr == nil {
-			logger.Infof("[Executor] #%s 启动于 PTY 模式", logID)
-			ptyFile = f
-			started = true
-			copyDone = make(chan struct{})
-			go func() {
-				defer close(copyDone)
-				// io.Copy 对于 PTY 来说是最稳健且即时的流式拷贝
-				io.Copy(stdout, f)
-				f.Close()
-			}()
-		} else {
-			logger.Errorf("[Executor] 任务 #%s PTY 启动失败: %v", logID, ptyErr)
-		}
-	}
-
-	if !started {
-		// 如果 stdout 和 stderr 指针不一致，但在逻辑上我们知道它们是同一个 MultiWriter，
-		// 这里会显示为 Pipe 模式。
-		if stdout != stderr && stdout != io.Discard {
-			logger.Debugf("[Executor] 任务 #%d stdout (%p) 和 stderr (%p) 不同，回退到 Pipe 模式。", logID, stdout, stderr)
-		}
-		logger.Infof("[Executor] #%s 启动于 Pipe 模式", logID)
-		if stdout != nil && stdout == stderr {
-			pr, pw, err := os.Pipe()
-			if err == nil {
-				cmd.Stdout = pw
-				cmd.Stderr = pw
-				pipeWriter = pw
-				copyDone = make(chan struct{})
-				go func() {
-					io.Copy(stdout, pr)
-					pr.Close()
-					close(copyDone)
-				}()
-			} else {
-				cmd.Stdout = stdout
-				cmd.Stderr = stderr
-			}
-		} else {
-			cmd.Stdout = stdout
-			cmd.Stderr = stderr
-		}
-
-		// 使用 cmd.Start() + Wait() 以便在后台处理心跳
-		err = cmd.Start()
-		if err != nil {
-			if pipeWriter != nil {
-				pipeWriter.Close()
-			}
-			// 启动失败的处理
-			end := time.Now()
-			result := &Result{
-				Status:    constant.TaskStatusFailed,
-				Duration:  end.Sub(start).Milliseconds(),
-				ExitCode:  1,
-				StartTime: start, // 记录开始时间
-				EndTime:   end,
-			}
-			// 执行后钩子
-			if hooks != nil {
-				result.Output += "\n[系统错误] " + err.Error()
-				hooks.PostExecute(ctx, logID, result)
-			}
-			return result, err
-		}
-
-		// 在父进程中关闭写端，这样子进程退出后 pr 才会收到 EOF
-		if pipeWriter != nil {
-			pipeWriter.Close()
-		}
-	} else {
-		// PTY 模式下 cmd.Start() 已经在 pty.Start(cmd) 中调用过了
-	}
-
-	// 启动心跳协程
-	done := make(chan struct{})
-	go func() {
-		// 每3秒一次心跳
-		ticker := time.NewTicker(3 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-done:
-				return
-			case <-ticker.C:
-				if hooks != nil {
-					hooks.OnHeartbeat(ctx, logID, time.Since(start).Milliseconds())
-				}
-			}
-		}
-	}()
-
-	// 等待命令完成
-	err = cmd.Wait()
-	close(done) // 停止心跳
-
-	// PTY 模式下需要显式关闭
-	if ptyFile != nil {
-		ptyFile.Close()
-	}
-
-	// 等待日志复制完成
-	if copyDone != nil {
-		<-copyDone
-	}
-
-	end := time.Now()
-
-	result := &Result{
-		StartTime: start,
-		EndTime:   end,
-		Duration:  end.Sub(start).Milliseconds(),
-	}
-
-	if err != nil {
-		result.Status = constant.TaskStatusFailed
-		result.Error = err.Error()
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			result.ExitCode = exitErr.ExitCode()
-		} else {
-			result.ExitCode = 1
-		}
-	} else {
-		result.Status = constant.TaskStatusSuccess
-		result.ExitCode = 0
-	}
-
-	// 3. 执行后钩子
-	if hooks != nil {
-		if hookErr := hooks.PostExecute(ctx, logID, result); hookErr != nil {
-			// 记录钩子错误但不影响执行结果
-			result.Output += "\n[钩子错误] " + hookErr.Error()
-		}
-	}
-
-	return result, err
+	return executeCmdInstance(execCtx, cmd, logID, start, stdout, stderr, hooks, usePty)
 }
 
 // ParseEnvVars 解析环境变量字符串 "KEY1=VALUE1,KEY2=VALUE2"
@@ -385,4 +285,138 @@ func FormatEnvVars(envs []string) string {
 	}
 
 	return strings.Join(pairs, ",")
+}
+
+// executeCmdInstance 执行装配好的 Cmd 实例，供 chpst 包装或原生命令调用
+func executeCmdInstance(ctx context.Context, cmd *exec.Cmd, logID string, start time.Time, stdout, stderr io.Writer, hooks Hooks, usePty bool) (*Result, error) {
+	var pipeWriter *os.File
+	var ptyFile *os.File
+	var copyDone chan struct{}
+	var err error
+
+	var started bool
+	// 尝试开启 PTY 模式（Unix/macOS 且输出合并时）
+	if usePty && runtime.GOOS != "windows" && stdout != nil && (stdout == stderr || stdout == io.Discard) {
+		f, ptyErr := pty.Start(cmd)
+		if ptyErr == nil {
+			logger.Infof("[Executor] #%s 启动于 PTY 模式", logID)
+			ptyFile = f
+			started = true
+			copyDone = make(chan struct{})
+			go func() {
+				defer close(copyDone)
+				io.Copy(stdout, f)
+				f.Close()
+			}()
+		} else {
+			logger.Errorf("[Executor] 任务 #%s PTY 启动失败: %v", logID, ptyErr)
+		}
+	}
+
+	if !started {
+		if stdout != stderr && stdout != io.Discard {
+			logger.Debugf("[Executor] 任务 #%s stdout (%p) 和 stderr (%p) 不同，回退到 Pipe 模式。", logID, stdout, stderr)
+		}
+		logger.Infof("[Executor] #%s 启动于 Pipe 模式", logID)
+		if stdout != nil && stdout == stderr {
+			pr, pw, err := os.Pipe()
+			if err == nil {
+				cmd.Stdout = pw
+				cmd.Stderr = pw
+				pipeWriter = pw
+				copyDone = make(chan struct{})
+				go func() {
+					io.Copy(stdout, pr)
+					pr.Close()
+					close(copyDone)
+				}()
+			} else {
+				cmd.Stdout = stdout
+				cmd.Stderr = stderr
+			}
+		} else {
+			cmd.Stdout = stdout
+			cmd.Stderr = stderr
+		}
+
+		err = cmd.Start()
+		if err != nil {
+			if pipeWriter != nil {
+				pipeWriter.Close()
+			}
+			end := time.Now()
+			result := &Result{
+				Status:    constant.TaskStatusFailed,
+				Duration:  end.Sub(start).Milliseconds(),
+				ExitCode:  1,
+				StartTime: start,
+				EndTime:   end,
+			}
+			if hooks != nil {
+				result.Output += "\n[系统错误] " + err.Error()
+				hooks.PostExecute(ctx, logID, result)
+			}
+			return result, err
+		}
+
+		if pipeWriter != nil {
+			pipeWriter.Close()
+		}
+	}
+
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(3 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				if hooks != nil {
+					hooks.OnHeartbeat(ctx, logID, time.Since(start).Milliseconds())
+				}
+			}
+		}
+	}()
+
+	err = cmd.Wait()
+	close(done)
+
+	if ptyFile != nil {
+		ptyFile.Close()
+	}
+
+	if copyDone != nil {
+		<-copyDone
+	}
+
+	end := time.Now()
+
+	result := &Result{
+		StartTime: start,
+		EndTime:   end,
+		Duration:  end.Sub(start).Milliseconds(),
+	}
+
+	if err != nil {
+		result.Status = constant.TaskStatusFailed
+		result.Error = err.Error()
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			result.ExitCode = exitErr.ExitCode()
+		} else {
+			result.ExitCode = 1
+		}
+	} else {
+		result.Status = constant.TaskStatusSuccess
+		result.ExitCode = 0
+	}
+
+	if hooks != nil {
+		if hookErr := hooks.PostExecute(ctx, logID, result); hookErr != nil {
+			result.Output += "\n[钩子错误] " + hookErr.Error()
+		}
+	}
+
+	return result, err
 }

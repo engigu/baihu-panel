@@ -15,7 +15,8 @@ export default defineConfig({
         nav: [
             { text: '快速开始', link: '/guide/introduction' },
             { text: '部署指南', link: '/guide/deployment' },
-            { text: 'API 文档', link: '/guide/api' }
+            { text: 'API 文档', link: '/guide/api' },
+            { text: '下载量', link: '/guide/package-stats' }
         ],
 
         sidebar: [
