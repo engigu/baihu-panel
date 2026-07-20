@@ -168,6 +168,13 @@ function initTerminal(forceConnect = false) {
       inputBuffer = ''
       historyIndex = commandHistory.length
       terminal?.write('^C\r\n')
+    } else if (data === '\x0c') {
+      if (!inputBuffer) {
+        ws.send('clear\r\n')
+      } else {
+        terminal?.clear()
+        terminal?.write(inputBuffer)
+      }
     } else if (data >= ' ' || data === '\t') {
       inputBuffer += data
       terminal?.write(data)
