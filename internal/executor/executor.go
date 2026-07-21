@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -81,8 +82,26 @@ func Execute(ctx context.Context, req Request, stdout, stderr io.Writer) (*Resul
 }
 
 // ExecuteWithHooks 执行命令（带钩子支持）
-func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer, hooks Hooks) (*Result, error) {
+func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer, hooks Hooks) (res *Result, err error) {
 	start := time.Now()
+
+	// 捕获任务执行过程中的 Panic 异常并输出 Go 层面的堆栈信息 (Stack Trace)
+	defer func() {
+		if r := recover(); r != nil {
+			stackTrace := string(debug.Stack())
+			logger.Errorf("[Executor] 任务执行发生 Panic 异常: %v\n%s", r, stackTrace)
+			err = fmt.Errorf("系统 Runtime Panic: %v", r)
+			res = &Result{
+				Status:    constant.TaskStatusFailed,
+				Error:     err.Error(),
+				Duration:  time.Since(start).Milliseconds(),
+				ExitCode:  1,
+				StartTime: start,
+				EndTime:   time.Now(),
+			}
+			writeDiagnosticError(stdout, start, req.WorkDir, req.Command, false, err.Error(), 1, stackTrace)
+		}
+	}()
 
 	// 演示模式拦截
 	if constant.DemoMode {
@@ -145,15 +164,15 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	// 1. 执行前钩子
 	var logID string
 	if hooks != nil {
-		id, err := hooks.PreExecute(ctx, req)
-		if err != nil {
+		id, hookErr := hooks.PreExecute(ctx, req)
+		if hookErr != nil {
 			return &Result{
 				Status:    constant.TaskStatusFailed,
 				Duration:  0,
 				ExitCode:  1,
 				StartTime: start,
 				EndTime:   time.Now(),
-			}, err
+			}, hookErr
 		}
 		logID = id
 	}
@@ -171,10 +190,11 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	}
 
 	// 设置工作目录
-	// 设置工作目录
 	workDir := strings.TrimSpace(req.WorkDir)
 	if workDir != "" {
 		cmd.Dir = workDir
+	} else {
+		workDir, _ = os.Getwd()
 	}
 
 	// 设置环境变量（始终继承系统环境变量）
@@ -195,7 +215,6 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	var pipeWriter *os.File
 	var ptyFile *os.File
 	var copyDone chan struct{}
-	var err error
 
 	var started bool
 	// 尝试开启 PTY 模式（Unix/macOS 且输出合并时）
@@ -241,8 +260,8 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		}
 		logger.Infof("[Executor] #%s 启动于 Pipe 模式", logID)
 		if stdout != nil && stdout == stderr {
-			pr, pw, err := os.Pipe()
-			if err == nil {
+			pr, pw, pipeErr := os.Pipe()
+			if pipeErr == nil {
 				cmd.Stdout = pw
 				cmd.Stderr = pw
 				pipeReader = pr
@@ -271,6 +290,9 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 			if pipeReader != nil {
 				pipeReader.Close()
 			}
+			// 仅在进程拉起失败时向日志写入诊断信息
+			writeDiagnosticError(stdout, start, workDir, req.Command, usePty, fmt.Sprintf("进程 fork/exec 启动失败: %v", err), 1, "")
+
 			// 启动失败的处理
 			end := time.Now()
 			result := &Result{
@@ -356,6 +378,15 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		result.ExitCode = 0
 	}
 
+	// 仅在任务执行失败/异常退出时向日志流追加写入诊断尾部
+	if result.Status != constant.TaskStatusSuccess {
+		var stack string
+		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+			stack = string(exitErr.Stderr)
+		}
+		writeDiagnosticError(stdout, start, workDir, req.Command, usePty, result.Error, result.ExitCode, stack)
+	}
+
 	// 3. 执行后钩子
 	if hooks != nil {
 		if hookErr := hooks.PostExecute(ctx, logID, result); hookErr != nil {
@@ -365,6 +396,45 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	}
 
 	return result, err
+}
+
+// writeDiagnosticError 统一向 stdout 追加格式化的诊断失败信息块及堆栈跟踪
+func writeDiagnosticError(w io.Writer, start time.Time, workDir, command string, usePty bool, errStr string, exitCode int, stackTrace string) {
+	if w == nil {
+		return
+	}
+	modeStr := "Pipe 模式"
+	if usePty {
+		modeStr = "PTY 伪终端模式"
+	}
+	detail := errStr
+	if exitCode > 0 && errStr != "" && !strings.Contains(errStr, "Exit Code:") {
+		detail = fmt.Sprintf("Exit Code: %d, Error: %s", exitCode, errStr)
+	} else if exitCode > 0 && errStr == "" {
+		detail = fmt.Sprintf("Exit Code: %d", exitCode)
+	}
+
+	stackBlock := ""
+	if strings.TrimSpace(stackTrace) != "" {
+		stackBlock = fmt.Sprintf("\n[Task StackTrace]\n%s", strings.TrimSpace(stackTrace))
+	}
+
+	block := fmt.Sprintf(
+		"\n================================================================================\n"+
+			"[Task Error] 任务执行失败 (%s)%s\n"+
+			"[Task Log] 开始时间 : %s\n"+
+			"[Task Log] 工作目录 : %s\n"+
+			"[Task Log] 运行命令 : %s\n"+
+			"[Task Log] 运行模式 : %s\n"+
+			"================================================================================\n",
+		detail,
+		stackBlock,
+		start.Format(time.DateTime),
+		workDir,
+		command,
+		modeStr,
+	)
+	w.Write([]byte(block))
 }
 
 // ParseEnvVars 解析环境变量字符串 "KEY1=VALUE1,KEY2=VALUE2"

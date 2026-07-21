@@ -14,7 +14,7 @@ import (
 func VerifyPwsh() {
 	if IsWindows() {
 		if _, err := exec.LookPath("pwsh"); err != nil {
-			logger.Fatalf("PowerShell 7+ (pwsh.exe) is required on Windows, but was not found in PATH. Please install it first.")
+			logger.Fatalf("Windows 系统必须依赖 PowerShell 7+ (pwsh.exe)，但在系统环境变量 PATH 中未找到，请先进行安装。")
 		}
 	}
 }
