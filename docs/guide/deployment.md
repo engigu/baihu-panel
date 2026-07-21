@@ -209,9 +209,9 @@ chmod +x baihu-linux-amd64
 
 **1. 安装前置依赖**
 * **安装 `mise`**（用于多语言运行时环境管理）：
-  在 PowerShell 中运行以下命令安装：
+  在 PowerShell 中运行以下命令使用 `winget` 安装：
   ```powershell
-  irm https://mise.run | iex
+  winget install jdx.mise
   ```
 * **安装 `pwsh`**（PowerShell 7.6+，用于执行后台任务）：
   白虎面板在 Windows 系统下执行任务及依赖检测强依赖 PowerShell 7+（`pwsh.exe`）。请参考 [微软官方 PowerShell 安装文档](https://learn.microsoft.com/zh-cn/powershell/scripting/install/install-powershell-on-windows?view=powershell-7.6) 安装，或在 PowerShell 中通过 `winget` 快捷安装：
