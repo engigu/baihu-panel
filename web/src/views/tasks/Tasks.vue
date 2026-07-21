@@ -198,6 +198,51 @@ function duplicateTask(task: Task) {
   }
 }
 
+function getLangBadgeClass(name: string) {
+  const n = name.toLowerCase()
+  const colors: Record<string, string> = {
+    python: 'bg-amber-500/10 text-amber-500 border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20',
+    py: 'bg-amber-500/10 text-amber-500 border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20',
+    
+    node: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
+    nodejs: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
+    
+    go: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20',
+    golang: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20',
+    
+    rust: 'bg-orange-500/10 text-orange-500 border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20',
+    cargo: 'bg-orange-500/10 text-orange-500 border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20',
+    
+    php: 'bg-violet-500/10 text-violet-500 border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20',
+    
+    ruby: 'bg-red-500/10 text-red-500 border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',
+    
+    bun: 'bg-pink-500/10 text-pink-500 border-pink-500/20 dark:bg-pink-500/10 dark:text-pink-400 dark:border-pink-500/20',
+    
+    deno: 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20 dark:bg-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/20',
+    
+    java: 'bg-amber-600/10 text-amber-600 border-amber-600/20 dark:bg-amber-600/10 dark:text-amber-500 dark:border-amber-600/20',
+    
+    dotnet: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20',
+    
+    lua: 'bg-blue-500/10 text-blue-500 border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20',
+    
+    dart: 'bg-sky-500/10 text-sky-500 border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20',
+    flutter: 'bg-sky-500/10 text-sky-500 border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20'
+  }
+  return colors[n] || 'bg-slate-500/10 text-slate-500 border-slate-500/20 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20'
+}
+
+function getShortLangName(name: string): string {
+  const n = name.toLowerCase()
+  const mapping: Record<string, string> = {
+    python: 'py',
+    nodejs: 'node',
+    golang: 'go'
+  }
+  return mapping[n] || n
+}
+
 const showExportDialog = ref(false)
 const exportCommandText = ref('')
 
@@ -849,6 +894,12 @@ watch(() => route.query.agent_id, (newVal: any) => {
             <div class="w-56 shrink-0 flex flex-col justify-center gap-0.5 overflow-hidden">
               <div class="flex items-center gap-1.5 overflow-hidden">
                 <span class="font-medium truncate cursor-help" :title="task.name">{{ task.name }}</span>
+                <span v-for="lang in task.languages" :key="lang.name"
+                  class="shrink-0 inline-flex items-center rounded px-1 py-px text-[9px] font-mono border transition-all hover:opacity-90 leading-none"
+                  :class="getLangBadgeClass(lang.name)"
+                  :title="lang.name + (lang.version ? '@' + lang.version : '')">
+                  {{ getShortLangName(lang.name) }}{{ lang.version ? ':' + lang.version : '' }}
+                </span>
                 <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
               </div>
               <div v-if="task.tags" class="flex items-center gap-1 overflow-hidden">
@@ -964,9 +1015,15 @@ watch(() => route.query.agent_id, (newVal: any) => {
               <div class="flex flex-col min-w-0">
                 <div class="flex items-center gap-1.5 overflow-hidden">
                   <span class="font-medium truncate">{{ task.name }}</span>
+                  <span v-for="lang in task.languages" :key="lang.name"
+                    class="shrink-0 inline-flex items-center rounded px-1 py-px text-[9px] font-mono border transition-all hover:opacity-90 leading-none"
+                    :class="getLangBadgeClass(lang.name)"
+                    :title="lang.name + (lang.version ? '@' + lang.version : '')">
+                    {{ getShortLangName(lang.name) }}{{ lang.version ? ':' + lang.version : '' }}
+                  </span>
                   <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
                 </div>
-                <span v-if="task.schedule" class="text-[10px] text-muted-foreground font-mono truncate">{{ task.schedule }}</span>
+                <span v-if="task.schedule" class="text-[10px] text-muted-foreground font-mono truncate mt-0.5">{{ task.schedule }}</span>
               </div>
             </div>
             <code class="flex-1 min-w-0 text-[11px] text-muted-foreground bg-muted/20 px-2 py-1 rounded truncate">
@@ -1049,6 +1106,16 @@ watch(() => route.query.agent_id, (newVal: any) => {
             </span>
           </div>
           <div class="space-y-1.5 text-xs text-muted-foreground mb-3 px-1">
+            <div v-if="task.languages && task.languages.length > 0" class="flex items-center gap-3">
+              <span class="w-10 shrink-0 font-medium opacity-70">环境:</span>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span v-for="lang in task.languages" :key="lang.name"
+                  class="inline-flex items-center rounded px-1 py-px text-[9px] font-mono border leading-none"
+                  :class="getLangBadgeClass(lang.name)">
+                  {{ getShortLangName(lang.name) }}{{ lang.version ? ':' + lang.version : '' }}
+                </span>
+              </div>
+            </div>
             <div class="flex items-center gap-3">
               <span class="w-10 shrink-0 font-medium opacity-70">{{ task.type === TASK_TYPE.REPO ? '周期:' : '定时:' }}</span>
               <span v-if="task.trigger_type === TRIGGER_TYPE.BAIHU_STARTUP" class="text-[10px] leading-tight bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded font-medium">服务启动时</span>
