@@ -78,9 +78,17 @@ log "Checking npm..."
 log "  - npm: $(npm --version 2>&1 | head -n 1 || echo "not found")"
 
 # ============================
-# 将 baihu 注册到全局命令
+# 将 baihu 注册到全局命令并配置 Tab 自动补全
 # ============================
 ln -sf /app/baihu /usr/local/bin/baihu
+
+for rcfile in /etc/bash.bashrc /etc/bashrc /root/.bashrc; do
+  if [ -f "$rcfile" ] || [ "$rcfile" = "/root/.bashrc" ]; then
+    if ! grep -q "baihu completion" "$rcfile" 2>/dev/null; then
+      echo 'eval "$(baihu completion bash 2>/dev/null)"' >> "$rcfile" 2>/dev/null || true
+    fi
+  fi
+done
 
 # ============================
 # 启动应用

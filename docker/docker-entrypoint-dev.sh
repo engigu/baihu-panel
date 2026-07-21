@@ -90,4 +90,14 @@ log "node: $(node --version 2>&1 | head -n 1) at $(which node)"
 log "npm: $(npm --version 2>&1 | head -n 1) at $(which npm)"
 
 log "Environment ready! Starting command as user '$TARGET_USER' (UID: $DEV_UID)..."
+
+# 自动配置 Docker 容器内 bash 的 baihu 命令行补全
+for rcfile in /etc/bash.bashrc /etc/bashrc /root/.bashrc "/home/$TARGET_USER/.bashrc"; do
+  if [ -f "$rcfile" ] || [ -d "$(dirname "$rcfile")" ]; then
+    if ! grep -q "baihu completion" "$rcfile" 2>/dev/null; then
+      echo 'eval "$(baihu completion bash 2>/dev/null)"' >> "$rcfile" 2>/dev/null || true
+    fi
+  fi
+done
+
 exec gosu "$DEV_UID:$DEV_GID" "$@"

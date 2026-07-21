@@ -12,11 +12,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/engigu/baihu-panel/cmd"
 	"github.com/engigu/baihu-panel/cmd/clibase"
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/services/repo"
 	"github.com/engigu/baihu-panel/internal/utils"
 )
+
+func init() {
+	cmd.RegisterHandler("reposync", Run)
+}
 
 type Config struct {
 	SourceType     string

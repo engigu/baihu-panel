@@ -7,10 +7,15 @@ import (
 	"os"
 	"strings"
 
+	"github.com/engigu/baihu-panel/cmd"
 	"github.com/engigu/baihu-panel/cmd/clibase"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/utils"
 )
+
+func init() {
+	cmd.RegisterHandler("resetpwd", Run)
+}
 
 func printHelp() {
 	clibase.PrintSubCommandUsage("白虎面板用户密码重置工具", "baihu resetpwd [用户名]", "  baihu resetpwd admin", nil)

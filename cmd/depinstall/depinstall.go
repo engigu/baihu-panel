@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/engigu/baihu-panel/cmd"
 	"github.com/engigu/baihu-panel/cmd/clibase"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
@@ -13,6 +14,10 @@ import (
 	"github.com/engigu/baihu-panel/internal/services/deps"
 	"github.com/engigu/baihu-panel/internal/utils"
 )
+
+func init() {
+	cmd.RegisterHandler("depinstall", Run)
+}
 
 // Run 依赖自动补全命令入口
 func Run(args []string) {

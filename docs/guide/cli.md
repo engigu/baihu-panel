@@ -11,6 +11,7 @@ baihu-panel在环境内内置了同名的 `baihu` 命令行工具。如果您在
 | `baihu resetpwd` | 交互式重置系统 admin 账号密码（密码丢失时可通过进入终端重置）。 |
 | `baihu restore <file>` | 使用本地的 .zip 备份压缩包文件，一条命令直接全量恢复系统数据。 |
 | `baihu task` | 极速只读与控制台常驻任务管理（支持查询列表、手动触发、查看状态及开关控制）。 |
+| `baihu completion` | 生成对应 Shell (PowerShell/Bash/Zsh) 的 Tab 自动补全脚本。 |
 
 ---
 

@@ -5,8 +5,16 @@ import (
 	"os"
 
 	"github.com/engigu/baihu-panel/cmd"
+	_ "github.com/engigu/baihu-panel/cmd/builtininstall"
+	_ "github.com/engigu/baihu-panel/cmd/completion"
+	_ "github.com/engigu/baihu-panel/cmd/depinstall"
+	_ "github.com/engigu/baihu-panel/cmd/reposync"
+	_ "github.com/engigu/baihu-panel/cmd/resetpwd"
+	_ "github.com/engigu/baihu-panel/cmd/restore"
+	_ "github.com/engigu/baihu-panel/cmd/task"
+	_ "github.com/engigu/baihu-panel/cmd/version"
+	_ "github.com/engigu/baihu-panel/cmd/webui"
 	"github.com/engigu/baihu-panel/internal/bootstrap"
-	"github.com/engigu/baihu-panel/internal/constant"
 )
 
 // @title Baihu Panel API
@@ -31,7 +39,7 @@ func printHelp() {
 	fmt.Println("用法:")
 	fmt.Println("  baihu <命令> [参数]")
 	fmt.Println("可用命令:")
-	for _, info := range constant.Commands {
+	for _, info := range cmd.Commands {
 		fmt.Printf("  %-15s %s\n", info.Name, info.Description)
 	}
 	fmt.Println("\n使用 'baihu <命令> --help' 查看具体命令的参数说明。")
