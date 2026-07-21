@@ -78,18 +78,29 @@ const handleCopy = async (text: string) => {
             </div>
           </PopoverTrigger>
           <PopoverContent align="start" side="bottom" :side-offset="8"
-            class="w-80 border-[#3c3c3c] bg-[#252526] text-gray-300">
+            class="w-[380px] p-2 border-[#3c3c3c] bg-[#252526] text-gray-300 shadow-xl rounded-md">
             <div class="flex flex-col">
-              <h4 class="text-xs font-medium text-white mb-1 pb-1.5 border-b border-[#3c3c3c]">内置命令说明</h4>
-              <div v-if="cmds.length === 0" class="text-xs text-gray-500 py-1">获取中...</div>
-              <div v-for="cmd in cmds" :key="cmd.name"
-                class="group flex flex-col py-1.5 border-b border-[#3c3c3c] last:border-0 relative">
-                <div class="flex items-start justify-between gap-2">
-                  <div class="flex flex-col min-w-0">
-                    <span class="font-bold text-blue-400 text-xs">baihu {{ cmd.name }}</span>
-                    <span class="text-gray-400 text-[11px] leading-tight mt-0.5">{{ cmd.description }}</span>
-                  </div>
-                  <button @click.stop.prevent="handleCopy(`baihu ${cmd.name}`)" class="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[#3c3c3c] rounded text-gray-400 hover:text-white focus:outline-none focus:ring-0 shrink-0 mt-0.5" :title="copiedCommand === `baihu ${cmd.name}` ? '已复制' : '复制命令'">
+              <div class="flex items-center justify-between pb-1.5 mb-1 border-b border-[#3c3c3c]">
+                <h4 class="text-xs font-medium text-white flex items-center gap-1.5">
+                  <span>内置命令说明</span>
+                  <span class="text-[10px] text-gray-400 font-normal">({{ cmds.length }})</span>
+                </h4>
+                <span class="text-[10px] text-gray-500">点击整行快速复制</span>
+              </div>
+              <div v-if="cmds.length === 0" class="text-xs text-gray-500 py-2 text-center">获取中...</div>
+              <div v-else class="max-h-[280px] overflow-y-auto space-y-0.5 pr-0.5">
+                <div v-for="cmd in cmds" :key="cmd.name"
+                  @click="handleCopy(`baihu ${cmd.name}`)"
+                  class="group flex items-center justify-between py-1 px-1.5 hover:bg-[#333333] rounded transition-colors cursor-pointer">
+                  <code class="font-mono text-blue-400 text-[11px] font-medium shrink-0 bg-[#1e1e1e] px-1.5 py-0.5 rounded border border-[#333]">
+                    baihu {{ cmd.name }}
+                  </code>
+                  <span class="text-gray-400 text-[11px] truncate mx-2 flex-1 text-right" :title="cmd.description">
+                    {{ cmd.description }}
+                  </span>
+                  <button @click.stop.prevent="handleCopy(`baihu ${cmd.name}`)" 
+                    class="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[#444] rounded text-gray-400 hover:text-white shrink-0" 
+                    :title="copiedCommand === `baihu ${cmd.name}` ? '已复制' : '复制命令'">
                     <Check v-if="copiedCommand === `baihu ${cmd.name}`" class="h-3 w-3 text-green-500" />
                     <Copy v-else class="h-3 w-3" />
                   </button>

@@ -84,13 +84,17 @@ func (tc *TerminalController) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
-	// Windows 使用 pipe 模式，Unix 使用 PTY 模式
+	// Windows 下支持 ConPTY API (Win10 1809+) 时开启原生伪终端，老旧系统优雅降级至 Pipe 模式
 	userID := c.GetString("userID")
 	if userID == "" {
 		userID = "1" // 兜底
 	}
 	if windows.IsWindows() {
-		tc.handlePipeMode(conn, userID)
+		if windows.HasConPTYSupport() {
+			tc.handleConPtyMode(conn, userID)
+		} else {
+			tc.handlePipeMode(conn, userID)
+		}
 	} else {
 		tc.handlePtyMode(conn, userID)
 	}
@@ -226,6 +230,112 @@ func (tc *TerminalController) handlePtyMode(conn *websocket.Conn, userID string)
 	cmd.Process.Kill()
 	cmd.Wait()
 	ptmx.Close() // Force close PTY to interrupt the blocking ptmx.Read() in the goroutine
+	wg.Wait()
+}
+
+// handleConPtyMode 使用 Windows 原生 ConPTY 伪终端（Win10 1809+ / Server 2019+）
+func (tc *TerminalController) handleConPtyMode(conn *websocket.Conn, userID string) {
+	conn.SetReadLimit(constant.MaxMessageSize)
+	conn.SetReadDeadline(time.Now().Add(constant.PongWait))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(constant.PongWait))
+		return nil
+	})
+
+	// 发送 PTY 模式标识，提示前端启用全量 PTY 终端特性
+	conn.WriteMessage(websocket.TextMessage, []byte("__PTY_MODE__"))
+
+	workDir := constant.ScriptsWorkDir
+	if absDir, err := filepath.Abs(constant.ScriptsWorkDir); err == nil {
+		workDir = absDir
+	}
+
+	env := tc.buildTerminalEnv(userID, "TERM=xterm-256color")
+
+	cmdStr := "pwsh.exe -NoLogo"
+
+	ptySession, err := windows.NewConPTYSession(cmdStr, 80, 24, env, workDir)
+	if err != nil {
+		// ConPTY 初始化失败时优雅降级回 Pipe 模式
+		tc.handlePipeMode(conn, userID)
+		return
+	}
+	defer ptySession.Close()
+
+	var wg sync.WaitGroup
+	var connMu sync.Mutex
+
+	writeMessage := func(data []byte) {
+		connMu.Lock()
+		defer connMu.Unlock()
+		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		conn.WriteMessage(websocket.TextMessage, data)
+	}
+
+	// 1. 读取 ConPTY 输出并写入 WebSocket
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		buf := make([]byte, 4096)
+		for {
+			n, err := ptySession.Read(buf)
+			if n > 0 {
+				writeMessage(buf[:n])
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	// 2. 启动 ping 心跳
+	pingDone := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(constant.PingPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				connMu.Lock()
+				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					connMu.Unlock()
+					return
+				}
+				connMu.Unlock()
+			case <-pingDone:
+				return
+			}
+		}
+	}()
+
+	// 3. 读取 WebSocket 输入并写入 ConPTY
+	for {
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+
+		// 处理前端窗口 Resize 尺寸消息
+		if len(message) > 0 && message[0] == '{' {
+			var resizeMsg struct {
+				Type string `json:"type"`
+				Rows uint16 `json:"rows"`
+				Cols uint16 `json:"cols"`
+			}
+			if err := json.Unmarshal(message, &resizeMsg); err == nil && (resizeMsg.Type == "resize" || (resizeMsg.Rows > 0 && resizeMsg.Cols > 0)) {
+				ptySession.Resize(resizeMsg.Cols, resizeMsg.Rows)
+				continue
+			}
+		}
+
+		if _, err := ptySession.Write(message); err != nil {
+			break
+		}
+	}
+
+	close(pingDone)
+	ptySession.Close()
 	wg.Wait()
 }
 
