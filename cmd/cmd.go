@@ -1,80 +1,79 @@
 package cmd
 
-// CommandSpec 定义了系统级 CLI 命令的统一元数据、子命令及选项接口
-type CommandSpec struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	SubCommands map[string]string `json:"sub_commands,omitempty"`
-	Flags       []string          `json:"flags,omitempty"`
-	Args        []string          `json:"args,omitempty"`
-}
+import (
+	"fmt"
+	"os"
 
-// CommandInfo 别名保持兼容
-type CommandInfo = CommandSpec
+	"github.com/engigu/baihu-panel/internal/bootstrap"
+	"github.com/engigu/baihu-panel/internal/constant"
+)
 
-// Commands 是全系统唯一单源的可用业务命令元数据与参数清单 (Single Source of Truth)
-// 包含 CLI 帮助、API 端点、终端面板以及 Shell Tab 自动补全均从此一份数据读取
-var Commands = []CommandSpec{
-	{
-		Name:        "server",
-		Description: "启动面板后台服务进程",
-	},
-	{
-		Name:        "task",
-		Description: "系统级任务的列表查询、触发运行、启停控制及状态查看",
-		SubCommands: map[string]string{
-			"list":    "查询任务列表概览",
-			"run":     "立即触发运行任务",
-			"status":  "查看任务执行日志和退出码",
-			"history": "查看任务近期运行历史记录",
-			"enable":  "快速启用指定任务",
-			"disable": "快速禁用指定任务",
-		},
-	},
-	{
-		Name:        "reposync",
-		Description: "同步远程 Git 仓库或文件到本地目录",
-		Flags: []string{
-			"--source-type", "--source-url", "--target-path", "--branch",
-			"--path", "--single-file", "--proxy", "--proxy-url",
-			"--auth-token", "--http-proxy", "--whitelist-paths",
-			"--blacklist", "--dependence", "--extensions", "--commenttotask",
-		},
-	},
-	{
-		Name:        "resetpwd",
-		Description: "交互式重置 admin 管理员账号密码",
-	},
-	{
-		Name:        "restore",
-		Description: "从本地 zip 备份包全量恢复系统数据",
-	},
-	{
-		Name:        "builtininstall",
-		Description: "为所有 mise 管理的 Node.js 和 Python 环境安装内建助手库",
-	},
-	{
-		Name:        "depinstall",
-		Description: "一键补全指定任务日志中的缺失依赖包",
-	},
-	{
-		Name:        "version",
-		Description: "查看当前系统版本号 (同 -v, -V)",
-	},
-	{
-		Name:        "completion",
-		Description: "生成当前 Shell (PowerShell/Bash/Zsh) 的 Tab 自动补全脚本",
-		Args:        []string{"powershell", "bash", "zsh"},
-	},
-}
+// CommandSpec 兼容引用 constant.CommandSpec
+type CommandSpec = constant.CommandSpec
+
+// CommandInfo 兼容引用 constant.CommandInfo
+type CommandInfo = constant.CommandInfo
+
+// Commands 兼容引用 constant.Commands
+var Commands = constant.Commands
 
 // CommandHandler 定义命令执行函数
 type CommandHandler func(args []string)
 
-// Handlers 维护除了 server 之外的命令的执行入口
-var Handlers = map[string]CommandHandler{}
+// CommandRegistration 声明式维护命令处理句柄及其执行策略
+type CommandRegistration struct {
+	Handler        CommandHandler
+	RequireContext bool // 是否需要初始化数据库/日志基础环境
+}
 
-// RegisterHandler 供各个子命令包注册自己的处理函数
+// Handlers 维护全系统可用命令的执行入口
+var Handlers = map[string]CommandRegistration{}
+
+// RegisterHandler 供各个子命令注册处理函数（默认初始化基础环境）
 func RegisterHandler(name string, handler CommandHandler) {
-	Handlers[name] = handler
+	RegisterHandlerWithConfig(name, handler, true)
+}
+
+// RegisterHandlerWithConfig 支持显式配置是否需要初始化基础环境
+func RegisterHandlerWithConfig(name string, handler CommandHandler, requireContext bool) {
+	Handlers[name] = CommandRegistration{
+		Handler:        handler,
+		RequireContext: requireContext,
+	}
+}
+
+// PrintHelp 打印根命令帮助信息
+func PrintHelp() {
+	fmt.Println("\nBaihu Panel - 极致轻量、高性能的自动化任务调度平台")
+	fmt.Println("用法:")
+	fmt.Println("  baihu <命令> [参数]")
+	fmt.Println("可用命令:")
+	for _, info := range constant.Commands {
+		fmt.Printf("  %-15s %s\n", info.Name, info.Description)
+	}
+	fmt.Println("\n使用 'baihu <命令> --help' 查看具体命令的参数说明。")
+	fmt.Println()
+}
+
+// Execute 统一路由与分发所有命令行指令
+func Execute(args []string) {
+	if len(args) < 2 {
+		PrintHelp()
+		os.Exit(1)
+	}
+
+	commandName := args[1]
+
+	reg, ok := Handlers[commandName]
+	if !ok {
+		fmt.Printf("Unknown command: %s\n", commandName)
+		PrintHelp()
+		os.Exit(1)
+	}
+
+	if reg.RequireContext {
+		bootstrap.InitBasicForCmd() // 专为命令行工具定制启动基础环境，屏蔽后台启动刷屏日志
+	}
+
+	reg.Handler(args[2:])
 }

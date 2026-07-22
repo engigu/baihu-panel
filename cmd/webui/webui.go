@@ -5,14 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/engigu/baihu-panel/cmd"
 	"github.com/engigu/baihu-panel/cmd/clibase"
 	"github.com/engigu/baihu-panel/internal/services"
 )
-
-func init() {
-	cmd.RegisterHandler("webui", Run)
-}
 
 func printMainHelp() {
 	fmt.Fprintf(os.Stderr, "\n白虎面板 WebUI 命令行管理工具\n\n")

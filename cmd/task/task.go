@@ -6,17 +6,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/engigu/baihu-panel/cmd"
 	"github.com/engigu/baihu-panel/cmd/clibase"
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/utils"
 )
-
-func init() {
-	cmd.RegisterHandler("task", Run)
-}
 
 // 打印主帮助
 func printMainHelp() {

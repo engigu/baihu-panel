@@ -7,12 +7,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/engigu/baihu-panel/cmd"
+	"github.com/engigu/baihu-panel/internal/constant"
 )
-
-func init() {
-	cmd.RegisterHandler("completion", Run)
-}
 
 // Run 处理 baihu completion 命令
 func Run(args []string) {
@@ -27,11 +23,11 @@ func Run(args []string) {
 
 	switch shell {
 	case "powershell", "pwsh":
-		script, err = renderTemplate(PowerShellTmpl, cmd.Commands)
+		script, err = renderTemplate(PowerShellTmpl, constant.Commands)
 	case "bash":
-		script, err = renderTemplate(BashTmpl, cmd.Commands)
+		script, err = renderTemplate(BashTmpl, constant.Commands)
 	case "zsh":
-		script, err = renderTemplate(ZshTmpl, cmd.Commands)
+		script, err = renderTemplate(ZshTmpl, constant.Commands)
 	default:
 		fmt.Fprintf(os.Stderr, "不支持的 Shell 类型: %s。可选类型: powershell, bash, zsh\n\n", shell)
 		printCompletionHelp()

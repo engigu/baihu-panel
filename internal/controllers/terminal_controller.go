@@ -11,7 +11,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/engigu/baihu-panel/cmd"
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/utils"
@@ -579,7 +578,7 @@ func (tc *TerminalController) buildTerminalEnv(userID string, extraEnvs ...strin
 // GetCommands 获取所有可用的 cmd 列表及说明
 func (tc *TerminalController) GetCommands(c *gin.Context) {
 	var cmds []map[string]string
-	for _, cmdInfo := range cmd.Commands {
+	for _, cmdInfo := range constant.Commands {
 		cmds = append(cmds, map[string]string{
 			"name":        cmdInfo.Name,
 			"description": cmdInfo.Description,

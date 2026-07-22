@@ -6,14 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/engigu/baihu-panel/cmd"
 	"github.com/engigu/baihu-panel/cmd/clibase"
 	"github.com/engigu/baihu-panel/internal/services"
 )
-
-func init() {
-	cmd.RegisterHandler("restore", Run)
-}
 
 func printHelp() {
 	clibase.PrintSubCommandUsage("白虎面板系统数据恢复工具", "baihu restore <备份文件.zip>", "  baihu restore backup_20231027.zip", nil)

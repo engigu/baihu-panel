@@ -8,14 +8,9 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/engigu/baihu-panel/cmd"
 	"github.com/engigu/baihu-panel/cmd/clibase"
 	"github.com/engigu/baihu-panel/internal/utils"
 )
-
-func init() {
-	cmd.RegisterHandler("builtininstall", Run)
-}
 
 func printHelp() {
 	clibase.PrintSubCommandUsage("白虎面板内建依赖安装工具", "baihu builtininstall", "", nil)
