@@ -893,9 +893,9 @@ watch(() => route.query.agent_id, (newVal: any) => {
             </span>
             <div class="w-56 shrink-0 flex flex-col justify-center gap-0.5 overflow-hidden">
               <div class="flex items-center gap-1.5 overflow-hidden">
-                <span class="font-medium truncate cursor-help" :title="task.name">{{ task.name }}</span>
+                <span class="font-medium truncate cursor-help flex-1 min-w-0" :title="task.name">{{ task.name }}</span>
                 <span v-for="lang in task.languages" :key="lang.name"
-                  class="shrink-0 inline-flex items-center rounded px-1 py-px text-[9px] font-mono border transition-all hover:opacity-90 leading-none"
+                  class="shrink-0 inline-flex items-center rounded px-1 py-px text-[9px] font-mono border transition-all hover:opacity-90 leading-none ml-auto"
                   :class="getLangBadgeClass(lang.name)"
                   :title="lang.name + (lang.version ? '@' + lang.version : '')">
                   {{ getShortLangName(lang.name) }}{{ lang.version ? ':' + lang.version : '' }}
@@ -1012,11 +1012,11 @@ watch(() => route.query.agent_id, (newVal: any) => {
                   <Terminal v-else class="h-3.5 w-3.5 text-primary" />
                 </div>
               </span>
-              <div class="flex flex-col min-w-0">
+              <div class="flex flex-col min-w-0 flex-1">
                 <div class="flex items-center gap-1.5 overflow-hidden">
-                  <span class="font-medium truncate">{{ task.name }}</span>
+                  <span class="font-medium truncate flex-1 min-w-0">{{ task.name }}</span>
                   <span v-for="lang in task.languages" :key="lang.name"
-                    class="shrink-0 inline-flex items-center rounded px-1 py-px text-[9px] font-mono border transition-all hover:opacity-90 leading-none"
+                    class="shrink-0 inline-flex items-center rounded px-1 py-px text-[9px] font-mono border transition-all hover:opacity-90 leading-none ml-auto"
                     :class="getLangBadgeClass(lang.name)"
                     :title="lang.name + (lang.version ? '@' + lang.version : '')">
                     {{ getShortLangName(lang.name) }}{{ lang.version ? ':' + lang.version : '' }}
