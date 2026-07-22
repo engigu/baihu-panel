@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"encoding/json"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -126,49 +128,29 @@ func BuildMiseCommandArgsSimple(cmdArgs []string, language, version string) []st
 	return append([]string{"mise", "exec", spec, "--"}, cmdArgs...)
 }
 
+type miseInstalledItem struct {
+	Version   string `json:"version"`
+	Installed bool   `json:"installed"`
+}
+
 // ListMiseInstalledVersions 获取指定语言已安装的所有版本列表
 func ListMiseInstalledVersions(language string) ([]string, error) {
-	// 执行 mise ls <language> 命令
-	cmd := exec.Command("mise", "ls", language)
+	// 执行 mise ls <language> --json 命令结构化获取版本
+	cmd := exec.Command("mise", "ls", language, "--json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, err
 	}
 
+	var items []miseInstalledItem
+	if err := json.Unmarshal(out, &items); err != nil {
+		return nil, fmt.Errorf("解析 mise 输出失败: %w", err)
+	}
+
 	var versions []string
-	lines := strings.Split(string(out), "\n")
-	for _, line := range lines {
-		v := strings.TrimSpace(line)
-		if v == "" {
-			continue
-		}
-		// mise ls 的输出可能包含状态标识或插件名，例:
-		// * 20.10.0 (active)
-		// node 18.17.0
-		fields := strings.Fields(v)
-		if len(fields) == 0 {
-			continue
-		}
-
-		startIdx := 0
-		// 跳过状态标识符
-		if fields[startIdx] == "*" || fields[startIdx] == "->" || fields[startIdx] == ">" {
-			startIdx++
-		}
-
-		if len(fields) <= startIdx {
-			continue
-		}
-
-		vstr := fields[startIdx]
-		// 如果第一个有效字段是插件名，则版本号在第二个字段
-		if vstr == language && len(fields) > startIdx+1 {
-			vstr = fields[startIdx+1]
-		}
-
-		// 确保解析出来的不是插件名
-		if vstr != "" && vstr != language {
-			versions = append(versions, vstr)
+	for _, item := range items {
+		if item.Version != "" {
+			versions = append(versions, item.Version)
 		}
 	}
 	return versions, nil
