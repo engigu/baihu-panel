@@ -156,6 +156,6 @@ func (a *App) initRouter() {
 
 func (a *App) Run() {
 	addr := fmt.Sprintf("%s:%d", a.Config.Server.Host, a.Config.Server.Port)
-	logger.Infof("Starting server on %s", addr)
+	logger.Infof("[HTTP] 服务已启动，监听地址: http://%s", addr)
 	a.Router.Run(addr)
 }
