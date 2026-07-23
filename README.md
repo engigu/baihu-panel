@@ -773,7 +773,12 @@ location /baihu/ {
 
 <img src="https://f.pz.al/pzal/2026/01/07/83be93eb4e2a3.png" width="200" />
 
+## 鸣谢
+
+- Windows 安装包的简体中文语言包使用了由 [Zhenghan Yang (Kira)](https://github.com/kira-96) 维护的开源项目 [Inno-Setup-Chinese-Simplified-Translation](https://github.com/kira-96/Inno-Setup-Chinese-Simplified-Translation)，特此致谢。
+
 ## 许可证 
+
 
 本项目采用 [Apache License 2.0](LICENSE) 协议发布，并包含额外的 [NOTICE](NOTICE) 说明。
 
