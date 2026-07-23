@@ -19,3 +19,12 @@ Any derivative work or modified version must include a prominent and
 verifiable attribution to the original author.
 
 =========================================================================
+
+-------------------------------------------------------------------------
+Third-Party Component Attribution
+-------------------------------------------------------------------------
+
+This product contains the Inno Setup Chinese Simplified translation file
+(build/windows/ChineseSimplified.isl), developed by Zhenghan Yang (Kira).
+Original Repository: https://github.com/kira-96/Inno-Setup-Chinese-Simplified-Translation
+
