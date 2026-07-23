@@ -211,32 +211,34 @@ chmod +x baihu-linux-amd64
 
 ### 🪟 Windows 平台部署
 
-**1. 安装前置依赖**
+#### 方式 A：GUI 安装向导（推荐 🌟）
 
-* **安装 `mise`**（用于多语言运行时环境管理）：
+1. 从 GitHub Release 页面下载 `BaihuPanel-Setup-vX.X.X-windows-amd64.exe` 安装包。
+2. 双击安装包按照向导提示进行安装，勾选创建“桌面快捷方式”与“开机启动托盘程序”。
+3. 安装完成后会自动启动任务栏托盘程序（右下角图标），右键托盘图标可进行：
+   - 🌐 **打开面板**：在默认浏览器中打开 `http://localhost:8052`
+   - 🔄 **重启服务**：一键重启白虎面板后台服务
+   - 📌 **开机自启**：随时开关系统自启策略
+   - 🚪 **退出**：完全停止面板服务并退出托盘
 
-  在 PowerShell 中运行以下命令使用 `winget` 安装：
+#### 方式 B：解压绿化运行（Zip）
+
+从 GitHub Release 下载 Windows 压缩包（`baihu-windows-amd64.zip`），解压后运行：
+- 双击运行 `baihu-tray.exe`（后台静默托盘守护运行）。
+- 或在 PowerShell 中运行命令行端：
   ```powershell
-  winget install jdx.mise
+  .\baihu.exe server
   ```
 
-* **安装 `pwsh`**（PowerShell 7.6+，用于执行后台任务）：
+---
 
-  白虎面板在 Windows 系统下执行任务及依赖检测强依赖 PowerShell 7+（`pwsh.exe`）。请参考 [微软官方 PowerShell 安装文档](https://learn.microsoft.com/zh-cn/powershell/scripting/install/install-powershell-on-windows?view=powershell-7.6) 安装，或在 PowerShell 中通过 `winget` 快捷安装：
-  ```powershell
-  winget install Microsoft.PowerShell
-  ```
-
-**2. 运行面板**
-
-从 GitHub Release 下载 Windows 部署包（`.zip`），解压后在解压目录中打开 PowerShell 并运行：
-
-```powershell
-.\baihu.exe server
-```
+**前置依赖说明（Windows 平台）：**
+- **PowerShell 7+ (`pwsh.exe`)**：面板在 Windows 系统下执行任务及依赖检测需要 `pwsh.exe`（可通过 `winget install Microsoft.PowerShell` 安装）。
+- **`mise` 管理工具**（可选，用于多语言动态环境）：可通过 `winget install jdx.mise` 安装。
 
 ### 访问面板
 
 启动成功后，使用浏览器访问：`http://localhost:8052`
 * **默认账号**：用户名 `admin`，初始随机密码会在控制台首次启动日志中打印，登录后请第一时间修改密码。
+
 

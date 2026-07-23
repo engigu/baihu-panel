@@ -156,6 +156,8 @@ func (a *App) initRouter() {
 
 func (a *App) Run() {
 	addr := fmt.Sprintf("%s:%d", a.Config.Server.Host, a.Config.Server.Port)
-	logger.Infof("[HTTP] 服务已启动，监听地址: http://%s", addr)
-	a.Router.Run(addr)
+	logger.Infof("[HTTP] 服务正在启动，监听地址: http://%s", addr)
+	if err := a.Router.Run(addr); err != nil {
+		logger.Fatalf("[HTTP] 服务启动失败: %v", err)
+	}
 }

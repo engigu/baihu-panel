@@ -52,8 +52,18 @@ jobs:
           tar -czvf baihu-android-arm64.tar.gz baihu-android-arm64
           CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -tags web -ldflags="$LDFLAGS" -o baihu-linux-armv7 main.go
           tar -czvf baihu-linux-armv7.tar.gz baihu-linux-armv7
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags web -ldflags="$LDFLAGS" -o baihu-windows-amd64.exe main.go
+          mkdir -p bin
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags web -ldflags="$LDFLAGS" -o bin/baihu.exe main.go
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -H=windowsgui" -o bin/baihu-tray.exe ./cmd/tray
+          cp bin/baihu.exe baihu-windows-amd64.exe
           zip -q -r baihu-windows-amd64.zip baihu-windows-amd64.exe
+
+      - name: Build Windows GUI Installer (Inno Setup)
+        uses: amddr/action-innosetup@v1
+        with:
+          filepath: build/windows/installer.iss
+          options: /DMyAppVersion=${{ github.ref_name }}
+
 
       - name: Build Agent Binaries
         run: |
@@ -109,6 +119,7 @@ jobs:
             baihu-linux-armv7.tar.gz
             baihu-android-arm64.tar.gz
             baihu-windows-amd64.zip
+            bin/BaihuPanel-Setup-*.exe
             data/agent/baihu-agent-*.tar.gz
             data/agent/baihu-agent-*.zip
 

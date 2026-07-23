@@ -1,4 +1,13 @@
-# 更新日志 (v1.1.22)
+# 更新日志 (v1.1.23)
+
+### 2026.07.23 - Windows GUI 安装包与系统托盘守护程序
+
+🎉 **新增与优化**
+* **Windows GUI 安装包 (New)**：新增了 Inno Setup 打包脚本 (`build/windows/installer.iss`)，可自动打出 Windows 标准 `.exe` 安装向导（支持引导界面、桌面快捷方式创建、自动注册系统自启与卸载）。
+* **Windows 系统托盘守护程序 (New)**：新增了 Golang 后台托盘 GUI 辅助程序 (`cmd/tray/main.go` -> `baihu-tray.exe`)，支持任务栏右下角菜单交互（一键打开网页面板、服务重启、状态监控、开机自启开关）。
+* **Makefile & Release CI 集成**：更新了 `Makefile` 构建目标（`release-windows-tray` 与 `pack-windows-installer`），并在 GitHub Actions 发布工作流中引入 `action-innosetup`，每次 Tag 发布时将自动编译并打包导出安装包产物 (`BaihuPanel-Setup-v*.exe`)。
+
+---
 
 ### 2026.07.20 - Windows 平台深度适配、网页终端 Ctrl+C 中止与 Linux PTY 回退机制修复
 

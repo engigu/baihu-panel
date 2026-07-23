@@ -124,6 +124,27 @@ build-agent-darwin-arm64:
 	@echo "$(VERSION)" > data/agent/version.txt
 	cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(AGENT_LDFLAGS)" -o ../data/agent/baihu-agent-darwin-arm64 .
 
+# Build Windows Tray GUI App
+release-windows-tray:
+	@mkdir -p bin
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -H=windowsgui" -o bin/baihu-tray.exe ./cmd/tray
+
+# Pack Windows GUI Installer using ISCC (Inno Setup)
+pack-windows-installer: release-windows release-windows-tray
+	@echo "==> 正在使用 Inno Setup 编译打包 Windows 安装包..."
+	@ISCC_BIN=""; \
+	if command -v ISCC >/dev/null 2>&1; then ISCC_BIN="ISCC"; \
+	elif [ -f "$$LOCALAPPDATA/Programs/Inno Setup 6/ISCC.exe" ]; then ISCC_BIN="$$LOCALAPPDATA/Programs/Inno Setup 6/ISCC.exe"; \
+	elif [ -f "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" ]; then ISCC_BIN="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"; \
+	elif [ -f "/c/Program Files/Inno Setup 6/ISCC.exe" ]; then ISCC_BIN="/c/Program Files/Inno Setup 6/ISCC.exe"; \
+	fi; \
+	if [ -z "$$ISCC_BIN" ]; then \
+		echo "Error: Inno Setup (ISCC.exe) not found in PATH or standard directories."; \
+		exit 1; \
+	fi; \
+	"$$ISCC_BIN" "-DMyAppVersion=$(VERSION)" build/windows/installer.iss
+
+
 # Clean built files
 clean:
 	$(GOCLEAN)
