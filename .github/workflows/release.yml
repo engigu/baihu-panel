@@ -123,11 +123,11 @@ jobs:
           name: windows-binaries
           path: bin
 
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
       - name: Build Windows GUI Installer (Inno Setup)
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
-        with:
-          path: build/windows/installer.iss
-          options: /DMyAppVersion=${{ github.ref_name }}
+        run: iscc /DMyAppVersion=${{ github.ref_name }} build/windows/installer.iss
 
       - name: Upload Setup Installer
         uses: actions/upload-artifact@v4
