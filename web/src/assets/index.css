@@ -632,3 +632,8 @@ input[type="time"]:hover::-webkit-calendar-picker-indicator {
 .apexcharts-tooltip-title {
   display: none !important;
 }
+
+/* 禁用图表聚焦时的默认白色边框 */
+.apexcharts-canvas:focus {
+  outline: none !important;
+}
