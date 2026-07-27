@@ -11,9 +11,9 @@
     },
     "dependencies": {
         "@scalar/api-reference": "^1.48.2",
-        "dompurify": "^3.4.8",
-        "fast-uri": "^3.1.2",
-        "postcss": "^8.5.15"
+        "dompurify": "^3.4.12",
+        "fast-uri": "^3.1.4",
+        "postcss": "^8.5.18"
     },
     "overrides": {
         "esbuild": "^0.25.0",
