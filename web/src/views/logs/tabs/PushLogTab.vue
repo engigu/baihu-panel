@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import PushLog from '@/views/notify/components/PushLog.vue'
 
 defineOptions({ name: 'PushLogTabWrapper' })
@@ -15,13 +15,15 @@ defineProps<{
 
 const pushLogRef = ref()
 
+const showClearConfirm = computed({
+  get() { return pushLogRef.value?.showClearConfirm },
+  set(v: boolean) { if (pushLogRef.value) pushLogRef.value.showClearConfirm = v }
+})
+
 // 暴露标准代理接口给父级控制器 MessageLogs.vue 统一调用
 defineExpose({
   fetchLogs: () => pushLogRef.value?.fetchLogs(),
-  showClearConfirm: {
-    get() { return pushLogRef.value?.showClearConfirm },
-    set(v: boolean) { if (pushLogRef.value) pushLogRef.value.showClearConfirm = v }
-  }
+  showClearConfirm
 })
 </script>
 
