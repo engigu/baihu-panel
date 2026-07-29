@@ -429,20 +429,66 @@ function closeTerminal() {
 }
 
 function getLanguage(path: string): string {
-  const ext = path.split('.').pop()?.toLowerCase()
+  const filename = path.split('/').pop()?.toLowerCase() || ''
+  const ext = filename.split('.').pop() || ''
+  
+  if (filename === 'dockerfile') return 'dockerfile'
+  
   const langMap: Record<string, string> = {
-    sh: 'shell', 
-    js: 'javascript', 
-    ts: 'typescript', 
-    py: 'python', 
-    json: 'json', 
-    yaml: 'yaml', 
-    md: 'markdown',
+    // 脚本与系统语言
+    sh: 'shell',
+    bash: 'shell',
+    zsh: 'shell',
     bat: 'bat',
     cmd: 'bat',
-    ps1: 'powershell'
+    ps1: 'powershell',
+    py: 'python',
+    js: 'javascript',
+    ts: 'typescript',
+    go: 'go',
+    php: 'php',
+    lua: 'lua',
+    pl: 'perl',
+    pm: 'perl',
+    rb: 'ruby',
+    
+    // 编译型语言
+    c: 'cpp',
+    h: 'cpp',
+    cpp: 'cpp',
+    cc: 'cpp',
+    hpp: 'cpp',
+    rs: 'rust',
+    java: 'java',
+    cs: 'csharp',
+    swift: 'swift',
+    kt: 'kotlin',
+    dart: 'dart',
+    
+    // 网页与前端样式
+    html: 'html',
+    htm: 'html',
+    vue: 'html',
+    css: 'css',
+    less: 'less',
+    scss: 'scss',
+    sass: 'scss',
+    
+    // 数据与配置格式
+    json: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+    toml: 'toml',
+    ini: 'ini',
+    conf: 'ini',
+    cfg: 'ini',
+    xml: 'xml',
+    sql: 'sql',
+    properties: 'properties',
+    md: 'markdown',
+    dockerfile: 'dockerfile'
   }
-  return langMap[ext || ''] || 'plaintext'
+  return langMap[ext] || 'plaintext'
 }
 
 function expandParentDirs(path: string) {
