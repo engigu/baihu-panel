@@ -30,6 +30,7 @@
     "lucide-vue-next": "^0.562.0",
     "monaco-editor": "^0.52.0",
     "pako": "^2.1.0",
+    "qrcode.vue": "^3.10.0",
     "radix-vue": "^1.9.17",
     "reka-ui": "^2.6.1",
     "tailwind-merge": "^3.4.0",

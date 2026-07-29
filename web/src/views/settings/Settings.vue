@@ -5,13 +5,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { UploadCloud, ExternalLink } from 'lucide-vue-next'
 import PasswordSettings from './PasswordSettings.vue'
+import OtpSettings from './OtpSettings.vue'
 import SiteSettings from './SiteSettings.vue'
 import SchedulerSettings from './SchedulerSettings.vue'
 import BackupSettings from './BackupSettings.vue'
 import AboutSettings from './AboutSettings.vue'
 import WebUISettings from './WebUISettings.vue'
 
-const activeTab = ref('password')
+const activeTab = ref('security')
 const webuiRef = ref<any>(null)
 </script>
 
@@ -24,7 +25,7 @@ const webuiRef = ref<any>(null)
 
     <Tabs v-model="activeTab" class="max-w-2xl">
       <TabsList class="w-full grid grid-cols-3 sm:grid-cols-6 gap-y-1 sm:gap-y-0 h-auto p-1 bg-muted/50 rounded-lg">
-        <TabsTrigger value="password" class="text-xs sm:text-sm px-1 sm:px-3 py-1.5 whitespace-nowrap">密码修改</TabsTrigger>
+        <TabsTrigger value="security" class="text-xs sm:text-sm px-1 sm:px-3 py-1.5 whitespace-nowrap">安全设置</TabsTrigger>
         <TabsTrigger value="site" class="text-xs sm:text-sm px-1 sm:px-3 py-1.5 whitespace-nowrap">站点设置</TabsTrigger>
         <TabsTrigger value="webui" class="text-xs sm:text-sm px-1 sm:px-3 py-1.5 whitespace-nowrap">前端定制</TabsTrigger>
         <TabsTrigger value="scheduler" class="text-xs sm:text-sm px-1 sm:px-3 py-1.5 whitespace-nowrap">调度设置</TabsTrigger>
@@ -32,14 +33,22 @@ const webuiRef = ref<any>(null)
         <TabsTrigger value="about" class="text-xs sm:text-sm px-1 sm:px-3 py-1.5 whitespace-nowrap">关于</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="password" class="mt-6">
+      <TabsContent value="security" class="mt-6">
         <Card>
           <CardHeader>
-            <CardTitle>修改密码</CardTitle>
-            <CardDescription>更新您的账户密码</CardDescription>
+            <CardTitle>安全设置</CardTitle>
+            <CardDescription>管理账户密码和两步验证 (2FA) 安全盾</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent class="space-y-6">
             <PasswordSettings />
+            <hr class="border-border/60" />
+            <div class="space-y-2">
+              <h3 class="text-sm font-semibold">两步验证 (2FA)</h3>
+              <p class="text-xs text-muted-foreground">每次登录时要求提供移动应用程序（如 Google Authenticator）生成的动态码。</p>
+              <div class="pt-2">
+                <OtpSettings />
+              </div>
+            </div>
           </CardContent>
         </Card>
       </TabsContent>

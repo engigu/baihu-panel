@@ -21,6 +21,7 @@ func initPublicAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 	auth := api.Group("/auth")
 	{
 		auth.POST("/login", c.Auth.Login)
+		auth.POST("/login/otp", c.Auth.VerifyOTP)
 		auth.POST("/logout", c.Auth.Logout)
 		// auth.POST("/register", c.Auth.Register)
 	}
@@ -49,6 +50,15 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 	{
 		// 获取当前用户 (普通用户即可访问)
 		authorized.GET("/auth/me", c.Auth.GetCurrentUser)
+
+		// OTP 两步验证管理 (普通用户即可访问，非 adminOnly)
+		otp := authorized.Group("/auth/otp")
+		{
+			otp.GET("/status", c.Auth.GetOTPStatus)
+			otp.POST("/generate", c.Auth.GenerateOTP)
+			otp.POST("/enable", c.Auth.EnableOTP)
+			otp.POST("/disable", c.Auth.DisableOTP)
+		}
 
 		// 以下管理接口需要管理员权限
 		adminOnly := authorized.Group("")

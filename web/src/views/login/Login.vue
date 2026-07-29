@@ -20,6 +20,10 @@ const siteSubtitle = ref('极致轻量、高性能的自动化任务调度平台
 const siteIcon = ref('')
 const demoMode = ref(false)
 
+const requireOtp = ref(false)
+const otpPendingToken = ref('')
+const otpCode = ref('')
+
 // 从 localStorage 加载缓存的站点设置
 function loadCachedSettings() {
   try {
@@ -106,18 +110,41 @@ async function loadSiteSettings() {
 async function handleLogin() {
   loading.value = true
   try {
-    await api.auth.login({ username: username.value, password: password.value })
-    setAuthCache(true) // 直接设置登录状态，避免多余请求
-    toast.success('登录成功')
-    
-    // 使用 window.location.href 替代 router.push，确保应用状态完全重新初始化，解决偶发的路由卡死/白屏问题
-    const baseUrl = (window as any).__BASE_URL__ || ''
-    window.location.href = baseUrl + '/'
-  } catch {
-    toast.error('登录失败，请检查用户名和密码')
+    if (requireOtp.value) {
+      await api.auth.loginOtp({ otp_pending_token: otpPendingToken.value, code: otpCode.value })
+      setAuthCache(true)
+      toast.success('登录成功')
+      const baseUrl = (window as any).__BASE_URL__ || ''
+      window.location.href = baseUrl + '/'
+    } else {
+      const res = await api.auth.login({ username: username.value, password: password.value })
+      if (res && res.require_otp) {
+        requireOtp.value = true
+        otpPendingToken.value = res.otp_pending_token || ''
+        otpCode.value = ''
+        toast.info('请输入两步验证码')
+      } else {
+        setAuthCache(true)
+        toast.success('登录成功')
+        const baseUrl = (window as any).__BASE_URL__ || ''
+        window.location.href = baseUrl + '/'
+      }
+    }
+  } catch (err: any) {
+    if (err && err.message && (err.message.includes('JSON') || err.message.includes('Unexpected') || err.message.includes('fetch'))) {
+      toast.error(requireOtp.value ? '两步验证码错误，请重新输入' : '登录失败，请检查用户名和密码')
+    } else {
+      toast.error(err.message || '登录失败，请检查用户名和密码')
+    }
   } finally {
     loading.value = false
   }
+}
+
+function handleBack() {
+  requireOtp.value = false
+  otpPendingToken.value = ''
+  otpCode.value = ''
 }
 
 onMounted(loadSiteSettings)
@@ -167,23 +194,39 @@ onMounted(loadSiteSettings)
           <!-- 登录表单 -->
           <form @submit.prevent="handleLogin" class="space-y-6">
             <div class="space-y-4">
-              <div class="space-y-2">
-                <Label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 ml-1">用户名</Label>
-                <Input v-model="username" placeholder="请输入用户名"
-                  class="h-12 text-base rounded-2xl bg-background/50 border-white/50 dark:border-white/5 focus:ring-4 focus:ring-primary/10 transition-all" />
+              <div v-if="!requireOtp" class="space-y-4">
+                <div class="space-y-2">
+                  <Label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 ml-1">用户名</Label>
+                  <Input v-model="username" placeholder="请输入用户名"
+                    class="h-12 text-base rounded-2xl bg-background/50 border-white/50 dark:border-white/5 focus:ring-4 focus:ring-primary/10 transition-all" />
+                </div>
+                <div class="space-y-2">
+                  <Label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 ml-1">密码</Label>
+                  <Input v-model="password" type="password" placeholder="请输入密码"
+                    class="h-12 text-base rounded-2xl bg-background/50 border-white/50 dark:border-white/5 focus:ring-4 focus:ring-primary/10 transition-all" />
+                </div>
               </div>
-              <div class="space-y-2">
-                <Label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 ml-1">密码</Label>
-                <Input v-model="password" type="password" placeholder="请输入密码"
-                  class="h-12 text-base rounded-2xl bg-background/50 border-white/50 dark:border-white/5 focus:ring-4 focus:ring-primary/10 transition-all" />
+              <div v-else class="space-y-4">
+                <div class="space-y-2">
+                  <Label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 ml-1">两步验证码 (OTP)</Label>
+                  <Input v-model="otpCode" placeholder="请输入 6 位验证码" autocomplete="one-time-code" maxlength="6"
+                    class="h-12 text-base rounded-2xl bg-background/50 border-white/50 dark:border-white/5 focus:ring-4 focus:ring-primary/10 transition-all text-center tracking-[0.5em]" />
+                </div>
               </div>
             </div>
-            <Button type="submit"
-              class="w-full h-12 text-base font-bold rounded-2xl bg-gradient-to-r from-primary/90 to-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
-              :disabled="loading">
-              <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
-              {{ loading ? '验证中...' : '立即登录' }}
-            </Button>
+            <div class="space-y-3">
+              <Button type="submit"
+                class="w-full h-12 text-base font-bold rounded-2xl bg-gradient-to-r from-primary/90 to-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                :disabled="loading">
+                <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
+                {{ loading ? '验证中...' : (requireOtp ? '验证并登录' : '立即登录') }}
+              </Button>
+              <Button v-if="requireOtp" type="button" variant="ghost"
+                class="w-full h-10 text-sm font-medium rounded-2xl text-muted-foreground hover:bg-muted"
+                @click="handleBack" :disabled="loading">
+                返回上一步
+              </Button>
+            </div>
           </form>
 
           <p v-if="demoMode" class="mt-8 text-center text-xs text-muted-foreground/60">

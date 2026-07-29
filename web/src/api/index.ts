@@ -133,11 +133,19 @@ export async function checkAuth(): Promise<boolean> {
 export const api = {
   auth: {
     login: (data: { username: string; password: string }) =>
-      request<{ user: string }>('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+      request<{ user: string; require_otp?: boolean; otp_pending_token?: string }>('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+    loginOtp: (data: { otp_pending_token: string; code: string }) =>
+      request<{ user: string }>('/auth/login/otp', { method: 'POST', body: JSON.stringify(data) }),
     logout: () => request('/auth/logout', { method: 'POST' }),
     me: () => request<{ username: string; role: string }>('/auth/me'),
     register: (data: { username: string; password: string; email: string }) =>
-      request('/auth/register', { method: 'POST', body: JSON.stringify(data) })
+      request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+    getOtpStatus: () => request<{ otp_enabled: boolean }>('/auth/otp/status'),
+    generateOtp: () => request<{ secret: string; url: string }>('/auth/otp/generate', { method: 'POST' }),
+    enableOtp: (data: { secret: string; code: string }) =>
+      request<void>('/auth/otp/enable', { method: 'POST', body: JSON.stringify(data) }),
+    disableOtp: (data: { code: string }) =>
+      request<void>('/auth/otp/disable', { method: 'POST', body: JSON.stringify(data) })
   },
   tasks: {
     list: (params?: { page?: number; page_size?: number; name?: string; agent_id?: string; tags?: string; type?: string; sort_by?: string; order?: string }) => {
