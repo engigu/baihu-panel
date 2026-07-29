@@ -108,6 +108,7 @@ func (ac *AuthController) Login(c *gin.Context) {
 			},
 		})
 		utils.Unauthorized(c, "用户名或密码错误")
+		return
 	}
 
 	// 登录成功，清除尝试记录

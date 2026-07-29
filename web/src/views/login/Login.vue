@@ -131,11 +131,7 @@ async function handleLogin() {
       }
     }
   } catch (err: any) {
-    if (err && err.message && (err.message.includes('JSON') || err.message.includes('Unexpected') || err.message.includes('fetch'))) {
-      toast.error(requireOtp.value ? '两步验证码错误，请重新输入' : '登录失败，请检查用户名和密码')
-    } else {
-      toast.error(err.message || '登录失败，请检查用户名和密码')
-    }
+    toast.error(err.message || '登录失败，请检查用户名和密码')
   } finally {
     loading.value = false
   }
