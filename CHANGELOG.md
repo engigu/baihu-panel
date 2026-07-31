@@ -1,29 +1,17 @@
-# 更新日志 (v1.1.23)
+# 更新日志 (v1.1.24)
 
-### 2026.07.23 - Windows GUI 安装包与系统托盘守护程序
-
-🎉 **新增与优化**
-* **Windows GUI 安装包 (New)**：新增了 Inno Setup 打包脚本 (`build/windows/installer.iss`)，可自动打出 Windows 标准 `.exe` 安装向导（支持引导界面、桌面快捷方式创建、自动注册系统自启与卸载）。
-* **Windows 系统托盘守护程序 (New)**：新增了 Golang 后台托盘 GUI 辅助程序 (`cmd/tray/main.go` -> `baihu-tray.exe`)，支持任务栏右下角菜单交互（一键打开网页面板、服务重启、状态监控、开机自启开关）。
-* **Makefile & Release CI 集成**：更新了 `Makefile` 构建目标（`release-windows-tray` 与 `pack-windows-installer`），并在 GitHub Actions 发布工作流中引入 `action-innosetup`，每次 Tag 发布时将自动编译并打包导出安装包产物 (`BaihuPanel-Setup-v*.exe`)。
-
----
-
-### 2026.07.20 - Windows 平台深度适配、网页终端 Ctrl+C 中止与 Linux PTY 回退机制修复
+### 2026.07.31 - 标签管理、编辑器多语言高亮、登录两步验证与响应式布局优化
 
 🎉 **新增与优化**
-* **Windows 平台适配包重构**：新建并集成了后端 `internal/windows` 与前端 `web/src/windows` 专有包，统一收拢 Windows 的特异性环境检测、PSReadline 影响规避、PATH 优先级修复 (FixPathEnv) 等底层逻辑，大幅提升了在 Windows 平台直接运行时的环境稳定性与规范度。
-* **网页终端 Ctrl+C 中断支持**：支持了 Windows 网页终端下通过快捷键 `Ctrl+C` 中止运行中程序，后端会拦截 `\x03` 信号并调用 `taskkill /F /T` 强行递归终结前台子进程树，并保持外层 Shell 会话完好，与 Linux/macOS 的体验全面看齐。
-* **Monaco 编辑器高亮与检测**：前端编辑器新增了保存脚本时的风险警告拦截审查 (`scriptCheck.ts`)，针对 `timeout` 或 `pause` 等后台挂起指令给出安全平替建议；同时为 Monaco 编辑器补齐了 `.bat`、`.cmd`、`.ps1` 等 Windows 脚本语言的语法高亮支持。
-* **编译与自动化发布**：在 `Makefile` 中添加了跨平台编译 Windows 二进制的 `release-windows` 目标；重构了 GitHub Actions 自动发布工作流 `.github/workflows/release.yml`，在发布时自动编译并打包 Windows 平台的单文件发布包 (`baihu-windows-amd64.zip`) 并自动上传 Release 附件。
-* **xterm 终端换行 Bug 修复**：开启了终端组件的 `convertEol: true` 自动换行翻译配置，彻底解决了 Windows 管道重定向模式下，因 Shell 回显单 `\n` 导致首行输出排版乱折行的排版问题。
-* **Windows 部署使用文档**：更新了部署说明文档，新增了“二进制单文件运行 (Linux / Windows)”专栏，细化了 `mise` 以及 `pwsh 7+` 工具链的安装指导。
+* **全新标签管理功能 (New)**：新增了独立的“标签管理”后台服务及前端控制页，支持对系统内任务标签（`task_tag`）与环境变量标签（`env_tag`）进行创建、重命名、删除、分页、过滤等操作，并引入了标签名称的全局排重机制。
+* **Monaco 多语言语法高亮支持 (New)**：编辑器组件扩展支持了 Python, JavaScript/TypeScript, Go, Shell/Bash 等多种主流语言的开箱即用语法高亮，优化了编辑器编码体验。
+* **登录 2FA/OTP 二步验证 (New)**：系统全新集成了两步验证（OTP/2FA），支持管理员账号在系统设置页绑定和启用/停用 OTP，并配套重构了登录界面、OTP 验证码拦截以及安全防爆破拦截。同时在后台重构并平坦化了 OTP 设置页的移动端自适应排版。
+* **极简图标与响应式布局升级**：重新设计了标签类型标识，舍弃了传统的徽章卡片背景 and 文字，直接以蓝色终端图标（任务）和橙色变量图标（变量）做纯视觉区分；针对移动端/小屏模式重构优化了控制工具栏、按钮的排列换行方式；并统筹统一了“环境变量”及“定时任务”页面移动端卡片底栏网格动作按钮的间距和贴边排版。
+* **互联管理控制栏优化**：修复了“互联管理”页面在小屏宽度下由于没有换行导致“同步”页签按钮被半截截断溢出的 UI Bug；设计了两行自适应移动端布局，实现了搜索输入框、刷新按钮与各操作页签的上下视觉平衡，且在切换至无搜索框的“同步”标签时，自动收缩为空行以避免排版漏洞。
 
 **✨ 修复与改进**
-* **脚本执行参数校验**：修复了在“测试运行” Windows 脚本时，即便不需要运行环境也会强行拼接 `python` / `node` 执行器前缀导致命令无法执行的缺陷。
-* **Linux PTY 回退机制修复**：修复了 Linux 环境下 PTY 分配失败（如 `ioctl` 错误）时，因 `exec.Cmd` 实例被占用重用触发 `already started` 导致的崩溃挂起，同时确保回退后的命令完整保留超时控制。
-
----
+* **修复登录接口多重 JSON 响应 Bug**：修复了登录校验失败时后端可能同时吐出多个 JSON 结构体导致的 JSON 序列化损坏及前端无响应 Bug，完善了前端错误捕获提醒。
+* **其他细节修复与依赖升级**：修复了推送日志清理按钮偶尔无响应的问题（#23）；升级了多处有安全漏洞的 npm 依赖项以消除 Dependabot 警报。
 
 > 💡 **提示**：出于安全及环境隔离考虑，推荐使用 Docker/Compose 部署方式。[镜像地址](https://github.com/engigu/baihu-panel/pkgs/container/baihu)
 
