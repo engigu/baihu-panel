@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { resetAuthCache } from '@/router'
-import { LayoutDashboard, ListTodo, FileCode, Settings, LogOut, ScrollText, Terminal, Variable, KeyRound, Menu, X, Server, Globe, Bell, Activity, Network } from 'lucide-vue-next'
+import { LayoutDashboard, ListTodo, FileCode, Settings, LogOut, ScrollText, Terminal, Variable, KeyRound, Menu, X, Server, Globe, Bell, Activity, Network, Tag } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import SystemNotice from '@/components/SystemNotice.vue'
@@ -56,16 +56,17 @@ const sentenceContent = computed(() => {
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: '数据仪表', exact: true },
   { to: '/tasks', icon: ListTodo, label: '定时任务', exact: true },
-  { to: '/agents', icon: Server, label: '远程执行', exact: true },
   { to: '/editor', icon: FileCode, label: '脚本编辑', exact: false },
   { to: '/history', icon: ScrollText, label: '执行历史', exact: true },
   { to: '/environments', icon: Variable, label: '变量机密', exact: true },
+  { to: '/tags', icon: Tag, label: '标签管理', exact: true },
   { to: '/languages', icon: Globe, label: '语言依赖', exact: true },
   { to: '/terminal', icon: Terminal, label: '终端命令', exact: true },
+  { to: '/agents', icon: Server, label: '远程执行', exact: true },
+  { to: '/interconnect', icon: Network, label: '互联管理', exact: true },
   { to: '/notify', icon: Bell, label: '消息推送', exact: true },
   { to: '/logs', icon: KeyRound, label: '运行日志', exact: true },
   { to: '/monitor', icon: Activity, label: '系统监控', exact: true },
-  { to: '/interconnect', icon: Network, label: '互联管理', exact: true },
   { to: '/settings', icon: Settings, label: '系统设置', exact: true },
 ]
 

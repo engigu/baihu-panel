@@ -215,6 +215,19 @@ export const api = {
     command: (command: string) => request('/execute/command', { method: 'POST', body: JSON.stringify({ command }) }),
     results: () => request('/execute/results')
   },
+  tags: {
+    list: (params?: { page?: number; page_size?: number; name?: string; type?: string }) => {
+      const query = new URLSearchParams()
+      if (params?.page) query.set('page', String(params.page))
+      if (params?.page_size) query.set('page_size', String(params.page_size))
+      if (params?.name) query.set('name', params.name)
+      if (params?.type && params.type !== 'all') query.set('type', params.type)
+      return request<TagListResponse>(`/tags?${query}`)
+    },
+    create: (data: { name: string; type: string }) => request<TagItem>('/tags', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: { name: string }) => request<void>(`/tags/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request<void>(`/tags/${id}`, { method: 'DELETE' })
+  },
   logs: {
     list: (params?: { page?: number; page_size?: number; task_id?: string; task_name?: string; status?: string }) => {
       const query = new URLSearchParams()
@@ -828,4 +841,19 @@ export const LOG_STATUS = {
   SUCCESS: 'success',
   FAILED: 'failed'
 } as const
+
+export interface TagItem {
+  id: string
+  name: string
+  type: 'task_tag' | 'env_tag'
+  association_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface TagListResponse {
+  data: TagItem[]
+  total: number
+}
+
 

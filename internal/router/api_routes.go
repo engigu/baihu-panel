@@ -82,6 +82,7 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 			registerMonitorRoutes(adminOnly, c)
 			registerInterconnectRoutes(adminOnly, c)
 			registerSystemRoutes(adminOnly, c)
+			registerTagRoutes(adminOnly, c)
 		}
 	}
 
@@ -351,3 +352,14 @@ func registerSystemRoutes(g *gin.RouterGroup, c *Controllers) {
 		systemAPI.POST("/import", c.Data.ImportBusinessData)
 	}
 }
+
+func registerTagRoutes(g *gin.RouterGroup, c *Controllers) {
+	tags := g.Group("/tags")
+	{
+		tags.GET("", c.Tag.GetTags)
+		tags.POST("", c.Tag.CreateTag)
+		tags.PUT("/:id", c.Tag.UpdateTag)
+		tags.DELETE("/:id", c.Tag.DeleteTag)
+	}
+}
+

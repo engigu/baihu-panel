@@ -47,44 +47,55 @@ onMounted(() => {
         <p class="text-muted-foreground text-xs mt-0.5 ml-0.5">集中监控其他面板的状态，并可无缝穿越到子节点进行管理</p>
       </div>
 
-      <div class="flex flex-row items-center flex-wrap gap-2 w-full md:w-auto md:ml-auto md:justify-end">
-        <!-- 搜索框 (仅节点管理时显示) -->
-        <div class="relative w-full sm:flex-1 md:flex-none md:w-[180px] xl:w-[240px] group shrink-0" v-if="activeTab === 'nodes'">
-          <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-          <Input v-model="searchQuery" placeholder="搜索节点..." class="h-9 pl-9 w-full bg-muted/20 border-muted-foreground/10 focus:bg-background text-sm" />
+      <div class="flex flex-col md:flex-row md:items-center gap-2 w-full md:w-auto md:ml-auto md:justify-end">
+        <!-- 第一行：搜索框与刷新按钮 (仅节点列表时显示) -->
+        <div v-if="activeTab === 'nodes'" class="flex items-center gap-2 w-full md:w-auto">
+          <div class="relative flex-1 md:flex-none md:w-[180px] xl:w-[240px] group shrink-0">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+            <Input v-model="searchQuery" placeholder="搜索节点..." class="h-9 pl-9 w-full bg-muted/20 border-muted-foreground/10 focus:bg-background text-sm" />
+          </div>
+          <!-- 移动端刷新按钮 -->
+          <Button variant="outline" size="icon" class="h-9 w-9 shrink-0 md:hidden" @click="fetchNodes" :disabled="loading" title="刷新">
+            <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loading }" />
+          </Button>
         </div>
         
-        <div class="flex items-center gap-2 w-full sm:w-auto sm:justify-end overflow-x-auto scrollbar-none pb-1 -mb-1 sm:pb-0 sm:mb-0">
-          <!-- 刷新按钮 -->
-          <Button variant="outline" size="icon" class="h-9 w-9 shrink-0" @click="fetchNodes" :disabled="loading" title="刷新">
+        <!-- 第二行：操作按钮及切换 -->
+        <div class="flex items-center flex-wrap gap-2 w-full md:w-auto md:justify-end">
+          <!-- 刷新按钮 (在 desktop 始终显示，而在 mobile 下仅在 sync 标签页显示) -->
+          <Button variant="outline" size="icon" 
+            class="h-9 w-9 shrink-0" 
+            :class="activeTab === 'nodes' ? 'hidden md:inline-flex' : 'inline-flex'" 
+            @click="fetchNodes" 
+            :disabled="loading" 
+            title="刷新"
+          >
             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loading }" />
           </Button>
 
-          <div class="flex items-center gap-2 flex-1 sm:flex-none sm:ml-0">
-            <!-- 取消主控角色按钮 -->
-            <Button variant="outline" class="flex-1 sm:flex-none shrink-0 px-3 h-9 shadow-sm text-destructive border-destructive/20 hover:bg-destructive/10" @click="emit('cancel')">
-              取消主控
-            </Button>
+          <!-- 取消主控角色按钮 -->
+          <Button variant="outline" class="flex-1 md:flex-none shrink-0 px-3 h-9 shadow-sm text-destructive border-destructive/20 hover:bg-destructive/10" @click="emit('cancel')">
+            取消主控
+          </Button>
 
-            <!-- 添加子节点按钮 -->
-            <Button v-if="activeTab === 'nodes'" @click="masterListRef?.openAddDialog()" class="flex-1 sm:flex-none shrink-0 px-3 h-9 shadow-sm font-medium gap-1" title="添加子节点">
-              <Plus class="h-4 w-4" /><span>添加</span>
-            </Button>
-            
-            <!-- Tabs 切换 -->
-            <Tabs :model-value="activeTab" @update:model-value="(v: string | number) => activeTab = String(v)" class="flex-1 sm:flex-none shrink-0 min-w-[120px]">
-               <TabsList class="h-9 p-0.5 bg-muted/20 border border-border/40 rounded-lg w-full flex">
-                  <TabsTrigger value="nodes" class="flex-1 px-3 h-8 text-xs gap-1.5 font-medium transition-all">
-                     <Server class="w-3.5 h-3.5 opacity-70" />
-                     <span>节点</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="sync" class="flex-1 px-3 h-8 text-xs gap-1.5 font-medium transition-all">
-                     <ArrowRightLeft class="w-3.5 h-3.5 opacity-70" />
-                     <span>同步</span>
-                  </TabsTrigger>
-               </TabsList>
-            </Tabs>
-          </div>
+          <!-- 添加子节点按钮 -->
+          <Button v-if="activeTab === 'nodes'" @click="masterListRef?.openAddDialog()" class="flex-1 md:flex-none shrink-0 px-3 h-9 shadow-sm font-medium gap-1" title="添加子节点">
+            <Plus class="h-4 w-4" /><span>添加</span>
+          </Button>
+          
+          <!-- Tabs 切换 -->
+          <Tabs :model-value="activeTab" @update:model-value="(v: string | number) => activeTab = String(v)" class="flex-1 md:flex-none shrink-0 min-w-[120px]">
+             <TabsList class="h-9 p-0.5 bg-muted/20 border border-border/40 rounded-lg w-full flex">
+                <TabsTrigger value="nodes" class="flex-1 px-3 h-8 text-xs gap-1.5 font-medium transition-all">
+                   <Server class="w-3.5 h-3.5 opacity-70" />
+                   <span>节点</span>
+                </TabsTrigger>
+                <TabsTrigger value="sync" class="flex-1 px-3 h-8 text-xs gap-1.5 font-medium transition-all">
+                   <ArrowRightLeft class="w-3.5 h-3.5 opacity-70" />
+                   <span>同步</span>
+                </TabsTrigger>
+             </TabsList>
+          </Tabs>
         </div>
       </div>
     </div>
