@@ -62,6 +62,7 @@ const (
 	ChannelPushPlus        = channels.ChannelPushPlus
 	ChannelVoceChat        = channels.ChannelVoceChat
 	ChannelWxPusher        = channels.ChannelWxPusher
+	ChannelQyWeiXinApp     = channels.ChannelQyWeiXinApp
 )
 
 // 重导出辅助函数
@@ -96,6 +97,7 @@ func init() {
 	RegisterChannel(ChannelPushPlus, func() Channel { return channels.NewPushPlusChannel() })
 	RegisterChannel(ChannelVoceChat, func() Channel { return channels.NewVoceChatChannel() })
 	RegisterChannel(ChannelWxPusher, func() Channel { return channels.NewWxPusherChannel() })
+	RegisterChannel(ChannelQyWeiXinApp, func() Channel { return channels.NewQyWeiXinAppChannel() })
 }
 
 // RegisterChannel 注册自定义渠道（可用于扩展）
@@ -128,20 +130,6 @@ func ListChannels() []string {
 }
 
 // Send 发送消息的便捷函数
-//
-// 参数：
-//   - channelType: 渠道类型（如 "Telegram", "Dtalk" 等）
-//   - config: 渠道必要的认证配置
-//   - msg: 消息内容
-//
-// 使用示例：
-//
-//	result, err := messenger.Send("Ntfy", messenger.ChannelConfig{
-//	    "topic": "my-topic",
-//	}, &messenger.Message{
-//	    Title: "Alert",
-//	    Text:  "Something happened!",
-//	})
 func Send(channelType string, config ChannelConfig, msg *Message) (*Result, error) {
 	ch, err := GetChannel(channelType)
 	if err != nil {
@@ -164,16 +152,6 @@ func NewClient() *Client {
 }
 
 // SetDefaultConfig 为指定渠道设置默认配置
-//
-// 使用示例：
-//
-//	client := messenger.NewClient()
-//	client.SetDefaultConfig("Telegram", messenger.ChannelConfig{
-//	    "bot_token": "default-token",
-//	    "chat_id":   "default-chat",
-//	})
-//	// 后续发送时不需要再传 config 的相关字段
-//	result, err := client.Send("Telegram", nil, &messenger.Message{...})
 func (c *Client) SetDefaultConfig(channelType string, config ChannelConfig) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

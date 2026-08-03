@@ -87,4 +87,5 @@ const (
 	ChannelPushPlus        = "PushPlus"
 	ChannelVoceChat        = "VoceChat"
 	ChannelWxPusher        = "WxPusher"
+	ChannelQyWeiXinApp     = "QyWeiXinApp"
 )

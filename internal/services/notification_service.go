@@ -46,6 +46,7 @@ var SupportedChannelTypes = []map[string]string{
 	{"type": messenger.ChannelBark, "label": "Bark"},
 	{"type": messenger.ChannelDtalk, "label": "钉钉"},
 	{"type": messenger.ChannelQyWeiXin, "label": "企业微信"},
+	{"type": messenger.ChannelQyWeiXinApp, "label": "企业微信应用"},
 	{"type": messenger.ChannelFeishu, "label": "飞书"},
 	{"type": messenger.ChannelEmail, "label": "邮件"},
 	{"type": messenger.ChannelCustom, "label": "自定义Webhook"},

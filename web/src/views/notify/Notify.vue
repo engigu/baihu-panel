@@ -70,6 +70,16 @@ const channelConfigFields: Record<string, { key: string; label: string; required
   QyWeiXin: [
     { key: 'access_token', label: 'Access Token', required: true, placeholder: '企业微信机器人 Key' },
   ],
+  QyWeiXinApp: [
+    { key: 'corpid', label: '企业 ID', required: true, placeholder: '企业微信后台获取的 corpid' },
+    { key: 'agentid', label: '应用 ID', required: true, placeholder: '应用后台获取的 agentid' },
+    { key: 'secret', label: '应用 Secret', required: true, placeholder: '应用后台获取的 secret' },
+    { key: 'to_user', label: '接收成员', required: false, placeholder: '接收成员账号，多个用 | 分隔，默认 @all' },
+    { key: 'to_party', label: '接收部门', required: false, placeholder: '接收部门 ID，多个用 | 分隔' },
+    { key: 'to_tag', label: '接收标签', required: false, placeholder: '接收标签 ID，多个用 | 分隔' },
+    { key: 'api_host', label: 'API 地址', required: false, placeholder: '自定义 API 地址，留空使用官方' },
+    { key: 'proxy_url', label: '代理地址', required: false, placeholder: 'http/https/socks5 代理' },
+  ],
   Feishu: [
     { key: 'access_token', label: 'Access Token', required: true, placeholder: '飞书机器人 access_token' },
     { key: 'secret', label: '加签秘钥', required: false, placeholder: '可选' },
