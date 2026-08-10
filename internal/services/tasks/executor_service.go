@@ -568,6 +568,20 @@ func (es *ExecutorService) GetScheduledCount() int {
 	return es.cronManager.GetScheduledCount()
 }
 
+// ReloadCronTasks 重新加载所有计划任务
+func (es *ExecutorService) ReloadCronTasks() {
+	es.cronManager.ClearTasks()
+	es.loadCronTasks()
+}
+
+// SubscribeEvents 订阅系统事件
+func (es *ExecutorService) SubscribeEvents(bus *eventbus.EventBus) {
+	bus.Subscribe(constant.EventBackupRestored, func(event eventbus.Event) {
+		logger.Infof("[Executor] 收到备份恢复事件，正在重新加载计划任务调度...")
+		es.ReloadCronTasks()
+	})
+}
+
 // loadCronTasks 加载所有已启用的本地计划任务
 func (es *ExecutorService) loadCronTasks() {
 	tasks := es.taskService.GetTasks()

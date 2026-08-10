@@ -14,6 +14,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/cache"
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
+	"github.com/engigu/baihu-panel/internal/eventbus"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/systime"
 	"github.com/rs/xid"
@@ -260,6 +261,9 @@ func (s *BackupService) Restore(zipPath string) error {
 		// 备份恢复成功后，需要同时刷新内存中的配置缓存以免数据不一致导致异常
 		constant.Secret = s.settingsService.Get(constant.SectionSecurity, constant.KeySecret)
 		cache.LoadSiteCache()
+		eventbus.DefaultBus.Publish(eventbus.Event{
+			Type: constant.EventBackupRestored,
+		})
 	}
 
 	return err

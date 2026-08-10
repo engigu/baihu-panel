@@ -93,6 +93,7 @@ const (
 	EventSchedulerLog = "scheduler_log"
 	EventNotifySent   = "notify_sent"
 	EventAppLogAdded  = "app_log_added"
+	EventBackupRestored = "backup_restored"
 
 	// WebSocket 消息类型
 	WSTypeHeartbeat     = "heartbeat"

@@ -42,7 +42,7 @@ func RegisterControllers() *Controllers {
 	executorService.StartCron()
 
 	// 初始化所有关注系统总线的服务
-	setupEventHandlers(appLogService, notifyService, loginLogService, systemWSManager)
+	setupEventHandlers(appLogService, notifyService, loginLogService, systemWSManager, executorService)
 	startAppLogCleanup(appLogService)
 
 	taskController := controllers.NewTaskController(taskService, executorService)

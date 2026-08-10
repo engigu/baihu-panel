@@ -182,6 +182,18 @@ func (m *CronManager) RemoveTask(taskID string) {
 	}
 }
 
+// ClearTasks 清空所有计划任务
+func (m *CronManager) ClearTasks() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for taskID, entryID := range m.entryMap {
+		m.cron.Remove(entryID)
+		delete(m.entryMap, taskID)
+	}
+	m.logger.Infof("[CronManager] 已清空所有计划任务调度")
+}
+
 // triggerNextRunEvent 触发下次运行时间更新事件
 func (m *CronManager) triggerNextRunEvent(taskID string, req *ExecutionRequest) {
 	m.mu.RLock()
