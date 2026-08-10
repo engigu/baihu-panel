@@ -60,7 +60,8 @@
       "vite": "$vite"
     },
     "esbuild": "^0.28.1",
-    "brace-expansion": "^5.0.7",
-    "fast-uri": "^3.1.4"
+    "brace-expansion": "^5.0.9",
+    "fast-uri": "^3.1.5",
+    "nanoid": "^5.1.16"
   }
 }
