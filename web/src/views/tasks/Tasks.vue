@@ -428,11 +428,30 @@ async function viewLogs(taskId: string, logId?: string) {
     } else {
       const res = await api.logs.list({ task_id: taskId, page: 1, page_size: 1 })
       if (res.data && res.data.length > 0) {
-        latestLog = res.data[0]
+        latestLog = res.data[0] || null
       }
     }
 
-    if (!latestLog) return
+    if (!latestLog) {
+      // 如果没有日志，构造一个基础的任务信息对象用于展示弹窗
+      const task = tasks.value.find(t => t.id === taskId)
+      selectedLog.value = {
+        id: '',
+        task_id: taskId,
+        task_name: task?.name || '未知任务',
+        command: task?.command || '',
+        status: 'UNEXECUTED',
+        duration: 0,
+        start_time: '-',
+        end_time: '-',
+      } as TaskLog
+      logContent.value = ''
+      logEmptyTitle.value = '该任务暂无执行记录'
+      logEmptyDesc.value = '此任务尚未被触发执行，目前没有任何运行日志产生。'
+      showLogViewer.value = true
+      return
+    }
+
     selectedLog.value = latestLog
     logContent.value = ''
     logEmptyTitle.value = undefined
@@ -483,41 +502,23 @@ async function viewLogs(taskId: string, logId?: string) {
       cleanupLogSocket()
     }
 
-      // 优化：本地定时更新耗时，不再发请求轮询状态，状态变更依赖 EventBus 推送
-      cleanupDurationTimer()
-      const updateLogStatus = () => {
-        if (selectedLog.value && selectedLog.value.status === TASK_STATUS.RUNNING) {
-          if (selectedLog.value.start_time && selectedLog.value.start_time !== '-') {
-            const startMs = new Date(selectedLog.value.start_time).getTime()
-            if (!isNaN(startMs)) {
-              selectedLog.value.duration = Date.now() - startMs
-            } else {
-              selectedLog.value.duration += 1000
-            }
+    // 优化：本地定时更新耗时，不再发请求轮询状态，状态变更依赖 EventBus 推送
+    cleanupDurationTimer()
+    const updateLogStatus = () => {
+      if (selectedLog.value && selectedLog.value.status === TASK_STATUS.RUNNING) {
+        if (selectedLog.value.start_time && selectedLog.value.start_time !== '-') {
+          const startMs = new Date(selectedLog.value.start_time).getTime()
+          if (!isNaN(startMs)) {
+            selectedLog.value.duration = Date.now() - startMs
           } else {
             selectedLog.value.duration += 1000
           }
+        } else {
+          selectedLog.value.duration += 1000
         }
       }
-      durationTimer = setInterval(updateLogStatus, 1000)
-    } else {
-      // 如果没有日志，构造一个基础的任务信息对象用于展示弹窗
-      const task = tasks.value.find(t => t.id === taskId)
-      selectedLog.value = {
-        id: '',
-        task_id: taskId,
-        task_name: task?.name || '未知任务',
-        command: task?.command || '',
-        status: 'UNEXECUTED',
-        duration: 0,
-        start_time: '-',
-        end_time: '-',
-      } as TaskLog
-      logContent.value = ''
-      logEmptyTitle.value = '该任务暂无执行记录'
-      logEmptyDesc.value = '此任务尚未被触发执行，目前没有任何运行日志产生。'
-      showLogViewer.value = true
     }
+    durationTimer = setInterval(updateLogStatus, 1000)
   } catch {
     toast.error('获取日志失败')
   }
