@@ -77,20 +77,17 @@ onUnmounted(() => {
   stopTimer()
 })
 
-watch(() => props.log?.status, (newStatus) => {
-  if (newStatus === TASK_STATUS.RUNNING) {
+// 深度监听 props.log 的变化（包含属性更新与对象替换）
+watch(() => props.log, (newLog) => {
+  if (newLog?.status === TASK_STATUS.RUNNING) {
     startTimer()
   } else {
     stopTimer()
-    if (props.log) currentDuration.value = props.log.duration
+    if (newLog) {
+      currentDuration.value = newLog.duration || 0
+    }
   }
-})
-
-watch(() => props.log?.duration, (newVal) => {
-  if (props.log?.status !== TASK_STATUS.RUNNING) {
-    currentDuration.value = newVal || 0
-  }
-})
+}, { deep: true, immediate: true })
 </script>
 
 <template>

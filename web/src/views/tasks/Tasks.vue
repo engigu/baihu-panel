@@ -681,11 +681,15 @@ useEventBus(['task_running', 'task_queued', 'task_success', 'task_failed', 'task
     task.running_status = payload.status
   }
   
-  // 同步更新打开的日志弹窗状态
-  if (selectedLog.value && selectedLog.value.id === payload.log_id) {
-    selectedLog.value.status = payload.status
-    if (payload.duration !== undefined) selectedLog.value.duration = payload.duration
-    if (payload.end_time !== undefined) selectedLog.value.end_time = payload.end_time
+  // 同步更新打开的日志弹窗状态（按 log_id 或 task_id 匹配）
+  if (selectedLog.value && (selectedLog.value.id === payload.log_id || selectedLog.value.task_id === payload.task_id)) {
+    // 替换为全新的响应式对象以触发所有子组件更新
+    selectedLog.value = {
+      ...selectedLog.value,
+      status: payload.status,
+      duration: payload.duration !== undefined ? payload.duration : selectedLog.value.duration,
+      end_time: payload.end_time !== undefined ? payload.end_time : selectedLog.value.end_time
+    }
     
     if (payload.status !== TASK_STATUS.RUNNING) {
       cleanupDurationTimer()

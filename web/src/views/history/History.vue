@@ -49,10 +49,13 @@ useEventBus(Object.values(TASK_EVENTS), (payload, type) => {
     if (end_time !== undefined) logItem.end_time = end_time
     
     // 如果详情页打开的是这个记录，也同步更新
-    if (selectedLog.value && selectedLog.value.id === log_id) {
-      selectedLog.value.status = status
-      if (duration !== undefined) selectedLog.value.duration = duration
-      if (end_time !== undefined) selectedLog.value.end_time = end_time
+    if (selectedLog.value && (selectedLog.value.id === log_id || selectedLog.value.task_id === payload.task_id)) {
+      selectedLog.value = {
+        ...selectedLog.value,
+        status: status,
+        duration: duration !== undefined ? duration : selectedLog.value.duration,
+        end_time: end_time !== undefined ? end_time : selectedLog.value.end_time
+      }
       
       // 如果任务完成了，停止详情页的轮询定时器并断开 SSE
       if (status !== TASK_STATUS.RUNNING) {
