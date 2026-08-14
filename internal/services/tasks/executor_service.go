@@ -621,13 +621,19 @@ func (es *ExecutorService) loadCronTasks() {
 
 // Reload 重新加载配置并重建调度器
 func (es *ExecutorService) Reload() {
+	logger.Info("[Executor] 正在重载配置...")
+
+	// 1. 局部提取并停止旧的调度器，不在大锁中阻塞等待协程退出
+	es.mu.RLock()
+	oldScheduler := es.scheduler
+	es.mu.RUnlock()
+
+	if oldScheduler != nil {
+		oldScheduler.Stop()
+	}
+
 	es.mu.Lock()
 	defer es.mu.Unlock()
-
-	logger.Info("[Executor] 正在重载配置...")
-	if es.scheduler != nil {
-		es.scheduler.Stop()
-	}
 
 	// 从设置中读取新配置
 	es.initScheduler()
