@@ -87,7 +87,16 @@ func (lc *LogSSEController) StreamLog(c *gin.Context) {
 					if content != "" {
 						c.SSEvent("message", gin.H{"text": "\n--- 任务已结束 ---\n"})
 					}
+					// 发送 finish 自定义事件，带上最新的状态和耗时，让前端能立刻关闭定时器和更新 UI
+					c.SSEvent("finish", gin.H{
+						"status":   finalLog.Status,
+						"duration": finalLog.Duration,
+						"end_time": finalLog.EndTime,
+					})
+				} else {
+					c.SSEvent("finish", gin.H{"status": "success"})
 				}
+				c.Writer.Flush()
 				return false
 			}
 			c.SSEvent("message", gin.H{"text": string(data)})

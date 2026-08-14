@@ -248,6 +248,25 @@ async function selectLog(log: TaskLog) {
     }
   }
 
+  logSource.addEventListener('finish', (event: any) => {
+    try {
+      const data = JSON.parse(event.data)
+      if (selectedLog.value) {
+        selectedLog.value.status = data.status || 'success'
+        if (data.duration !== undefined) selectedLog.value.duration = data.duration
+        if (data.end_time !== undefined) selectedLog.value.end_time = data.end_time
+      }
+    } catch (e) {
+      if (selectedLog.value) selectedLog.value.status = 'success'
+    }
+    if (durationTimer) {
+      clearInterval(durationTimer)
+      durationTimer = null
+    }
+    cleanupLogSocket()
+    loadLogs()
+  })
+
   logSource.onerror = (e) => {
     isWsLoading.value = false
     console.error('[LogSSE] Connection error/closed', e)

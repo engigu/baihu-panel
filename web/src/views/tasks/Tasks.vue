@@ -461,6 +461,21 @@ async function viewLogs(taskId: string) {
           }, 150)
         }
       }
+      logSource.addEventListener('finish', (event: any) => {
+        try {
+          const data = JSON.parse(event.data)
+          if (selectedLog.value) {
+            selectedLog.value.status = data.status || 'success'
+            if (data.duration !== undefined) selectedLog.value.duration = data.duration
+            if (data.end_time !== undefined) selectedLog.value.end_time = data.end_time
+          }
+        } catch (e) {
+          if (selectedLog.value) selectedLog.value.status = 'success'
+        }
+        cleanupDurationTimer()
+        cleanupLogSocket()
+        loadTasks()
+      })
       logSource.onerror = (e) => {
         console.error('[LogSSE] Connection error/closed', e)
         cleanupLogSocket()
