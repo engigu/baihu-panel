@@ -496,10 +496,42 @@ async function viewLogs(taskId: string, logId?: string) {
           }
         }, 150)
       }
+
+      // 如果接收到任务已结束的标语，说明后端流已完结，主动关闭连接并拉取最终状态
+      if (text.includes('--- 任务已结束 ---')) {
+        setTimeout(async () => {
+          cleanupDurationTimer()
+          cleanupLogSocket()
+          try {
+            const detail = await api.logs.get(latestLog.id)
+            selectedLog.value = {
+              ...selectedLog.value,
+              status: detail.status || 'success',
+              duration: detail.duration || selectedLog.value?.duration || 0,
+              end_time: detail.end_time || selectedLog.value?.end_time || '-'
+            } as TaskLog
+          } catch {}
+          loadTasks()
+        }, 300)
+      }
     }
-    logSource.onerror = (e) => {
-      console.error('[LogSSE] Connection error/closed', e)
+    logSource.onerror = async (e) => {
+      console.log('[LogSSE] Connection closed/finished', e)
       cleanupLogSocket()
+      // 连接断开后拉取一次最新状态，若已结束则停止计时
+      try {
+        const detail = await api.logs.get(latestLog.id)
+        if (detail.status !== TASK_STATUS.RUNNING && selectedLog.value) {
+          cleanupDurationTimer()
+          selectedLog.value = {
+            ...selectedLog.value,
+            status: detail.status,
+            duration: detail.duration,
+            end_time: detail.end_time
+          } as TaskLog
+          loadTasks()
+        }
+      } catch {}
     }
 
     // 优化：本地定时更新耗时，不再发请求轮询状态，状态变更依赖 EventBus 推送

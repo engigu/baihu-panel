@@ -249,12 +249,48 @@ async function selectLog(log: TaskLog) {
         }
       }, 150)
     }
+
+    if (text.includes('--- 任务已结束 ---')) {
+      setTimeout(async () => {
+        if (durationTimer) {
+          clearInterval(durationTimer)
+          durationTimer = null
+        }
+        cleanupLogSocket()
+        try {
+          const detail = await api.logs.get(log.id)
+          selectedLog.value = {
+            ...selectedLog.value,
+            status: detail.status || 'success',
+            duration: detail.duration || selectedLog.value?.duration || 0,
+            end_time: detail.end_time || selectedLog.value?.end_time || '-'
+          } as TaskLog
+        } catch {}
+        loadLogs()
+      }, 300)
+    }
   }
 
-  logSource.onerror = (e) => {
+  logSource.onerror = async (e) => {
     isWsLoading.value = false
-    console.error('[LogSSE] Connection error/closed', e)
+    console.log('[LogSSE] Connection error/closed', e)
     cleanupLogSocket()
+    try {
+      const detail = await api.logs.get(log.id)
+      if (detail.status !== TASK_STATUS.RUNNING && selectedLog.value) {
+        if (durationTimer) {
+          clearInterval(durationTimer)
+          durationTimer = null
+        }
+        selectedLog.value = {
+          ...selectedLog.value,
+          status: detail.status,
+          duration: detail.duration,
+          end_time: detail.end_time
+        } as TaskLog
+        loadLogs()
+      }
+    } catch {}
   }
 }
 

@@ -88,9 +88,11 @@ func (lc *LogSSEController) StreamLog(c *gin.Context) {
 						c.SSEvent("message", gin.H{"text": "\n--- 任务已结束 ---\n"})
 					}
 				}
+				c.Writer.Flush()
 				return false
 			}
 			c.SSEvent("message", gin.H{"text": string(data)})
+			c.Writer.Flush()
 			return true
 		case <-c.Request.Context().Done():
 			return false
