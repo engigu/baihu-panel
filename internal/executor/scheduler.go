@@ -191,7 +191,7 @@ type Scheduler struct {
 	handler      SchedulerEventHandler
 	executor     TaskExecutor
 	taskQueue    chan *ExecutionRequest
-	rateLimiter  <-chan time.Time
+	rateLimiter  *time.Ticker
 	stopCh       chan struct{}
 	wg           sync.WaitGroup
 	mu           sync.RWMutex
@@ -238,7 +238,7 @@ func NewScheduler(config SchedulerConfig, handler SchedulerEventHandler) *Schedu
 			}, stdout, stderr, hooks)
 		},
 		taskQueue:    make(chan *ExecutionRequest, config.QueueSize),
-		rateLimiter:  time.Tick(config.RateInterval),
+		rateLimiter:  time.NewTicker(config.RateInterval),
 		stopCh:       make(chan struct{}),
 		logger:       &DefaultLogger{},
 		runningTasks: make(map[string]context.CancelFunc),
@@ -281,7 +281,18 @@ func (s *Scheduler) Start() {
 
 // Stop 停止调度器
 func (s *Scheduler) Stop() {
-	close(s.stopCh)
+	s.mu.Lock()
+	select {
+	case <-s.stopCh:
+		s.mu.Unlock()
+		return
+	default:
+		close(s.stopCh)
+		if s.rateLimiter != nil {
+			s.rateLimiter.Stop()
+		}
+	}
+	s.mu.Unlock()
 	s.wg.Wait()
 	s.logger.Infof("[Scheduler] 已停止")
 }
@@ -357,8 +368,12 @@ func (s *Scheduler) worker(id int) {
 						s.logger.Errorf("[Scheduler] Worker %d panic while processing task %s: %v", id, req.TaskID, r)
 					}
 				}()
-				// 速率限制
-				<-s.rateLimiter
+				// 速率限制安全等待
+				select {
+				case <-s.stopCh:
+					return
+				case <-s.rateLimiter.C:
+				}
 
 				func() {
 					// 恢复 worker 状态为空闲
@@ -638,14 +653,24 @@ func (s *Scheduler) Reload(config SchedulerConfig) {
 	s.logger.Infof("[Scheduler] 正在重载配置...")
 
 	// 停止现有 workers
-	close(s.stopCh)
+	s.mu.Lock()
+	select {
+	case <-s.stopCh:
+		// already closed
+	default:
+		close(s.stopCh)
+		if s.rateLimiter != nil {
+			s.rateLimiter.Stop()
+		}
+	}
+	s.mu.Unlock()
 	s.wg.Wait()
 
 	// 更新配置
 	s.mu.Lock()
 	s.config = config
 	s.taskQueue = make(chan *ExecutionRequest, config.QueueSize)
-	s.rateLimiter = time.Tick(config.RateInterval)
+	s.rateLimiter = time.NewTicker(config.RateInterval)
 	s.stopCh = make(chan struct{})
 	s.mu.Unlock()
 
