@@ -196,7 +196,19 @@ func (l *TinyLog) Unsubscribe(ch chan []byte) {
 	for i, sub := range l.subscribers {
 		if sub == ch {
 			l.subscribers = append(l.subscribers[:i], l.subscribers[i+1:]...)
-			close(ch)
+			// 避免重复关闭通道引发 panic
+			select {
+			case _, ok := <-ch:
+				if ok {
+					close(ch)
+				}
+			default:
+				// 非阻塞安全关闭
+				func() {
+					defer func() { recover() }()
+					close(ch)
+				}()
+			}
 			break
 		}
 	}
