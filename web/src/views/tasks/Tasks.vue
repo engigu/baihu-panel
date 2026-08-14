@@ -319,7 +319,7 @@ async function runTask(id: string) {
     toast.success('执行指令已发送')
     if (res.log_id) {
       // 开启日志查看器
-      viewLogs(id)
+      viewLogs(id, res.log_id)
     }
   } catch (error: any) {
     toast.error(error.message || '执行失败')
@@ -410,76 +410,78 @@ const displayLogContent = computed(() => {
   return decompressFromBase64(logContent.value)
 })
 
-async function viewLogs(taskId: string) {
+async function viewLogs(taskId: string, logId?: string) {
   try {
-    const res = await api.logs.list({ task_id: taskId, page: 1, page_size: 1 })
-    if (res.data && res.data.length > 0) {
-      const latestLog = res.data[0]
-      if (!latestLog) return
-      selectedLog.value = latestLog
-      logContent.value = ''
-      logEmptyTitle.value = undefined
-      logEmptyDesc.value = undefined
-      showLogViewer.value = true
-
-      if (latestLog.status !== TASK_STATUS.RUNNING) {
-        try {
-          const detail = await api.logs.get(latestLog.id)
-          logContent.value = detail.output
-        } catch {
-          toast.error('加载日志详情失败')
-        }
-        return
+    let latestLog: TaskLog | null = null
+    if (logId) {
+      const task = tasks.value.find(t => t.id === taskId)
+      latestLog = {
+        id: logId,
+        task_id: taskId,
+        task_name: task?.name || '未知任务',
+        command: task?.command || '',
+        status: TASK_STATUS.RUNNING,
+        duration: 0,
+        start_time: new Date().toISOString(),
+        end_time: '-',
+      } as TaskLog
+    } else {
+      const res = await api.logs.list({ task_id: taskId, page: 1, page_size: 1 })
+      if (res.data && res.data.length > 0) {
+        latestLog = res.data[0]
       }
+    }
 
-      // Connect SSE to load log content for running tasks
-      logContent.value = 'raw:'
-      cleanupLogSocket()
-      const protocol = window.location.protocol
-      const host = window.location.host
-      const baseUrl = (window as any).__BASE_URL__ || ''
-      const apiVersion = (window as any).__API_VERSION__ || '/api/v1'
-      const sseUrl = `${protocol}//${host}${baseUrl}${apiVersion}/logs/sse?log_id=${latestLog.id}`
+    if (!latestLog) return
+    selectedLog.value = latestLog
+    logContent.value = ''
+    logEmptyTitle.value = undefined
+    logEmptyDesc.value = undefined
+    showLogViewer.value = true
 
-      logSource = new EventSource(sseUrl)
-      logSource.onmessage = (event) => {
-        let text = ''
-        try {
-          const data = JSON.parse(event.data)
-          text = data.text || ''
-        } catch {
-          text = event.data
-        }
-        logBuffer.push(text)
-
-        if (!logFlushInterval) {
-          logFlushInterval = setInterval(() => {
-            if (logBuffer.length > 0) {
-              logContent.value += logBuffer.join('')
-              logBuffer = []
-            }
-          }, 150)
-        }
+    if (latestLog.status !== TASK_STATUS.RUNNING) {
+      try {
+        const detail = await api.logs.get(latestLog.id)
+        logContent.value = detail.output
+      } catch {
+        toast.error('加载日志详情失败')
       }
-      logSource.addEventListener('finish', (event: any) => {
-        try {
-          const data = JSON.parse(event.data)
-          if (selectedLog.value) {
-            selectedLog.value.status = data.status || 'success'
-            if (data.duration !== undefined) selectedLog.value.duration = data.duration
-            if (data.end_time !== undefined) selectedLog.value.end_time = data.end_time
+      return
+    }
+
+    // Connect SSE to load log content for running tasks
+    logContent.value = 'raw:'
+    cleanupLogSocket()
+    const protocol = window.location.protocol
+    const host = window.location.host
+    const baseUrl = (window as any).__BASE_URL__ || ''
+    const apiVersion = (window as any).__API_VERSION__ || '/api/v1'
+    const sseUrl = `${protocol}//${host}${baseUrl}${apiVersion}/logs/sse?log_id=${latestLog.id}`
+
+    logSource = new EventSource(sseUrl)
+    logSource.onmessage = (event) => {
+      let text = ''
+      try {
+        const data = JSON.parse(event.data)
+        text = data.text || ''
+      } catch {
+        text = event.data
+      }
+      logBuffer.push(text)
+
+      if (!logFlushInterval) {
+        logFlushInterval = setInterval(() => {
+          if (logBuffer.length > 0) {
+            logContent.value += logBuffer.join('')
+            logBuffer = []
           }
-        } catch (e) {
-          if (selectedLog.value) selectedLog.value.status = 'success'
-        }
-        cleanupDurationTimer()
-        cleanupLogSocket()
-        loadTasks()
-      })
-      logSource.onerror = (e) => {
-        console.error('[LogSSE] Connection error/closed', e)
-        cleanupLogSocket()
+        }, 150)
       }
+    }
+    logSource.onerror = (e) => {
+      console.error('[LogSSE] Connection error/closed', e)
+      cleanupLogSocket()
+    }
 
       // 优化：本地定时更新耗时，不再发请求轮询状态，状态变更依赖 EventBus 推送
       cleanupDurationTimer()

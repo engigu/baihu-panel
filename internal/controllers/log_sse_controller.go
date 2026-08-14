@@ -55,25 +55,6 @@ func (lc *LogSSEController) StreamLog(c *gin.Context) {
 	// 2. 未结束或未找到记录，尝试从 TinyLogManager 获取
 	tl := tasks.GetActiveLog(logID)
 	if tl == nil {
-		// 优化：可能此时任务刚刚结束，TinyLog 刚被 unregister，但数据库事务还在写入中。
-		// 我们在 500ms 内重试 5 次去数据库读取最新已完结的日志。
-		for attempt := 0; attempt < 5; attempt++ {
-			time.Sleep(100 * time.Millisecond)
-			var retryLog models.TaskLog
-			if err := database.DB.Where("id = ?", logID).Limit(1).Find(&retryLog).Error; err == nil && retryLog.Status != "running" {
-				content, err := utils.DecompressFromBase64(string(retryLog.Output))
-				if err == nil {
-					c.SSEvent("message", gin.H{"text": content})
-					c.SSEvent("finish", gin.H{
-						"status":   retryLog.Status,
-						"duration": retryLog.Duration,
-						"end_time": retryLog.EndTime,
-					})
-					c.Writer.Flush()
-					return
-				}
-			}
-		}
 		c.SSEvent("message", gin.H{"text": "未找到正在运行的任务日志"})
 		c.Writer.Flush()
 		return
@@ -107,16 +88,7 @@ func (lc *LogSSEController) StreamLog(c *gin.Context) {
 					if content != "" {
 						c.SSEvent("message", gin.H{"text": "\n--- 任务已结束 ---\n"})
 					}
-					// 发送 finish 自定义事件，带上最新的状态和耗时，让前端能立刻关闭定时器和更新 UI
-					c.SSEvent("finish", gin.H{
-						"status":   finalLog.Status,
-						"duration": finalLog.Duration,
-						"end_time": finalLog.EndTime,
-					})
-				} else {
-					c.SSEvent("finish", gin.H{"status": "success"})
 				}
-				c.Writer.Flush()
 				return false
 			}
 			c.SSEvent("message", gin.H{"text": string(data)})
