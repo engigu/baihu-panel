@@ -128,19 +128,23 @@ func (m *CronManager) AddTask(task CronTask) error {
 			}
 		}
 
+		m.mu.RLock()
+		sched := m.scheduler
+		m.mu.RUnlock()
+
 		randomRange := task.GetRandomRange()
-		if randomRange > 0 && m.scheduler != nil {
+		if randomRange > 0 && sched != nil {
 			// 生成 0 到 randomRange 之间的随机秒数
 			delaySeconds := rand.Intn(randomRange)
 			delay := time.Duration(delaySeconds) * time.Second
 			m.logger.Infof("[CronManager] 任务 %s (#%s) 将随机延迟 %v (范围: %ds) 后入队", name, taskID, delay, randomRange)
 
 			// 使用调度器的延时投递功能，不阻塞当前 Cron 协程
-			m.scheduler.EnqueueDelayed(delay, reqBuilder)
+			sched.EnqueueDelayed(delay, reqBuilder)
 		} else {
 			m.logger.Infof("[CronManager] 触发计划任务: %s (#%s)", name, taskID)
-			if m.scheduler != nil {
-				m.scheduler.EnqueueOrExecute(reqBuilder())
+			if sched != nil {
+				sched.EnqueueOrExecute(reqBuilder())
 			}
 		}
 
