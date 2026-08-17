@@ -15,6 +15,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/yamux v0.1.2
 	github.com/klauspost/compress v1.19.0
+	github.com/pquerna/otp v1.5.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/rs/xid v1.6.0
 	github.com/shirou/gopsutil/v3 v3.24.5
@@ -108,7 +109,6 @@ require (
 	github.com/pelletier/go-toml/v2 v2.4.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
-	github.com/pquerna/otp v1.5.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.60.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
