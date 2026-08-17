@@ -63,8 +63,17 @@ baihu builtininstall
 ```python
 import baihu
 
-# 消息通知
+# 基本消息通知
 baihu.notify("任务标题", "通知正文内容")
+
+# 指定内容格式（text/markdown/html）
+baihu.notify("任务标题", "**加粗内容**", format='markdown')
+
+# 指定渠道
+baihu.notify("任务标题", "正文", channel_id='ch-xxx')
+
+# 完整参数
+baihu.notify("任务标题", "<b>粗体</b>", format='html', channel_id='ch-xxx')
 
 # 环境变量与任务管理（详细用法见内置库示例）
 envs = baihu.get_envs()
@@ -75,8 +84,17 @@ tasks = baihu.get_tasks()
 ```javascript
 const baihu = require('baihu');
 
-// 消息通知
+// 基本消息通知
 baihu.notify("任务标题", "通知正文内容");
+
+// 指定内容格式（text/markdown/html）
+baihu.notify("任务标题", "**加粗内容**", { format: "markdown" });
+
+// 指定渠道
+baihu.notify("任务标题", "正文", { channel_id: "ch-xxx" });
+
+// 完整参数
+baihu.notify("任务标题", "<b>粗体</b>", { format: "html", channel_id: "ch-xxx" });
 
 // 环境变量与任务管理（详细用法见内置库示例）
 (async () => {
@@ -108,17 +126,17 @@ baihu.notify("任务标题", "通知正文内容");
 ```bash
 curl -X POST "http://localhost:8052/api/v1/notify/send" \
   -H "notify-token: 您的_NOTIFY_TOKEN" \
-  -d '{"channel_id":"渠道ID", "title":"标题", "text":"内容"}'
+  -d '{"channel_id":"渠道ID", "title":"标题", "content":"内容", "format":"markdown"}'
 ```
 
 ##### 基础 Python (requests)
 ```python
 import requests
 
-def send_notify(title, content):
+def send_notify(title, content, format="text"):
     url = "http://localhost:8052/api/v1/notify/send"
     headers = { "notify-token": "您的_NOTIFY_TOKEN" }
-    data = {"channel_id": "您的_渠道_ID", "title": title, "text": content}
+    data = {"channel_id": "您的_渠道_ID", "title": title, "content": content, "format": format}
     requests.post(url, headers=headers, json=data)
 ```
 
