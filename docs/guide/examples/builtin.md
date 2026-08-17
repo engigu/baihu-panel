@@ -31,7 +31,7 @@ baihu builtininstall
 
 ## 消息通知示例
 
-只需要一行代码即可触发零配置推送。
+只需要一行代码即可触发零配置推送，支持普通文本、Markdown 以及 HTML 格式。
 
 ::: code-group
 
@@ -41,16 +41,34 @@ import baihu
 def main():
     print("正在尝试发送 Python 内建通知...")
     try:
-        # 调用内置 notify 函数
-        # 内部会自动使用环境变量进行鉴权和投递
+        # 基本调用
+        baihu.notify("任务标题", "通知正文内容")
+
+        # 指定 Markdown 格式
+        baihu.notify(
+            title="Python 任务提醒",
+            content="## 任务完成\n\n所有步骤已**成功**执行。",
+            format='markdown'
+        )
+
+        # 指定 HTML 格式
+        baihu.notify(
+            title="Python 任务提醒",
+            content="<h2>任务完成</h2><p>所有步骤已<b>成功</b>执行。</p>",
+            format='html'
+        )
+
+        # 显式指定渠道
         response = baihu.notify(
             title="Python 任务提醒",
-            text="这是一条来自 Python 示例脚本的通知消息。调用非常简单！"
+            content="发送到指定渠道的消息。",
+            format='text',
+            channel_id='ch-xxx'
         )
         print("发送请求已处理。")
         if response:
             print(f"服务器响应: {response}")
-            
+
     except Exception as e:
         print(f"发送过程发生异常: {e}")
 
@@ -64,13 +82,23 @@ const baihu = require('baihu');
 console.log("正在尝试发送 Node.js 内建通知...");
 
 try {
-    // 简单的一行代码即可完成推送，内置包采用异步非阻塞发送
-    baihu.notify(
-        "Node.js 任务提醒", 
-        "这是一条来自 Node.js 示例脚本的通知消息。无需配置 API 地址或 Token。"
-    );
+    // 基本用法：仅指定标题和内容
+    baihu.notify("任务标题", "通知正文内容");
+
+    // 指定 Markdown 格式
+    baihu.notify("Node.js 任务提醒", "## 任务完成\n\n所有步骤已**成功**执行。", { format: "markdown" });
+
+    // 指定 HTML 格式
+    baihu.notify("Node.js 任务提醒", "<h2>任务完成</h2><p>所有步骤已<b>成功</b>执行。</p>", { format: "html" });
+
+    // 指定渠道
+    baihu.notify("Node.js 任务提醒", "发送到指定渠道的消息。", { channel_id: "ch-xxx" });
+
+    // 同时指定格式与渠道
+    baihu.notify("Node.js 任务提醒", "<b>粗体</b>", { format: "html", channel_id: "ch-xxx" });
+
     console.log("发送请求已提交。");
-    
+
 } catch (e) {
     console.error(`通知失败: ${e.message}`);
 }
