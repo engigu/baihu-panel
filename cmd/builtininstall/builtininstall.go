@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/engigu/baihu-panel/cmd/clibase"
 	"github.com/engigu/baihu-panel/internal/utils"
@@ -76,56 +75,23 @@ func installForLanguage(lang, pkgPath string) {
 	for _, v := range versions {
 		fmt.Printf(">> [Builtin] 正在为 %s@%s 安装内建包...\n", lang, v)
 
-		// 尝试直接获取该版本的物理安装路径，直接调用 bin/npm 或 bin/pip
-		var binCmd string
 		var subCmdArgs []string
-
-		cmdWhere := exec.Command("mise", "where", lang+"@"+v)
-		whereOut, whereErr := cmdWhere.CombinedOutput()
-		installDir := strings.TrimSpace(string(whereOut))
-
-		if whereErr == nil && installDir != "" {
-			if lang == "node" {
-				candidate := filepath.Join(installDir, "bin", "npm")
-				if runtime.GOOS == "windows" {
-					candidate = filepath.Join(installDir, "npm.cmd")
-				}
-				if _, err := os.Stat(candidate); err == nil {
-					binCmd = candidate
-				}
-			} else if lang == "python" {
-				candidate := filepath.Join(installDir, "bin", "pip")
-				if runtime.GOOS == "windows" {
-					candidate = filepath.Join(installDir, "Scripts", "pip.exe")
-				}
-				if _, err := os.Stat(candidate); err == nil {
-					binCmd = candidate
-				}
-			}
+		if lang == "node" {
+			// 使用 npm i -g 进行全局安装
+			subCmdArgs = []string{"npm", "i", "-g", pkgPath}
+		} else {
+			// python 改为标准安装 (非 -e)，避免 Docker 内软链接可能导致的路径丢失问题
+			subCmdArgs = []string{"pip", "install", "--force-reinstall", pkgPath}
 		}
 
+		// 构建参数列表: [mise, exec, lang@v, --, cmd...]
+		fullArgs := utils.BuildMiseCommandArgsSimple(subCmdArgs, lang, v)
+
 		var cmd *exec.Cmd
-		if binCmd != "" {
-			// 直接使用版本内部的包管理器，完全绕过全局 shims 和环境变量缺失问题
-			if lang == "node" {
-				subCmdArgs = []string{"i", "-g", pkgPath}
-			} else {
-				subCmdArgs = []string{"install", "--force-reinstall", pkgPath}
-			}
-			cmd = exec.Command(binCmd, subCmdArgs...)
+		if runtime.GOOS == "windows" {
+			cmd = exec.Command("cmd", append([]string{"/c"}, fullArgs...)...)
 		} else {
-			// 回退到 mise exec 模式
-			if lang == "node" {
-				subCmdArgs = []string{"npm", "i", "-g", pkgPath}
-			} else {
-				subCmdArgs = []string{"pip", "install", "--force-reinstall", pkgPath}
-			}
-			fullArgs := utils.BuildMiseCommandArgsSimple(subCmdArgs, lang, v)
-			if runtime.GOOS == "windows" {
-				cmd = exec.Command("cmd", append([]string{"/c"}, fullArgs...)...)
-			} else {
-				cmd = exec.Command(fullArgs[0], fullArgs[1:]...)
-			}
+			cmd = exec.Command(fullArgs[0], fullArgs[1:]...)
 		}
 
 		out, err := cmd.CombinedOutput()
