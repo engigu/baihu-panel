@@ -129,11 +129,12 @@ func BuildMiseCommandArgsSimple(cmdArgs []string, language, version string) []st
 }
 
 type miseInstalledItem struct {
-	Version   string `json:"version"`
-	Installed bool   `json:"installed"`
+	Version     string `json:"version"`
+	Installed   bool   `json:"installed"`
+	InstallPath string `json:"install_path,omitempty"`
 }
 
-// ListMiseInstalledVersions 获取指定语言已安装的所有版本列表
+// ListMiseInstalledVersions 获取指定语言已安装的所有版本列表（严格校验安装状态）
 func ListMiseInstalledVersions(language string) ([]string, error) {
 	// 执行 mise ls <language> --json 命令结构化获取版本
 	cmd := exec.Command("mise", "ls", language, "--json")
@@ -142,16 +143,34 @@ func ListMiseInstalledVersions(language string) ([]string, error) {
 		return nil, err
 	}
 
+	var versions []string
+	versionSet := make(map[string]bool)
+
+	// 1. 尝试解析为数组格式 [{}, {}]
 	var items []miseInstalledItem
-	if err := json.Unmarshal(out, &items); err != nil {
-		return nil, fmt.Errorf("解析 mise 输出失败: %w", err)
+	if err := json.Unmarshal(out, &items); err == nil {
+		for _, item := range items {
+			if item.Version != "" && item.Installed && !versionSet[item.Version] {
+				versionSet[item.Version] = true
+				versions = append(versions, item.Version)
+			}
+		}
+		return versions, nil
 	}
 
-	var versions []string
-	for _, item := range items {
-		if item.Version != "" {
-			versions = append(versions, item.Version)
+	// 2. 尝试解析为对象格式 {"node": [{}], "python": [{}]}
+	var itemMap map[string][]miseInstalledItem
+	if err := json.Unmarshal(out, &itemMap); err == nil {
+		for _, list := range itemMap {
+			for _, item := range list {
+				if item.Version != "" && item.Installed && !versionSet[item.Version] {
+					versionSet[item.Version] = true
+					versions = append(versions, item.Version)
+				}
+			}
 		}
+		return versions, nil
 	}
-	return versions, nil
+
+	return nil, fmt.Errorf("解析 mise 输出失败: %s", string(out))
 }
