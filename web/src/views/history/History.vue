@@ -379,8 +379,9 @@ async function handleDeleteLog() {
     await api.logs.delete(deleteLogId.value)
     toast.success('该日志已删除')
 
-    // 如果当前选中的是这条日志，关闭详情页
+    // 如果当前选中的是这条日志，关闭详情页及全屏弹窗
     if (selectedLog.value?.id === deleteLogId.value) {
+      showFullscreen.value = false
       closeDetail()
     }
 
@@ -562,7 +563,8 @@ watch(() => route.query, (newQuery) => {
       :log="selectedLog"
       :is-stopping="isStopping"
       :content="decompressedOutput"
-      @stop="stopTask" />
+      @stop="stopTask"
+      @delete="confirmDeleteLog" />
 
     <!-- 清空日志确认弹窗 -->
     <BaihuDialog v-model:open="showClearDialog" title="确认清空日志?">
