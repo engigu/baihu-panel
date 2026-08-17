@@ -192,14 +192,89 @@ baihu reposync \
   --path "checkin.py"
 ```
 
-##### (4) 过滤黑名单并自动解析青龙注释注册定时任务
+##### (4) 过滤黑名单并自动解析脚本注释注册定时任务（--commenttotask）
+开启 `--commenttotask true` 后，系统在拉取脚本后会自动扫描脚本头部（前 15 行内），**直接从脚本注释或代码中提取任务名称和 Cron 表达式自动注册到定时任务列表**，完全避免同步后手动逐个创建和配置任务：
 ```bash
 baihu reposync \
   --source-url https://github.com/myuser/myscripts.git \
   --blacklist "test|backup|utils" \
   --dependence "package.json|requirements.txt|sendNotify.js" \
-  --extensions ".py|.js" \
+  --extensions ".py|.js|.ts|.sh" \
   --commenttotask true
+```
+
+---
+
+#### 💡 脚本头部注释规范与自动解析支持范围
+
+同步引擎在扫描脚本时（支持 `.js`、`.py`、`.ts`、`.sh` 等），在前 15 行内支持以下多种注释规范自动提取元数据：
+
+##### 1. 任务名称 (Task Name) 支持范围与格式
+
+| 格式规范 | 示例 | 适用语言/场景 |
+| :--- | :--- | :--- |
+| **`new Env('任务名称')`** | `const $ = new Env('京东每日签到')` 或 `// new Env('每日签到')` | JavaScript / TypeScript / 青龙生态标准写法（代码行或注释行均可） |
+| **`Env('任务名称')`** | `// Env('哔哩哔哩投币')` 或 `# Env("自动打卡")` | Python / Shell / JS（支持单双引号） |
+| **`name: "任务名称"`** | `// name: "微信步数刷取"` 或 `# name: '网易云音乐打卡'` | 全语言注释行推荐规范 |
+| **首行注释回退** | `// 百度贴吧一键签到助手` 或 `# 阿里云盘自动签到` | 当未显式指定 Env/name 时，自动使用前 15 行内的第一行非空注释作为任务名称 |
+| **文件名兜底** | `task_daily_checkin` | 若无任何有效注释，自动回退使用文件名（去掉后缀）作为名称 |
+
+##### 2. 执行频率 (Cron 表达式) 支持范围与格式
+
+| 格式规范 | 示例 | 说明 |
+| :--- | :--- | :--- |
+| **`cron: "..."` / `cron = '...'`** | `// cron: "0 8 * * *"` 或 `# cron: 0 30 7 * * *` | 推荐的标准键值对写法，支持 5 位（分时日月周）或 6 位（秒分时日月周）Cron |
+| **`cron "..."`** | `// cron "15 10 * * *"` | 简化写法 |
+| **关联文件名的 Cron 行** | `// 0 0 12 * * checkin.js` 或 `# 30 8 * * * checkin.py` | 经典青龙 Perl 兼容写法，Cron 表达式后跟当前脚本文件名 |
+| **纯 Cron 独立注释行** | `// 0 9 * * 1-5` | 独立的 Cron 表达式行，自动校验合法性后提取 |
+
+##### 3. 多语言脚本头部标准 Demo 示例
+
+###### (1) JavaScript / TypeScript (`.js` / `.ts`) 示例
+```javascript
+/**
+ * name: 京东多合一签到
+ * cron: 0 0 8,12,20 * * *
+ */
+const { notify } = require('baihu-notify');
+const $ = new Env('京东多合一签到');
+
+async function main() {
+    console.log("正在执行签到任务...");
+    await notify("签到成功", "今日所有账号已全部完成签到！");
+}
+
+main();
+```
+
+###### (2) Python (`.py`) 示例
+```python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# name: 阿里云盘每日自动签到
+# cron: 30 7 * * *
+# new Env('阿里云盘每日自动签到')
+
+import os
+from baihu import notify
+
+def main():
+    print("开始阿里云盘每日签到...")
+    notify("阿里云盘签到", "今日签到获得 500MB 容量奖励！", options={"format": "text"})
+
+if __name__ == "__main__":
+    main()
+```
+
+###### (3) Shell / Bash (`.sh`) 示例
+```bash
+#!/usr/bin/env bash
+# name: 系统磁盘与内存自动清理
+# cron: 0 4 * * 0
+
+echo "开始清理日志与临时缓存..."
+find /tmp -type f -mtime +7 -delete
+echo "清理完成！"
 ```
 
 ##### (5) 指定分支与白名单保护路径（--branch, --whitelist-paths, --repo-name）
