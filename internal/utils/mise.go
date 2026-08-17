@@ -1,7 +1,11 @@
 package utils
 
 import (
+	"encoding/json"
+	"fmt"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -23,9 +27,15 @@ func GetMiseNodePath(version string) string {
 	if err == nil {
 		nodeDir := strings.TrimSpace(string(out))
 		if nodeDir != "" {
-			// 采用双路径策略：lib/node_modules 是标准路径，lib 是某些环境（如 mise Docker）下的特殊路径
-			// 通过冒号分隔，让 Node.js 按顺序搜索，保证最大兼容性
-			nodePath := nodeDir + "/lib/node_modules:" + nodeDir + "/lib"
+			var nodePath string
+			if runtime.GOOS == "windows" {
+				// Windows 下, Mise 安装的 Node.js 全局 node_modules 通常位于安装根目录下
+				nodePath = filepath.Join(nodeDir, "node_modules")
+			} else {
+				// 采用双路径策略：lib/node_modules 是标准路径，lib 是某些环境（如 mise Docker）下的特殊路径
+				// 通过冒号分隔，让 Node.js 按顺序搜索，保证最大兼容性
+				nodePath = nodeDir + "/lib/node_modules:" + nodeDir + "/lib"
+			}
 			nodePathCache.Store(version, nodePath)
 			return nodePath
 		}
@@ -116,4 +126,32 @@ func BuildMiseCommandArgsSimple(cmdArgs []string, language, version string) []st
 		spec += "@" + version
 	}
 	return append([]string{"mise", "exec", spec, "--"}, cmdArgs...)
+}
+
+type miseInstalledItem struct {
+	Version   string `json:"version"`
+	Installed bool   `json:"installed"`
+}
+
+// ListMiseInstalledVersions 获取指定语言已安装的所有版本列表
+func ListMiseInstalledVersions(language string) ([]string, error) {
+	// 执行 mise ls <language> --json 命令结构化获取版本
+	cmd := exec.Command("mise", "ls", language, "--json")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, err
+	}
+
+	var items []miseInstalledItem
+	if err := json.Unmarshal(out, &items); err != nil {
+		return nil, fmt.Errorf("解析 mise 输出失败: %w", err)
+	}
+
+	var versions []string
+	for _, item := range items {
+		if item.Version != "" {
+			versions = append(versions, item.Version)
+		}
+	}
+	return versions, nil
 }

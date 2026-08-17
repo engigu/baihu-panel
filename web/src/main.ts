@@ -17,7 +17,7 @@ createApp(App)
   .use(router)
   .use(VueMonacoEditorPlugin, {
     paths: {
-      vs: `${origin}${BASE_URL}/assets/vs`
+      vs: __MONACO_CDN__ || `${origin}${BASE_URL}/assets/vs`
     }
   })
   .mount('#app')

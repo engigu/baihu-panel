@@ -35,8 +35,28 @@ func BuildRuntimeProcessEnv() []string {
 	appendEnvIfSet(&envs, "BH_DB_PATH", constant.RuntimeDBPath)
 	appendEnvIfSet(&envs, "BH_DB_DSN", constant.RuntimeDBDSN)
 	appendEnvIfSet(&envs, "BH_DB_TABLE_PREFIX", constant.RuntimeDBTablePrefix)
+	appendEnvIfSet(&envs, "BH_DB_SSL_MODE", constant.RuntimeDBSSLMode)
 
 	return envs
+}
+
+// GetSystemSecrets 返回当前运行时的所有系统级敏感机密（如数据库账号密码等）
+func GetSystemSecrets() []string {
+	secrets := make([]string, 0, 8)
+	addIfNotEmpty := func(s string) {
+		if s != "" {
+			secrets = append(secrets, s)
+		}
+	}
+
+	addIfNotEmpty(constant.RuntimeDBPassword)
+	addIfNotEmpty(constant.RuntimeDBUser)
+	addIfNotEmpty(constant.RuntimeDBHost)
+	addIfNotEmpty(constant.RuntimeDBName)
+	addIfNotEmpty(constant.RuntimeDBPath)
+	addIfNotEmpty(constant.RuntimeDBDSN)
+
+	return secrets
 }
 
 // BuildShellEnvPrefix 将 KEY=VALUE 环境变量切片转换为 shell 前缀。
@@ -74,22 +94,7 @@ func ResolveAbsScriptsDir() string {
 		return filepath.Clean(scriptsDir)
 	}
 
-	if configPath := os.Getenv("BH_CONFIG_PATH"); configPath != "" {
-		if !filepath.IsAbs(configPath) {
-			if absConfigPath, err := filepath.Abs(configPath); err == nil {
-				configPath = absConfigPath
-			}
-		}
-
-		projectRoot := filepath.Dir(filepath.Dir(configPath))
-		return filepath.Clean(filepath.Join(projectRoot, constant.ScriptsWorkDir))
-	}
-
-	if absScriptsDir, err := filepath.Abs(constant.ScriptsWorkDir); err == nil {
-		return absScriptsDir
-	}
-
-	return filepath.Clean(constant.ScriptsWorkDir)
+	return constant.ScriptsWorkDir
 }
 
 func appendEnvIfSet(envs *[]string, key, value string) {

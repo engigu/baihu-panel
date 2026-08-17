@@ -77,6 +77,8 @@ func (s *SettingsService) InitSettings() error {
 		constant.KeyPushLogMaxCount:      "5000",
 		constant.KeyLoginLogDays:         "30",
 		constant.KeyLoginLogMaxCount:     "1000",
+		constant.KeySchedulerLogDays:     "30",
+		constant.KeySchedulerLogMaxCount: "10000",
 	}
 
 	for k, v := range defaultRetention {
@@ -146,15 +148,22 @@ func (s *SettingsService) Get(section, key string) string {
 func (s *SettingsService) Set(section, key, value string) error {
 	var setting models.Setting
 	res := database.DB.Where(&models.Setting{Section: section, Key: key}).Limit(1).Find(&setting)
+	var err error
 	if res.Error != nil || res.RowsAffected == 0 {
-		return database.DB.Create(&models.Setting{
+		err = database.DB.Create(&models.Setting{
 			ID:      utils.GenerateID(),
 			Section: section,
 			Key:     key,
 			Value:   models.BigText(value),
 		}).Error
+	} else {
+		err = database.DB.Model(&setting).Update("value", models.BigText(value)).Error
 	}
-	return database.DB.Model(&setting).Update("value", models.BigText(value)).Error
+
+	if err == nil && section == constant.SectionSite {
+		cache.SetSiteCache(key, value)
+	}
+	return err
 }
 
 // Delete 删除单个设置

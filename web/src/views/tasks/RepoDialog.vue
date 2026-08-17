@@ -8,14 +8,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import DirTreeSelect from '@/components/DirTreeSelect.vue'
-import { X, Globe, GitBranch, Shield, Zap, Clock, Download, Plus, Search, Check, ChevronsUpDown, Loader2, AlertCircle } from 'lucide-vue-next'
-import { api, type Task, type RepoConfig, type Agent, type MiseLanguage } from '@/api'
+import TaskLangConfig from './components/TaskLangConfig.vue'
+import { Globe, GitBranch, Shield, Zap, Download, AlertCircle, Terminal } from 'lucide-vue-next'
+import { api, type Task, type RepoConfig, type Agent } from '@/api'
 import { toast } from 'vue-sonner'
 import { cn } from '@/lib/utils'
-import { getCronDescription } from '@/utils/cron'
+
+import { parseBaihuCommand, parseQlCommand } from '@/utils/repo-parser'
+import { copyToClipboard } from '@/utils/clipboard'
 import TaskNotificationConfig from './components/TaskNotificationConfig.vue'
+import TaskAdvancedConfig from './components/TaskAdvancedConfig.vue'
+import TaskCronConfig from './components/TaskCronConfig.vue'
+import TaskTagsConfig from './components/TaskTagsConfig.vue'
 
 const notificationConfigRef = ref<InstanceType<typeof TaskNotificationConfig> | null>(null)
 
@@ -30,17 +35,7 @@ const emit = defineEmits<{
   'saved': []
 }>()
 
-const cronPresets = [
-  { label: '每5秒', value: '*/5 * * * * *' },
-  { label: '每30秒', value: '*/30 * * * * *' },
-  { label: '每分钟', value: '0 * * * * *' },
-  { label: '每5分钟', value: '0 */5 * * * *' },
-  { label: '每小时', value: '0 0 * * * *' },
-  { label: '每天0点', value: '0 0 0 * * *' },
-  { label: '每天8点', value: '0 0 8 * * *' },
-  { label: '每周一', value: '0 0 0 * * 1' },
-  { label: '每月1号', value: '0 0 0 1 * *' },
-]
+
 
 const proxyOptions = [
   { label: '不使用代理', value: 'none' },
@@ -64,15 +59,16 @@ const repoConfig = ref<RepoConfig>({
   dependence: '',
   extensions: '',
   auto_add_cron: false,
+  commenttotask: 'false',
   concurrency: 1,
   repo_source: '',
-  proxy: ''
+  proxy: '',
+  repo_dir_name: ''
 })
-const cleanType = ref('none')
-const cleanKeep = ref(30)
+
 const allAgents = ref<Agent[]>([])
 const selectedAgentId = ref<string>('local')
-const tagInput = ref('')
+
 
 const autoAddCron = computed({
   get: () => !!repoConfig.value.auto_add_cron,
@@ -81,109 +77,91 @@ const autoAddCron = computed({
   }
 })
 
-// === 语言环境相关 ===
-const installedLangs = ref<MiseLanguage[]>([])
-const loadingLangs = ref(false)
-const selectedLangs = ref<{ name: string; version: string; availableVersions: string[] }[]>([])
-const availablePlugins = ref<string[]>([])
-const pluginSearch = ref('')
-const versionSearch = ref('')
-
-const filteredPlugins = computed(() => {
-  if (!pluginSearch.value) return availablePlugins.value
-  const s = pluginSearch.value.toLowerCase()
-  return availablePlugins.value.filter((p: string) => p.toLowerCase().includes(s))
+const pullQlConfig = computed({
+  get: () => repoConfig.value.commenttotask === 'true',
+  set: (val: boolean) => {
+    repoConfig.value.commenttotask = val ? 'true' : 'false'
+  }
 })
 
-function getFilteredVersions(versions: string[]) {
-  if (!versionSearch.value) return versions
-  const s = versionSearch.value.toLowerCase()
-  return versions.filter((v: string) => v.toLowerCase().includes(s))
-}
-
-async function fetchInstalledLangs() {
-  loadingLangs.value = true
-  try {
-    installedLangs.value = await api.mise.list()
-    const plugins = new Set<string>()
-    installedLangs.value.forEach((l: MiseLanguage) => plugins.add(l.plugin))
-    availablePlugins.value = Array.from(plugins).sort()
-  } catch (e) {
-    console.error('Fetch installed langs failed', e)
-  } finally {
-    loadingLangs.value = false
-  }
-}
-
-function getLangIcon(plugin: string) {
-  const name = plugin?.toLowerCase().trim()
-  const mapping: Record<string, string> = {
-    'python': 'python/python-original.svg',
-    'node': 'nodejs/nodejs-original.svg',
-    'nodejs': 'nodejs/nodejs-original.svg',
-    'go': 'go/go-original.svg',
-    'rust': 'rust/rust-original.svg',
-    'ruby': 'ruby/ruby-plain.svg',
-    'php': 'php/php-plain.svg',
-    'java': 'java/java-plain.svg',
-    'deno': 'deno/deno-plain.svg',
-    'bun': 'bun/bun-plain.svg',
-    'zig': 'zig/zig-original.svg',
-    'dotnet': 'dot-net/dot-net-original.svg',
-    '.net': 'dot-net/dot-net-original.svg',
-    'elixir': 'elixir/elixir-original.svg',
-    'erlang': 'erlang/erlang-original.svg',
-    'crystal': 'crystal/crystal-original.svg',
-    'lua': 'lua/lua-original.svg',
-    'julia': 'julia/julia-original.svg',
-    'nim': 'nim/nim-original.svg',
-    'perl': 'perl/perl-original.svg',
-    'scala': 'scala/scala-original.svg',
-    'kotlin': 'kotlin/kotlin-original.svg',
-    'clojure': 'clojure/clojure-line.svg',
-    'dart': 'dart/dart-original.svg',
-    'flutter': 'flutter/flutter-original.svg',
-    'terraform': 'terraform/terraform-original.svg',
-    'docker': 'docker/docker-original.svg',
-    'kubernetes': 'kubernetes/kubernetes-plain.svg',
-    'ansible': 'ansible/ansible-original.svg',
-  }
-
-  if (mapping[name]) {
-    return `https://fastly.jsdelivr.net/gh/devicons/devicon/icons/${mapping[name]}`
-  }
-  return ''
-}
-
-function updateAvailableVersions(lang: { name: string; version: string; availableVersions: string[] }) {
-  if (lang.name) {
-    lang.availableVersions = installedLangs.value
-      .filter((l: MiseLanguage) => l.plugin === lang.name)
-      .map((l: MiseLanguage) => l.version)
-      .sort((a: string, b: string) => b.localeCompare(a, undefined, { numeric: true }))
-  } else {
-    lang.availableVersions = []
-  }
-}
-
-function addLang() {
-  selectedLangs.value.push({ name: '', version: '', availableVersions: [] })
-}
-
-function removeLang(index: number) {
-  selectedLangs.value.splice(index, 1)
-}
-
-function updateLangName(index: number, name: string) {
-  const lang = selectedLangs.value[index]
-  if (!lang) return
-  lang.name = name
-  lang.version = '' // reset version
-  updateAvailableVersions(lang)
-}
+// === 语言环境相关 ===
+const selectedLangs = ref<{ name: string; version: string; availableVersions: string[] }[]>([])
 
 const showQlImportDialog = ref(false)
 const qlCommandInput = ref('')
+
+const showBaihuImportDialog = ref(false)
+const baihuCommandInput = ref('')
+
+function exportBaihuCommand() {
+  const parts = ['baihu', 'reposync']
+  if (repoConfig.value.source_type) parts.push(`--source-type ${repoConfig.value.source_type}`)
+  if (repoConfig.value.source_url) parts.push(`--source-url "${repoConfig.value.source_url}"`)
+  if (repoConfig.value.target_path) parts.push(`--target-path "${repoConfig.value.target_path}"`)
+  if (repoConfig.value.branch) parts.push(`--branch "${repoConfig.value.branch}"`)
+  if (repoConfig.value.repo_dir_name) parts.push(`--repo-name "${repoConfig.value.repo_dir_name}"`)
+  if (repoConfig.value.sparse_path) parts.push(`--path "${repoConfig.value.sparse_path}"`)
+  if (repoConfig.value.single_file) parts.push(`--single-file`)
+  if (repoConfig.value.proxy && repoConfig.value.proxy !== 'none') parts.push(`--proxy ${repoConfig.value.proxy}`)
+  if (repoConfig.value.proxy_url) parts.push(`--proxy-url "${repoConfig.value.proxy_url}"`)
+  if (repoConfig.value.auth_token) parts.push(`--auth-token "${repoConfig.value.auth_token}"`)
+  if (repoConfig.value.whitelist_paths) parts.push(`--whitelist-paths "${repoConfig.value.whitelist_paths}"`)
+  if (repoConfig.value.blacklist) parts.push(`--blacklist "${repoConfig.value.blacklist}"`)
+  if (repoConfig.value.dependence) parts.push(`--dependence "${repoConfig.value.dependence}"`)
+  if (repoConfig.value.extensions) parts.push(`--extensions "${repoConfig.value.extensions}"`)
+  if (repoConfig.value.auto_add_cron) parts.push(`--commenttotask true`)
+  
+  if (form.value.pre_command) parts.push(`--pre-command "${form.value.pre_command}"`)
+  if (form.value.post_command) parts.push(`--post-command "${form.value.post_command}"`)
+  if (form.value.timeout !== undefined && form.value.timeout !== 30) parts.push(`--task-timeout ${form.value.timeout}`)
+  
+  if (selectedLangs.value.length > 0) {
+    const langs = selectedLangs.value.filter(l => l.name).map(l => ({ name: l.name, version: l.version }))
+    if (langs.length > 0) {
+      parts.push(`--task-langs '${JSON.stringify(langs)}'`)
+    }
+  }
+
+  const cmd = parts.join(' ')
+  copyToClipboard(cmd).then((success) => {
+    if (success) toast.success('baihu 指令已复制到剪贴板')
+  })
+}
+
+function importFromBaihu() {
+  baihuCommandInput.value = ''
+  showBaihuImportDialog.value = true
+}
+
+function submitBaihuImport() {
+  const result = parseBaihuCommand(baihuCommandInput.value)
+  if (!result) {
+    if (!baihuCommandInput.value.trim()) {
+      showBaihuImportDialog.value = false
+    } else {
+      toast.error('未识别到有效的 reposync 参数')
+    }
+    return
+  }
+
+  // 应用解析结果
+  repoConfig.value = { ...repoConfig.value, ...result.repoConfig }
+  if (result.task.name) form.value.name = result.task.name
+  if (result.task.timeout) form.value.timeout = result.task.timeout
+  if (result.task.pre_command) form.value.pre_command = result.task.pre_command
+  if (result.task.post_command) form.value.post_command = result.task.post_command
+  
+  if (result.task.languages) {
+    selectedLangs.value = result.task.languages.map(l => ({
+      name: l.name || '',
+      version: l.version || '',
+      availableVersions: []
+    }))
+  }
+
+  // toast.success('命令解析成功，已自动填充表单')
+  showBaihuImportDialog.value = false
+}
 
 function importFromQl() {
   qlCommandInput.value = ''
@@ -191,97 +169,33 @@ function importFromQl() {
 }
 
 function submitQlImport() {
-  const s = qlCommandInput.value.trim()
-  if (!s) {
-    showQlImportDialog.value = false
-    return
-  }
-  if (!s.startsWith('ql repo')) {
-    toast.error('无效的指令：必须以 ql repo 开头')
+  const result = parseQlCommand(qlCommandInput.value)
+  if (!result) {
+    if (!qlCommandInput.value.trim()) {
+      showQlImportDialog.value = false
+    } else {
+      toast.error('无效的指令：必须以 ql repo 开头')
+    }
     return
   }
 
-  // Parse arguments handling quotes
-  const args: string[] = []
-  const regex = /[^\s"']+|"([^"]*)"|'([^']*)'/g
-  let match
-  while ((match = regex.exec(s)) !== null) {
-    args.push(match[1] || match[2] || match[0])
-  }
-  
-  if (args[2]) {
-    repoConfig.value.source_url = args[2]
-    repoConfig.value.source_type = 'git'
-    // form task name
-    let name = '同步 '
-    try {
-      const urlPaths = args[2]?.split('/')
-      if (urlPaths && urlPaths.length > 0) {
-        name += urlPaths[urlPaths.length - 1]?.replace('.git', '') || ''
-      } else {
-        name += '未命名仓库'
-      }
-    } catch {
-      name += '未命名仓库'
-    }
-    form.value.name = name
-  }
-  
-  if (args[3]) repoConfig.value.whitelist_paths = args[3]
-  if (args[4]) repoConfig.value.blacklist = args[4]
-  if (args[5]) repoConfig.value.dependence = args[5]
-  if (args[6]) repoConfig.value.branch = args[6]
-  if (args[7]) repoConfig.value.extensions = args[7]
-  
-  repoConfig.value.auto_add_cron = true
-  repoConfig.value.repo_source = 'ql'
+  // 应用解析结果
+  repoConfig.value = { ...repoConfig.value, ...result.repoConfig }
+  if (result.task.name) form.value.name = result.task.name
+
   toast.success('指令解析成功，已开启自动添加任务，请继续完善其他设置')
   showQlImportDialog.value = false
 }
 
-const cronDescription = computed(() => {
-  if (!form.value.schedule) return ''
-  return getCronDescription(form.value.schedule, (navigator as any).language)
-})
-
-function addTag() {
-  const val = tagInput.value.trim()
-  if (!val) return
-  const currentTags = form.value.tags ? form.value.tags.split(',').filter(Boolean) : []
-  if (!currentTags.includes(val)) {
-    currentTags.push(val)
-    form.value.tags = currentTags.join(',')
-  }
-  tagInput.value = ''
-}
-
-function removeTag(tagToRemove: string) {
-  const currentTags = form.value.tags ? form.value.tags.split(',').filter(Boolean) : []
-  form.value.tags = currentTags.filter((t: string) => t !== tagToRemove).join(',')
-}
 
 
-const concurrencyEnabled = computed({
-  get: () => repoConfig.value.concurrency === 1,
-  set: (val: boolean) => {
-    repoConfig.value.concurrency = val ? 1 : 0
-  }
-})
 
-function onConcurrencyChange(val: boolean) {
-  concurrencyEnabled.value = val
-}
 
 const isSingleFile = computed({
   get: () => !!repoConfig.value.single_file,
   set: (val: boolean) => {
     repoConfig.value.single_file = val
   }
-})
-
-const cleanConfig = computed(() => {
-  if (!cleanType.value || cleanType.value === 'none' || cleanKeep.value <= 0) return ''
-  return JSON.stringify({ type: cleanType.value, keep: cleanKeep.value })
 })
 
 watch(() => props.open, async (val: boolean) => {
@@ -291,22 +205,12 @@ watch(() => props.open, async (val: boolean) => {
       retry_interval: props.task?.retry_interval ?? 0,
       random_range: props.task?.random_range ?? 0,
       timeout: props.task?.timeout ?? 30,
+      pin_type: props.task?.pin_type ?? 'none',
+      pre_command: props.task?.pre_command ?? '',
+      post_command: props.task?.post_command ?? '',
       ...props.task
     }
-    // 解析清理配置
-    if (props.task?.clean_config) {
-      try {
-        const config = JSON.parse(props.task.clean_config)
-        cleanType.value = config.type || 'none'
-        cleanKeep.value = config.keep || 30
-      } catch {
-        cleanType.value = 'none'
-        cleanKeep.value = 30
-      }
-    } else {
-      cleanType.value = 'none'
-      cleanKeep.value = 30
-    }
+
     // 解析仓库配置
     // 解析仓库配置
     const defaultConfig: RepoConfig = {
@@ -324,19 +228,16 @@ watch(() => props.open, async (val: boolean) => {
       dependence: '',
       extensions: '',
       auto_add_cron: false,
+      commenttotask: 'false',
       concurrency: 1,
-      repo_source: ''
+      repo_source: '',
+      repo_dir_name: ''
     }
     const configStr = props.task?.config
     if (configStr) {
       try {
         const parsed = JSON.parse(configStr)
-        // 兼容旧字段: 优先使用 $task_concurrency, 若无则默认 1
-        let concurrency = 1
-        if (parsed['$task_concurrency'] !== undefined) {
-          concurrency = parsed['$task_concurrency'] === 1 ? 1 : 0
-        }
-        repoConfig.value = { ...defaultConfig, ...parsed, concurrency }
+        repoConfig.value = { ...defaultConfig, ...parsed }
       } catch {
         repoConfig.value = defaultConfig
       }
@@ -358,12 +259,6 @@ watch(() => props.open, async (val: boolean) => {
     selectedAgentId.value = 'local'
     // 加载 Agent 列表
     await loadAgents()
-    if (selectedAgentId.value === 'local') {
-      await fetchInstalledLangs()
-      selectedLangs.value.forEach((lang: { name: string; version: string; availableVersions: string[] }) => {
-        updateAvailableVersions(lang)
-      })
-    }
     // 加载通知配置
     await notificationConfigRef.value?.loadConfig(props.isEdit ? props.task?.id : undefined)
   }
@@ -384,14 +279,13 @@ async function save() {
   }
 
   try {
-    form.value.clean_config = cleanConfig.value
-    form.value.type = 'repo'
-    // 确保 concurrency 字段被正确保存到 config 中
-    // 注意：我们将 concurrency 存储在 config 的 $task_concurrency 字段中
-    // 同时也保留在 repoConfig 对象中以便回显
+    let existingConfig = {}
+    if (form.value.config) {
+      try { existingConfig = JSON.parse(form.value.config) } catch {}
+    }
     const configToSave: any = {
-      ...repoConfig.value,
-      '$task_concurrency': concurrencyEnabled.value ? 1 : 0
+      ...existingConfig,
+      ...repoConfig.value
     }
 
     // 保存语言环境
@@ -414,24 +308,39 @@ async function save() {
     }
     emit('update:open', false)
     emit('saved')
-  } catch { toast.error('保存失败') }
+  } catch (error: any) {
+    toast.error('保存失败', {
+      description: error.response?.data?.error || error.response?.data?.message || error.message || '未知错误'
+    })
+  }
 }
 </script>
 
 <template>
   <Dialog :open="open" @update:open="emit('update:open', $event)">
-    <DialogContent class="max-w-[95vw] sm:max-w-[700px] xl:max-w-[950px] p-0 overflow-hidden border-none bg-background shadow-2xl transition-all duration-300" style="text-rendering: optimizeLegibility;" @openAutoFocus.prevent>
-
+    <DialogContent class="max-w-[95vw] sm:max-w-[700px] xl:max-w-[950px] p-0 overflow-hidden border-none bg-background shadow-2xl transition-all duration-300" style="text-rendering: optimizeLegibility;" @openAutoFocus.prevent @pointerDownOutside.prevent>
       <div class="flex flex-col max-h-[85vh]">
-        <DialogHeader class="px-6 pr-12 pt-6 pb-2 shrink-0">
-          <div class="flex items-center justify-between">
-            <DialogTitle class="text-xl font-bold">
+        <DialogHeader class="px-5 sm:px-6 pr-20 pt-6 pb-2 shrink-0">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-2">
+            <DialogTitle class="text-xl font-bold whitespace-nowrap">
               {{ isEdit ? '编辑仓库同步' : '新建仓库同步' }}
             </DialogTitle>
-            <Button v-if="!isEdit" variant="outline" size="sm" @click="importFromQl" class="h-8 gap-1.5 bg-primary/5 hover:bg-primary/10 border-primary/20 hover:border-primary/40 text-primary">
-              <Download class="w-3.5 h-3.5" />
-              青龙格式导入
-            </Button>
+            <div class="flex flex-wrap items-center justify-end self-end sm:self-auto gap-2 -mr-14 sm:mr-4">
+              <Button v-if="isEdit" variant="outline" size="sm" @click="exportBaihuCommand" title="复制导出 baihu 指令" class="h-8 gap-1.5 bg-primary/5 hover:bg-primary/10 border-primary/20 hover:border-primary/40 text-primary px-3">
+                <Terminal class="w-3.5 h-3.5" />
+                <span class="text-xs">复制指令</span>
+              </Button>
+              <template v-else>
+              <Button variant="outline" size="sm" @click="importFromBaihu" class="flex-1 sm:flex-initial h-8 gap-1.5 bg-primary/5 hover:bg-primary/10 border-primary/20 hover:border-primary/40 text-primary px-3">
+                <Terminal class="w-3.5 h-3.5" />
+                <span class="text-xs">Baihu 命令导入</span>
+              </Button>
+              <Button variant="outline" size="sm" @click="importFromQl" class="flex-1 sm:flex-initial h-8 gap-1.5 bg-muted/50 hover:bg-muted border-muted-foreground/20 text-muted-foreground px-3">
+                <Download class="w-3.5 h-3.5" />
+                <span class="text-xs">Qinlong格式导入</span>
+              </Button>
+              </template>
+            </div>
           </div>
         </DialogHeader>
 
@@ -455,28 +364,7 @@ async function save() {
                   <Input v-model="form.remark" placeholder="输入同步任务备注" class="sm:col-span-3 h-9 bg-muted/30 border-muted-foreground/20 focus:bg-background transition-all" />
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
-                  <Label class="sm:text-right text-xs text-muted-foreground uppercase tracking-wider pt-2.5">任务标签</Label>
-                  <div class="sm:col-span-3 space-y-2">
-                    <div class="flex gap-2">
-                      <div class="relative flex-1">
-                        <Input v-model="tagInput" placeholder="输入标签按回车..." class="h-9 bg-muted/30 border-muted-foreground/20 pr-12" @keydown.enter.prevent="addTag" />
-                        <Button type="button" variant="ghost" size="sm" class="absolute right-1 top-1 h-7 px-2 text-xs hover:bg-primary/10 hover:text-primary transition-colors" @click="addTag">
-                          添加
-                        </Button>
-                      </div>
-                    </div>
-                    <div v-if="form.tags" class="flex flex-wrap gap-1.5 pt-1">
-                      <span v-for="tag in form.tags.split(',').filter(Boolean)" :key="tag" 
-                        class="flex items-center gap-1.5 bg-primary/5 text-primary px-2.5 py-1 rounded-full text-[11px] font-medium border border-primary/10 group transition-all hover:bg-primary/10">
-                        {{ tag }}
-                        <button type="button" class="text-primary/40 hover:text-destructive transition-colors shrink-0" @click.prevent="removeTag(tag)">
-                          <X class="h-3 w-3" />
-                        </button>
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                <TaskTagsConfig v-model="form.tags" />
               </div>
             </section>
 
@@ -534,6 +422,13 @@ async function save() {
                     <Input v-else v-model="repoConfig.target_path" placeholder="Agent 上的目标路径" class="h-9 bg-muted/30 border-muted-foreground/20" />
                   </div>
                 </div>
+
+                <div v-if="repoConfig.source_type === 'git'" class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-medium">目录名定制</Label>
+                  <div class="sm:col-span-3 relative">
+                    <Input v-model="repoConfig.repo_dir_name" placeholder="留空则默认为 username_reponame 拼接" class="h-9 bg-muted/30 border-muted-foreground/20 focus:bg-background transition-all" autocomplete="off" />
+                  </div>
+                </div>
                 <div v-if="repoConfig.source_type === 'git'" class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
                   <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-medium">分支</Label>
                   <Input v-model="repoConfig.branch" placeholder="main (默认)" class="sm:col-span-3 h-9 bg-muted/30 border-muted-foreground/20 focus:bg-background transition-all" autocomplete="off" />
@@ -552,6 +447,15 @@ async function save() {
                       <Label for="single-file-sync" class="text-[11px] font-medium cursor-pointer">作为单文件直接下载</Label>
                     </div>
                   </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3 mt-4">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">前置脚本</Label>
+                  <div class="sm:col-span-3 relative"><Input v-model="form.pre_command" placeholder="同步前运行的指令 (可选)" :class="cn('h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50 pr-10', form.pre_command ? 'font-mono text-sm tracking-tight font-medium' : 'text-[11px] font-normal')" /><Zap class="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground opacity-40 pointer-events-none" /></div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">后置脚本</Label>
+                  <div class="sm:col-span-3 relative"><Input v-model="form.post_command" placeholder="同步后运行的指令 (可选)" :class="cn('h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50 pr-10', form.post_command ? 'font-mono text-sm tracking-tight font-medium' : 'text-[11px] font-normal')" /><Zap class="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground opacity-40 pointer-events-none" /></div>
                 </div>
               </div>
             </section>
@@ -651,87 +555,7 @@ async function save() {
                       <p>同步后生成的任务将自动继承此运行环境。如果不指定语言版本，某些依赖特定语言的脚本（如 js, py）将无法顺利解析和运行！</p>
                     </div>
 
-                    <div v-for="(clang, idx) in selectedLangs" :key="idx" 
-                      class="flex gap-2 p-2 rounded-lg bg-muted/20 border border-muted-foreground/10 group/lang relative overflow-hidden">
-                      <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/20 group-hover/lang:bg-primary transition-colors" />
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="ghost" role="combobox" class="justify-between flex-1 h-8 text-xs font-normal hover:bg-background/50">
-                            <div class="flex items-center gap-2 truncate">
-                              <div v-if="clang.name && getLangIcon(clang.name)" class="w-4 h-4 shrink-0 rounded-sm bg-white p-0.5 border shadow-sm">
-                                <img :src="getLangIcon(clang.name)" class="w-full h-full object-contain" />
-                              </div>
-                              <span class="font-medium">{{ clang.name || "选择插件..." }}</span>
-                            </div>
-                            <ChevronsUpDown class="ml-1 h-3 w-3 opacity-40" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent class="p-0 w-[240px]" align="start">
-                          <div class="p-2 border-b bg-muted/30">
-                            <div class="relative">
-                              <Search class="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                              <Input v-model="pluginSearch" placeholder="搜索已安装语言..." class="h-8 pl-8 text-xs bg-background" />
-                            </div>
-                          </div>
-                          <ScrollArea class="h-48 p-1">
-                            <div v-if="loadingLangs" class="flex items-center justify-center py-6">
-                              <Loader2 class="h-5 w-5 animate-spin text-primary/50" />
-                            </div>
-                            <div v-else-if="filteredPlugins.length === 0" class="py-6 text-center text-xs text-muted-foreground">
-                              未找到匹配项
-                            </div>
-                            <button v-else v-for="p in filteredPlugins" :key="p" @click="updateLangName(idx, p)"
-                              class="w-full flex items-center px-3 py-2 text-xs rounded-md hover:bg-accent text-left transition-all group/item mb-0.5">
-                              <div class="mr-3 h-5 w-5 shrink-0 flex items-center justify-center transition-transform group-hover/item:scale-110">
-                                <img v-if="getLangIcon(p)" :src="getLangIcon(p)" class="w-full h-full object-contain p-0.5 bg-white rounded border" />
-                                <div v-else class="w-full h-full flex items-center justify-center bg-primary/10 rounded-sm text-[8px] font-bold border">
-                                  {{ p.substring(0, 2) }}
-                                </div>
-                              </div>
-                              <span class="flex-1" :class="{ 'font-bold text-primary': clang.name === p }">{{ p }}</span>
-                              <Check v-if="clang.name === p" class="h-3 w-3 text-primary" />
-                            </button>
-                          </ScrollArea>
-                        </PopoverContent>
-                      </Popover>
-
-                      <Popover>
-                        <PopoverTrigger asChild :disabled="!clang.name">
-                          <Button variant="ghost" role="combobox" class="justify-between w-28 h-8 text-xs font-normal hover:bg-background/50" :disabled="!clang.name">
-                            <span class="truncate">{{ clang.version || "版本..." }}</span>
-                            <ChevronsUpDown class="h-3 w-3 opacity-40 ml-1" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent class="p-0 w-[160px]" align="start">
-                          <div class="p-2 border-b bg-muted/30">
-                            <div class="relative">
-                              <Search class="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                              <Input v-model="versionSearch" placeholder="搜索版本..." class="h-8 pl-8 text-xs bg-background" />
-                            </div>
-                          </div>
-                          <ScrollArea class="h-48 p-1">
-                            <div v-if="getFilteredVersions(clang.availableVersions).length === 0" class="py-6 text-center text-xs text-muted-foreground">
-                              无可用版本
-                            </div>
-                            <button v-else v-for="v in getFilteredVersions(clang.availableVersions)" :key="v" @click="clang.version = v"
-                              class="w-full flex items-center px-3 py-2 text-xs rounded-md hover:bg-accent text-left mb-0.5 font-mono">
-                              <span class="flex-1 truncate" :class="{ 'font-bold text-primary': clang.version === v }">{{ v }}</span>
-                              <Check v-if="clang.version === v" class="h-3 w-3 text-primary" />
-                            </button>
-                          </ScrollArea>
-                        </PopoverContent>
-                      </Popover>
-
-                      <Button variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
-                        @click="removeLang(idx)">
-                        <X class="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    <Button variant="outline" size="sm" class="w-full h-9 text-xs border-dashed border-muted-foreground/30 text-muted-foreground hover:text-primary hover:border-primary/50 transition-all bg-muted/10 hover:bg-primary/5"
-                      @click="addLang">
-                      <Plus class="h-4 w-4 mr-2" /> 必须添加运行语言和版本
-                    </Button>
+                    <TaskLangConfig v-model="selectedLangs" />
                   </div>
                 </div>
               </div>
@@ -745,94 +569,24 @@ async function save() {
               </div>
 
               <div class="grid gap-5 pl-3 border-l border-muted">
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">定时规则</Label>
-                  <div class="sm:col-span-3">
-                    <Input v-model="form.schedule" placeholder="* * * * * *" class="h-9 font-mono text-[13px] bg-muted/30 border-muted-foreground/20 focus:ring-1 focus:ring-primary/50" />
-                    <div v-if="cronDescription" class="mt-2.5 p-2 rounded-lg bg-primary/5 border border-primary/10 text-[11px] text-primary font-medium flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-300">
-                      <Zap class="h-3 w-3" />
-                      {{ cronDescription }}
-                    </div>
-                    <div class="mt-2.5 space-y-2">
-                       <div class="flex items-center gap-1.5 text-[10px] text-muted-foreground/70 uppercase font-bold tracking-tighter">
-                          <Clock class="h-3 w-3" /> 格式指导: 秒 分 时 日 月 周
-                        </div>
-                      <div class="flex flex-wrap gap-1.5">
-                        <button v-for="preset in cronPresets" :key="preset.value"
-                          class="px-2 py-1 text-[10px] rounded-md bg-muted/50 border border-muted-foreground/10 hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-all font-medium"
-                          @click.prevent="form.schedule = preset.value">
-                          {{ preset.label }}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <TaskCronConfig v-model="form.schedule" />
 
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">随机延迟</Label>
-
-                  <div class="sm:col-span-3 flex items-center gap-4">
-                    <div class="flex items-center gap-2">
-                      <Input :model-value="form.random_range" @update:model-value="(v: string | number) => form.random_range = Number(v || 0)" type="number" :min="0" class="w-20 h-9 bg-muted/30 text-center" />
-                      <span class="text-xs font-semibold text-muted-foreground">秒</span>
-                    </div>
-                    <div class="flex-1 text-[11px] text-muted-foreground leading-snug p-2 rounded-lg bg-blue-500/5 border border-blue-500/10 italic">
-                      避免高频并发，在基准时间点后延迟 0~{{ form.random_range || 0 }}s
-                    </div>
-                  </div>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
-                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">运行策略</Label>
-                  <div class="sm:col-span-3 space-y-4">
-                    
+                <TaskAdvancedConfig v-model="form" :show-retry="false">
+                  <template #run-strategy-prepend>
                     <div class="p-3 rounded-xl bg-muted/20 border border-muted-foreground/10 space-y-2.5">
                       <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2 text-xs font-semibold">
                           <Zap :class="cn('h-3.5 w-3.5', autoAddCron ? 'text-primary' : 'text-muted-foreground')" /> 
-                          自动添加任务
+                          自动添加任务并解析元数据
                         </div>
-                        <Switch :model-value="autoAddCron" @update:model-value="(v: boolean) => autoAddCron = v" />
+                        <Switch :model-value="autoAddCron" @update:model-value="(v: boolean) => { autoAddCron = v; pullQlConfig = v }" />
                       </div>
-                      <p class="text-[11px] text-muted-foreground leading-relaxed">
-                        {{ autoAddCron ? '同步完成后将尝试自动分析脚本并注册定时任务。' : '仅拉取脚本，不自动注册成面板任务。' }}
+                      <p class="text-[11px] text-muted-foreground leading-relaxed italic">
+                        {{ autoAddCron ? '同步后将自动识别脚本中的 new Env("xxx") 和 cron 信息并注册任务。' : '仅拉取脚本，不自动注册任务。' }}
                       </p>
                     </div>
-
-                    <div class="flex items-center gap-4">
-                      <div class="flex items-center gap-2">
-                         <Input :model-value="form.timeout" @update:model-value="(v: string | number) => form.timeout = Number(v || 0)" type="number" :min="0" class="w-20 h-9 bg-muted/30 text-center" />
-                         <span class="text-[11px] font-semibold text-muted-foreground">分钟超时</span>
-                      </div>
-                      <div class="flex items-center gap-2 pl-4 border-l">
-                        <Select :model-value="cleanType" @update:model-value="(v: any) => cleanType = String(v || 'none')">
-                          <SelectTrigger class="w-28 h-9 text-xs bg-muted/10">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">保留日志</SelectItem>
-                            <SelectItem value="day">按天清理</SelectItem>
-                            <SelectItem value="count">按条清理</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input v-if="cleanType && cleanType !== 'none'" :model-value="cleanKeep" @update:model-value="v => cleanKeep = Number(v || 30)" type="number" class="w-16 h-9 bg-muted/30 text-center text-xs" />
-                      </div>
-                    </div>
-
-                    <div class="p-3 rounded-xl bg-muted/20 border border-muted-foreground/10 space-y-2.5">
-                      <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2 text-xs font-semibold">
-                          <Zap :class="cn('h-3.5 w-3.5', concurrencyEnabled ? 'text-primary' : 'text-muted-foreground')" /> 
-                          并发控制
-                        </div>
-                        <Switch :model-value="concurrencyEnabled" @update:model-value="onConcurrencyChange" />
-                      </div>
-                      <p class="text-[11px] text-muted-foreground leading-relaxed">
-                        {{ concurrencyEnabled ? '允许同时开启多个同步副本。' : '当前同步未结束时，新触发将被静默忽略。' }}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                  </template>
+                </TaskAdvancedConfig>
               </div>
             </section>
 
@@ -879,6 +633,57 @@ async function save() {
         </Button>
         <Button size="sm" @click="submitQlImport" class="shadow-sm">
           确定 <Download class="h-3 w-3 ml-1.5" />
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <!-- Baihu 导入提示对话框 -->
+  <Dialog :open="showBaihuImportDialog" @update:open="v => showBaihuImportDialog = v">
+    <DialogContent class="sm:max-w-[550px] p-0 border-none bg-background shadow-xl overflow-hidden">
+      <DialogHeader class="px-6 pt-6 pb-2">
+        <DialogTitle class="text-lg font-bold flex items-center gap-2">
+          <Terminal class="w-4 h-4 text-primary" />
+          命令行快速导入
+        </DialogTitle>
+      </DialogHeader>
+      
+      <div class="px-6 py-4 space-y-5">
+        <div class="p-3 rounded-lg bg-primary/5 border border-primary/10">
+          <p class="text-xs text-primary/80 leading-relaxed">
+            粘贴包含 <code class="px-1 py-0.5 rounded bg-primary/10 font-mono">reposync</code> 及其参数的命令，系统将自动填充表单。
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <Label class="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">示例命令</Label>
+            <button class="text-[10px] text-primary hover:underline font-medium" @click="baihuCommandInput = 'baihu reposync --source-url \'https://github.com/example/repo.git\' --branch \'main\' --blacklist \'test|dev\' --pre-command \'npm install\' --post-command \'echo done\''">填入示例</button>
+          </div>
+          <div class="p-3 rounded-lg bg-muted/40 font-mono text-[11px] text-muted-foreground/70 border border-muted/20 leading-relaxed break-all">
+            baihu reposync --source-url 'https://...' --branch 'main' --blacklist '...' --pre-command '...' --post-command '...'
+          </div>
+        </div>
+
+        <div class="relative group">
+          <textarea 
+            v-model="baihuCommandInput" 
+            placeholder="在此处粘贴完整指令，如 baihu reposync --source-url ..." 
+            class="w-full min-h-[140px] p-4 rounded-lg bg-muted/30 border border-muted/30 focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all text-sm resize-none outline-none"
+            @keydown.enter.ctrl.prevent="submitBaihuImport"
+          />
+          <div class="absolute bottom-3 right-3 text-[10px] text-muted-foreground/40 font-medium">
+            CTRL + ENTER 快速确认
+          </div>
+        </div>
+      </div>
+      
+      <DialogFooter class="px-6 pb-6 pt-2 flex gap-2">
+        <Button variant="ghost" size="sm" @click="showBaihuImportDialog = false" class="flex-1 h-9 rounded-md font-medium text-xs">
+          取消
+        </Button>
+        <Button size="sm" @click="submitBaihuImport" class="flex-1 h-9 rounded-md font-bold text-xs shadow-sm bg-primary hover:bg-primary/90">
+          确认解析并填充
         </Button>
       </DialogFooter>
     </DialogContent>

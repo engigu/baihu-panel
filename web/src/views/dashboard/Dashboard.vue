@@ -451,11 +451,11 @@ onUnmounted(() => {
         <Card v-for="item in statItems" :key="item.key" class="cursor-pointer hover:bg-accent/50 transition-colors"
           @click="navigateTo(item.route)">
           <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle class="text-xs sm:text-sm font-medium">{{ item.label }}</CardTitle>
+            <CardTitle class="text-sm font-medium">{{ item.label }}</CardTitle>
             <component :is="item.icon" class="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div class="text-xl sm:text-2xl font-bold">{{ displayStats[item.key as keyof Stats] }}</div>
+            <div class="text-xl sm:text-2xl font-semibold">{{ displayStats[item.key as keyof Stats] }}</div>
           </CardContent>
         </Card>
       </div>

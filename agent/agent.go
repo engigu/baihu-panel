@@ -46,6 +46,8 @@ type AgentTask struct {
 	ID          string              `json:"id"`
 	Name        string              `json:"name"`
 	Command     string              `json:"command"`
+	PreCommand  string              `json:"pre_command"`
+	PostCommand string              `json:"post_command"`
 	Schedule    string              `json:"schedule"`
 	Cron        string              `json:"cron"`
 	Timeout     int                 `json:"timeout"`
@@ -67,6 +69,14 @@ func (t *AgentTask) GetName() string {
 
 func (t *AgentTask) GetCommand() string {
 	return t.Command
+}
+
+func (t *AgentTask) GetPreCommand() string {
+	return t.PreCommand
+}
+
+func (t *AgentTask) GetPostCommand() string {
+	return t.PostCommand
 }
 
 func (t *AgentTask) GetTimeout() int {
@@ -127,21 +137,22 @@ type TaskResult struct {
 }
 
 type Agent struct {
-	config        *Config
-	configFile    string
-	machineID     string
-	scheduler     *executor.Scheduler
-	cronManager   *executor.CronManager
-	tasks         map[string]*AgentTask // 本地任务缓存，用于执行 lookup
-	lastTaskCount int
-	mu            sync.RWMutex
-	client        *http.Client
-	wsConn        *websocket.Conn
-	wsMu          sync.Mutex
-	stopCh        chan struct{}
-	wsStopCh      chan struct{}       // 用于停止当前 WebSocket 相关的 goroutine
-	taskLogs      map[string][]string // 记录最近的日志行，用于失败显示
-	logMu         sync.Mutex          // taskLogs 的锁
+	config           *Config
+	configFile       string
+	machineID        string
+	scheduler        *executor.Scheduler
+	cronManager      *executor.CronManager
+	tasks            map[string]*AgentTask // 本地任务缓存，用于执行 lookup
+	lastTaskCount    int
+	mu               sync.RWMutex
+	client           *http.Client
+	wsConn           *websocket.Conn
+	wsMu             sync.Mutex
+	stopCh           chan struct{}
+	wsStopCh         chan struct{}       // 用于停止当前 WebSocket 相关的 goroutine
+	taskLogs         map[string][]string // 记录最近的日志行，用于失败显示
+	logMu            sync.Mutex          // taskLogs 的锁
+	schedulerStarted bool                // 调度器是否已经启动
 }
 
 func NewAgent(config *Config, configFile string) *Agent {
@@ -257,9 +268,7 @@ func (a *Agent) Start() error {
 	}
 
 	logger.Infof("机器识别码: %s", a.machineID[:16]+"...")
-	a.scheduler.Start()
-	a.cronManager.Start()
-
+	// 调度器暂不在此启动，等待 WebSocket 连接成功并获取到调度配置后再启动
 	go a.wsLoop()
 
 	logger.Info("Agent 已启动 (时区: Asia/Shanghai, 模式: WebSocket)")
@@ -269,8 +278,16 @@ func (a *Agent) Start() error {
 func (a *Agent) Stop() {
 	close(a.stopCh)
 	a.closeWS()
-	a.cronManager.Stop()
-	a.scheduler.Stop()
+
+	a.mu.Lock()
+	started := a.schedulerStarted
+	a.schedulerStarted = false
+	a.mu.Unlock()
+
+	if started {
+		a.cronManager.Stop()
+		a.scheduler.Stop()
+	}
 	logger.Info("Agent 已停止")
 }
 
@@ -450,16 +467,30 @@ func (a *Agent) updateSchedulerConfig(config map[string]interface{}) {
 			newCfg.RateInterval = time.Duration(v) * time.Millisecond
 		}
 	}
+	if val, ok := config["strict_queue"]; ok {
+		if v, ok := val.(bool); ok {
+			newCfg.StrictQueue = v
+		}
+	}
 
-	// 只有当配置发生变化时才重新加载
-	// 只有当配置发生变化时才重新加载
-	if newCfg != currentCfg {
-		logger.Infof("收到调度配置更新: workers=%d, queue=%d, rate=%v",
-			newCfg.WorkerCount, newCfg.QueueSize, newCfg.RateInterval)
+	a.mu.Lock()
+	started := a.schedulerStarted
+	a.schedulerStarted = true
+	a.mu.Unlock()
+
+	if !started {
+		logger.Infof("首次连接成功，启动调度器配置: workers=%d, queue=%d, rate=%v, strict=%t",
+			newCfg.WorkerCount, newCfg.QueueSize, newCfg.RateInterval, newCfg.StrictQueue)
+		// 用下发的最新配置加载并启动调度器与计划任务管理器
+		a.scheduler.Reload(newCfg)
+		a.cronManager.Start()
+	} else if newCfg != currentCfg {
+		logger.Infof("收到调度配置更新: workers=%d, queue=%d, rate=%v, strict=%t",
+			newCfg.WorkerCount, newCfg.QueueSize, newCfg.RateInterval, newCfg.StrictQueue)
 		a.scheduler.Reload(newCfg)
 	} else {
-		logger.Infof("当前调度配置: workers=%d, queue=%d, rate=%v",
-			newCfg.WorkerCount, newCfg.QueueSize, newCfg.RateInterval)
+		logger.Infof("当前调度配置未改变: workers=%d, queue=%d, rate=%v, strict=%t",
+			newCfg.WorkerCount, newCfg.QueueSize, newCfg.RateInterval, newCfg.StrictQueue)
 	}
 }
 
@@ -496,10 +527,13 @@ func (a *Agent) handleTasks(data json.RawMessage) {
 
 func (a *Agent) handleExecute(data json.RawMessage) {
 	var req struct {
-		TaskID  string   `json:"task_id"`
-		LogID   string   `json:"log_id"`
-		Envs    string   `json:"envs"`
-		Secrets []string `json:"secrets"`
+		TaskID      string   `json:"task_id"`
+		LogID       string   `json:"log_id"`
+		Envs        string   `json:"envs"`
+		Secrets     []string `json:"secrets"`
+		Command     string   `json:"command"`
+		PreCommand  string   `json:"pre_command"`
+		PostCommand string   `json:"post_command"`
 	}
 	if err := json.Unmarshal(data, &req); err != nil {
 		logger.Errorf("解析立即执行请求失败: %v", err)
@@ -517,24 +551,41 @@ func (a *Agent) handleExecute(data json.RawMessage) {
 	}
 
 	// 准备执行请求
-	// 如果消息中携带了环境变量，则优先使用（通常由服务端解析好后推过来）
+	// 如果消息中携带了环境变量或指令，则优先使用（确保即时生效）
 	envs := task.Envs
 	if req.Envs != "" {
 		envs = req.Envs
 	}
 
+	command := task.Command
+	if req.Command != "" {
+		command = req.Command
+	}
+
+	preCommand := task.PreCommand
+	if req.PreCommand != "" {
+		preCommand = req.PreCommand
+	}
+
+	postCommand := task.PostCommand
+	if req.PostCommand != "" {
+		postCommand = req.PostCommand
+	}
+
 	execReq := &executor.ExecutionRequest{
-		TaskID:    task.ID,
-		LogID:     req.LogID,
-		Name:      task.Name,
-		Command:   task.Command,
-		WorkDir:   task.WorkDir,
-		Envs:      executor.ParseEnvVars(envs),
-		Secrets:   req.Secrets,
-		Timeout:   task.Timeout,
-		Languages: task.Languages,
-		UseMise:   task.UseMise(),
-		Type:      executor.TaskTypeManual,
+		TaskID:      task.ID,
+		LogID:       req.LogID,
+		Name:        task.Name,
+		Command:     command,
+		PreCommand:  preCommand,
+		PostCommand: postCommand,
+		WorkDir:     task.WorkDir,
+		Envs:        executor.ParseEnvVars(envs),
+		Secrets:     req.Secrets,
+		Timeout:     task.Timeout,
+		Languages:   task.Languages,
+		UseMise:     task.UseMise(),
+		Type:        executor.TaskTypeManual,
 	}
 
 	// 立即执行任务（加入队列）
@@ -690,6 +741,7 @@ func (a *Agent) updateTasks(tasks []AgentTask) {
 	for id, task := range newTasks {
 		oldTask, exists := a.tasks[id]
 		if !exists || oldTask.Schedule != task.Schedule || oldTask.Command != task.Command ||
+			oldTask.PreCommand != task.PreCommand || oldTask.PostCommand != task.PostCommand ||
 			oldTask.Enabled != task.Enabled || oldTask.Timeout != task.Timeout ||
 			oldTask.WorkDir != task.WorkDir || oldTask.Envs != task.Envs ||
 			oldTask.RandomRange != task.RandomRange {

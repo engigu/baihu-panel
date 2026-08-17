@@ -20,9 +20,7 @@ import (
 )
 
 var agentUpgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
+	CheckOrigin: utils.CheckWSOrigin,
 }
 
 // AgentController Agent 控制器
@@ -47,6 +45,29 @@ func (c *AgentController) List(ctx *gin.Context) {
 	utils.Success(ctx, vo.ToAgentVOListFromModels(agents))
 }
 
+// getActiveSchedulerConfig 获取 Agent 的实际调度配置（若为空或零值，则使用系统默认的 settings）
+func (c *AgentController) getActiveSchedulerConfig(agent *models.Agent) map[string]interface{} {
+	workerCount := agent.SchedulerConfig.WorkerCount
+	queueSize := agent.SchedulerConfig.QueueSize
+	rateInterval := int(agent.SchedulerConfig.RateInterval / time.Millisecond)
+	strictQueue := agent.SchedulerConfig.StrictQueue
+
+	// 如果未配置（WorkerCount <= 0），则使用全局系统设置
+	if workerCount <= 0 {
+		workerCount = getIntSetting(c.settingsService, constant.SectionScheduler, constant.KeyWorkerCount, 4)
+		queueSize = getIntSetting(c.settingsService, constant.SectionScheduler, constant.KeyQueueSize, 100)
+		rateInterval = getIntSetting(c.settingsService, constant.SectionScheduler, constant.KeyRateInterval, 200)
+		strictQueue = false
+	}
+
+	return map[string]interface{}{
+		"worker_count":  workerCount,
+		"queue_size":    queueSize,
+		"rate_interval": rateInterval,
+		"strict_queue":  strictQueue,
+	}
+}
+
 // Update 更新 Agent
 func (c *AgentController) Update(ctx *gin.Context) {
 	id := ctx.Param("id")
@@ -56,9 +77,10 @@ func (c *AgentController) Update(ctx *gin.Context) {
 	}
 
 	var req struct {
-		Name        string `json:"name" binding:"required"`
-		Description string `json:"description"`
-		Enabled     bool   `json:"enabled"`
+		Name            string                     `json:"name" binding:"required"`
+		Description     string                     `json:"description"`
+		Enabled         bool                       `json:"enabled"`
+		SchedulerConfig *vo.AgentSchedulerConfigVO `json:"scheduler_config"`
 	}
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -72,9 +94,18 @@ func (c *AgentController) Update(ctx *gin.Context) {
 		utils.NotFound(ctx, "Agent 不存在")
 		return
 	}
-	wasEnabled := oldAgent.Enabled
+	wasEnabled := utils.DerefBool(oldAgent.Enabled, true)
 
-	if err := c.agentService.Update(id, req.Name, req.Description, req.Enabled); err != nil {
+	var schedulerConfig models.AgentSchedulerConfig
+	if req.SchedulerConfig != nil {
+		schedulerConfig.WorkerCount = req.SchedulerConfig.WorkerCount
+		schedulerConfig.QueueSize = req.SchedulerConfig.QueueSize
+		schedulerConfig.RateInterval = time.Duration(req.SchedulerConfig.RateInterval) * time.Millisecond
+		schedulerConfig.Verbose = req.SchedulerConfig.Verbose
+		schedulerConfig.StrictQueue = req.SchedulerConfig.StrictQueue
+	}
+
+	if err := c.agentService.Update(id, req.Name, req.Description, req.Enabled, schedulerConfig); err != nil {
 		utils.ServerError(ctx, err.Error())
 		return
 	}
@@ -92,6 +123,19 @@ func (c *AgentController) Update(ctx *gin.Context) {
 			// 禁用：发送禁用消息，Agent 收到后清空任务
 			c.wsManager.SendToAgent(id, services.WSTypeDisabled, map[string]interface{}{
 				"message": "Agent 已禁用",
+			})
+		}
+	}
+
+	// 推送最新的调度配置给 Agent (如果 Agent 在线)
+	if req.Enabled {
+		// 重新加载已更新的 Agent 信息以获取正确的 SchedulerConfig
+		updatedAgent := c.agentService.GetByID(id)
+		if updatedAgent != nil {
+			c.wsManager.SendToAgent(id, services.WSTypeConnected, map[string]interface{}{
+				"agent_id":         id,
+				"name":             req.Name,
+				"scheduler_config": c.getActiveSchedulerConfig(updatedAgent),
 			})
 		}
 	}
@@ -233,7 +277,7 @@ func (c *AgentController) GetTasks(ctx *gin.Context) {
 		return
 	}
 
-	if !agent.Enabled {
+	if !utils.DerefBool(agent.Enabled, true) {
 		utils.Forbidden(ctx, "Agent 已禁用")
 		return
 	}
@@ -259,7 +303,7 @@ func (c *AgentController) ReportResult(ctx *gin.Context) {
 		return
 	}
 
-	if !agent.Enabled {
+	if !utils.DerefBool(agent.Enabled, true) {
 		utils.Forbidden(ctx, "Agent 已禁用")
 		return
 	}
@@ -393,7 +437,7 @@ func (c *AgentController) WSConnect(ctx *gin.Context) {
 		logger.Infof("[AgentWS] 注册成功: Agent #%s, isNew=%v", agent.ID, isNewAgent)
 	}
 
-	if !agent.Enabled {
+	if !utils.DerefBool(agent.Enabled, true) {
 		c.wsManager.RecordConnectFail(ip)
 		logger.Warnf("[AgentWS] Agent #%s 已禁用, IP=%s", agent.ID, ip)
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "Agent 已禁用"})
@@ -406,6 +450,7 @@ func (c *AgentController) WSConnect(ctx *gin.Context) {
 		logger.Errorf("[AgentWS] 升级连接失败: %v, Agent #%s, IP=%s", err, agent.ID, ip)
 		return
 	}
+	conn.SetReadLimit(constant.MaxMessageSize)
 
 	// 连接成功，重置失败计数
 	c.wsManager.RecordConnectSuccess(ip)
@@ -416,26 +461,17 @@ func (c *AgentController) WSConnect(ctx *gin.Context) {
 	// 更新 Agent 状态
 	c.agentService.Heartbeat(token, ip, "", "", "", "", "")
 
-	// 获取调度配置
-	workerCount := getIntSetting(c.settingsService, constant.SectionScheduler, constant.KeyWorkerCount, 4)
-	queueSize := getIntSetting(c.settingsService, constant.SectionScheduler, constant.KeyQueueSize, 100)
-	rateInterval := getIntSetting(c.settingsService, constant.SectionScheduler, constant.KeyRateInterval, 200)
-
-	// 发送连接成功消息（包含注册状态和调度配置）
+	// 获取调度配置并发送连接成功消息（包含注册状态和调度配置）
+	schedCfg := c.getActiveSchedulerConfig(agent)
 	c.wsManager.SendToAgent(agent.ID, services.WSTypeConnected, map[string]interface{}{
-		"agent_id":     agent.ID,
-		"name":         agent.Name,
-		"is_new_agent": isNewAgent,
-		"machine_id":   machineID,
-		"scheduler_config": map[string]interface{}{
-			"worker_count":  workerCount,
-			"queue_size":    queueSize,
-			"rate_interval": rateInterval,
-		},
+		"agent_id":         agent.ID,
+		"name":             agent.Name,
+		"is_new_agent":     isNewAgent,
+		"machine_id":       machineID,
+		"scheduler_config": schedCfg,
 	})
 
-	logger.Infof("[AgentWS] Agent #%s 连接成功 (配置: workers=%d, queue=%d, rate=%d)",
-		agent.ID, workerCount, queueSize, rateInterval)
+	logger.Infof("[AgentWS] Agent #%s 连接成功 (配置: %v)", agent.ID, schedCfg)
 
 	// 启动读写协程
 	go c.wsWritePump(ac)
@@ -544,7 +580,7 @@ func (c *AgentController) handleWSMessage(ac *services.AgentConnection, agent *m
 }
 
 // handleTaskHeartbeat 处理任务心跳
-func (c *AgentController) handleTaskHeartbeat(agent *models.Agent, data json.RawMessage) {
+func (c *AgentController) handleTaskHeartbeat(_ *models.Agent, data json.RawMessage) {
 	var req struct {
 		LogID    string `json:"log_id"`
 		Duration int64  `json:"duration"`
@@ -617,7 +653,7 @@ func (c *AgentController) handleTaskResult(agent *models.Agent, data json.RawMes
 }
 
 // handleTaskLog 处理 Agent 发送的实时日志
-func (c *AgentController) handleTaskLog(agent *models.Agent, data json.RawMessage) {
+func (c *AgentController) handleTaskLog(_ *models.Agent, data json.RawMessage) {
 	var logMsg struct {
 		LogID   string `json:"log_id"`
 		Content string `json:"content"`

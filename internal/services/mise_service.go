@@ -74,8 +74,7 @@ func (s *MiseService) fetchLiveLanguages() ([]MiseLanguage, error) {
 
 	output, err := cmd.Output()
 	if err != nil {
-		logger.Warnf("[Mise] mise ls --json failed: %v", err)
-		return s.listFallback()
+		return nil, fmt.Errorf("mise ls --json 运行失败: %w", err)
 	}
 
 	// 1. 尝试解析为数组格式 [{}, {}]
@@ -106,43 +105,7 @@ func (s *MiseService) fetchLiveLanguages() ([]MiseLanguage, error) {
 		return result, nil
 	}
 
-	return s.listFallback()
-}
-
-
-func (s *MiseService) listFallback() ([]MiseLanguage, error) {
-	cmd := exec.Command("mise", "ls")
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, "MISE_NO_COLOR=1", "TERM=dumb")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("mise ls failed: %v, output: %s", err, string(output))
-	}
-
-	lines := strings.Split(string(output), "\n")
-	languages := []MiseLanguage{}
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(strings.ToLower(line), "tool") {
-			continue
-		}
-
-		parts := strings.Fields(line)
-		if len(parts) < 2 {
-			continue
-		}
-
-		lang := MiseLanguage{
-			Plugin:  parts[0],
-			Version: parts[1],
-		}
-		if len(parts) >= 3 {
-			lang.Source = MiseSource{Path: parts[2]}
-		}
-		languages = append(languages, lang)
-	}
-
-	return languages, nil
+	return nil, fmt.Errorf("解析 mise ls --json 输出失败")
 }
 
 // Plugins 获取主流的 mise 插件列表 (固定返回以确保速度和稳定性)
@@ -286,7 +249,7 @@ func (s *MiseService) syncToDB(languages []MiseLanguage) {
 		}
 
 		if queryErr == nil && rowsAffected == 0 {
-				// 如果不存在，则创建
+			// 如果不存在，则创建
 			newLang := models.Language{
 				ID:          utils.GenerateID(),
 				Plugin:      lang.Plugin,
@@ -329,6 +292,7 @@ func (s *MiseService) GetVerifyCommand(plugin, version string) (string, error) {
 	}
 	return m.GetVerifyCommand(version)
 }
+
 // UseGlobal 设置全局默认版本
 func (s *MiseService) UseGlobal(plugin, version string) error {
 	cmd := exec.Command("mise", "use", "-g", fmt.Sprintf("%s@%s", plugin, version))
@@ -355,6 +319,7 @@ func (s *MiseService) UnsetGlobal(plugin, version string) error {
 	}
 	return nil
 }
+
 // Envs 获取全局环境变量
 func (s *MiseService) Envs() (map[string]string, error) {
 	cmd := exec.Command("mise", "set")

@@ -9,14 +9,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import DirTreeSelect from '@/components/DirTreeSelect.vue'
-import { Plus, ChevronDown, X, Search, Check, ChevronsUpDown, AlertCircle, Terminal, Zap, Loader2, Lock, Variable } from 'lucide-vue-next'
+import { Plus, X, ChevronDown, Search, AlertCircle, Terminal, Zap, Lock, Variable, Wrench } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { api, type Task, type EnvVar, type Agent, type MiseLanguage } from '@/api'
+import { api, type Task, type EnvVar, type Agent } from '@/api'
 import { PATHS, TRIGGER_TYPE } from '@/constants'
 import { toast } from 'vue-sonner'
-import { getCronDescription } from '@/utils/cron'
+
 import TaskNotificationConfig from './components/TaskNotificationConfig.vue'
+import TaskAdvancedConfig from './components/TaskAdvancedConfig.vue'
+import TaskCronConfig from './components/TaskCronConfig.vue'
+import TaskLangConfig from './components/TaskLangConfig.vue'
+import TaskTagsConfig from './components/TaskTagsConfig.vue'
 
 const props = defineProps<{
   open: boolean
@@ -29,22 +33,9 @@ const emit = defineEmits<{
   'saved': []
 }>()
 
-const cronPresets = [
-  { label: '每5秒', value: '*/5 * * * * *' },
-  { label: '每30秒', value: '*/30 * * * * *' },
-  { label: '每分钟', value: '0 * * * * *' },
-  { label: '每5分钟', value: '0 */5 * * * *' },
-  { label: '每小时', value: '0 0 * * * *' },
-  { label: '每天0点', value: '0 0 0 * * *' },
-  { label: '每天8点', value: '0 0 8 * * *' },
-  { label: '每周一', value: '0 0 0 * * 1' },
-  { label: '每月1号', value: '0 0 0 1 * *' },
-]
+
 
 const form = ref<Partial<Task>>({})
-const tagInput = ref('')
-const cleanType = ref('none')
-const cleanKeep = ref(30)
 const allEnvVars = ref<EnvVar[]>([])
 const allAgents = ref<Agent[]>([])
 const selectedEnvIds = ref<string[]>([])
@@ -53,23 +44,10 @@ const selectedTriggerType = ref<string>('cron')
 const envSearchQuery = ref('')
 // 为每个执行位置保存独立的工作目录配置
 const workDirCache = ref<Record<string, string>>({})
-const concurrency = ref(0)
-const concurrencyEnabled = ref(false)
+const commentToTaskEnabled = ref(false)
 const allEnvsEnabled = ref(false)
-const SCRIPTS_DIR_PLACEHPLDER = '$SCRIPTS_DIR$'
 const scriptsDir = ref<string>(PATHS.SCRIPTS_DIR)
 
-const cronDescription = computed(() => {
-  if (!form.value.schedule) return ''
-  return getCronDescription(form.value.schedule, (navigator as any).language)
-})
-
-
-
-// 监听 concurrencyEnabled 的变化，同步到 concurrency
-watch(concurrencyEnabled, (val: boolean) => {
-  concurrency.value = val ? 1 : 0
-})
 
 
 
@@ -77,21 +55,7 @@ function onAllEnvsChange(val: boolean) {
   allEnvsEnabled.value = val
 }
 
-function addTag() {
-  const val = tagInput.value.trim()
-  if (!val) return
-  const currentTags = form.value.tags ? form.value.tags.split(',').filter(Boolean) : []
-  if (!currentTags.includes(val)) {
-    currentTags.push(val)
-    form.value.tags = currentTags.join(',')
-  }
-  tagInput.value = ''
-}
 
-function removeTag(tagToRemove: string) {
-  const currentTags = form.value.tags ? form.value.tags.split(',').filter(Boolean) : []
-  form.value.tags = currentTags.filter((t: string) => t !== tagToRemove).join(',')
-}
 
 // 当前显示的工作目录（根据选择的执行位置）
 const currentWorkDir = computed({
@@ -101,17 +65,14 @@ const currentWorkDir = computed({
   }
 })
 
-const cleanConfig = computed(() => {
-  if (!cleanType.value || cleanType.value === 'none' || cleanKeep.value <= 0) return ''
-  return JSON.stringify({ type: cleanType.value, keep: cleanKeep.value })
-})
 
 const filteredEnvVars = computed(() => {
   return allEnvVars.value.filter((env: EnvVar) => {
     const q = envSearchQuery.value.toLowerCase()
     const matchSearch = !q || 
       env.name.toLowerCase().includes(q) || 
-      (env.remark && env.remark.toLowerCase().includes(q))
+      (env.remark && env.remark.toLowerCase().includes(q)) ||
+      (env.tags && env.tags.toLowerCase().includes(q))
     const notSelected = !selectedEnvIds.value.includes(env.id)
     return matchSearch && notSelected
   })
@@ -127,109 +88,11 @@ const onlineAgents = computed(() => {
   return allAgents.value.filter((a: Agent) => a.enabled)
 })
 
-// 语言环境相关
-const installedLangs = ref<MiseLanguage[]>([])
-const loadingLangs = ref(false)
+
+
 const selectedLangs = ref<{ name: string; version: string; availableVersions: string[] }[]>([])
 
-const availablePlugins = ref<string[]>([])
-const pluginSearch = ref('')
-const versionSearch = ref('')
-
 const notificationConfigRef = ref<InstanceType<typeof TaskNotificationConfig> | null>(null)
-
-const filteredPlugins = computed(() => {
-  if (!pluginSearch.value) return availablePlugins.value
-  const s = pluginSearch.value.toLowerCase()
-  return availablePlugins.value.filter((p: string) => p.toLowerCase().includes(s))
-})
-
-function getFilteredVersions(versions: string[]) {
-  if (!versionSearch.value) return versions
-  const s = versionSearch.value.toLowerCase()
-  return versions.filter((v: string) => v.toLowerCase().includes(s))
-}
-
-async function fetchInstalledLangs() {
-  loadingLangs.value = true
-  try {
-    installedLangs.value = await api.mise.list()
-    const plugins = new Set<string>()
-    installedLangs.value.forEach((l: MiseLanguage) => plugins.add(l.plugin))
-    availablePlugins.value = Array.from(plugins).sort()
-  } catch (e) {
-    console.error('Fetch installed langs failed', e)
-  } finally {
-    loadingLangs.value = false
-  }
-}
-
-function getLangIcon(plugin: string) {
-  const name = plugin?.toLowerCase().trim()
-  const mapping: Record<string, string> = {
-    'python': 'python/python-original.svg',
-    'node': 'nodejs/nodejs-original.svg',
-    'nodejs': 'nodejs/nodejs-original.svg',
-    'go': 'go/go-original.svg',
-    'rust': 'rust/rust-original.svg',
-    'ruby': 'ruby/ruby-plain.svg',
-    'php': 'php/php-plain.svg',
-    'java': 'java/java-plain.svg',
-    'deno': 'deno/deno-plain.svg',
-    'bun': 'bun/bun-plain.svg',
-    'zig': 'zig/zig-original.svg',
-    'dotnet': 'dot-net/dot-net-original.svg',
-    '.net': 'dot-net/dot-net-original.svg',
-    'elixir': 'elixir/elixir-original.svg',
-    'erlang': 'erlang/erlang-original.svg',
-    'crystal': 'crystal/crystal-original.svg',
-    'lua': 'lua/lua-original.svg',
-    'julia': 'julia/julia-original.svg',
-    'nim': 'nim/nim-original.svg',
-    'perl': 'perl/perl-original.svg',
-    'scala': 'scala/scala-original.svg',
-    'kotlin': 'kotlin/kotlin-original.svg',
-    'clojure': 'clojure/clojure-line.svg',
-    'dart': 'dart/dart-original.svg',
-    'flutter': 'flutter/flutter-original.svg',
-    'terraform': 'terraform/terraform-original.svg',
-    'docker': 'docker/docker-original.svg',
-    'kubernetes': 'kubernetes/kubernetes-plain.svg',
-    'ansible': 'ansible/ansible-original.svg',
-  }
-
-  if (mapping[name]) {
-    return `https://fastly.jsdelivr.net/gh/devicons/devicon/icons/${mapping[name]}`
-  }
-  return ''
-}
-
-function updateAvailableVersions(lang: { name: string; version: string; availableVersions: string[] }) {
-  if (lang.name) {
-    lang.availableVersions = installedLangs.value
-      .filter((l: MiseLanguage) => l.plugin === lang.name)
-      .map((l: MiseLanguage) => l.version)
-      .sort((a: string, b: string) => b.localeCompare(a, undefined, { numeric: true }))
-  } else {
-    lang.availableVersions = []
-  }
-}
-
-function addLang() {
-  selectedLangs.value.push({ name: '', version: '', availableVersions: [] })
-}
-
-function removeLang(index: number) {
-  selectedLangs.value.splice(index, 1)
-}
-
-function updateLangName(index: number, name: string) {
-  const lang = selectedLangs.value[index]
-  if (!lang) return
-  lang.name = name
-  lang.version = '' // reset version
-  updateAvailableVersions(lang)
-}
 
 watch(() => props.open, async (val: boolean) => {
   if (val) {
@@ -238,22 +101,12 @@ watch(() => props.open, async (val: boolean) => {
       retry_interval: props.task?.retry_interval ?? 0,
       random_range: props.task?.random_range ?? 0,
       timeout: props.task?.timeout ?? 30,
+      pin_type: props.task?.pin_type ?? 'none',
+      pre_command: props.task?.pre_command ?? '',
+      post_command: props.task?.post_command ?? '',
       ...props.task
     }
-    // 解析清理配置
-    if (props.task?.clean_config) {
-      try {
-        const config = JSON.parse(props.task.clean_config)
-        cleanType.value = config.type || 'none'
-        cleanKeep.value = config.keep || 30
-      } catch {
-        cleanType.value = 'none'
-        cleanKeep.value = 30
-      }
-    } else {
-      cleanType.value = 'none'
-      cleanKeep.value = 30
-    }
+    // 配置清理会在 TaskAdvancedConfig 中自动处理
     // 解析任务配置
     try {
       // 确保 config 是有效的 JSON 对象字符串
@@ -266,27 +119,17 @@ watch(() => props.open, async (val: boolean) => {
       const parsed = JSON.parse(configStr)
       // 确保解析结果是对象
       if (parsed && typeof parsed === 'object') {
-        const val = parsed['$task_concurrency']
-        if (typeof val === 'number') {
-          // 如果已存在并发配置，直接使用（0 或 1）
-          concurrency.value = val
-          concurrencyEnabled.value = val === 1
-        } else {
-          // 默认值：允许并发
-          concurrency.value = 1
-          concurrencyEnabled.value = true
-        }
 
         // 解析全部环境变量配置
         allEnvsEnabled.value = !!parsed['$task_all_envs']
+        // 解析注释解析配置
+        commentToTaskEnabled.value = !!parsed['$task_comment_to_task']
       } else {
-        concurrency.value = 1
-        concurrencyEnabled.value = true
         allEnvsEnabled.value = false
+        commentToTaskEnabled.value = false
       }
     } catch {
-      concurrency.value = 1
-      concurrencyEnabled.value = true
+      // ignore
     }
     // 解析环境变量
     if (props.task?.envs) {
@@ -321,13 +164,7 @@ watch(() => props.open, async (val: boolean) => {
         ? normalizeLocalWorkDirForDisplay(props.task?.work_dir)
         : (props.task?.work_dir || '')
     }
-    if (selectedAgentId.value === 'local') {
-      await fetchInstalledLangs()
-      // 更新所有语言的可用版本
-      selectedLangs.value.forEach((lang: { name: string; version: string; availableVersions: string[] }) => {
-        updateAvailableVersions(lang)
-      })
-    }
+
     // 加载通知配置
     await notificationConfigRef.value?.loadConfig(props.isEdit ? props.task?.id : undefined)
   }
@@ -358,9 +195,9 @@ function removeEnv(id: string) {
 
 function normalizeLocalWorkDirForDisplay(workDir?: string | null): string {
   if (!workDir) return ''
-  if (workDir === SCRIPTS_DIR_PLACEHPLDER) return ''
-  if (workDir.startsWith(`${SCRIPTS_DIR_PLACEHPLDER}/`)) {
-    return workDir.slice(SCRIPTS_DIR_PLACEHPLDER.length + 1)
+  if (workDir === PATHS.SCRIPTS_DIR_PLACEHOLDER) return ''
+  if (workDir.startsWith(`${PATHS.SCRIPTS_DIR_PLACEHOLDER}/`)) {
+    return workDir.slice(PATHS.SCRIPTS_DIR_PLACEHOLDER.length + 1)
   }
   const base = scriptsDir.value || PATHS.SCRIPTS_DIR
   if (workDir === base) return ''
@@ -372,21 +209,20 @@ function normalizeLocalWorkDirForDisplay(workDir?: string | null): string {
 
 function encodeLocalWorkDir(workDir?: string | null): string {
   const value = workDir?.trim() || ''
-  if (!value) return SCRIPTS_DIR_PLACEHPLDER
-  if (value === SCRIPTS_DIR_PLACEHPLDER || value.startsWith(`${SCRIPTS_DIR_PLACEHPLDER}/`)) {
+  if (!value) return PATHS.SCRIPTS_DIR_PLACEHOLDER
+  if (value === PATHS.SCRIPTS_DIR_PLACEHOLDER || value.startsWith(`${PATHS.SCRIPTS_DIR_PLACEHOLDER}/`)) {
     return value
   }
   const base = scriptsDir.value || PATHS.SCRIPTS_DIR
-  if (value === base) return SCRIPTS_DIR_PLACEHPLDER
+  if (value === base) return PATHS.SCRIPTS_DIR_PLACEHOLDER
   if (value.startsWith(`${base}/`)) {
-    return `${SCRIPTS_DIR_PLACEHPLDER}/${value.slice(base.length + 1)}`
+    return `${PATHS.SCRIPTS_DIR_PLACEHOLDER}/${value.slice(base.length + 1)}`
   }
-  return `${SCRIPTS_DIR_PLACEHPLDER}/${value.replace(/^\/+/, '')}`
+  return `${PATHS.SCRIPTS_DIR_PLACEHOLDER}/${value.replace(/^\/+/, '')}`
 }
 
 async function save() {
   try {
-    form.value.clean_config = cleanConfig.value
     form.value.envs = selectedEnvIds.value.join(',')
     form.value.type = 'task'
     form.value.trigger_type = selectedTriggerType.value
@@ -413,10 +249,10 @@ async function save() {
       }
     }
 
-    // 更新并发控制字段 (1: 开启, 0: 关闭)
-    config['$task_concurrency'] = concurrencyEnabled.value ? 1 : 0
     // 更新注入全部环境变量字段
     config['$task_all_envs'] = !!allEnvsEnabled.value
+    // 更新注释解析字段
+    config['$task_comment_to_task'] = !!commentToTaskEnabled.value
 
     form.value.config = JSON.stringify(config)
 
@@ -446,7 +282,7 @@ async function save() {
 
 <template>
   <Dialog :open="open" @update:open="emit('update:open', $event)">
-    <DialogContent class="max-w-[95vw] sm:max-w-[700px] xl:max-w-[1000px] p-0 overflow-hidden border-none bg-background shadow-2xl transition-all duration-300" style="text-rendering: optimizeLegibility;" @openAutoFocus.prevent>
+    <DialogContent class="max-w-[95vw] sm:max-w-[700px] xl:max-w-[950px] p-0 overflow-hidden border-none bg-background shadow-2xl transition-all duration-300" style="text-rendering: optimizeLegibility;" @openAutoFocus.prevent @pointerDownOutside.prevent>
       <div class="flex flex-col max-h-[85vh]">
         <DialogHeader class="px-6 pr-12 pt-6 pb-2 shrink-0 border-b border-muted/50">
           <DialogTitle class="text-xl font-bold py-2">
@@ -471,45 +307,36 @@ async function save() {
                   <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">任务备注</Label>
                   <Input v-model="form.remark" placeholder="输入任务备注信息 (可选)" :class="cn('sm:col-span-3 h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50', form.remark ? 'text-sm font-medium' : 'text-[11px] font-normal')" />
                 </div>
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
-                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold pt-2.5">任务标签</Label>
-                  <div class="sm:col-span-3 space-y-2">
-                    <div class="flex gap-2">
-                      <div class="relative flex-1">
-                        <Input v-model="tagInput" placeholder="输入标签按回车..." :class="cn('h-9 bg-muted/20 border-muted-foreground/15 transition-all pr-12', tagInput ? 'text-sm font-medium' : 'text-[11px] font-normal')" @keydown.enter.prevent="addTag" />
-                        <Button type="button" variant="ghost" size="sm" class="absolute right-1 top-1 h-7 px-2 text-xs hover:bg-primary/10 hover:text-primary transition-colors" @click.prevent="addTag">添加</Button>
-                      </div>
-                    </div>
-                    <div v-if="form.tags" class="flex flex-wrap gap-1.5 pt-1">
-                      <span v-for="tag in form.tags.split(',').filter(Boolean)" :key="tag" class="flex items-center gap-1.5 bg-primary/5 text-primary px-2.5 py-1 rounded-full text-[11px] font-medium border border-primary/10 group transition-all hover:bg-primary/10">
-                        {{ tag }}
-                        <button type="button" class="text-primary/40 hover:text-destructive transition-colors shrink-0" @click.prevent="removeTag(tag)"><X class="h-3 w-3" /></button>
-                      </span>
+                <TaskTagsConfig v-model="form.tags" />
+                <!-- 执行位置与触发方式 (大屏保持原样，小屏并排展示优化) -->
+                <div class="grid grid-cols-2 sm:grid-cols-1 gap-2.5 sm:gap-5">
+                  <div class="grid sm:grid-cols-4 items-center gap-1 sm:gap-3 min-w-0">
+                    <Label class="sm:text-right text-[11px] sm:text-xs text-foreground/70 uppercase tracking-wider font-semibold truncate">执行位置</Label>
+                    <div class="sm:col-span-3 min-w-0">
+                      <Select v-model="selectedAgentId">
+                        <SelectTrigger class="h-9 bg-muted/20 border-muted-foreground/15 px-2 sm:px-3 text-[11px] sm:text-sm min-w-0">
+                          <SelectValue placeholder="选择..." class="truncate" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="local" class="text-xs sm:text-sm"><div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-blue-500" /><span>本地执行</span></div></SelectItem>
+                          <SelectItem v-for="agent in onlineAgents" :key="agent.id" :value="String(agent.id)" class="text-xs sm:text-sm"><div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full" :class="agent.status === 'online' ? 'bg-green-500' : 'bg-muted-foreground'" /><span>{{ agent.name }}</span></div></SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">执行位置</Label>
-                  <div class="sm:col-span-3">
-                    <Select v-model="selectedAgentId">
-                      <SelectTrigger class="h-9 bg-muted/20 border-muted-foreground/15"><SelectValue placeholder="选择执行节点" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="local" class="flex items-center gap-2"><div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-blue-500" /><span>本地执行 (Local)</span></div></SelectItem>
-                        <SelectItem v-for="agent in onlineAgents" :key="agent.id" :value="String(agent.id)"><div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full" :class="agent.status === 'online' ? 'bg-green-500' : 'bg-muted-foreground'" /><span>{{ agent.name }}</span></div></SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">触发方式</Label>
-                  <div class="sm:col-span-3">
-                    <Select v-model="selectedTriggerType">
-                      <SelectTrigger class="h-9 bg-muted/20 border-muted-foreground/15"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem :value="TRIGGER_TYPE.CRON">⏳ 定时周期触发</SelectItem>
-                        <SelectItem :value="TRIGGER_TYPE.BAIHU_STARTUP">🚀 系统启动触发</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div class="grid sm:grid-cols-4 items-center gap-1 sm:gap-3 min-w-0">
+                    <Label class="sm:text-right text-[11px] sm:text-xs text-foreground/70 uppercase tracking-wider font-semibold truncate">触发方式</Label>
+                    <div class="sm:col-span-3 min-w-0">
+                      <Select v-model="selectedTriggerType">
+                        <SelectTrigger class="h-9 bg-muted/20 border-muted-foreground/15 px-2 sm:px-3 text-[11px] sm:text-sm min-w-0">
+                          <SelectValue class="truncate" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem :value="TRIGGER_TYPE.CRON" class="text-xs sm:text-sm">⏳ 定时周期</SelectItem>
+                          <SelectItem :value="TRIGGER_TYPE.BAIHU_STARTUP" class="text-xs sm:text-sm">🚀 系统启动</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -526,41 +353,36 @@ async function save() {
                   <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
                     <div class="sm:col-span-1" />
                     <div class="sm:col-span-3">
-                      <div class="flex items-center gap-2.5 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] leading-relaxed font-medium">
-                        <AlertCircle class="h-4 w-4 shrink-0 text-amber-500" /><p>请先在<b>「语言依赖」</b>中安装所需的运行时。执行脚本时将自动注入该环境。</p>
+                      <div class="flex flex-col gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] leading-relaxed font-medium">
+                        <div class="flex items-center gap-2.5">
+                          <AlertCircle class="h-4 w-4 shrink-0 text-amber-500" />
+                          <p>请先在<b>「语言依赖」</b>中安装所需的运行时。执行脚本时将自动注入该环境。</p>
+                        </div>
+                        <div class="flex items-center gap-2.5 mt-1 border-t border-amber-500/10 pt-1.5">
+                          <Wrench class="h-4 w-4 shrink-0 text-amber-500" />
+                          <p><b>依赖自动补全：</b>若执行报错提示缺失包（如 requests 等），可在任务列表的<b>「操作菜单」</b>中点击<b>「补全依赖」</b>进行一键安装。</p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
+                  <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3 mt-2">
                     <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold pt-2.5">语言环境</Label>
                     <div class="sm:col-span-3 space-y-2">
-                      <div v-for="(clang, idx) in selectedLangs" :key="idx" class="flex gap-2 p-2 rounded-lg bg-muted/20 border border-muted-foreground/10 group/lang relative overflow-hidden">
-                        <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/20 group-hover/lang:bg-primary transition-colors" />
-                        <Popover>
-                          <PopoverTrigger asChild><Button variant="ghost" class="justify-between flex-1 h-8 text-xs font-normal hover:bg-background/50"><div class="flex items-center gap-2 truncate"><div v-if="clang.name && getLangIcon(clang.name)" class="w-4 h-4 shrink-0 rounded-sm bg-white p-0.5 border shadow-sm"><img :src="getLangIcon(clang.name)" class="w-full h-full object-contain" /></div><span class="font-medium">{{ clang.name || "选择环境..." }}</span></div><ChevronsUpDown class="ml-1 h-3 w-3 opacity-40" /></Button></PopoverTrigger>
-                          <PopoverContent class="p-0 w-[240px]" align="start">
-                            <div class="p-2 border-b bg-muted/30"><div class="relative"><Search class="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" /><Input v-model="pluginSearch" placeholder="搜索已安装语言..." :class="cn('h-8 pl-8 bg-background border-muted-foreground/20', pluginSearch ? 'text-xs font-medium' : 'text-[10px]')" /></div></div>
-                            <ScrollArea class="h-48 p-1">
-                              <div v-if="loadingLangs" class="flex items-center justify-center py-6"><Loader2 class="h-5 w-5 animate-spin text-primary/50" /></div>
-                              <button v-else v-for="p in filteredPlugins" :key="p" @click="updateLangName(idx, p)" class="w-full flex items-center px-3 py-2 text-xs rounded-md hover:bg-accent text-left transition-all mb-0.5"><span class="flex-1" :class="{ 'font-bold text-primary': clang.name === p }">{{ p }}</span><Check v-if="clang.name === p" class="h-3 w-3 text-primary" /></button>
-                            </ScrollArea>
-                          </PopoverContent>
-                        </Popover>
-                        <Popover>
-                          <PopoverTrigger asChild :disabled="!clang.name"><Button variant="ghost" class="justify-between w-28 h-8 text-xs font-normal hover:bg-background/50" :disabled="!clang.name"><span class="truncate">{{ clang.version || "版本..." }}</span><ChevronsUpDown class="h-3 w-3 opacity-40 ml-1" /></Button></PopoverTrigger>
-                          <PopoverContent class="p-0 w-[160px]" align="start">
-                            <ScrollArea class="h-48 p-1"><button v-for="v in getFilteredVersions(clang.availableVersions)" :key="v" @click="clang.version = v" class="w-full flex items-center px-3 py-2 text-xs rounded-md hover:bg-accent font-mono mb-0.5"><span class="flex-1 truncate" :class="{ 'font-bold text-primary': clang.version === v }">{{ v }}</span><Check v-if="clang.version === v" class="h-3 w-3 text-primary" /></button></ScrollArea>
-                          </PopoverContent>
-                        </Popover>
-                        <Button variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0" @click="removeLang(idx)"><X class="h-4 w-4" /></Button>
-                      </div>
-                      <Button variant="outline" size="sm" class="w-full h-9 text-xs border-dashed border-muted-foreground/30 text-muted-foreground hover:text-primary hover:border-primary/50 transition-all bg-muted/5 hover:bg-primary/5 rounded-xl" @click="addLang"><Plus class="h-4 w-4 mr-2" /> 添加运行时环境 (Mise)</Button>
+                      <TaskLangConfig v-model="selectedLangs" />
                     </div>
                   </div>
                 </template>
                 <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">执行命令</Label>
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">前置指令</Label>
+                  <div class="sm:col-span-3 relative"><Input v-model="form.pre_command" placeholder="执行主命令前运行的指令 (可选)" :class="cn('h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50 pr-10', form.pre_command ? 'font-mono text-sm tracking-tight font-medium' : 'text-[11px] font-normal')" /><Zap class="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground opacity-40 pointer-events-none" /></div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">核心命令</Label>
                   <div class="sm:col-span-3 relative"><Input v-model="form.command" placeholder="例如: python main.py --args" :class="cn('h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50 pr-10', form.command ? 'font-mono text-sm tracking-tight font-medium' : 'text-[11px] font-normal')" /><Terminal class="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground opacity-40 pointer-events-none" /></div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">后置指令</Label>
+                  <div class="sm:col-span-3 relative"><Input v-model="form.post_command" placeholder="主命令执行后运行的指令 (可选)" :class="cn('h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50 pr-10', form.post_command ? 'font-mono text-sm tracking-tight font-medium' : 'text-[11px] font-normal')" /><Zap class="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground opacity-40 pointer-events-none" /></div>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
                   <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">工作目录</Label>
@@ -589,7 +411,7 @@ async function save() {
                         <div class="px-4 py-3.5 border-b bg-muted/20 backdrop-blur-md sticky top-0 z-10">
                           <div class="relative group">
                             <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
-                            <Input v-model="envSearchQuery" placeholder="输入关键字搜索变量名或备注..." 
+                            <Input v-model="envSearchQuery" placeholder="输入关键字搜索变量名、备注或标签..." 
                               class="pl-9 h-9 bg-background/50 border-primary/10 focus:border-primary/30 transition-all rounded-lg text-[13px]" />
                           </div>
                         </div>
@@ -612,6 +434,9 @@ async function save() {
                                 <Badge v-if="env.type === 'secret'" variant="outline" class="h-4 px-1.5 text-[9px] border-amber-500/20 bg-amber-500/5 text-amber-600 font-bold uppercase tracking-tight scale-90">
                                   机密
                                 </Badge>
+                                <div v-if="env.tags" class="flex items-center gap-1 overflow-hidden ml-1">
+                                  <span v-for="tag in env.tags.split(',').filter(Boolean).slice(0, 3)" :key="tag" class="truncate text-[9px] leading-none px-1 py-0.5 bg-secondary text-secondary-foreground rounded border">{{ tag }}</span>
+                                </div>
                               </div>
                               <div class="flex items-center gap-2 scale-75 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 translate-x-2 transition-all duration-300 shrink-0">
                                 <Plus class="h-4 w-4 text-primary" />
@@ -639,53 +464,21 @@ async function save() {
               </div>
               <div class="grid gap-5 pl-3 border-l border-muted">
                 <template v-if="selectedTriggerType === TRIGGER_TYPE.CRON">
-                  <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-                    <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">定时规则</Label>
-                    <div class="sm:col-span-3">
-                      <Input v-model="form.schedule" placeholder="秒 分 时 日 月 周 (必须 6 位)" :class="cn('h-9 bg-muted/30 border-muted-foreground/20 transition-all focus:ring-1 focus:ring-primary/40 focus:border-primary/40', form.schedule ? 'font-mono text-sm tracking-[0.1em] font-medium' : 'text-[11px] font-normal')" />
-                      <div v-if="cronDescription" class="mt-2.5 p-2 px-3 rounded-xl bg-primary/5 border border-primary/10 text-[11px] text-primary/80 font-medium flex items-center gap-2.5"><Zap class="h-3 w-3 text-primary" />{{ cronDescription }}</div>
-                      <div class="mt-3 flex flex-wrap gap-1.5"><button v-for="preset in cronPresets" :key="preset.value" class="px-2.5 py-1 text-[10px] rounded-lg bg-muted/50 border border-muted-foreground/10 hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-all font-medium" @click.prevent="form.schedule = preset.value">{{ preset.label }}</button></div>
-                    </div>
-                  </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-                    <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">随机延迟</Label>
-                    <div class="sm:col-span-3 flex items-center gap-4">
-                      <div class="flex items-center gap-2">
-                        <Input :model-value="form.random_range" @update:model-value="(v: string | number) => form.random_range = Number(v || 0)" type="number" :min="0" class="w-20 h-9 bg-muted/30 text-center font-bold" />
-                        <span class="text-xs font-semibold text-muted-foreground">秒</span>
-                      </div>
-                      <div class="flex-1 text-[11px] text-muted-foreground leading-snug p-2 rounded-lg bg-blue-500/5 border border-blue-500/10 italic">
-                        避免高频并发，在基准时间点后延迟 0~{{ form.random_range || 0 }}s
-                      </div>
-                    </div>
-                  </div>
+                  <TaskCronConfig v-model="form.schedule" />
                 </template>
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">失败策略</Label>
-                  <div class="sm:col-span-3 flex items-center gap-4">
-                    <div class="flex items-center gap-2">
-                       <span class="text-[11px] text-muted-foreground font-semibold">重试</span>
-                       <Input :model-value="form.retry_count" @update:model-value="(v: string | number) => form.retry_count = Number(v)" type="number" :min="0" class="w-16 h-9 bg-muted/30 text-center font-bold" />
-                       <span class="text-[11px] text-muted-foreground font-semibold">次，间隔</span>
-                       <Input :model-value="form.retry_interval" @update:model-value="(v: string | number) => form.retry_interval = Number(v)" type="number" :min="0" class="w-16 h-9 bg-muted/30 text-center font-bold" />
-                       <span class="text-[11px] text-muted-foreground font-semibold">秒</span>
-                    </div>
-                  </div>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">运行策略</Label>
-                  <div class="sm:col-span-3 flex items-center gap-3">
-                    <Input :model-value="form.timeout" @update:model-value="(v: string | number) => form.timeout = Number(v)" type="number" :min="0" class="w-20 h-9 bg-muted/30 text-center font-bold" />
-                    <span class="text-[11px] font-semibold text-muted-foreground">分钟超时</span>
-                  </div>
-                </div>
+
+                <TaskAdvancedConfig v-model="form" />
+
               </div>
             </section>
             <TaskNotificationConfig ref="notificationConfigRef" :task-id="isEdit ? task?.id : undefined" />
           </div>
         </ScrollArea>
         <div class="flex items-center justify-between px-6 py-4 bg-muted/20 border-t shrink-0 backdrop-blur-sm">
-          <p class="text-[10px] text-muted-foreground/50 italic">最后编辑于: {{ isEdit ? (form.updated_at || '刚才') : '现在' }}</p>
+          <div class="text-[10px] text-muted-foreground/40 italic flex flex-col leading-tight select-none pointer-events-none">
+            <span>最后编辑于:</span>
+            <span>{{ isEdit ? (form.updated_at || '刚才') : '现在' }}</span>
+          </div>
           <div class="flex gap-3">
             <Button variant="ghost" size="sm" class="hover:bg-muted font-medium text-xs px-6" @click="emit('update:open', false)">取消</Button>
             <Button size="sm" class="px-8 font-semibold text-xs shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90" @click="save">确定保存</Button>

@@ -8,6 +8,7 @@ import (
 func GenerateID() string {
 	return xid.New().String()
 }
+
 // IsNumeric 检查字符串是否全为数字
 func IsNumeric(s string) bool {
 	for _, c := range s {

@@ -6,6 +6,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/services/relation"
 	"github.com/engigu/baihu-panel/internal/utils"
 
 	"gorm.io/gorm"
@@ -30,8 +31,8 @@ func (es *EnvService) CreateEnvVar(name, value, remark, envType string, hidden, 
 		Value:     models.BigText(value),
 		Remark:    remark,
 		Type:      envType,
-		Hidden:    hidden,
-		Enabled:   enabled,
+		Hidden:    &hidden,
+		Enabled:   &enabled,
 		UserID:    userID,
 		CreatedAt: models.Now(),
 		UpdatedAt: models.Now(),
@@ -43,6 +44,7 @@ func (es *EnvService) CreateEnvVar(name, value, remark, envType string, hidden, 
 func (es *EnvService) GetEnvVarsByUserID(userID string) []models.EnvironmentVariable {
 	var envs []models.EnvironmentVariable
 	database.DB.Where("user_id = ?", userID).Find(&envs)
+	es.LoadEnvTags(envs)
 	return envs
 }
 
@@ -52,7 +54,7 @@ func (es *EnvService) GetFormattedEnvVarsByUserID(userID string) []string {
 	return es.formatEnvVars(envs)
 }
 
-func (es *EnvService) GetEnvVarsWithPagination(userID string, name string, envType string, page, pageSize int) ([]models.EnvironmentVariable, int64) {
+func (es *EnvService) GetEnvVarsWithPagination(userID string, name string, envType string, tags string, page, pageSize int) ([]models.EnvironmentVariable, int64) {
 	var envs []models.EnvironmentVariable
 	var total int64
 
@@ -64,8 +66,35 @@ func (es *EnvService) GetEnvVarsWithPagination(userID string, name string, envTy
 		query = query.Where("type = ?", envType)
 	}
 
+	if tags != "" {
+		tagList := strings.Split(tags, ",")
+		var validTags []string
+		for _, t := range tagList {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				validTags = append(validTags, t)
+			}
+		}
+		if len(validTags) > 0 {
+			var storageIDs []string
+			database.DB.Model(&models.DataStorage{}).Where("type = ? AND name IN ?", constant.RelationTypeEnvTag, validTags).Pluck("id", &storageIDs)
+			
+			var envIDs []string
+			if len(storageIDs) > 0 {
+				database.DB.Model(&models.DataRelation{}).Where("type = ? AND relate_id IN ?", constant.RelationTypeEnvTag, storageIDs).Pluck("data_id", &envIDs)
+			}
+			
+			if len(envIDs) > 0 {
+				query = query.Where("id IN ?", envIDs)
+			} else {
+				query = query.Where("1 = 0")
+			}
+		}
+	}
+
 	query.Count(&total)
 	query.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&envs)
+	es.LoadEnvTags(envs)
 	return envs, total
 }
 
@@ -75,7 +104,9 @@ func (es *EnvService) GetEnvVarByID(id string) *models.EnvironmentVariable {
 	if res.Error != nil || res.RowsAffected == 0 {
 		return nil
 	}
-	return &env
+	envs := []models.EnvironmentVariable{env}
+	es.LoadEnvTags(envs)
+	return &envs[0]
 }
 
 func (es *EnvService) UpdateEnvVar(id string, name, value, remark, envType string, hidden, enabled bool) *models.EnvironmentVariable {
@@ -99,8 +130,8 @@ func (es *EnvService) UpdateEnvVar(id string, name, value, remark, envType strin
 		"value":   models.BigText(value),
 		"remark":  remark,
 		"type":    envType,
-		"hidden":  hidden,
-		"enabled": enabled,
+		"hidden":  &hidden,
+		"enabled": &enabled,
 	}
 	database.DB.Model(&env).Updates(updates)
 	return &env
@@ -108,8 +139,11 @@ func (es *EnvService) UpdateEnvVar(id string, name, value, remark, envType strin
 
 func (es *EnvService) GetAssociatedTasks(id string) []models.Task {
 	var associatedTasks []models.Task
-	query := "envs = ? OR envs LIKE ? OR envs LIKE ? OR envs LIKE ?"
-	database.DB.Where(query, id, id+",%", "%,"+id, "%,"+id+",%").Find(&associatedTasks)
+	var taskIDs []string
+	database.DB.Model(&models.DataRelation{}).Where("type = ? AND relate_id = ?", constant.RelationTypeTaskEnv, id).Pluck("data_id", &taskIDs)
+	if len(taskIDs) > 0 {
+		database.DB.Where("id IN ?", taskIDs).Find(&associatedTasks)
+	}
 	return associatedTasks
 }
 
@@ -122,19 +156,9 @@ func (es *EnvService) DeleteEnvVar(id string, force bool) (bool, []models.Task) 
 
 	if force {
 		err := database.DB.Transaction(func(tx *gorm.DB) error {
-			// Update tasks to remove this env ID
-			for _, task := range associatedTasks {
-				ids := splitEnvIDs(string(task.Envs))
-				var newIDs []string
-				for _, eid := range ids {
-					if eid != id {
-						newIDs = append(newIDs, eid)
-					}
-				}
-				newEnvs := strings.Join(newIDs, ",")
-				if err := tx.Model(&task).Update("envs", newEnvs).Error; err != nil {
-					return err
-				}
+			// Delete the relations mapping this env to any tasks
+			if err := tx.Where("type = ? AND relate_id = ?", constant.RelationTypeTaskEnv, id).Delete(&models.DataRelation{}).Error; err != nil {
+				return err
 			}
 			// Delete the env var
 			if err := tx.Where("id = ?", id).Delete(&models.EnvironmentVariable{}).Error; err != nil {
@@ -142,11 +166,19 @@ func (es *EnvService) DeleteEnvVar(id string, force bool) (bool, []models.Task) 
 			}
 			return nil
 		})
-		return err == nil, nil
+		if err == nil {
+			relation.DataRelation.CleanRelations(id, constant.RelationTypeEnvTag)
+			return true, nil
+		}
+		return false, nil
 	}
 
 	result := database.DB.Where("id = ?", id).Delete(&models.EnvironmentVariable{})
-	return result.RowsAffected > 0, nil
+	if result.RowsAffected > 0 {
+		relation.DataRelation.CleanRelations(id, constant.RelationTypeEnvTag)
+		return true, nil
+	}
+	return false, nil
 }
 
 // GetEnvVarsByIDs 根据逗号分隔的ID字符串获取环境变量列表，返回 NAME=VALUE 格式
@@ -224,7 +256,7 @@ func (es *EnvService) formatEnvVars(envs []models.EnvironmentVariable) []string 
 		}
 
 		value := string(env.Value)
-		if !env.Enabled {
+		if !utils.DerefBool(env.Enabled, true) {
 			value = ""
 		}
 
@@ -266,13 +298,13 @@ func (es *EnvService) formatEnvVarsAndSecrets(envs []models.EnvironmentVariable)
 		if env.Type == constant.EnvTypeSecret {
 			if decValue, err := utils.Decrypt(value); err == nil {
 				value = decValue
-				if env.Enabled && value != "" {
+				if utils.DerefBool(env.Enabled, true) && value != "" {
 					secrets = append(secrets, value)
 				}
 			}
 		}
 
-		if !env.Enabled {
+		if !utils.DerefBool(env.Enabled, true) {
 			value = ""
 		}
 
@@ -307,3 +339,71 @@ func splitEnvIDs(envIDs string) []string {
 	}
 	return ids
 }
+
+// SaveEnvTags 保存环境变量标签
+func (es *EnvService) SaveEnvTags(envID string, tagsStr string) {
+	database.DB.Where("data_id = ? AND type = ?", envID, constant.RelationTypeEnvTag).Delete(&models.DataRelation{})
+	if tagsStr == "" {
+		return
+	}
+	tags := strings.Split(tagsStr, ",")
+	for _, tag := range tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		var storage models.DataStorage
+		res := database.DB.Where("type = ? AND name = ?", constant.RelationTypeEnvTag, tag).Limit(1).Find(&storage)
+		if res.RowsAffected == 0 {
+			storage = models.DataStorage{
+				ID:        utils.GenerateID(),
+				Type:      constant.RelationTypeEnvTag,
+				Name:      tag,
+				CreatedAt: models.Now(),
+				UpdatedAt: models.Now(),
+			}
+			database.DB.Create(&storage)
+		}
+		relation := models.DataRelation{
+			ID:        utils.GenerateID(),
+			DataID:    envID,
+			RelateID:  storage.ID,
+			Type:      constant.RelationTypeEnvTag,
+			CreatedAt: models.Now(),
+			UpdatedAt: models.Now(),
+		}
+		database.DB.Create(&relation)
+	}
+}
+
+// LoadEnvTags 为环境变量列表加载标签
+func (es *EnvService) LoadEnvTags(envs []models.EnvironmentVariable) {
+	if len(envs) == 0 {
+		return
+	}
+	envIDs := make([]string, len(envs))
+	for i, e := range envs {
+		envIDs[i] = e.ID
+	}
+
+	tagsMap := relation.DataRelation.LoadTags(envIDs, constant.RelationTypeEnvTag)
+
+	for i, e := range envs {
+		if tags, ok := tagsMap[e.ID]; ok {
+			envs[i].Tags = strings.Join(tags, ",")
+		} else {
+			envs[i].Tags = ""
+		}
+	}
+}
+
+// GetAllEnvTags 获取全局环境变量标签
+func (es *EnvService) GetAllEnvTags() ([]string, error) {
+	return relation.DataRelation.GetAllTags(constant.RelationTypeEnvTag)
+}
+
+// CleanEnvTags 删除环境变量时清理关联标签记录
+func (es *EnvService) CleanEnvTags(id string) {
+	database.DB.Where("data_id = ? AND type = ?", id, constant.RelationTypeEnvTag).Delete(&models.DataRelation{})
+}
+

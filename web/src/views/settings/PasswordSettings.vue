@@ -132,25 +132,26 @@ onMounted(loadData)
     
     <div class="space-y-6">
       <!-- 基础设置展示 -->
-      <div class="grid gap-4 py-2">
-        <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-          <Label class="sm:text-right font-medium">新账户名</Label>
-          <Input v-model="username" placeholder="输入新的登录账号" class="sm:col-span-3" :disabled="demoMode" />
+      <div class="space-y-4 py-2">
+        <div class="space-y-1.5">
+          <Label class="text-xs font-medium text-foreground">新账户名</Label>
+          <Input v-model="username" placeholder="输入新的登录账号" class="h-9" :disabled="demoMode" />
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-          <Label class="sm:text-right font-medium">新密码</Label>
-          <Input v-model="newPassword" type="password" placeholder="若不修改密码请留空" class="sm:col-span-3" :disabled="demoMode" autocomplete="new-password" />
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-          <Label class="sm:text-right font-medium">确认新密码</Label>
-          <Input v-model="confirmPassword" type="password" placeholder="请再次输入新密码" class="sm:col-span-3" :disabled="demoMode" autocomplete="new-password" />
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="space-y-1.5">
+            <Label class="text-xs font-medium text-foreground">新密码</Label>
+            <Input v-model="newPassword" type="password" placeholder="若不修改密码请留空" class="h-9" :disabled="demoMode" autocomplete="new-password" />
+          </div>
+          <div class="space-y-1.5">
+            <Label class="text-xs font-medium text-foreground">确认新密码</Label>
+            <Input v-model="confirmPassword" type="password" placeholder="请再次输入新密码" class="h-9" :disabled="demoMode" autocomplete="new-password" />
+          </div>
         </div>
       </div>
 
       <div class="flex justify-end pt-2">
-        <Button @click="prepareUpdate" :disabled="demoMode" size="lg" class="px-8 shadow-md">
+        <Button @click="prepareUpdate" :disabled="demoMode" class="shadow-md">
           提交修改
         </Button>
       </div>

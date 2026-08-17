@@ -23,6 +23,7 @@ func RegisterControllers() *Controllers {
 	scriptService := services.NewScriptService()
 	sendStatsService := services.NewSendStatsService()
 	agentWSManager := services.GetAgentWSManager()
+	systemWSManager := services.GetSystemWSManager()
 
 	taskLogService := tasks.NewTaskLogService(sendStatsService)
 	workflowService := services.NewWorkflowService()
@@ -30,6 +31,7 @@ func RegisterControllers() *Controllers {
 	// 创建任务执行服务（需要依赖注入）
 	notifyService := services.NewNotificationService()
 	appLogService := services.NewAppLogService()
+	interconnectService := services.NewInterconnectService()
 
 	// 清理 task 运行状态的任务可以直接由 executorService 承担或在此处通过 Database 直接清理
 	// 简单期间，我们使用一个新方法 tasks.CleanupRunningTasks() 或者让 executorService 启动时清理
@@ -42,20 +44,23 @@ func RegisterControllers() *Controllers {
 	executorService.StartCron()
 
 	// 初始化所有关注系统总线的服务
-	setupEventHandlers(appLogService, notifyService, loginLogService)
-	go startAppLogCleanup(appLogService)
+	setupEventHandlers(appLogService, notifyService, loginLogService, systemWSManager, executorService)
+	startAppLogCleanup(appLogService)
+
+	taskController := controllers.NewTaskController(taskService, executorService)
+	envController := controllers.NewEnvController(envService)
 
 	// 初始化并返回控制器
 	return &Controllers{
-		Task:         controllers.NewTaskController(taskService, executorService),
+		Task:         taskController,
 		Auth:         controllers.NewAuthController(userService, settingsService, loginLogService),
-		Env:          controllers.NewEnvController(envService),
+		Env:          envController,
 		Script:       controllers.NewScriptController(scriptService),
 		Executor:     controllers.NewExecutorController(executorService),
 		File:         controllers.NewFileController(constant.ScriptsWorkDir),
 		Dashboard:    controllers.NewDashboardController(executorService),
 		Log:          controllers.NewLogController(),
-		LogWS:        controllers.NewLogWSController(),
+		LogSSE:       controllers.NewLogSSEController(),
 		Terminal:     controllers.NewTerminalController(envService),
 		Settings:     controllers.NewSettingsController(userService, loginLogService, executorService),
 		Dependency:   controllers.NewDependencyController(),
@@ -64,6 +69,12 @@ func RegisterControllers() *Controllers {
 		Workflow:     controllers.NewWorkflowController(workflowService, executorService),
 		Notification: controllers.NewNotificationController(),
 		AppLog:       controllers.NewAppLogController(),
+		SystemWS:     controllers.NewSystemWSController(),
+		WebUI:        controllers.NewWebUIController(services.NewWebUIService(settingsService)),
+		Monitor:      controllers.NewMonitorController(executorService),
+		Interconnect: controllers.NewInterconnectController(interconnectService),
+		Data:         controllers.NewDataController(taskController, envController),
+		Tag:          controllers.NewTagController(services.NewTagService()),
 	}
 }
 

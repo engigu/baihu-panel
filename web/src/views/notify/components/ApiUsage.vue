@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Copy, Terminal, Key, FileJson, RefreshCw, Check, Hash, Info, AlertTriangle, Code2 } from 'lucide-vue-next'
+import { Copy, Terminal, Key, RefreshCw, Check, Hash, Info, AlertTriangle, Code2 } from 'lucide-vue-next'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -19,6 +19,7 @@ import {
 import type { NotifyChannel, ChannelType } from '@/api'
 import { ref, computed } from 'vue'
 import { toast } from 'vue-sonner'
+import { copyToClipboard } from '@/utils/clipboard'
 
 const props = defineProps<{
   channels: NotifyChannel[]
@@ -49,25 +50,19 @@ function handleConfirmGenerate() {
   emit('generateToken')
 }
 
-function copyToClipboard(text: string, blockId: string) {
-  navigator.clipboard.writeText(text).then(() => {
-    copiedBlock.value = blockId
-    toast.success('已复制到剪贴板')
-    setTimeout(() => {
-      copiedBlock.value = null
-    }, 2000)
+function handleCopy(text: string, blockId: string) {
+  copyToClipboard(text).then((success) => {
+    if (success) {
+      copiedBlock.value = blockId
+      toast.success('已复制到剪贴板')
+      setTimeout(() => {
+        copiedBlock.value = null
+      }, 2000)
+    }
   })
 }
 
-const apiExample = `POST /api/v1/notify/send
-Content-Type: application/json
-notify-token: <你的API Token>
 
-{
-  "channel_id": "渠道ID",
-  "title": "标题",
-  "text": "内容"
-}`
 
 const activeLang = ref('shell')
 const testTitle = ref('系统通知')
@@ -272,7 +267,7 @@ const currentExample = computed(() => {
               <div class="relative flex-1 group">
                 <Input :model-value="apiToken" readonly placeholder="尚未生成 Token"
                   class="h-10 pr-10 bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/30 font-code text-sm tracking-tight" />
-                <div v-if="apiToken" @click="copyToClipboard(apiToken, 'token')"
+                <div v-if="apiToken" @click="handleCopy(apiToken, 'token')"
                   class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary cursor-pointer transition-colors p-1 rounded-md hover:bg-muted"
                   title="复制 Token">
                   <Check v-if="copiedBlock === 'token'" class="w-4 h-4 text-emerald-500 animate-in zoom-in" />
@@ -332,75 +327,106 @@ const currentExample = computed(() => {
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <!-- API 接口规格 -->
       <Card class="border bg-card shadow-sm flex flex-col overflow-hidden h-[520px]">
-        <CardHeader class="pb-3 shrink-0">
+        <CardHeader class="pb-2 shrink-0">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <div class="p-1.5 rounded-md bg-emerald-500/10 text-emerald-600">
-                <FileJson class="w-4 h-4" />
+              <div class="w-5 h-5 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center text-[11px] font-bold border border-emerald-500/20">
+                1
               </div>
-              <CardTitle class="text-sm font-bold uppercase tracking-wider whitespace-nowrap">API 接口说明</CardTitle>
+              <CardTitle class="text-[13px] font-bold uppercase tracking-wider whitespace-nowrap">内建助手库 (推荐)</CardTitle>
             </div>
           </div>
         </CardHeader>
         <CardContent class="p-0 flex-1 overflow-y-auto">
           <div
-            class="bg-zinc-50 dark:bg-zinc-950/50 p-5 font-code text-xs sm:text-sm leading-relaxed text-zinc-800 dark:text-zinc-300 relative group min-h-full">
-            <div class="flex items-center justify-between mb-6 border-b border-zinc-200 dark:border-zinc-800/50 pb-3">
-              <div class="flex items-center gap-2">
-                <Badge class="bg-emerald-600 text-white border-none py-0 px-2 text-[10px]">POST</Badge>
-                <code
-                  class="px-2 py-0.5 bg-zinc-200/50 dark:bg-zinc-800/60 border border-zinc-300/50 dark:border-zinc-700/50 rounded-md text-[13px] text-zinc-700 dark:text-zinc-300 font-mono shadow-sm tracking-tight">/api/v1/notify/send</code>
+            class="bg-zinc-50 dark:bg-zinc-950/50 p-4 text-xs sm:text-sm leading-relaxed text-zinc-800 dark:text-zinc-300 relative group min-h-full">
+            
+            <div class="mb-4 border-b border-zinc-200 dark:border-zinc-800/50 pb-3">
+              <div class="flex items-center gap-2 mb-1.5">
+                <Badge class="bg-primary text-primary-foreground border-none py-0 px-2 text-[10px]">推荐</Badge>
+                <span class="text-sm font-bold text-zinc-900 dark:text-zinc-100">内建助手库 (内置)</span>
               </div>
-              <Button variant="ghost" size="icon"
-                class="h-7 w-7 text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all rounded-md"
-                @click="copyToClipboard(apiExample, 'api')">
-                <Check v-if="copiedBlock === 'api'" class="w-3.5 h-3.5 text-emerald-500" />
-                <Copy v-else class="w-3.5 h-3.5" />
-              </Button>
+              <p class="text-[12px] text-zinc-500 leading-normal">
+                白虎面板内置了跨语言的脚本推送工具。通过环境层预装该库，您的脚本可以实现完全的“零配置”调用。
+              </p>
             </div>
 
-            <div class="space-y-6">
-              <div>
-                <span class="block mb-2 text-zinc-500 uppercase text-[10px] font-bold tracking-widest">Headers</span>
-                <div class="space-y-2">
-                  <div class="flex items-center gap-2">
-                    <span class="text-zinc-500">Content-Type:</span>
-                    <span>application/json</span>
+            <div class="space-y-5">
+              <!-- 一键安装说明 -->
+              <div class="space-y-2">
+                <span class="block text-zinc-500 uppercase text-[10px] font-bold tracking-widest flex items-center gap-1.5">
+                  <Terminal class="w-3.5 h-3.5" />
+                  环境初始化 (一键安装)
+                </span>
+                <div class="group relative">
+                  <div class="bg-zinc-900 dark:bg-black p-3 rounded-lg font-mono text-[12px] text-emerald-500 shadow-inner">
+                    <span class="text-zinc-500 select-none">$ </span>baihu builtininstall
                   </div>
-                  <div class="flex items-center gap-2">
-                    <span class="text-zinc-500">notify-token:</span>
-                    <span class="text-primary">&lt;TOKEN&gt;</span>
+                  <Button variant="ghost" size="icon"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 text-zinc-500 hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
+                    @click="handleCopy('baihu builtininstall', 'install-cmd')">
+                    <Check v-if="copiedBlock === 'install-cmd'" class="w-3.5 h-3.5 text-emerald-500" />
+                    <Copy v-else class="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+                <p class="text-[10px] text-zinc-500 italic pl-1">
+                  * 该命令会为 mise 管理的所有 Python 和 Node.js 版本安装 <code class="text-primary font-bold">baihu</code> 包。
+                </p>
+              </div>
+
+              <!-- 脚本调用方案 -->
+              <div class="space-y-3">
+                <span class="block text-zinc-500 uppercase text-[10px] font-bold tracking-widest flex items-center gap-1.5">
+                  <Code2 class="w-3.5 h-3.5" />
+                  导入并使用
+                </span>
+                
+                <div class="grid grid-cols-1 gap-3">
+                  <!-- Python 示例 -->
+                  <div class="space-y-1.5">
+                    <div class="flex items-center justify-between px-1">
+                      <span class="text-[10px] font-medium text-zinc-400">Python</span>
+                      <badge variant="outline" class="text-[8px] h-3.5 px-1 border-zinc-700 text-zinc-500">BAIHU-PY</badge>
+                    </div>
+                    <div class="bg-zinc-200/50 dark:bg-zinc-800/60 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700/50 relative group shadow-sm">
+                      <pre class="text-[11px] leading-snug"><span class="text-violet-500">import</span> baihu<br/>baihu.notify(<span class="text-emerald-600">"标题"</span>, <span class="text-emerald-600">"内容"</span>)</pre>
+                      <Button variant="ghost" size="icon"
+                        class="absolute right-2 top-2 h-6 w-6 text-zinc-400 opacity-0 group-hover:opacity-100 transition-all"
+                        @click="handleCopy('import baihu\nbaihu.notify(\'标题\', \'内容\')', 'py-builtin')">
+                        <Check v-if="copiedBlock === 'py-builtin'" class="w-3.5 h-3.5 text-emerald-500" />
+                        <Copy v-else class="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <!-- Node.js 示例 -->
+                  <div class="space-y-1.5">
+                    <div class="flex items-center justify-between px-1">
+                      <span class="text-[10px] font-medium text-zinc-400">Node.js</span>
+                      <badge variant="outline" class="text-[8px] h-3.5 px-1 border-zinc-700 text-zinc-500">BAIHU-JS</badge>
+                    </div>
+                    <div class="bg-zinc-200/50 dark:bg-zinc-800/60 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700/50 relative group shadow-sm">
+                      <pre class="text-[11px] leading-snug"><span class="text-violet-500">const</span> baihu = require(<span class="text-emerald-600">'baihu'</span>);<br/>baihu.notify(<span class="text-emerald-600">"标题"</span>, <span class="text-emerald-600">"内容"</span>);</pre>
+                      <Button variant="ghost" size="icon"
+                        class="absolute right-2 top-2 h-6 w-6 text-zinc-400 opacity-0 group-hover:opacity-100 transition-all"
+                        @click="handleCopy('const baihu = require(\'baihu\');\nbaihu.notify(\'标题\', \'内容\');', 'js-builtin')">
+                        <Check v-if="copiedBlock === 'js-builtin'" class="w-3.5 h-3.5 text-emerald-500" />
+                        <Copy v-else class="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div>
-                <span class="block mb-2 text-zinc-500 uppercase text-[10px] font-bold tracking-widest">Body
-                  (JSON)</span>
-                <div class="pl-2 font-mono">
-                  <p class="text-zinc-600 dark:text-zinc-400 mb-1">{</p>
-                  <div class="pl-4 space-y-2">
-                    <div class="flex flex-wrap items-center gap-x-2">
-                      <span class="text-orange-600 dark:text-orange-400">"channel_id":</span>
-                      <span class="text-emerald-600 dark:text-emerald-400">"ID"</span><span
-                        class="text-zinc-600 dark:text-zinc-400">,</span>
-                      <span class="text-zinc-500 font-sans italic ml-auto whitespace-nowrap">//
-                        渠道唯一标识</span>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-x-2">
-                      <span class="text-orange-600 dark:text-orange-400">"title":</span>
-                      <span class="text-emerald-600 dark:text-emerald-400">"标题"</span><span
-                        class="text-zinc-600 dark:text-zinc-400">,</span>
-                      <span class="text-zinc-500 font-sans italic ml-auto whitespace-nowrap">// 可选</span>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-x-2">
-                      <span class="text-orange-600 dark:text-orange-400">"text":</span>
-                      <span class="text-emerald-600 dark:text-emerald-400">"内容"</span>
-                      <span class="text-zinc-500 font-sans italic ml-auto whitespace-nowrap">// 必填</span>
-                    </div>
-                  </div>
-                  <p class="text-zinc-600 dark:text-zinc-400 mt-1">}</p>
+              <!-- 核心机制说明 -->
+              <div class="p-3 rounded-lg bg-orange-500/5 border border-orange-500/10 space-y-1.5">
+                <div class="flex items-center gap-2 text-[11px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-tight">
+                  <AlertTriangle class="w-3 h-3" />
+                  核心机制
                 </div>
+                <p class="text-[10px] text-zinc-500 leading-normal">
+                  系统在执行脚本时会默认注入 <code class="text-zinc-700 dark:text-zinc-300">BHPKG_NOTIFY_TOKEN</code> & <code class="text-zinc-700 dark:text-zinc-300">BHPKG_NOTIFY_CHANNEL</code>。<strong>请确保您已在任务设置的“环境变量”或“机密”中配置了这两个同名 Key（系统会自动通过脚本环境生效）。</strong> 库会自动读取这些值，实现真正的免配置调用。
+                </p>
               </div>
             </div>
           </div>
@@ -413,10 +439,10 @@ const currentExample = computed(() => {
           <CardHeader class="pb-3 shrink-0 border-b px-4">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div class="flex items-center gap-2">
-                <div class="p-1.5 rounded-md bg-sky-500/10 text-sky-600">
-                  <Terminal class="w-4 h-4" />
+                <div class="w-5 h-5 rounded-full bg-sky-500/10 text-sky-600 flex items-center justify-center text-[11px] font-bold border border-sky-500/20">
+                  2
                 </div>
-                <CardTitle class="text-sm font-bold uppercase tracking-wider whitespace-nowrap">脚本调用示例</CardTitle>
+                <CardTitle class="text-[13px] font-bold uppercase tracking-wider whitespace-nowrap">原始 API 调用</CardTitle>
               </div>
               <div class="flex items-center gap-2 sm:gap-3 justify-between sm:justify-end overflow-hidden">
                 <div class="overflow-x-auto hide-scrollbar shrink-0">
@@ -429,7 +455,7 @@ const currentExample = computed(() => {
                 </div>
                 <Button variant="outline" size="sm"
                   class="h-8 px-2.5 text-[11px] border-muted-foreground/30 hover:bg-muted transition-all shrink-0"
-                  @click="copyToClipboard(currentExample, 'example')">
+                  @click="handleCopy(currentExample, 'example')">
                   <Check v-if="copiedBlock === 'example'" class="w-3.5 h-3.5 text-emerald-500 sm:mr-1.5" />
                   <Copy v-else class="w-3.5 h-3.5 sm:mr-1.5" />
                   <span class="hidden sm:inline">复制代码</span>
@@ -439,7 +465,7 @@ const currentExample = computed(() => {
           </CardHeader>
           <CardContent class="p-0 flex-1 flex flex-col overflow-hidden">
             <!-- 脚本区域：独立滚动 -->
-            <div class="flex-1 overflow-y-auto p-5 font-code text-[12px] sm:text-[13px] leading-relaxed text-zinc-800 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-950/50">
+            <div class="flex-1 overflow-y-auto p-5 text-[12px] sm:text-[13px] leading-relaxed text-zinc-800 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-950/50">
               <pre class="whitespace-pre-wrap break-all" v-html="currentExample" />
             </div>
 
@@ -458,7 +484,7 @@ const currentExample = computed(() => {
                   <span class="text-zinc-600 dark:text-zinc-500 truncate max-w-[100px]">{{ ch.name }}</span>
                   <Button variant="ghost" size="icon"
                     class="h-5 w-5 ml-auto text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800 opacity-0 group-hover:opacity-100 transition-all rounded"
-                    @click="copyToClipboard(ch.id, 'channel-' + ch.id)">
+                    @click="handleCopy(ch.id, 'channel-' + ch.id)">
                     <Check v-if="copiedBlock === 'channel-' + ch.id" class="w-2.5 h-2.5 text-emerald-500" />
                     <Copy v-else class="w-2.5 h-2.5" />
                   </Button>
@@ -492,36 +518,4 @@ const currentExample = computed(() => {
 </template>
 
 <style scoped>
-.font-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  position: relative;
-}
-
-.font-code ::selection {
-  background-color: rgba(59, 130, 246, 0.4);
-  /* 鲜亮的蓝色选中背景 */
-  color: #fff;
-  /* 选中时文字为白色 */
-}
-
-/* 兼容 Safari */
-.font-code ::-moz-selection {
-  background-color: rgba(59, 130, 246, 0.4);
-  color: #fff;
-}
-
-/* 优化滚动条样式 if needed */
-.font-code::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.font-code::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-}
-
-.font-code::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
 </style>

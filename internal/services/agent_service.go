@@ -12,9 +12,10 @@ import (
 
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
-	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/executor"
+	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/services/relation"
 	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/engigu/baihu-panel/internal/utils"
 
@@ -54,7 +55,7 @@ func (s *AgentService) CreateToken(remark string, maxUses int, expiresAt *time.T
 		Remark:    remark,
 		MaxUses:   maxUses,
 		ExpiresAt: expires,
-		Enabled:   true,
+		Enabled:   utils.BoolPtr(true),
 	}
 
 	if err := database.DB.Create(agentToken).Error; err != nil {
@@ -85,7 +86,7 @@ func (s *AgentService) ValidateToken(token string) (*models.AgentToken, error) {
 		return nil, &ServiceError{Message: "无效的令牌"}
 	}
 
-	if !agentToken.Enabled {
+	if !utils.DerefBool(agentToken.Enabled, true) {
 		return nil, &ServiceError{Message: "令牌已禁用"}
 	}
 
@@ -147,7 +148,7 @@ func (s *AgentService) RegisterByToken(token string, machineID string, ip string
 		IP:        ip,
 		Status:    constant.AgentStatusOnline,
 		LastSeen:  &now,
-		Enabled:   true,
+		Enabled:   utils.BoolPtr(true),
 	}
 
 	if err := database.DB.Create(agent).Error; err != nil {
@@ -190,7 +191,7 @@ func (s *AgentService) Register(req *models.AgentRegisterRequest, ip string) (*m
 		IP:        ip,
 		Status:    constant.AgentStatusOnline,
 		LastSeen:  &now,
-		Enabled:   true,
+		Enabled:   utils.BoolPtr(true),
 	}
 
 	if err := database.DB.Create(agent).Error; err != nil {
@@ -203,11 +204,12 @@ func (s *AgentService) Register(req *models.AgentRegisterRequest, ip string) (*m
 }
 
 // Update 更新 Agent
-func (s *AgentService) Update(id string, name, description string, enabled bool) error {
+func (s *AgentService) Update(id string, name, description string, enabled bool, schedulerConfig models.AgentSchedulerConfig) error {
 	return database.DB.Model(&models.Agent{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"name":        name,
-		"description": description,
-		"enabled":     enabled,
+		"name":             name,
+		"description":      description,
+		"enabled":          &enabled,
+		"scheduler_config": schedulerConfig,
 	}).Error
 }
 
@@ -220,7 +222,7 @@ func (s *AgentService) Delete(id string) error {
 		return &ServiceError{Message: "该 Agent 下还有关联任务，无法删除"}
 	}
 
-	return database.DB.Unscoped().Where("id = ?", id).Delete(&models.Agent{}).Error
+	return database.DB.Where("id = ?", id).Delete(&models.Agent{}).Error
 }
 
 // GetByID 根据 ID 获取 Agent
@@ -272,7 +274,7 @@ func (s *AgentService) Heartbeat(token, ip, version, buildTime, hostname, osType
 		return nil, &ServiceError{Message: "无效的 Token"}
 	}
 
-	if !agent.Enabled {
+	if !utils.DerefBool(agent.Enabled, true) {
 		return nil, &ServiceError{Message: "Agent 已禁用"}
 	}
 
@@ -314,16 +316,30 @@ func (s *AgentService) Heartbeat(token, ip, version, buildTime, hostname, osType
 
 // GetTasks 获取 Agent 的任务列表
 func (s *AgentService) GetTasks(agentID string) []models.AgentTask {
-	var tasks []models.Task
-	database.DB.Where("agent_id = ? AND enabled = ?", agentID, true).Find(&tasks)
+	var tasksList []models.Task
+	database.DB.Where("agent_id = ? AND enabled = ?", agentID, true).Find(&tasksList)
 
-	result := make([]models.AgentTask, len(tasks))
+	// 装载关联的变量信息
+	if len(tasksList) > 0 {
+		taskIDs := make([]string, len(tasksList))
+		for i, t := range tasksList {
+			taskIDs[i] = t.ID
+		}
+		envsMap := relation.DataRelation.LoadRelations(taskIDs, constant.RelationTypeTaskEnv)
+		for i, t := range tasksList {
+			if envs, ok := envsMap[t.ID]; ok {
+				tasksList[i].Envs = models.BigText(strings.Join(envs, ","))
+			}
+		}
+	}
+
+	result := make([]models.AgentTask, len(tasksList))
 	envService := NewEnvService()
 
-	for i, task := range tasks {
+	for i, task := range tasksList {
 		// 加载环境配置
 		var envVars []string
-		
+
 		// 检查全量注入模式
 		allEnvs := false
 		if task.Config != "" {
@@ -344,24 +360,38 @@ func (s *AgentService) GetTasks(agentID string) []models.AgentTask {
 
 		envVarsStr := executor.FormatEnvVars(envVars)
 
+		command := string(task.Command)
+		preCommand := string(task.PreCommand)
+		postCommand := string(task.PostCommand)
+		workDir := task.WorkDir
+
+		// 仓库同步任务特殊处理：将配置转换为 reposync 命令行
+		if task.Type == constant.TaskTypeRepo {
+			command, workDir = tasks.BuildRepoCommand(&task)
+			// 仓库任务的前置/后置命令已作为参数传给 reposync 内部处理，此处清空防止重复执行
+			preCommand = ""
+			postCommand = ""
+		}
+
 		result[i] = models.AgentTask{
 			ID:          task.ID,
 			Name:        task.Name,
-			Command:     string(task.Command),
+			Command:     command,
+			PreCommand:  preCommand,
+			PostCommand: postCommand,
 			Schedule:    task.Schedule,
 			Timeout:     task.Timeout,
-			WorkDir:     task.WorkDir,
+			WorkDir:     workDir,
 			Envs:        envVarsStr,
 			Languages:   []map[string]string(task.Languages),
 			RandomRange: task.RandomRange,
 			Secrets:     secrets,
-			Enabled:     task.Enabled,
+			Enabled:     utils.DerefBool(task.Enabled, true),
 		}
 	}
 
 	return result
 }
-
 
 // ReportResult Agent 上报执行结果
 func (s *AgentService) ReportResult(result *models.AgentTaskResult) error {
@@ -380,7 +410,8 @@ func (s *AgentService) ReportResult(result *models.AgentTaskResult) error {
 	sendStatsService := NewSendStatsService()
 	taskLogService := tasks.NewTaskLogService(sendStatsService)
 
-	// 创建日志对象
+	// 创建日志对象前进行指令脱敏
+	result.Command = utils.MaskSecrets(result.Command, utils.GetSystemSecrets())
 	taskLog, err := taskLogService.CreateTaskLogFromAgentResult(result)
 	if err != nil {
 		return err

@@ -6,6 +6,7 @@ import (
 
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/utils"
 
 	"gopkg.in/ini.v1"
 )
@@ -15,6 +16,7 @@ type ServerConfig struct {
 	Host         string `ini:"host"`
 	URLPrefix    string `ini:"url_prefix"`
 	PprofEnabled bool   `ini:"pprof_enabled"`
+	CookieName   string `ini:"cookie_name"`
 }
 
 type DatabaseConfig struct {
@@ -27,6 +29,7 @@ type DatabaseConfig struct {
 	Path        string `ini:"path"`
 	DSN         string `ini:"dsn"`
 	TablePrefix string `ini:"table_prefix"`
+	SSLMode     string `ini:"ssl_mode"`
 }
 
 type SecurityConfig struct {
@@ -85,6 +88,7 @@ func LoadConfig(path string) (*AppConfig, error) {
 			Port:         8052,
 			Host:         "0.0.0.0",
 			PprofEnabled: false,
+			CookieName:   "BHToken",
 		},
 		Database: DatabaseConfig{
 			Type:        "sqlite",
@@ -123,7 +127,10 @@ func LoadConfig(path string) (*AppConfig, error) {
 		Config.Database.Path = constant.DefaultDBPath
 	}
 
-	// 设置表前缀到 constant 包
+	// 设置配置到 constant 包
+	if Config.Server.CookieName != "" {
+		constant.CookieName = Config.Server.CookieName
+	}
 	constant.TablePrefix = Config.Database.TablePrefix
 	constant.RuntimeDBType = Config.Database.Type
 	constant.RuntimeDBHost = Config.Database.Host
@@ -134,6 +141,7 @@ func LoadConfig(path string) (*AppConfig, error) {
 	constant.RuntimeDBPath = Config.Database.Path
 	constant.RuntimeDBDSN = Config.Database.DSN
 	constant.RuntimeDBTablePrefix = Config.Database.TablePrefix
+	constant.RuntimeDBSSLMode = Config.Database.SSLMode
 
 	// 暂存旧的 Secret，不再直接给 constant 赋值（改为到 settings 初始化时判断）
 	// constant.Secret = Config.Security.Secret
@@ -150,8 +158,11 @@ func LoadConfig(path string) (*AppConfig, error) {
 	if Config.Server.URLPrefix != "" {
 		logger.Infof("[Config] URL前缀: %s", Config.Server.URLPrefix)
 	}
+
+	maskedHost := utils.MaskString(Config.Database.Host)
+	maskedDBName := utils.MaskString(Config.Database.DBName)
 	logger.Infof("[Config] 数据库: type=%s, host=%s, port=%d, dbname=%s, dsn=%v",
-		Config.Database.Type, Config.Database.Host, Config.Database.Port, Config.Database.DBName, Config.Database.DSN != "")
+		Config.Database.Type, maskedHost, Config.Database.Port, maskedDBName, Config.Database.DSN != "")
 
 	return Config, nil
 }
@@ -163,6 +174,7 @@ func applyEnvOverrides() {
 	getEnvStr("BH_SERVER_HOST", &Config.Server.Host)
 	getEnvStr("BH_SERVER_URL_PREFIX", &Config.Server.URLPrefix)
 	getEnvBool("BH_SERVER_PPROF", &Config.Server.PprofEnabled)
+	getEnvStr("BH_COOKIE_NAME", &Config.Server.CookieName)
 
 	// Database
 	getEnvStr("BH_DB_TYPE", &Config.Database.Type)
@@ -174,6 +186,7 @@ func applyEnvOverrides() {
 	getEnvStr("BH_DB_PATH", &Config.Database.Path)
 	getEnvStr("BH_DB_DSN", &Config.Database.DSN)
 	getEnvStr("BH_DB_TABLE_PREFIX", &Config.Database.TablePrefix)
+	getEnvStr("BH_DB_SSL_MODE", &Config.Database.SSLMode)
 
 	// Security
 	getEnvStr("BH_SECRET", &Config.Security.Secret)

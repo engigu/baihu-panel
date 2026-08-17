@@ -10,7 +10,7 @@ ENV PATH="/opt/mise-base/shims:/opt/mise-base/bin:$PATH"
 # 安装必要系统工具
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories \
     && apk add --no-cache \
-        tzdata git bash curl wget vim htop ca-certificates rsync \
+        tzdata git bash curl wget vim htop ca-certificates rsync openssh-client \
     && BUILD_DEPS="build-base libffi-dev openssl-dev bzip2-dev zlib-dev readline-dev sqlite-dev ncurses-dev xz-dev" \
     && apk add --no-cache $BUILD_DEPS \
     && curl https://mise.run | MISE_INSTALL_PATH=/usr/local/bin/mise sh \

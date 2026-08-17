@@ -44,12 +44,12 @@ const hasMoreTasks = ref(true)
 const isLoadingTasks = ref(false)
 
 // Setup vue flow connection behavior
-onNodeClick((e) => {
+onNodeClick((e: any) => {
   selectedElement.value = e.node
   selectedElementType.value = 'node'
 })
 
-onEdgeClick((e) => {
+onEdgeClick((e: any) => {
   selectedElement.value = e.edge
   selectedElementType.value = 'edge'
 })

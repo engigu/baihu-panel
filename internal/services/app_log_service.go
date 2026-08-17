@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"fmt"
+	"strings"
 
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
@@ -32,7 +33,14 @@ func (s *AppLogService) Add(log *models.AppLog) error {
 	if log.ID == "" {
 		log.ID = utils.GenerateID()
 	}
-	return database.DB.Create(log).Error
+	err := database.DB.Create(log).Error
+	if err == nil {
+		eventbus.DefaultBus.Publish(eventbus.Event{
+			Type:    constant.EventAppLogAdded,
+			Payload: log,
+		})
+	}
+	return err
 }
 
 func (s *AppLogService) List(category string, status string, level string, page, pageSize int, keyword string) ([]models.AppLog, int64, error) {
@@ -109,7 +117,7 @@ func (s *AppLogService) Clear(category string) error {
 	if category != "" {
 		query = query.Where("category = ?", category)
 	}
-	return query.Unscoped().Delete(&models.AppLog{}).Error
+	return query.Delete(&models.AppLog{}).Error
 }
 
 func (s *AppLogService) GetRetentionConfigs() map[string]LogRetentionConfig {
@@ -126,6 +134,10 @@ func (s *AppLogService) GetRetentionConfigs() map[string]LogRetentionConfig {
 			Days:     utils.ToInt(s.settingsService.Get(constant.SectionSystem, constant.KeyLoginLogDays), 30),
 			MaxCount: utils.ToInt(s.settingsService.Get(constant.SectionSystem, constant.KeyLoginLogMaxCount), 1000),
 		},
+		constant.LogCategorySchedulerLog: {
+			Days:     utils.ToInt(s.settingsService.Get(constant.SectionSystem, constant.KeySchedulerLogDays), 30),
+			MaxCount: utils.ToInt(s.settingsService.Get(constant.SectionSystem, constant.KeySchedulerLogMaxCount), 10000),
+		},
 		constant.LogCategoryDefault: {
 			Days:     30,
 			MaxCount: 10000,
@@ -134,9 +146,25 @@ func (s *AppLogService) GetRetentionConfigs() map[string]LogRetentionConfig {
 	return configs
 }
 
+func (s *AppLogService) AddSchedulerLog(title, content, level string) error {
+	if level == "" {
+		level = constant.LogLevelInfo
+	}
+	return s.Add(&models.AppLog{
+		Category: constant.LogCategorySchedulerLog,
+		Title:    title,
+		Content:  models.BigText(content),
+		Level:    level,
+		Status:   constant.LogStatusRead,
+	})
+}
+
 func (s *AppLogService) CleanUp() {
 	configs := s.GetRetentionConfigs()
-	categories := []string{constant.LogCategorySystemNotice, constant.LogCategoryPushLog, constant.LogCategoryLoginLog}
+	categories := []string{constant.LogCategorySystemNotice, constant.LogCategoryPushLog, constant.LogCategoryLoginLog, constant.LogCategorySchedulerLog}
+
+	var totalDeleted int64
+	var summaryBuilder strings.Builder
 
 	for _, cat := range categories {
 		cfg, ok := configs[cat]
@@ -144,11 +172,16 @@ func (s *AppLogService) CleanUp() {
 			cfg = configs[constant.LogCategoryDefault]
 		}
 
+		var daysDeleted int64
 		if cfg.Days > 0 {
 			deadline := time.Now().AddDate(0, 0, -cfg.Days)
-			database.DB.Unscoped().Where("category = ? AND created_at < ?", cat, deadline).Delete(&models.AppLog{})
+			res := database.DB.Where("category = ? AND created_at < ?", cat, deadline).Delete(&models.AppLog{})
+			if res.Error == nil {
+				daysDeleted = res.RowsAffected
+			}
 		}
 
+		var countDeleted int64
 		if cfg.MaxCount > 0 {
 			var total int64
 			database.DB.Model(&models.AppLog{}).Where("category = ?", cat).Count(&total)
@@ -157,12 +190,47 @@ func (s *AppLogService) CleanUp() {
 				var ids []string
 				database.DB.Model(&models.AppLog{}).Where("category = ?", cat).Order("created_at asc").Limit(int(deleteCount)).Pluck("id", &ids)
 				if len(ids) > 0 {
-					database.DB.Unscoped().Where("id IN ?", ids).Delete(&models.AppLog{})
+					res := database.DB.Where("id IN ?", ids).Delete(&models.AppLog{})
+					if res.Error == nil {
+						countDeleted = res.RowsAffected
+					}
 				}
 			}
 		}
+
+		catTotal := daysDeleted + countDeleted
+		if catTotal > 0 {
+			totalDeleted += catTotal
+			var catLabel string
+			switch cat {
+			case constant.LogCategorySystemNotice:
+				catLabel = "系统通知"
+			case constant.LogCategoryPushLog:
+				catLabel = "推送日志"
+			case constant.LogCategoryLoginLog:
+				catLabel = "登录日志"
+			case constant.LogCategorySchedulerLog:
+				catLabel = "调度日志"
+			default:
+				catLabel = cat
+			}
+			summaryBuilder.WriteString(fmt.Sprintf("分类 [%s]: 过期清理 %d 条，溢出限制清理 %d 条；\n", catLabel, daysDeleted, countDeleted))
+		}
 	}
-	logger.Debugf("[AppLog] 完成应用日志清理策略")
+
+	if totalDeleted > 0 {
+		logger.Infof("[AppLog] 周期巡检完成清理，共删除 %d 条陈旧日志", totalDeleted)
+		eventbus.DefaultBus.Publish(eventbus.Event{
+			Type: constant.EventSystemNotice,
+			Payload: map[string]interface{}{
+				"title":   "系统日志定时容量收敛",
+				"content": fmt.Sprintf("后台巡检已自动执行日志容量清理，共计清除陈旧或溢出记录 %d 条。\n详情明细:\n%s", totalDeleted, summaryBuilder.String()),
+				"level":   constant.LogLevelInfo,
+			},
+		})
+	} else {
+		logger.Debugf("[AppLog] 完成应用日志清理策略，未检测到需要剔除的陈旧记录")
+	}
 }
 
 func (s *AppLogService) SubscribeEvents(bus *eventbus.EventBus) {
@@ -273,5 +341,17 @@ func (s *AppLogService) SubscribeEvents(bus *eventbus.EventBus) {
 				"level":   constant.LogLevelInfo,
 			},
 		})
+	})
+
+	// 4. [订阅] 调度日志写入
+	bus.Subscribe(constant.EventSchedulerLog, func(e eventbus.Event) {
+		payload, ok := e.Payload.(map[string]interface{})
+		if !ok {
+			return
+		}
+		title, _ := payload["title"].(string)
+		content, _ := payload["content"].(string)
+		level, _ := payload["level"].(string)
+		s.AddSchedulerLog(title, content, level)
 	})
 }

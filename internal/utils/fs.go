@@ -75,3 +75,11 @@ func copyDir(src, dest string) error {
 
 	return nil
 }
+
+// IsInDocker 判断程序是否运行在 Docker 容器中
+func IsInDocker() bool {
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+	return false
+}

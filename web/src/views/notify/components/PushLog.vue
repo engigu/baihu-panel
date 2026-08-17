@@ -1,27 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { api, type AppLog, LOG_CATEGORY, LOG_STATUS } from '@/api'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import Pagination from '@/components/Pagination.vue'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { toast } from 'vue-sonner'
 import { format } from 'date-fns'
 import {
-  RefreshCw, Trash2, Check, X, Search
+  Check, X
 } from 'lucide-vue-next'
 import {
   AlertDialog,
@@ -34,7 +19,16 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useSiteSettings } from '@/composables/useSiteSettings'
+import { useEventBus } from '@/composables/useEventBus'
+import { LOG_EVENTS } from '@/constants'
+import BaihuDialog from '@/components/ui/BaihuDialog.vue'
 
+const props = defineProps<{
+  filters: {
+    status: string
+    keyword: string
+  }
+}>()
 
 const { pageSize } = useSiteSettings()
 
@@ -43,15 +37,7 @@ const selectedLogId = ref<string | null>(null)
 const total = ref(0)
 const loading = ref(false)
 const showClearConfirm = ref(false)
-
-const filters = ref({
-  status: 'all',
-  keyword: '',
-  page: 1
-})
-
-let searchTimer: ReturnType<typeof setTimeout> | null = null
-
+const currentPage = ref(1)
 
 const detailDialogProps = ref({
   open: false,
@@ -65,9 +51,9 @@ async function fetchLogs() {
   try {
     const res = await api.appLogs.list({
       category: LOG_CATEGORY.PUSH_LOG,
-      status: filters.value.status === 'all' ? undefined : filters.value.status,
-      keyword: filters.value.keyword || undefined,
-      page: filters.value.page,
+      status: props.filters.status === 'all' ? undefined : props.filters.status,
+      keyword: props.filters.keyword || undefined,
+      page: currentPage.value,
       page_size: pageSize.value
     })
     logs.value = res.data || []
@@ -79,23 +65,8 @@ async function fetchLogs() {
   }
 }
 
-function handleSearch() {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    filters.value.page = 1
-    fetchLogs()
-  }, 300)
-}
-
-function handlePageChange(page: number) {
-  filters.value.page = page
-  fetchLogs()
-}
-
-function handleStatusChange(val: any) {
-  if (val === null || val === undefined) return
-  filters.value.status = String(val)
-  filters.value.page = 1
+function handlePageChange(index: number) {
+  currentPage.value = index
   fetchLogs()
 }
 
@@ -113,18 +84,33 @@ async function handleClear() {
   try {
     await api.appLogs.clear(LOG_CATEGORY.PUSH_LOG)
     toast.success('清空成功')
-    filters.value.page = 1
+    currentPage.value = 1
     fetchLogs()
   } catch (e: any) {
     toast.error('清空失败: ' + (e.message || ''))
   }
+  showClearConfirm.value = false
 }
 
 onMounted(() => {
   fetchLogs()
 })
 
+// 实时更新：当有新推送产生且用户在第一页时刷新
+useEventBus([LOG_EVENTS.ADDED], (payload) => {
+  if (payload && payload.category === LOG_CATEGORY.PUSH_LOG) {
+    if (currentPage.value === 1) {
+      fetchLogs()
+    }
+  }
+})
+
 const selectedLog = computed(() => logs.value.find((l: AppLog) => l.id === selectedLogId.value))
+
+defineExpose({
+  fetchLogs,
+  showClearConfirm
+})
 
 function getStatusBadgeClass(status: string) {
   switch (status) {
@@ -138,7 +124,7 @@ function getStatusBadgeClass(status: string) {
 }
 
 function getLogIndex(index: number) {
-  return total.value - (filters.value.page - 1) * pageSize.value - index
+  return total.value - (currentPage.value - 1) * pageSize.value - index
 }
 
 function formatDate(dateStr: string) {
@@ -165,52 +151,22 @@ function onDialogClose(open: boolean) {
 
 <template>
   <div class="space-y-6">
-    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full">
-      <div class="flex items-center gap-2 w-full lg:w-auto lg:ml-auto">
-        <div class="relative w-full sm:w-60 group">
-          <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-          <Input v-model="filters.keyword" placeholder="搜索标题或内容..." class="h-9 pl-9 w-full text-sm bg-muted/20 border-muted-foreground/10 focus:bg-background"
-            @input="handleSearch" />
-        </div>
-        <div class="relative flex-1 sm:flex-none sm:w-28">
-          <Select :model-value="filters.status" @update:model-value="handleStatusChange">
-            <SelectTrigger class="h-9 w-full text-sm bg-muted/20 border-muted-foreground/10">
-              <SelectValue placeholder="状态" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">所有状态</SelectItem>
-              <SelectItem :value="LOG_STATUS.SUCCESS">发送成功</SelectItem>
-              <SelectItem :value="LOG_STATUS.FAILED">发送失败</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <Button variant="outline" size="icon" class="h-9 w-9 shrink-0 sm:flex" @click="fetchLogs" :disabled="loading"
-          title="刷新">
-          <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loading }" />
-        </Button>
-      </div>
-      <AlertDialog :open="showClearConfirm" @update:open="showClearConfirm = $event">
-        <Button variant="outline"
-          class="h-9 px-4 shrink-0 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20 w-full sm:w-auto"
-          @click="showClearConfirm = true">
-          <Trash2 class="h-4 w-4 mr-2" /> <span>清空记录</span>
-        </Button>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>确认清空所有推送日志？</AlertDialogTitle>
-            <AlertDialogDescription>
-              此操作将永久清空当前分类下的所有消息推送历史记录，操作后无法恢复。确认要继续吗？
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction @click="handleClear" variant="destructive">
-              确认清空
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+    <AlertDialog :open="showClearConfirm" @update:open="showClearConfirm = $event">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>确认清空所有推送日志？</AlertDialogTitle>
+          <AlertDialogDescription>
+            此操作将永久清空当前分类下的所有消息推送历史记录，操作后无法恢复。确认要继续吗？
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>取消</AlertDialogCancel>
+          <AlertDialogAction @click="handleClear" variant="destructive">
+            确认清空
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
     <div class="rounded-lg border bg-card overflow-hidden">
       <!-- ========== 1. 大屏表头 (Large >= 1024px) ========== -->
@@ -240,7 +196,7 @@ function onDialogClose(open: boolean) {
           :class="[selectedLogId === log.id && 'bg-accent/50']">
           <div class="flex items-start justify-between mb-3 border-b border-border/40 pb-2">
             <div class="flex items-center gap-2 flex-1 min-w-0 mr-2">
-              <span class="text-xs text-muted-foreground shrink-0">#{{ getLogIndex(index) }}</span>
+              <span class="text-[10px] text-muted-foreground shrink-0">#{{ getLogIndex(index) }}</span>
               <span class="font-bold text-sm truncate">{{ log.title }}</span>
             </div>
             <span
@@ -289,91 +245,92 @@ function onDialogClose(open: boolean) {
         <div v-for="(log, index) in logs" :key="`large-${log.id}`"
           class="hidden lg:flex items-center gap-4 px-4 py-2 hover:bg-muted/50 transition-colors cursor-pointer group"
           :class="[selectedLogId === log.id && 'bg-accent/50']" @click="showDetail(log)">
-          <span class="w-16 shrink-0 text-muted-foreground text-sm tabular-nums pl-1">#{{ getLogIndex(index) }}</span>
-          <div class="w-56 shrink-0 flex items-center gap-3 min-w-0 font-medium text-sm">
+          <span class="w-16 shrink-0 text-muted-foreground text-[11px] tabular-nums pl-1">#{{ getLogIndex(index) }}</span>
+          <div class="w-56 shrink-0 flex items-center gap-3 min-w-0 text-[13px]">
             <span :class="['h-2 w-2 rounded-full shrink-0', log.status === LOG_STATUS.SUCCESS ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.3)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.3)]']"></span>
             <span class="truncate" :title="log.title">
               <span v-if="log.channel_name" class="mr-1 text-muted-foreground opacity-60">[{{ log.channel_name }}]</span>{{ log.title }}
             </span>
           </div>
-          <span class="flex-1 min-w-0 text-sm text-muted-foreground truncate" :title="log.content">
+          <span class="flex-1 min-w-0 text-[13px] text-muted-foreground truncate" :title="log.content">
             {{ log.content || '-' }}
           </span>
-          <span class="w-40 shrink-0 text-right text-xs text-muted-foreground tabular-nums opacity-60">
+          <span class="w-40 shrink-0 text-right text-[13px] text-muted-foreground tabular-nums opacity-60">
             {{ formatDate(log.created_at) }}
           </span>
         </div>
       </div>
 
       <!-- 分页 -->
-      <Pagination :total="total" :page="filters.page" @update:page="handlePageChange" />
+      <Pagination :total="total" :page="currentPage" @update:page="handlePageChange" />
     </div>
 
-    <Dialog v-model:open="detailDialogProps.open" @update:open="onDialogClose">
-      <DialogContent class="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
-        <DialogHeader class="px-6 py-4 border-b bg-muted/20">
-          <div class="flex items-center justify-between pr-8">
-            <DialogTitle>日志详情</DialogTitle>
-            <Badge variant="outline" :class="[
-              'px-2 py-0.5 text-[10px] font-bold rounded-md border shadow-sm transition-all duration-300',
-              selectedLog ? getStatusBadgeClass(selectedLog.status) : ''
-            ]">
-              <div class="flex items-center gap-1 uppercase tracking-tighter">
-                <Check v-if="selectedLog?.status === LOG_STATUS.SUCCESS" class="h-3 w-3" />
-                <X v-else class="h-3 w-3" />
-                <span>{{ selectedLog?.status === LOG_STATUS.SUCCESS ? 'Success' : 'Failed' }}</span>
-              </div>
+    <BaihuDialog v-model:open="detailDialogProps.open" title="日志详情" @update:open="onDialogClose">
+      <template #extra>
+        <Badge variant="outline" :class="[
+          'px-2 py-0.5 text-[10px] font-bold rounded-md border shadow-sm transition-all duration-300',
+          selectedLog ? getStatusBadgeClass(selectedLog.status) : ''
+        ]">
+          <div class="flex items-center gap-1 uppercase tracking-tighter">
+            <Check v-if="selectedLog?.status === LOG_STATUS.SUCCESS" class="h-3 w-3" />
+            <X v-else class="h-3 w-3" />
+            <span>{{ selectedLog?.status === LOG_STATUS.SUCCESS ? '发送成功' : '发送失败' }}</span>
+          </div>
+        </Badge>
+      </template>
+
+      <!-- 核心内容区 (依赖 BaihuDialog 自带的 p-6) -->
+      <div class="space-y-8">
+        <!-- 1. 基础信息列表 (扁平化布局) -->
+        <div class="grid grid-cols-1 gap-4 text-sm px-2">
+          <div class="flex justify-between items-center group cursor-default">
+            <span class="text-muted-foreground/60 font-medium">消息标题</span>
+            <span class="font-semibold text-foreground tracking-tight">{{ detailDialogProps.title }}</span>
+          </div>
+          <div v-if="selectedLog?.channel_name" class="flex justify-between items-center group cursor-default">
+            <span class="text-muted-foreground/60 font-medium">推送渠道</span>
+            <Badge variant="secondary" class="font-normal text-[11px] bg-muted/40 hover:bg-muted/60 transition-colors">
+              {{ selectedLog.channel_name }}
             </Badge>
           </div>
-        </DialogHeader>
-
-        <div class="flex-1 overflow-y-auto">
-          <!-- 基础信息区 -->
-          <div class="px-6 py-4 border-b space-y-3 bg-card">
-            <div class="flex justify-between items-center text-sm">
-              <span class="text-muted-foreground">标题</span>
-              <span class="font-medium text-foreground">{{ detailDialogProps.title }}</span>
-            </div>
-            <div v-if="selectedLog?.channel_name" class="flex justify-between items-center text-sm">
-              <span class="text-muted-foreground">发送渠道</span>
-              <span class="font-medium text-foreground">{{ selectedLog.channel_name }}</span>
-            </div>
-            <div class="flex justify-between items-center text-sm">
-              <span class="text-muted-foreground">发生时间</span>
-              <span class="font-mono text-xs text-muted-foreground">{{ selectedLog ? formatDate(selectedLog.created_at)
-                : '-' }}</span>
-            </div>
-          </div>
-
-          <!-- 内容输出区 -->
-          <div class="flex flex-col min-h-0 bg-muted/5">
-            <div
-              class="px-6 py-2.5 text-xs font-semibold text-muted-foreground border-b bg-muted/10 uppercase tracking-wider">
-              推送内容
-            </div>
-            <div class="p-6">
-              <div v-if="detailDialogProps.content"
-                class="text-sm text-foreground bg-muted/20 p-5 rounded-xl border border-border/50 whitespace-pre-wrap break-all leading-relaxed shadow-sm" v-html="renderedContent">
-              </div>
-              <div v-else class="text-sm text-muted-foreground italic py-2">无推送内容</div>
-            </div>
-
-            <template v-if="detailDialogProps.error">
-              <div
-                class="px-6 py-2.5 text-xs font-semibold uppercase tracking-wider border-y bg-muted/10 text-muted-foreground border-border/60">
-                错误信息
-              </div>
-              <div class="p-6">
-                <div v-if="detailDialogProps.error"
-                  class="text-sm p-5 rounded-xl border whitespace-pre-wrap break-all leading-relaxed shadow-sm bg-muted/20 border-border/60 text-foreground">
-                  {{ detailDialogProps.error }}
-                </div>
-                <div v-else class="text-sm text-muted-foreground italic py-2">无错误信息</div>
-              </div>
-            </template>
+          <div class="flex justify-between items-center group cursor-default">
+            <span class="text-muted-foreground/60 font-medium">发送时间</span>
+            <span class="font-mono text-[11px] text-muted-foreground/80 tabular-nums">
+              {{ selectedLog ? formatDate(selectedLog.created_at) : '-' }}
+            </span>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        <!-- 2. 推送内容展示 -->
+        <div class="space-y-3">
+          <div class="flex items-center gap-2 px-2">
+            <div class="w-1 h-3.5 bg-primary/40 rounded-full" />
+            <span class="text-xs font-bold text-muted-foreground uppercase tracking-widest">推送内容</span>
+          </div>
+          <div class="relative group">
+            <!-- 装饰性背景，模拟高级卡片 -->
+            <div class="absolute -inset-0.5 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+            <div v-if="detailDialogProps.content"
+              class="relative bg-background/50 dark:bg-muted/10 p-5 rounded-2xl border border-border/40 whitespace-pre-wrap break-all leading-relaxed shadow-[0_2px_15px_-3px_rgba(0,0,0,0.03)] text-[13px] text-foreground/90 font-medium max-h-[50vh] overflow-y-auto custom-scrollbar"
+              v-html="renderedContent">
+            </div>
+            <div v-else class="relative bg-muted/20 p-6 rounded-2xl border border-dashed border-border/60 text-center text-sm text-muted-foreground">
+              此消息无标准推送内容
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. 错误信息 (仅当存在时展示) -->
+        <div v-if="detailDialogProps.error" class="space-y-3">
+          <div class="flex items-center gap-2 px-2">
+            <div class="w-1 h-3.5 bg-destructive/40 rounded-full" />
+            <span class="text-xs font-bold text-destructive/80 uppercase tracking-widest">错误报告</span>
+          </div>
+          <div class="bg-destructive/[0.03] p-5 rounded-2xl border border-destructive/10 text-[13px] text-destructive/90 font-mono leading-relaxed break-all max-h-[200px] overflow-y-auto custom-scrollbar">
+            {{ detailDialogProps.error }}
+          </div>
+        </div>
+      </div>
+    </BaihuDialog>
   </div>
 </template>

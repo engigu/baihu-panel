@@ -27,6 +27,7 @@ type AgentWSManager interface {
 	RegisterRemoteWaiter(logID string) chan *models.AgentTaskResult
 	UnregisterRemoteWaiter(logID string)
 	SendToAgent(agentID string, msgType string, data interface{}) error
+	IsAgentOnline(agentID string) bool
 }
 
 // SettingsService 接口定义（避免循环依赖）
@@ -67,6 +68,9 @@ func NewExecutorService(
 	settingsService SettingsService,
 	envService EnvService,
 ) *ExecutorService {
+	// 0. 清理旧临时日志
+	CleanupOrphanedTinyLogs()
+
 	es := &ExecutorService{
 		taskService:     taskService,
 		taskLogService:  taskLogService,
@@ -82,6 +86,10 @@ func NewExecutorService(
 
 	// 2. 初始化计划任务管理器
 	es.cronManager = executor.NewCronManager(es.scheduler)
+	es.cronManager.OnTrigger = func(t executor.CronTask) *executor.ExecutionRequest {
+		task := es.taskService.GetTaskByID(t.GetID())
+		return es.CreateExecutionRequest(task, executor.TaskTypeCron, nil)
+	}
 
 	return es
 }
@@ -104,6 +112,15 @@ func (es *ExecutorService) initScheduler() {
 	es.scheduler.Start()
 
 	logger.Infof("[Executor] 调度器已启动: workers=%d, queue=%d, rate=%dms", workerCount, queueSize, rateInterval)
+
+	eventbus.DefaultBus.Publish(eventbus.Event{
+		Type: constant.EventSchedulerLog,
+		Payload: map[string]interface{}{
+			"title":   "调度器启动",
+			"content": fmt.Sprintf("主服务任务调度引擎已成功拉起运行。\n配置 Worker 数量: %d\n等待队列容量: %d\n速率限制间隔: %dms", workerCount, queueSize, rateInterval),
+			"level":   constant.LogLevelInfo,
+		},
+	})
 }
 
 // ServerSchedulerHandler 实现 executor.SchedulerEventHandler
@@ -112,7 +129,24 @@ type ServerSchedulerHandler struct {
 }
 
 func (h *ServerSchedulerHandler) OnTaskScheduled(req *executor.ExecutionRequest) {
-	// 任务入队事件，可以在此处更新数据库状态为 "pending"
+	if req.TaskID != "" {
+		eventbus.DefaultBus.Publish(eventbus.Event{
+			Type: constant.EventTaskQueued,
+			Payload: map[string]interface{}{
+				"task_id": req.TaskID,
+				"status":  constant.TaskStatusQueued,
+			},
+		})
+
+		eventbus.DefaultBus.Publish(eventbus.Event{
+			Type: constant.EventSchedulerLog,
+			Payload: map[string]interface{}{
+				"title":   "触发任务",
+				"content": fmt.Sprintf("任务 [%s] (#%s) 调度类型: %s\n已成功推入后台调度排队队列等待执行。", req.Name, req.TaskID, req.Type),
+				"level":   constant.LogLevelInfo,
+			},
+		})
+	}
 }
 
 func (h *ServerSchedulerHandler) OnTaskExecuting(req *executor.ExecutionRequest) (io.Writer, io.Writer, error) {
@@ -137,8 +171,12 @@ func (h *ServerSchedulerHandler) OnTaskExecuting(req *executor.ExecutionRequest)
 		}
 	}
 
-	// 1. 创建初始日志记录
-	taskLog, err := h.es.taskLogService.CreateEmptyLog(task.ID, req.Command, workflowID, workflowRunID)
+	// 1. 使用预先准备好的脱敏指令创建初始日志记录
+	cmd := req.MaskedCommand
+	if cmd == "" {
+		cmd = req.Command
+	}
+	taskLog, err := h.es.taskLogService.CreateEmptyLog(task.ID, cmd, workflowID, workflowRunID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("创建初始日志失败: %v", err)
 	}
@@ -172,6 +210,16 @@ func (h *ServerSchedulerHandler) OnTaskExecuting(req *executor.ExecutionRequest)
 		StartTime: time.Now(),
 	})
 
+	// 发布任务开始运行事件
+	eventbus.DefaultBus.Publish(eventbus.Event{
+		Type: constant.EventTaskRunning,
+		Payload: map[string]interface{}{
+			"task_id": req.TaskID,
+			"status":  constant.TaskStatusRunning,
+			"log_id":  req.LogID,
+		},
+	})
+
 	if req.Metadata.RetryIndex > 0 {
 		tl.Write([]byte(fmt.Sprintf("\n[System] 此为任务失败后的第 %d 次重试执行...\n\n", req.Metadata.RetryIndex)))
 	}
@@ -188,8 +236,8 @@ func (h *ServerSchedulerHandler) OnTaskHeartbeat(req *executor.ExecutionRequest,
 
 	// 每分钟打印一次任务还在运行的日志
 	if duration >= 60000 && (duration/60000 > (duration-3000)/60000) {
-		logger.Infof("[Scheduler] 任务 #%s 仍在运行中... (已耗时: %v)",
-			req.TaskID, (time.Duration(duration) * time.Millisecond).Round(time.Second))
+		logger.Infof("[Scheduler] 命令: %s (#%s 已耗时: %v)",
+			req.MaskedCommand, req.TaskID, (time.Duration(duration) * time.Millisecond).Round(time.Second))
 	}
 }
 
@@ -232,7 +280,7 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 	taskLog := &models.TaskLog{
 		ID:        req.LogID,
 		TaskID:    task.ID,
-		Command:   models.BigText(req.Command),
+		Command:   models.BigText(req.MaskedCommand),
 		Output:    models.BigText(output),
 		Error:     models.BigText(result.Error),
 		Status:    result.Status,
@@ -276,11 +324,14 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 			eventType = constant.EventTaskFailed
 		case constant.TaskStatusTimeout:
 			eventType = constant.EventTaskTimeout
+		case constant.TaskStatusCancelled:
+			eventType = constant.EventTaskCancelled
 		}
 		if eventType != "" {
 			eventbus.DefaultBus.Publish(eventbus.Event{
 				Type: eventType,
 				Payload: map[string]interface{}{
+					"log_id":     req.LogID,
 					"task_id":    task.ID,
 					"task_name":  task.Name,
 					"status":     result.Status,
@@ -320,7 +371,7 @@ func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, er
 	taskLog := &models.TaskLog{
 		ID:        req.LogID,
 		TaskID:    taskID,
-		Command:   models.BigText(req.Command),
+		Command:   models.BigText(req.MaskedCommand),
 		Output:    models.BigText(output),
 		Error:     models.BigText(err.Error()),
 		Status:    constant.TaskStatusFailed,
@@ -365,6 +416,7 @@ func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, er
 		eventbus.DefaultBus.Publish(eventbus.Event{
 			Type: constant.EventTaskFailed,
 			Payload: map[string]interface{}{
+				"log_id":    req.LogID,
 				"task_id":   taskID,
 				"task_name": taskName,
 				"error":     err.Error(),
@@ -389,26 +441,12 @@ func (es *ExecutorService) HandleTaskRetry(task *models.Task, req *executor.Exec
 
 			es.scheduler.EnqueueDelayed(time.Duration(task.RetryInterval)*time.Second, func() *executor.ExecutionRequest {
 				latestTask := es.taskService.GetTaskByID(task.ID)
-				if latestTask == nil || !latestTask.Enabled {
+				if latestTask == nil || !utils.DerefBool(latestTask.Enabled, true) {
 					return nil
 				}
-
-				newEnvs, newSecrets := es.loadEnvVars(latestTask.ID, string(latestTask.Envs))
-				return &executor.ExecutionRequest{
-					TaskID:    req.TaskID,
-					Name:      latestTask.Name,
-					Command:   string(latestTask.Command),
-					WorkDir:   latestTask.WorkDir,
-					Envs:      newEnvs,
-					Secrets:   newSecrets,
-					Timeout:   latestTask.Timeout,
-					Languages: []map[string]string(latestTask.Languages),
-					UseMise:   latestTask.UseMise(),
-					Type:      executor.TaskTypeManual,
-					Metadata: executor.ExecutionMetadata{
-						RetryIndex: retryIndex,
-					},
-				}
+				newReq := es.CreateExecutionRequest(latestTask, req.Type, nil)
+				newReq.Metadata.RetryIndex = retryIndex
+				return newReq
 			})
 		}
 	}
@@ -447,47 +485,50 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 
 	// 解析路径变量 (如 $SCRIPTS_DIR$)
 	req.Command = es.ResolvePath(req.Command)
+	req.PreCommand = es.ResolvePath(req.PreCommand)
+	req.PostCommand = es.ResolvePath(req.PostCommand)
 	req.WorkDir = es.ResolvePath(req.WorkDir)
 
 	task := es.taskService.GetTaskByID(taskID)
 	// 系统任务（无 taskID）直接本地执行
 	if task == nil {
 		return executor.Execute(ctx, executor.Request{
-			Command: req.Command,
-			WorkDir: req.WorkDir,
-			Envs:    req.Envs,
-			Timeout: req.Timeout,
-			UseMise: false, // 系统任务不使用 mise
+			Command:     req.Command,
+			PreCommand:  req.PreCommand,
+			PostCommand: req.PostCommand,
+			WorkDir:     req.WorkDir,
+			Envs:        req.Envs,
+			Timeout:     req.Timeout,
+			UseMise:     false, // 系统任务不使用 mise
 		}, stdout, stderr)
 	}
 
 	// 重新加载最新的环境变量，满足即时生效的需求
 	es.refreshExecutionRequestEnvs(req, task)
 
-	// 特殊处理仓库同步任务
-	if task.Type == constant.TaskTypeRepo {
-		cmd, workDir := es.BuildRepoCommand(task)
-		if cmd != "" {
-			req.Command = cmd
-			req.WorkDir = workDir
-		}
-	}
+	// 在控制台打印最终执行的脱敏命令
+	logger.Infof("[Executor] 任务最终执行命令: %s", req.MaskedCommand)
+
+	// 组合指令逻辑已移至 executor.ExecuteWithHooks 中，此处不再处理
+	// 以避免指令被重复组合。
 
 	// 远程任务
 	if task.AgentID != nil && *task.AgentID != "" {
 		// 将请求中已包含的环境变量（已合并）传递给 Agent
-		return es.ExecuteRemoteForScheduler(task, req.LogID, executor.FormatEnvVars(req.Envs), req.Secrets)
+		return es.ExecuteRemoteForScheduler(ctx, task, req.LogID, executor.FormatEnvVars(req.Envs), req.Secrets)
 	}
 
 	// 本地任务
 	hooks := &LocalTaskHooks{es: es, logID: req.LogID}
 	return executor.ExecuteWithHooks(ctx, executor.Request{
-		Command:   req.Command,
-		WorkDir:   req.WorkDir,
-		Envs:      req.Envs,
-		Timeout:   req.Timeout,
-		Languages: []map[string]string(task.Languages),
-		UseMise:   req.UseMise, // 使用请求中的 UseMise 标志 (由调度器统一处理过)
+		Command:     req.Command,
+		PreCommand:  req.PreCommand,
+		PostCommand: req.PostCommand,
+		WorkDir:     req.WorkDir,
+		Envs:        req.Envs,
+		Timeout:     req.Timeout,
+		Languages:   []map[string]string(task.Languages),
+		UseMise:     req.UseMise, // 使用请求中的 UseMise 标志 (由调度器统一处理过)
 	}, stdout, stderr, hooks)
 }
 
@@ -550,12 +591,26 @@ func (es *ExecutorService) GetScheduledCount() int {
 	return es.cronManager.GetScheduledCount()
 }
 
+// ReloadCronTasks 重新加载所有计划任务
+func (es *ExecutorService) ReloadCronTasks() {
+	es.cronManager.ClearTasks()
+	es.loadCronTasks()
+}
+
+// SubscribeEvents 订阅系统事件
+func (es *ExecutorService) SubscribeEvents(bus *eventbus.EventBus) {
+	bus.Subscribe(constant.EventBackupRestored, func(event eventbus.Event) {
+		logger.Infof("[Executor] 收到备份恢复事件，正在重新加载计划任务调度...")
+		es.ReloadCronTasks()
+	})
+}
+
 // loadCronTasks 加载所有已启用的本地计划任务
 func (es *ExecutorService) loadCronTasks() {
 	tasks := es.taskService.GetTasks()
 	count := 0
 	for _, task := range tasks {
-		if !task.Enabled {
+		if !utils.DerefBool(task.Enabled, true) {
 			continue
 		}
 
@@ -576,15 +631,116 @@ func (es *ExecutorService) loadCronTasks() {
 		}
 	}
 	logger.Infof("[Executor] 启动调度已加载 %d 个定时任务", count)
+
+	eventbus.DefaultBus.Publish(eventbus.Event{
+		Type: constant.EventSchedulerLog,
+		Payload: map[string]interface{}{
+			"title":   "加载定时任务",
+			"content": fmt.Sprintf("后台调度引擎成功解析并载入本地活跃定时计划任务: %d 个。", count),
+			"level":   constant.LogLevelInfo,
+		},
+	})
 }
 
 // Reload 重新加载配置并重建调度器
 func (es *ExecutorService) Reload() {
 	logger.Info("[Executor] 正在重载配置...")
-	es.scheduler.Stop()
+
+	// 1. 局部提取并停止旧的调度器，不在大锁中阻塞等待协程退出
+	es.mu.RLock()
+	oldScheduler := es.scheduler
+	es.mu.RUnlock()
+
+	if oldScheduler != nil {
+		oldScheduler.Stop()
+	}
+
+	es.mu.Lock()
+	defer es.mu.Unlock()
 
 	// 从设置中读取新配置
 	es.initScheduler()
+
+	// 重要：更新计划任务管理器中的调度器引用，确保后续触发的任务进入新队列
+	if es.cronManager != nil {
+		es.cronManager.SetScheduler(es.scheduler)
+	}
+
+	eventbus.DefaultBus.Publish(eventbus.Event{
+		Type: constant.EventSchedulerLog,
+		Payload: map[string]interface{}{
+			"title":   "调度器重载",
+			"content": "主服务任务调度引擎配置及执行队列实例已全量重载完毕。",
+			"level":   constant.LogLevelInfo,
+		},
+	})
+}
+
+// CreateExecutionRequest 统一处理任务到执行请求的转换逻辑（包含指令拼装、脱敏等）
+func (es *ExecutorService) CreateExecutionRequest(task *models.Task, triggerType executor.TaskType, extraEnvs []string) *executor.ExecutionRequest {
+	if task == nil {
+		return nil
+	}
+
+	// 1. 加载环境变量和机密
+	envs, secrets := es.loadEnvVars(task.ID, string(task.Envs))
+	if len(extraEnvs) > 0 {
+		envs = append(envs, extraEnvs...)
+	}
+
+	// 2. 准备指令
+	command := string(task.Command)
+	preCommand := string(task.PreCommand)
+	postCommand := string(task.PostCommand)
+	workDir := task.WorkDir
+
+	// 解析路径变量 (如 $SCRIPTS_DIR$)
+	command = es.ResolvePath(command)
+	preCommand = es.ResolvePath(preCommand)
+	postCommand = es.ResolvePath(postCommand)
+	workDir = es.ResolvePath(workDir)
+
+	useMise := task.UseMise()
+
+	// 特殊处理仓库同步任务
+	if task.Type == constant.TaskTypeRepo {
+		repoCmd, repoWorkDir := es.BuildRepoCommand(task)
+		if repoCmd != "" {
+			command = repoCmd
+			workDir = repoWorkDir
+			useMise = false // 仓库同步不使用 mise
+			// 仓库任务的前置/后置命令由 reposync 内部处理，此处清空
+			preCommand = ""
+			postCommand = ""
+
+			// 补充仓库特有的 AuthToken 到脱敏列表
+			var repoCfg models.RepoConfig
+			if err := json.Unmarshal([]byte(task.Config), &repoCfg); err == nil && repoCfg.AuthToken != "" {
+				secrets = append(secrets, repoCfg.AuthToken)
+			}
+		}
+	}
+
+	// 3. 统一脱敏处理
+	masks := append([]string{}, secrets...)
+	masks = append(masks, utils.GetSystemSecrets()...)
+	maskedCommand := utils.MaskSecrets(command, masks)
+
+	return &executor.ExecutionRequest{
+		TaskID:        task.ID,
+		Name:          task.Name,
+		Type:          triggerType,
+		Command:       command,
+		MaskedCommand: maskedCommand,
+		PreCommand:    preCommand,
+		PostCommand:   postCommand,
+		WorkDir:       workDir,
+		Envs:          envs,
+		Secrets:       secrets,
+		Timeout:       task.Timeout,
+		Languages:     []map[string]string(task.Languages),
+		UseMise:       useMise,
+	}
 }
 
 // ExecuteTask executes a task by ID（同步执行，供 API 调用）
@@ -611,24 +767,7 @@ func (es *ExecutorService) ExecuteTask(taskID string, extraEnvs []string) *execu
 		}
 	}
 
-	envs, secrets := es.loadEnvVars(task.ID, string(task.Envs))
-	if len(extraEnvs) > 0 {
-		envs = append(envs, extraEnvs...)
-	}
-
-	req := &executor.ExecutionRequest{
-		TaskID:    task.ID,
-		Name:      task.Name,
-		Command:   string(task.Command),
-		WorkDir:   task.WorkDir,
-		Envs:      envs,
-		Secrets:   secrets,
-		Timeout:   task.Timeout,
-		Languages: []map[string]string(task.Languages),
-		UseMise:   task.UseMise(),
-		Type:      executor.TaskTypeManual,
-	}
-
+	req := es.CreateExecutionRequest(task, executor.TaskTypeManual, extraEnvs)
 	es.scheduler.EnqueueOrExecute(req)
 
 	return &executor.ExecutionResult{
@@ -639,38 +778,92 @@ func (es *ExecutorService) ExecuteTask(taskID string, extraEnvs []string) *execu
 	}
 }
 
+// SyncRepoTasks 增量同步仓库任务到调度器
+func (es *ExecutorService) SyncRepoTasks(upsertedIDs []string, deletedIDs []string) {
+	// 处理删除的任务
+	for _, id := range deletedIDs {
+		es.RemoveCronTask(id)
+	}
+
+	// 处理新增/更新的任务
+	if len(upsertedIDs) > 0 {
+		var tasks []models.Task
+		database.DB.Where("id IN ?", upsertedIDs).Find(&tasks)
+		for _, t := range tasks {
+			if utils.DerefBool(t.Enabled, true) {
+				es.AddCronTask(&t)
+			} else {
+				es.RemoveCronTask(t.ID)
+			}
+		}
+	}
+}
+
 // StopTaskExecution stops a running task execution by LogID
 func (es *ExecutorService) StopTaskExecution(logID string) error {
 	var taskLog models.TaskLog
 	res := database.DB.Where("id = ?", logID).Limit(1).Find(&taskLog)
 	if res.Error != nil || res.RowsAffected == 0 {
-		return fmt.Errorf("日志不存在")
+		return fmt.Errorf("停止失败：找不到指定的执行记录 (LogID: %s)", logID)
 	}
 
+	// 1. 状态预校验
 	if taskLog.Status != constant.TaskStatusRunning {
-		return fmt.Errorf("任务已结束")
+		statusText := "已结束"
+		switch taskLog.Status {
+		case constant.TaskStatusSuccess:
+			statusText = "执行成功"
+		case constant.TaskStatusFailed:
+			statusText = "执行失败"
+		case constant.TaskStatusTimeout:
+			statusText = "执行超时"
+		case constant.TaskStatusCancelled:
+			statusText = "已取消"
+		}
+		return fmt.Errorf("操作无效：任务当前状态为 [%s]，无需停止", statusText)
 	}
 
 	task := es.taskService.GetTaskByID(taskLog.TaskID)
 	if task == nil {
-		return fmt.Errorf("任务不存在")
+		return fmt.Errorf("停止失败：关联的任务信息已丢失")
 	}
 
-	// 远程任务：发送停止指令到 Agent
+	// 2. 远程任务逻辑
 	if task.AgentID != nil && *task.AgentID != "" {
+		// 校验 Agent 是否在线
+		if !es.agentWSManager.IsAgentOnline(*task.AgentID) {
+			return fmt.Errorf("停止失败：目标 Agent (%s) 当前离线，无法下发指令", *task.AgentID)
+		}
+
 		logger.Infof("[Executor] 请求停止远程任务 #%s (Agent #%s, LogID: %s)", task.ID, *task.AgentID, logID)
-		return es.agentWSManager.SendToAgent(*task.AgentID, constant.WSTypeStop, map[string]interface{}{
+		err := es.agentWSManager.SendToAgent(*task.AgentID, constant.WSTypeStop, map[string]interface{}{
 			"log_id": logID,
 		})
+		if err != nil {
+			return fmt.Errorf("下发停止指令失败: %v", err)
+		}
+		return nil
 	}
 
-	// 本地任务：直接停止调度器中的执行实例
+	// 3. 本地任务逻辑
 	logger.Infof("[Executor] 请求停止本地任务 #%s (LogID: %s)", task.ID, logID)
 	if es.scheduler.StopLog(logID) {
 		return nil
 	}
 
-	return fmt.Errorf("任务当前不在运行队列中或已完成")
+	// 4. 容错处理：如果调度器中没有句柄，但数据库状态还是 running
+	// 这通常发生在程序异常重启后，需要手动清理掉这个“僵尸状态”
+	taskLog.Status = constant.TaskStatusFailed
+	errorMessage := "任务执行实例已丢失（可能由于系统重启导致），已自动同步状态为失败"
+	taskLog.Error = models.BigText(errorMessage)
+
+	// 更新数据库状态
+	database.DB.Model(&taskLog).Updates(map[string]interface{}{
+		"status": taskLog.Status,
+		"error":  taskLog.Error,
+	})
+
+	return fmt.Errorf("停止失败：%s", errorMessage)
 }
 
 // GetRunningCount 获取正在运行任务数量
@@ -794,7 +987,17 @@ func (es *ExecutorService) CheckConcurrency(taskID string) error {
 	}
 
 	if config.Concurrency == 0 && len(goids) > 0 {
-		return fmt.Errorf("任务正在运行中，拒绝并行执行，请前往日志查看")
+		// 检查目标 Agent 是否开启了排队机制
+		var isAgentQueueing bool
+		if task.AgentID != nil && *task.AgentID != "" {
+			var agent models.Agent
+			if err := database.DB.Select("scheduler_config").Where("id = ?", *task.AgentID).First(&agent).Error; err == nil {
+				isAgentQueueing = agent.SchedulerConfig.StrictQueue
+			}
+		}
+		if !isAgentQueueing {
+			return fmt.Errorf("任务正在运行中，拒绝并行执行，请前往日志查看")
+		}
 	}
 	return nil
 }
@@ -826,7 +1029,17 @@ func (es *ExecutorService) AddRunningGo(taskID string) (int64, error) {
 
 			// 如果并发为0(禁用)且已有执行中的任务，返回错误
 			if config.Concurrency == 0 && len(goids) > 0 {
-				return fmt.Errorf("task is running")
+				// 检查目标 Agent 是否开启了排队机制
+				var isAgentQueueing bool
+				if task.AgentID != nil && *task.AgentID != "" {
+					var agent models.Agent
+					if err := tx.Select("scheduler_config").Where("id = ?", *task.AgentID).First(&agent).Error; err == nil {
+						isAgentQueueing = agent.SchedulerConfig.StrictQueue
+					}
+				}
+				if !isAgentQueueing {
+					return fmt.Errorf("task is running")
+				}
 			}
 
 			goids = append(goids, goid)
@@ -879,7 +1092,7 @@ func (es *ExecutorService) RemoveRunningGo(taskID string, goid int64) {
 }
 
 // ExecuteRemoteForScheduler 供 Scheduler 调用，执行远程任务并等待结果
-func (es *ExecutorService) ExecuteRemoteForScheduler(task *models.Task, logID string, envs string, secrets []string) (*executor.Result, error) {
+func (es *ExecutorService) ExecuteRemoteForScheduler(ctx context.Context, task *models.Task, logID string, envs string, secrets []string) (*executor.Result, error) {
 	agentID := *task.AgentID
 	logger.Infof("[Executor] 远程执行任务 #%s: %s (Agent #%s, LogID: %s)", task.ID, task.Name, agentID, logID)
 
@@ -889,7 +1102,7 @@ func (es *ExecutorService) ExecuteRemoteForScheduler(task *models.Task, logID st
 	if res.Error != nil || res.RowsAffected == 0 {
 		return nil, fmt.Errorf("Agent #%s 不存在", agentID)
 	}
-	if !agent.Enabled {
+	if !utils.DerefBool(agent.Enabled, true) {
 		return nil, fmt.Errorf("Agent #%s 已禁用", agentID)
 	}
 	if es.agentWSManager == nil {
@@ -902,10 +1115,13 @@ func (es *ExecutorService) ExecuteRemoteForScheduler(task *models.Task, logID st
 
 	// 3. 发送指令
 	err := es.agentWSManager.SendToAgent(agentID, constant.WSTypeExecute, map[string]interface{}{
-		"task_id": task.ID,
-		"log_id":  logID,
-		"envs":    envs,
-		"secrets": secrets,
+		"task_id":      task.ID,
+		"log_id":       logID,
+		"envs":         envs,
+		"secrets":      secrets,
+		"command":      task.Command,
+		"pre_command":  task.PreCommand,
+		"post_command": task.PostCommand,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("发送执行命令失败: %v", err)
@@ -913,46 +1129,126 @@ func (es *ExecutorService) ExecuteRemoteForScheduler(task *models.Task, logID st
 
 	// 4. 等待结果或超时
 	timeout := task.Timeout
-	if timeout <= 0 {
-		timeout = 30
-	}
 
 	start := time.Now()
-	select {
-	case agentResult := <-resultChan:
-		return &executor.Result{
-			Output:    agentResult.Output,
-			Error:     agentResult.Error,
-			Status:    agentResult.Status,
-			Duration:  agentResult.Duration,
-			ExitCode:  agentResult.ExitCode,
-			StartTime: time.Unix(agentResult.StartTime, 0),
-			EndTime:   time.Unix(agentResult.EndTime, 0),
-		}, nil
-	case <-time.After(time.Duration(timeout) * time.Minute):
-		end := time.Now()
-		return &executor.Result{
-			Status:    constant.TaskStatusFailed,
-			Error:     "等待 Agent 结果超时",
-			Duration:  end.Sub(start).Milliseconds(),
-			ExitCode:  -1,
-			StartTime: start,
-			EndTime:   end,
-		}, fmt.Errorf("等待 Agent 结果超时")
+
+	var timeoutChan <-chan time.Time
+	if timeout > 0 {
+		timeoutChan = time.After(time.Duration(timeout) * time.Minute)
+	}
+
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case agentResult := <-resultChan:
+			return &executor.Result{
+				Output:    agentResult.Output,
+				Error:     agentResult.Error,
+				Status:    agentResult.Status,
+				Duration:  agentResult.Duration,
+				ExitCode:  agentResult.ExitCode,
+				StartTime: time.Unix(agentResult.StartTime, 0),
+				EndTime:   time.Unix(agentResult.EndTime, 0),
+			}, nil
+
+		case <-timeoutChan:
+			end := time.Now()
+			return &executor.Result{
+				Status:    constant.TaskStatusFailed,
+				Error:     "等待 Agent 结果超时",
+				Duration:  end.Sub(start).Milliseconds(),
+				ExitCode:  -1,
+				StartTime: start,
+				EndTime:   end,
+			}, fmt.Errorf("等待 Agent 结果超时")
+
+		case <-ctx.Done():
+			// 收到取消信号，向 Agent 发送停止指令
+			_ = es.agentWSManager.SendToAgent(agentID, constant.WSTypeStop, map[string]interface{}{
+				"log_id": logID,
+			})
+			end := time.Now()
+			return &executor.Result{
+				Status:    constant.TaskStatusCancelled,
+				Error:     "任务被手动停止或删除",
+				Duration:  end.Sub(start).Milliseconds(),
+				ExitCode:  -1,
+				StartTime: start,
+				EndTime:   end,
+			}, fmt.Errorf("任务被主动停止")
+
+		case <-ticker.C:
+			// 定期检查 Agent 是否在线
+			if !es.agentWSManager.IsAgentOnline(agentID) {
+				end := time.Now()
+				return &executor.Result{
+					Status:    constant.TaskStatusFailed,
+					Error:     "Agent 离线，任务被迫终止",
+					Duration:  end.Sub(start).Milliseconds(),
+					ExitCode:  -1,
+					StartTime: start,
+					EndTime:   end,
+				}, fmt.Errorf("Agent 离线")
+			}
+		}
 	}
 }
 
 // HandleAgentResult 处理来自 Agent 的异步结果
 func (es *ExecutorService) HandleAgentResult(result *models.AgentTaskResult) error {
+	// 加载机密以进行脱敏处理
+	var secrets []string
+	task := es.taskService.GetTaskByID(result.TaskID)
+	if task != nil {
+		_, secrets = es.loadEnvVars(task.ID, string(task.Envs))
+
+		// 如果是仓库同步任务，补充 AuthToken
+		if task.Type == constant.TaskTypeRepo {
+			var repoCfg models.RepoConfig
+			if err := json.Unmarshal([]byte(task.Config), &repoCfg); err == nil && repoCfg.AuthToken != "" {
+				secrets = append(secrets, repoCfg.AuthToken)
+			}
+		}
+	}
+
+	masks := append([]string{}, secrets...)
+	masks = append(masks, utils.GetSystemSecrets()...)
+	result.Command = utils.MaskSecrets(result.Command, masks)
+
 	taskLog, err := es.taskLogService.CreateTaskLogFromAgentResult(result)
 	if err != nil {
 		return err
 	}
-	return es.taskLogService.ProcessTaskCompletion(taskLog)
+
+	err = es.taskLogService.ProcessTaskCompletion(taskLog)
+	if err != nil {
+		return err
+	}
+
+	// 处理重试逻辑（针对 Agent 自主触发的定时任务）
+	if task != nil {
+		isSuccess := result.Status == constant.TaskStatusSuccess
+		es.HandleTaskRetry(task, &executor.ExecutionRequest{
+			TaskID: task.ID,
+			Type:   executor.TaskTypeCron,
+			Metadata: executor.ExecutionMetadata{
+				RetryIndex: 0, // 初始上报视为第 0 次
+			},
+		}, isSuccess, result.Status, result.ExitCode)
+	}
+
+	return nil
 }
 
 // BuildRepoCommand 构建仓库同步任务的命令
 func (es *ExecutorService) BuildRepoCommand(task *models.Task) (string, string) {
+	return BuildRepoCommand(task)
+}
+
+// BuildRepoCommand 构建仓库同步任务的命令（独立函数，方便 AgentService 调用）
+func BuildRepoCommand(task *models.Task) (string, string) {
 	var config models.RepoConfig
 	if err := json.Unmarshal([]byte(task.Config), &config); err != nil {
 		return "", ""
@@ -971,11 +1267,22 @@ func (es *ExecutorService) BuildRepoCommand(task *models.Task) (string, string) 
 		exePath = "baihu" // Fallback if executable path can't be found
 	}
 
+	// 尽量使用代号 $SCRIPTS_DIR$ 替代绝对路径，增加可读性和可移植性
+	scriptsDir, _ := filepath.Abs(constant.ScriptsWorkDir)
+	displayTargetPath := absTargetPath
+	if rel, err := filepath.Rel(scriptsDir, absTargetPath); err == nil && !strings.HasPrefix(rel, "..") {
+		if rel == "." {
+			displayTargetPath = constant.ScriptsDirPlaceholder
+		} else {
+			displayTargetPath = constant.ScriptsDirPlaceholder + "/" + filepath.ToSlash(rel)
+		}
+	}
+
 	args := []string{
 		"reposync",
 		"--source-type", config.SourceType,
 		"--source-url", config.SourceURL,
-		"--target-path", absTargetPath,
+		"--target-path", displayTargetPath,
 	}
 	if config.Branch != "" {
 		args = append(args, "--branch", config.Branch)
@@ -1004,8 +1311,20 @@ func (es *ExecutorService) BuildRepoCommand(task *models.Task) (string, string) 
 	if config.Dependence != "" {
 		args = append(args, "--dependence", config.Dependence)
 	}
+	if config.CommentToTask == "true" {
+		args = append(args, "--commenttotask", "true")
+	}
 	if config.Extensions != "" {
 		args = append(args, "--extensions", config.Extensions)
+	}
+	if config.RepoDirName != "" {
+		args = append(args, "--repo-name", config.RepoDirName)
+	}
+	if string(task.PreCommand) != "" {
+		args = append(args, "--pre-command", string(task.PreCommand))
+	}
+	if string(task.PostCommand) != "" {
+		args = append(args, "--post-command", string(task.PostCommand))
 	}
 
 	// 传递任务 ID，以便 reposync 内部直接处理脚本注册并输出日志
@@ -1090,7 +1409,7 @@ func (es *ExecutorService) refreshExecutionRequestEnvs(req *executor.ExecutionRe
 
 func (es *ExecutorService) ResolvePath(path string) string {
 	absScriptsDir := resolveAbsScriptsDir()
-	return strings.ReplaceAll(path, "$SCRIPTS_DIR$", absScriptsDir)
+	return strings.ReplaceAll(path, constant.ScriptsDirPlaceholder, absScriptsDir)
 }
 
 func buildRepoCommandEnvPrefix() string {

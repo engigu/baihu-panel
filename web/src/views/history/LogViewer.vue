@@ -1,55 +1,35 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted, nextTick } from 'vue'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { X, Search, AlertCircle, Check } from 'lucide-vue-next'
-import Ansi from 'ansi-to-vue3'
+import { ref, watch, onUnmounted } from 'vue'
+import LogDetailCard from '@/components/LogDetailCard.vue'
+import type { TaskLog } from '@/api'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   open: boolean
-  title: string
+  log: TaskLog | null
   content: string
-  status?: string
-}>()
+  title?: string
+  loading?: boolean
+  variant?: 'full' | 'simple'
+  isStopping?: boolean
+  emptyTitle?: string
+  emptyDescription?: string
+}>(), {
+  variant: 'simple',
+  isStopping: false
+})
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
+  'stop': []
+  'delete': [id: string]
 }>()
 
-const searchKeyword = ref('')
-const scrollContainer = ref<HTMLElement | null>(null)
-const shouldAutoScroll = ref(true)
+const isFullscreen = ref(false)
 
 function close() {
+  isFullscreen.value = false
   emit('update:open', false)
 }
-
-// 处理滚动事件，判断用户是否手动向上滚动
-function handleScroll() {
-  if (!scrollContainer.value) return
-  const { scrollTop, scrollHeight, clientHeight } = scrollContainer.value
-  // 如果距离底部小于 50px，认为用户想继续跟随滚动
-  const isAtBottom = scrollHeight - scrollTop - clientHeight < 50
-  shouldAutoScroll.value = isAtBottom
-}
-
-// 滚动到底部
-const scrollToBottom = async (smooth = true) => {
-  await nextTick()
-  if (scrollContainer.value && shouldAutoScroll.value) {
-    scrollContainer.value.scrollTo({
-      top: scrollContainer.value.scrollHeight,
-      behavior: smooth ? 'smooth' : 'auto'
-    })
-  }
-}
-
-// 监听内容变化，实现自动滚动
-watch(() => props.content, () => {
-  if (props.open) {
-    scrollToBottom(true)
-  }
-})
 
 // 统一控制 Body 滚动
 function toggleBodyScroll(lock: boolean) {
@@ -60,87 +40,57 @@ function toggleBodyScroll(lock: boolean) {
   }
 }
 
+function handleKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && props.open) {
+    close()
+  }
+}
+
 // 监听打开状态
 watch(() => props.open, (val) => {
   if (val) {
-    searchKeyword.value = ''
-    shouldAutoScroll.value = true // 每次重新打开都开启自动滚动
+    isFullscreen.value = false
     toggleBodyScroll(true)
-    scrollToBottom(false) // 首次打开立刻定位，不滑动
+    window.addEventListener('keydown', handleKeyDown)
   } else {
     toggleBodyScroll(false)
+    window.removeEventListener('keydown', handleKeyDown)
   }
 }, { immediate: true })
 
-// 确保组件卸载时恢复滚动
+// 确保组件卸载时恢复滚动并注销事件监听
 onUnmounted(() => {
   toggleBodyScroll(false)
+  window.removeEventListener('keydown', handleKeyDown)
 })
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
-      @click.self="close">
+    <div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-0 sm:p-4">
       <div
-        class="bg-background rounded-lg shadow-lg flex flex-col w-full sm:w-[90vw] md:w-[80vw] max-w-5xl h-[90vh] sm:h-[85vh]">
-        <div
-          class="flex flex-col sm:flex-row sm:items-center justify-between px-3 sm:px-4 py-2 sm:py-3 border-b shrink-0 gap-2">
-          <div class="flex items-center gap-3 min-w-0">
-            <span class="text-sm font-normal text-muted-foreground truncate">{{ title }}</span>
-            <div v-if="status"
-              class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-normal uppercase transition-all shrink-0 border shadow-sm ring-4 ring-transparent hover:ring-primary/5"
-              :class="status === 'success' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
-                status === 'failed' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
-                  'bg-blue-500/10 text-blue-600 border-blue-500/20'">
-              <Check v-if="status === 'success'" class="h-3 w-3 fill-green-500/20" />
-              <X v-else-if="status === 'failed'" class="h-3 w-3 fill-red-500/20" />
-              <span v-if="status === 'running'" class="relative flex h-1.5 w-1.5 mr-0.5">
-                <span
-                  class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-blue-500"></span>
-              </span>
-              {{ status === 'success' ? 'SUCCESS' : status === 'failed' ? 'FAILED' : 'RUNNING' }}
-            </div>
-          </div>
-          <div class="flex items-center gap-2">
-            <div class="relative flex-1 sm:flex-none">
-              <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input v-model="searchKeyword" placeholder="搜索内容..." class="h-8 pl-9 w-full sm:w-56 text-sm" />
-            </div>
-            <Button variant="ghost" size="icon" class="h-7 w-7 shrink-0" @click="close">
-              <X class="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        <div ref="scrollContainer" class="flex-1 overflow-auto bg-black/5 dark:bg-white/5 flex flex-col" @scroll="handleScroll">
-          <div v-if="!content.trim()" class="flex-1 flex flex-col items-center justify-center p-8 select-none text-center">
-            <div class="w-16 h-16 rounded-3xl bg-muted/20 flex items-center justify-center mb-6 border border-muted-foreground/10 mx-auto">
-              <AlertCircle class="h-8 w-8 text-muted-foreground/20" />
-            </div>
-            <span class="text-base text-muted-foreground font-normal">未检测到输出内容</span>
-            <p class="text-xs text-muted-foreground/40 mt-2 max-w-[280px] leading-relaxed mx-auto">
-              此任务已执行完毕，但在标准输出（Stdout）和错误输出（Stderr）通道中均未捕获到任何有效数据。
-            </p>
-          </div>
-          <div v-else class="p-3 sm:p-4 font-mono text-[11px] sm:text-xs leading-5 break-all whitespace-pre-wrap selection:bg-primary/20 selection:text-primary">
-            <Ansi :content="content" />
-          </div>
-        </div>
+        :class="[
+          'bg-background shadow-2xl flex flex-col transition-all duration-300 overflow-hidden',
+          isFullscreen 
+            ? 'fixed inset-0 w-screen h-screen z-[60] rounded-none' 
+            : 'w-full sm:w-[90vw] md:w-[80vw] max-w-5xl h-[90vh] sm:h-[85vh] rounded-xl'
+        ]">
+        <LogDetailCard 
+          class="flex-1"
+          :log="log" 
+          :content="content" 
+          :title="title"
+          :loading="loading"
+          :is-stopping="isStopping"
+          :variant="isFullscreen ? 'simple' : variant"
+          :empty-title="emptyTitle"
+          :empty-description="emptyDescription"
+          @close="close"
+          @maximize="isFullscreen = !isFullscreen"
+          @stop="$emit('stop')"
+          @delete="$emit('delete', $event)"
+        />
       </div>
     </div>
   </Teleport>
 </template>
-
-<style scoped>
-:deep(code) {
-  display: block;
-  padding: 0 !important;
-  margin: 0 !important;
-  background: transparent !important;
-}
-
-:deep(span) {
-  vertical-align: top;
-}
-</style>

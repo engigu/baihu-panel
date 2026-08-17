@@ -1,7 +1,6 @@
 package reposync
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -13,19 +12,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/engigu/baihu-panel/internal/services/tasks"
+	"github.com/engigu/baihu-panel/cmd/clibase"
+	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/services/repo"
 	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 type Config struct {
-	SourceType string
-	SourceURL  string
-	TargetPath string
-	Branch     string
-	Path       string
-	SingleFile bool
-	Proxy      string
-	ProxyURL   string
+	SourceType     string
+	SourceURL      string
+	TargetPath     string
+	Branch         string
+	Path           string
+	SingleFile     bool
+	Proxy          string
+	ProxyURL       string
 	AuthToken      string
 	HttpProxy      string
 	WhitelistPaths string // Comma or vertical line separated paths to preserve or filter (whitelist)
@@ -33,8 +34,13 @@ type Config struct {
 	Dependence     string // Script dependence file keywords, vertical line separated
 	Extensions     string // Script file extensions, vertical line separated
 	TaskID         string
+	RepoTaskID     string
 	TaskLanguages  string
 	TaskTimeout    int
+	CommentToTask  string
+	PreCommand     string
+	PostCommand    string
+	RepoName       string
 }
 
 func Run(args []string) {
@@ -56,10 +62,47 @@ func Run(args []string) {
 	fs.StringVar(&cfg.Extensions, "extensions", "", "Script extensions (| separated)")
 	fs.StringVar(&cfg.TaskID, "task-id", "", "Task ID for metadata")
 	fs.StringVar(&cfg.TaskLanguages, "task-langs", "", "Configured languages (JSON)")
-	fs.StringVar(&cfg.TaskID, "repo-task-id", "", "Original Task ID")
+	fs.StringVar(&cfg.RepoTaskID, "repo-task-id", "", "Original Task ID")
 	fs.IntVar(&cfg.TaskTimeout, "task-timeout", 30, "Task timeout (minutes)")
+	fs.StringVar(&cfg.CommentToTask, "commenttotask", "false", "Compatible with QL format script comment parsing (true/false)")
+	fs.StringVar(&cfg.PreCommand, "pre-command", "", "Default pre-command for discovered tasks")
+	fs.StringVar(&cfg.PostCommand, "post-command", "", "Default post-command for discovered tasks")
+	fs.StringVar(&cfg.RepoName, "repo-name", "", "Custom repository directory name")
 
-	fs.Parse(args)
+	printHelp := func() {
+		fmt.Fprintf(os.Stderr, "\n白虎面板仓库同步工具 (Reposync)\n\n")
+		fmt.Fprintf(os.Stderr, "用法:\n")
+		fmt.Fprintf(os.Stderr, "  baihu reposync [参数]\n\n")
+		fmt.Fprintf(os.Stderr, "参数详情:\n")
+		fs.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\n示例:\n")
+		fmt.Fprintf(os.Stderr, "  baihu reposync --source-url https://github.com/xxx/repo.git --target-path $SCRIPTS_DIR$/repo1\n\n")
+	}
+
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		printHelp()
+		return
+	}
+
+	fs.Usage = printHelp
+
+	if err := fs.Parse(args); err != nil {
+		return
+	}
+
+	if cfg.SourceURL == "" {
+		fmt.Fprintf(os.Stderr, "错误: 必须提供 --source-url 参数\n")
+		fs.Usage()
+		return
+	}
+
+	// 处理 $SCRIPTS_DIR$ 代号替换
+	if strings.Contains(cfg.TargetPath, constant.ScriptsDirPlaceholder) {
+		scriptsDir := os.Getenv("BH_SCRIPTS_DIR")
+		if scriptsDir != "" {
+			cfg.TargetPath = filepath.Clean(strings.ReplaceAll(cfg.TargetPath, constant.ScriptsDirPlaceholder, scriptsDir))
+		}
+	}
 
 	fmt.Println("========================================")
 	fmt.Println("  仓库同步任务开始  ")
@@ -74,18 +117,76 @@ func Run(args []string) {
 		syncURL(cfg)
 	}
 
+	// 执行前置指令
+	if cfg.PreCommand != "" {
+		fmt.Printf("[准备] 执行同步前指令: %s\n", cfg.PreCommand)
+		// 计算当前仓库真实的物理路径
+		repoDir := getActualRepoDir(cfg)
+		fmt.Printf("[准备] 工作目录: %s\n", repoDir)
+		fmt.Printf("[准备] 注入环境变量: CURR_REPO_DIR=%s\n", repoDir)
+
+		shell, shellArgs := utils.GetShellCommand(cfg.PreCommand)
+		envs := append(os.Environ(), "CURR_REPO_DIR="+repoDir)
+		runCmd(append([]string{shell}, shellArgs...), repoDir, envs)
+	}
+
 	// 执行脚本过滤（仅限 git 模式，url 加载通常为单文件，暂不处理过滤）
 	if cfg.SourceType == "git" {
 		fmt.Printf("[3/3] 正在执行脚本过滤与文件清理...\n")
 		filterFiles(cfg)
 
 		if cfg.TaskID != "" {
-			tasks.ParseRepoScriptsAndAddCron(nil, cfg.TaskID, os.Stdout)
+			upsertedIDs, deletedIDs := repo.ParseRepoScriptsAndAddCron(cfg.TaskID, os.Stdout, cfg.CommentToTask == "true")
+			if len(upsertedIDs) > 0 || len(deletedIDs) > 0 {
+				notifyMainServerToSyncRepoTasks(cfg.TaskID, upsertedIDs, deletedIDs)
+			}
 		}
 	}
+
+	// 执行后置指令
+	if cfg.PostCommand != "" {
+		fmt.Printf("[收尾] 执行同步后指令: %s\n", cfg.PostCommand)
+
+		// 计算当前仓库真实的物理路径
+		repoDir := getActualRepoDir(cfg)
+		fmt.Printf("[收尾] 工作目录: %s\n", repoDir)
+		fmt.Printf("[收尾] 注入环境变量: CURR_REPO_DIR=%s\n", repoDir)
+
+		shell, shellArgs := utils.GetShellCommand(cfg.PostCommand)
+		envs := append(os.Environ(), "CURR_REPO_DIR="+repoDir)
+		runCmd(append([]string{shell}, shellArgs...), repoDir, envs)
+	}
+
 	fmt.Println("\n========================================")
 	fmt.Println("  仓库同步任务完成  ")
 	fmt.Println("========================================")
+}
+
+func getActualRepoDir(cfg Config) string {
+	if cfg.SourceType == "git" {
+		repoName := cfg.RepoName
+		if repoName == "" {
+			repoName = utils.GetRepoIdentifier(cfg.SourceURL, cfg.Branch)
+		}
+		if repoName == "." {
+			return cfg.TargetPath
+		}
+		return filepath.Join(cfg.TargetPath, repoName)
+	}
+	return cfg.TargetPath
+}
+
+func notifyMainServerToSyncRepoTasks(repoID string, upsertedIDs []string, deletedIDs []string) {
+	_, err := clibase.CallInternalAPI("POST", "/internal/tasks/sync-repo-status", map[string]interface{}{
+		"repo_id":      repoID,
+		"upserted_ids": upsertedIDs,
+		"deleted_ids":  deletedIDs,
+	})
+	if err != nil {
+		fmt.Printf(">> [通知] 调度器同步失败: %v\n", err)
+		return
+	}
+	fmt.Println(">> [通知] 已成功将变动任务增量同步至主程序调度器")
 }
 
 func syncGit(cfg Config) {
@@ -115,21 +216,40 @@ func syncGit(cfg Config) {
 
 	gitDir := filepath.Join(dest, ".git")
 	if isDir(dest) && !pathExists(gitDir) {
-		repoName := utils.GetRepoIdentifier(cfg.SourceURL, cfg.Branch)
-		dest = filepath.Join(dest, repoName)
-		fmt.Printf("目标路径自动追加仓库名: %s\n", dest)
-		gitDir = filepath.Join(dest, ".git")
+		repoName := cfg.RepoName
+		if repoName == "" {
+			repoName = utils.GetRepoIdentifier(cfg.SourceURL, cfg.Branch)
+		}
+		if repoName != "." {
+			dest = filepath.Join(dest, repoName)
+			fmt.Printf("目标路径自动追加仓库名: %s\n", dest)
+			gitDir = filepath.Join(dest, ".git")
+		} else {
+			fmt.Printf("目标路径使用当前目录 (不追加仓库名): %s\n", dest)
+		}
 	}
 
 	restore := preserve(dest, cfg.WhitelistPaths)
 	defer restore()
 
 	if pathExists(gitDir) {
-		fmt.Println("检测到已存在仓库，执行 git pull")
-		if cfg.Branch != "" {
-			runCmd([]string{"git", "checkout", cfg.Branch}, dest, env)
+		fmt.Println("检测到已存在仓库，正在更新...")
+		runCmd([]string{"git", "fetch", "--all"}, dest, env)
+
+		targetBranch := cfg.Branch
+		if targetBranch != "" {
+			// 如果切换了分支，或者当前分支偏离，强制切换并对齐远程
+			runCmd([]string{"git", "checkout", "-B", targetBranch, "origin/" + targetBranch}, dest, env)
+		} else {
+			targetBranch = getCurrentBranch(dest, env)
 		}
-		runCmd([]string{"git", "pull"}, dest, env)
+
+		if targetBranch != "" {
+			fmt.Printf("执行强制同步 (reset --hard origin/%s)\n", targetBranch)
+			runCmd([]string{"git", "reset", "--hard", "origin/" + targetBranch}, dest, env)
+		} else {
+			runCmd([]string{"git", "pull", "--rebase"}, dest, env)
+		}
 	} else {
 		fmt.Println("执行 git clone")
 		parentDir := filepath.Dir(dest)
@@ -146,7 +266,7 @@ func syncGit(cfg Config) {
 			fmt.Println("提示: 请清空目标目录或指定一个新目录")
 			os.Exit(1)
 		}
-		// If dest exists but is empty now, git clone might still complain if the directory itself exists? 
+		// If dest exists but is empty now, git clone might still complain if the directory itself exists?
 		// No, git clone works if dir is empty.
 
 		cloneCmd := []string{"git", "clone", "--depth", "1"}
@@ -247,7 +367,7 @@ func buildProxyURL(url string, proxyType string, proxyURL string) string {
 	if proxyType == "" || proxyType == "none" {
 		return url
 	}
-	
+
 	// 如果 URL 已经包含明显的代理前缀 (如用户手动填写的 http://ghproxy.com/...)
 	// 则跳过内置代理逻辑
 	if strings.Contains(url, "googo.win") || (proxyType == "custom" && strings.HasPrefix(url, proxyURL)) {
@@ -333,75 +453,16 @@ func isRawFileURL(url string) bool {
 	return false
 }
 
-
-
-var ansiRegex = regexp.MustCompile("\x1b\\[[0-9;]*[a-zA-Z]")
-
-type cleanWriter struct {
-	out io.Writer
-	buf []byte
-}
-
-func (c *cleanWriter) Write(p []byte) (n int, err error) {
-	c.buf = append(c.buf, p...)
-
-	for {
-		idx := bytes.IndexAny(c.buf, "\r\n")
-		if idx == -1 {
-			break
-		}
-
-		if c.buf[idx] == '\r' && idx == len(c.buf)-1 {
-			// Ends with \r across a chunk, wait for next.
-			break
-		}
-
-		char := c.buf[idx]
-		line := string(c.buf[:idx])
-		c.buf = c.buf[idx+1:]
-
-		if char == '\r' && len(c.buf) > 0 && c.buf[0] == '\n' {
-			c.buf = c.buf[1:]
-			char = '\n'
-		}
-
-		s := ansiRegex.ReplaceAllString(line, "")
-
-		if char == '\r' {
-			continue // filter out terminal progress overwrites
-		}
-
-		if s != "" {
-			c.out.Write([]byte(s + "\n"))
-		}
-	}
-	return len(p), nil
-}
-
-func (c *cleanWriter) Flush() {
-	if len(c.buf) > 0 {
-		s := string(c.buf)
-		if strings.HasSuffix(s, "\r") {
-			s = s[:len(s)-1]
-		}
-		s = ansiRegex.ReplaceAllString(s, "")
-		if s != "" {
-			c.out.Write([]byte(s + "\n"))
-		}
-		c.buf = nil
-	}
-}
-
 func runCmd(args []string, dir string, env []string) {
 	fmt.Printf(">> %s\n", strings.Join(args, " "))
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Dir = dir
 	cmd.Env = env
-	
-	cw := &cleanWriter{out: os.Stdout}
+
+	cw := clibase.NewCleanWriter(os.Stdout)
 	cmd.Stdout = cw
 	cmd.Stderr = cw
-	
+
 	if err := cmd.Run(); err != nil {
 		cw.Flush()
 		fmt.Printf("命令执行失败: %v\n", err)
@@ -431,6 +492,17 @@ func isDirEmpty(path string) bool {
 	defer f.Close()
 	_, err = f.Readdirnames(1)
 	return err == io.EOF
+}
+
+func getCurrentBranch(dir string, env []string) string {
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Dir = dir
+	cmd.Env = env
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // preserve moves specified paths to a temporary location and returns a function to restore them
@@ -533,18 +605,7 @@ func filterFiles(cfg Config) {
 		return
 	}
 
-	dest := cfg.TargetPath
-	// If the dest appended a repo name in syncGit, we need to find it.
-	// However, BuildRepoCommand already passes the abs path which might already be the specific repo dir.
-	// We'll walk from cfg.TargetPath.
-	
-	gitDir := filepath.Join(dest, ".git")
-	if isDir(dest) && !pathExists(gitDir) {
-		repoName := utils.GetRepoIdentifier(cfg.SourceURL, cfg.Branch)
-		if pathExists(filepath.Join(dest, repoName)) {
-			dest = filepath.Join(dest, repoName)
-		}
-	}
+	dest := getActualRepoDir(cfg)
 
 	fmt.Printf("开始执行脚本过滤: %s\n", dest)
 
@@ -555,7 +616,7 @@ func filterFiles(cfg Config) {
 
 	// We'll collect files to delete to avoid modifying while walking if possible.
 	// But os.RemoveAll is fine.
-	
+
 	count := 0
 	filepath.Walk(dest, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -636,7 +697,7 @@ func splitKeywords(s string) []string {
 	} else {
 		parts = []string{s}
 	}
-	
+
 	var res []string
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
@@ -693,13 +754,15 @@ func cleanEmptyDirs(root string) {
 		}
 		return nil
 	})
-	
+
 	// Actually we need to do this recursively or multiple times.
 	// A simpler way:
 	entries, _ := os.ReadDir(root)
 	for _, entry := range entries {
 		if entry.IsDir() {
-			if entry.Name() == ".git" { continue }
+			if entry.Name() == ".git" {
+				continue
+			}
 			dirPath := filepath.Join(root, entry.Name())
 			cleanEmptyDirs(dirPath)
 			// Check if now empty
@@ -710,4 +773,3 @@ func cleanEmptyDirs(root string) {
 	}
 
 }
-

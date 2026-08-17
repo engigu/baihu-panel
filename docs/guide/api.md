@@ -16,6 +16,7 @@ import '@scalar/api-reference/style.css'
         },
         theme: 'alternate',
         showSidebar: true,
+        withDefaultFonts: false,
         servers: [
           { 
             url: '{protocol}://{host}:{port}/open2api/v1',
@@ -42,6 +43,8 @@ import '@scalar/api-reference/style.css'
 .scalar-container {
   height: 100vh;
   width: 100vw;
+  --scalar-font: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --scalar-font-code: "Ubuntu Mono", monospace;
 }
 
 /* 覆盖 VitePress 可能存在的样式干扰 */

@@ -29,11 +29,13 @@ func initOpenAPIV1Routes(root *gin.RouterGroup, c *Controllers) {
 func registerOpenAPITaskRoutes(g *gin.RouterGroup, c *Controllers) {
 	tasks := g.Group("/tasks")
 	{
+		tasks.POST("", c.Task.CreateTask)
 		tasks.GET("", c.Task.GetTasks)
 		tasks.GET("/:id", c.Task.GetTask)
 		tasks.PUT("/:id", c.Task.UpdateTask)
 		tasks.DELETE("/:id", c.Task.DeleteTask)
 		tasks.POST("/stop/:logID", c.Task.StopTask)
+		tasks.GET("/tags", c.Task.GetTags)
 	}
 }
 

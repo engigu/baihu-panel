@@ -141,7 +141,7 @@ func (lc *LogController) ClearLogs(c *gin.Context) {
 	var req struct {
 		TaskID *string `json:"task_id"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, err.Error())
 		return

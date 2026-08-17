@@ -1,31 +1,68 @@
 package models
 
 import (
-	"github.com/engigu/baihu-panel/internal/constant"
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
+	"time"
 
-	"gorm.io/gorm"
+	"github.com/engigu/baihu-panel/internal/constant"
 )
+
+// AgentSchedulerConfig Agent 调度器配置
+type AgentSchedulerConfig struct {
+	WorkerCount  int           `json:"worker_count"`
+	QueueSize    int           `json:"queue_size"`
+	RateInterval time.Duration `json:"rate_interval"`
+	Verbose      bool          `json:"verbose"`
+	StrictQueue  bool          `json:"strict_queue"`
+}
+
+// Value 序列化为数据库字符串
+func (c AgentSchedulerConfig) Value() (driver.Value, error) {
+	bytes, err := json.Marshal(c)
+	if err != nil {
+		return nil, err
+	}
+	return string(bytes), nil
+}
+
+// Scan 反序列化数据库字符串为结构体
+func (c *AgentSchedulerConfig) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		str, ok := value.(string)
+		if !ok {
+			return errors.New("invalid type for AgentSchedulerConfig")
+		}
+		bytes = []byte(str)
+	}
+	return json.Unmarshal(bytes, c)
+}
 
 // Agent 远程执行代理
 type Agent struct {
-	ID          string         `json:"id" gorm:"primaryKey;size:20"`
-	Name        string         `json:"name" gorm:"size:100;not null"`                 // Agent 名称
-	Token       string         `json:"token" gorm:"size:64;index"`                    // 认证 Token（可重复使用）
-	MachineID   string         `json:"machine_id" gorm:"size:64;uniqueIndex"`         // 机器识别码（唯一）
-	Description string         `json:"description" gorm:"size:255"`                   // 描述
-	Status      string         `json:"status" gorm:"size:20;default:'pending';index"` // 状态: constant.AgentStatusOnline, constant.AgentStatusOffline
-	LastSeen    *LocalTime     `json:"last_seen"`                                     // 最后心跳时间
-	IP          string         `json:"ip" gorm:"size:45"`                             // Agent IP 地址
-	Version     string         `json:"version" gorm:"size:50"`                        // Agent 版本
-	BuildTime   string         `json:"build_time" gorm:"size:30"`                     // Agent 构建时间
-	Hostname    string         `json:"hostname" gorm:"size:100"`                      // Agent 主机名
-	OS          string         `json:"os" gorm:"size:20"`                             // 操作系统
-	Arch        string         `json:"arch" gorm:"size:20"`                           // 架构
-	ForceUpdate bool           `json:"force_update" gorm:"default:false"`             // 强制更新标志
-	Enabled     bool           `json:"enabled" gorm:"default:true"`                   // 是否启用
-	CreatedAt   LocalTime      `json:"created_at"`
-	UpdatedAt   LocalTime      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+	ID              string               `json:"id" gorm:"primaryKey;size:20"`
+	Name            string               `json:"name" gorm:"size:100;not null"`                 // Agent 名称
+	Token           string               `json:"token" gorm:"size:64;index"`                    // 认证 Token（可重复使用）
+	MachineID       string               `json:"machine_id" gorm:"size:64;uniqueIndex"`         // 机器识别码（唯一）
+	Description     string               `json:"description" gorm:"size:255"`                   // 描述
+	Status          string               `json:"status" gorm:"size:20;default:'pending';index"` // 状态: constant.AgentStatusOnline, constant.AgentStatusOffline
+	LastSeen        *LocalTime           `json:"last_seen"`                                     // 最后心跳时间
+	IP              string               `json:"ip" gorm:"size:45"`                             // Agent IP 地址
+	Version         string               `json:"version" gorm:"size:50"`                        // Agent 版本
+	BuildTime       string               `json:"build_time" gorm:"size:30"`                     // Agent 构建时间
+	Hostname        string               `json:"hostname" gorm:"size:100"`                      // Agent 主机名
+	OS              string               `json:"os" gorm:"size:20"`                             // 操作系统
+	Arch            string               `json:"arch" gorm:"size:20"`                           // 架构
+	ForceUpdate     bool                 `json:"force_update" gorm:"default:false"`             // 强制更新标志
+	Enabled         *bool                `json:"enabled" gorm:"default:true"`                   // 是否启用
+	SchedulerConfig AgentSchedulerConfig `json:"scheduler_config" gorm:"type:text"`             // 调度配置，以 JSON 字符串形式存储在 Text 类型字段中
+	CreatedAt       LocalTime            `json:"created_at"`
+	UpdatedAt       LocalTime            `json:"updated_at"`
 }
 
 func (Agent) TableName() string {
@@ -34,16 +71,15 @@ func (Agent) TableName() string {
 
 // AgentToken Agent 令牌
 type AgentToken struct {
-	ID        string         `json:"id" gorm:"primaryKey;size:20"`
-	Token     string         `json:"token" gorm:"size:64;uniqueIndex;not null"` // 令牌
-	Remark    string         `json:"remark" gorm:"size:255"`                    // 备注
-	MaxUses   int            `json:"max_uses" gorm:"default:0"`                 // 最大使用次数，0 表示无限制
-	UsedCount int            `json:"used_count" gorm:"default:0"`               // 已使用次数
-	ExpiresAt *LocalTime     `json:"expires_at"`                                // 过期时间，null 表示永不过期
-	Enabled   bool           `json:"enabled" gorm:"default:true"`               // 是否启用
-	CreatedAt LocalTime      `json:"created_at"`
-	UpdatedAt LocalTime      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
+	ID        string     `json:"id" gorm:"primaryKey;size:20"`
+	Token     string     `json:"token" gorm:"size:64;uniqueIndex;not null"` // 令牌
+	Remark    string     `json:"remark" gorm:"size:255"`                    // 备注
+	MaxUses   int        `json:"max_uses" gorm:"default:0"`                 // 最大使用次数，0 表示无限制
+	UsedCount int        `json:"used_count" gorm:"default:0"`               // 已使用次数
+	ExpiresAt *LocalTime `json:"expires_at"`                                // 过期时间，null 表示永不过期
+	Enabled   *bool      `json:"enabled" gorm:"default:true"`               // 是否启用
+	CreatedAt LocalTime  `json:"created_at"`
+	UpdatedAt LocalTime  `json:"updated_at"`
 }
 
 func (AgentToken) TableName() string {
@@ -52,13 +88,15 @@ func (AgentToken) TableName() string {
 
 // AgentTask Agent 任务配置（用于下发给 Agent）
 type AgentTask struct {
-	ID        string              `json:"id"`
-	Name      string              `json:"name"`
-	Command   string              `json:"command"`
-	Schedule  string              `json:"schedule"`
-	Timeout   int                 `json:"timeout"`
-	WorkDir   string              `json:"work_dir"`
-	Envs      string              `json:"envs"`
+	ID          string              `json:"id"`
+	Name        string              `json:"name"`
+	Command     string              `json:"command"`
+	PreCommand  string              `json:"pre_command"`
+	PostCommand string              `json:"post_command"`
+	Schedule    string              `json:"schedule"`
+	Timeout     int                 `json:"timeout"`
+	WorkDir     string              `json:"work_dir"`
+	Envs        string              `json:"envs"`
 	Languages   []map[string]string `json:"languages"`
 	RandomRange int                 `json:"random_range"`
 	Secrets     []string            `json:"secrets"`
@@ -75,6 +113,14 @@ func (t AgentTask) GetName() string {
 
 func (t AgentTask) GetCommand() string {
 	return t.Command
+}
+
+func (t AgentTask) GetPreCommand() string {
+	return t.PreCommand
+}
+
+func (t AgentTask) GetPostCommand() string {
+	return t.PostCommand
 }
 
 func (t AgentTask) GetSchedule() string {

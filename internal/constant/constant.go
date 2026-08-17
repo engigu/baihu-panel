@@ -1,18 +1,8 @@
 package constant
 
+import "time"
+
 const (
-
-	// ConfigPath 配置文件路径
-	ConfigPath = "configs/config.ini"
-
-	// DataDir 数据目录
-	DataDir = "./data"
-
-	// DefaultDBPath 默认数据库路径
-	DefaultDBPath = "./data/baihu.db"
-
-	// WebDistDir 前端构建目录
-	WebDistDir = "./web/dist"
 
 	// DefaultRole 默认用户角色
 	DefaultRole = "user"
@@ -20,29 +10,24 @@ const (
 	// AdminRole 管理员角色
 	AdminRole = "admin"
 
-	// ScriptsWorkDir 脚本工作目录
-	ScriptsWorkDir = "./data/scripts"
-
-	// CookieName Cookie 名称
-	CookieName = "BHToken"
-
 	// DefaultTaskTimeout 默认任务超时时间（分钟）
 	DefaultTaskTimeout = 30
 
 	// Settings Section 常量
-	SectionSite      = "site"
-	SectionSystem    = "system"
-	SectionScheduler = "scheduler"
-	SectionSecurity  = "security"
-	SectionNotify    = "notify"
+	SectionSite         = "site"
+	SectionSystem       = "system"
+	SectionScheduler    = "scheduler"
+	SectionSecurity     = "security"
+	SectionNotify       = "notify"
 
 	// Site Settings Key 常量
 	KeyTitle        = "title"
 	KeySubtitle     = "subtitle"
 	KeyIcon         = "icon"
-	KeyPageSize     = "page_size"
-	KeyCookieDays   = "cookie_days"
-	KeyOpenapiToken = "openapi_token"
+	KeyPageSize          = "page_size"
+	KeyCookieDays        = "cookie_days"
+	KeyOpenapiToken      = "openapi_token"
+	KeyActiveWebUI       = "active_webui"
 
 	// Security Settings Key 常量
 	KeySecret = "secret"
@@ -58,6 +43,8 @@ const (
 	KeyPushLogMaxCount      = "push_log_max_count"
 	KeyLoginLogDays         = "login_log_days"
 	KeyLoginLogMaxCount     = "login_log_max_count"
+	KeySchedulerLogDays     = "scheduler_log_days"
+	KeySchedulerLogMaxCount = "scheduler_log_max_count"
 
 	// Scheduler Settings Key 常量
 	KeyWorkerCount  = "worker_count"
@@ -73,8 +60,8 @@ const (
 	// Notify Templates Keys
 	KeyNotifyTemplateUserLoginTitle       = "notify_template_user_login_title"
 	KeyNotifyTemplateUserLoginText        = "notify_template_user_login_text"
-	KeyNotifyTemplateBruteForceLoginTitle  = "notify_template_brute_force_login_title"
-	KeyNotifyTemplateBruteForceLoginText   = "notify_template_brute_force_login_text"
+	KeyNotifyTemplateBruteForceLoginTitle = "notify_template_brute_force_login_title"
+	KeyNotifyTemplateBruteForceLoginText  = "notify_template_brute_force_login_text"
 	KeyNotifyTemplatePasswordChangedTitle = "notify_template_password_changed_title"
 	KeyNotifyTemplatePasswordChangedText  = "notify_template_password_changed_text"
 	KeyNotifyTemplateTaskSuccessTitle     = "notify_template_task_success_title"
@@ -94,13 +81,19 @@ const (
 	EventPasswordChanged = "password_changed"
 
 	// 任务事件类型
-	EventTaskSuccess = "task_success"
-	EventTaskFailed  = "task_failed"
-	EventTaskTimeout = "task_timeout"
+	EventTaskSuccess   = "task_success"
+	EventTaskFailed    = "task_failed"
+	EventTaskTimeout   = "task_timeout"
+	EventTaskRunning   = "task_running"
+	EventTaskQueued    = "task_queued"
+	EventTaskCancelled = "task_cancelled"
 
 	// 其他事件类型
 	EventSystemNotice = "system_notice"
+	EventSchedulerLog = "scheduler_log"
 	EventNotifySent   = "notify_sent"
+	EventAppLogAdded  = "app_log_added"
+	EventBackupRestored = "backup_restored"
 
 	// WebSocket 消息类型
 	WSTypeHeartbeat     = "heartbeat"
@@ -152,6 +145,11 @@ const (
 	// 虚拟任务 ID
 	WorkflowVirtualTaskID = "-1"
 
+	// 任务置顶类型
+	PinTypeNone = "none"
+	PinTypeTop  = "top"
+
+	// 触发类型
 	TriggerTypeCron         = "cron"
 	TriggerTypeBaihuStartup = "baihu_startup"
 	TriggerTypeManual       = "manual"
@@ -166,6 +164,7 @@ const (
 	LogCategorySystemNotice = "system_notice"
 	LogCategoryPushLog      = "push_log"
 	LogCategoryLoginLog     = "login_log"
+	LogCategorySchedulerLog = "scheduler_log"
 
 	// AppLog 级别
 	LogLevelInfo    = "info"
@@ -181,7 +180,28 @@ const (
 	// Env Type
 	EnvTypeNormal = "normal"
 	EnvTypeSecret = "secret"
+
+	// Relation Types
+	RelationTypeTaskTag = "task_tag"
+	RelationTypeTaskEnv = "task_env"
+	RelationTypeEnvTag  = "env_tag"
+
+	// WebSocket 安全常量
+	// PongWait 收到 pong 的超时时间
+	PongWait = 60 * time.Second
+	// PingPeriod 发送 ping 的周期
+	PingPeriod = (PongWait * 9) / 10
+	// MaxMessageSize 允许的最大消息大小
+	MaxMessageSize = 1024 * 1024 // 1MB
+	// MaxLogSize 允许的最大日志大小 (保留末尾 10MB)
+	MaxLogSize = 10 * 1024 * 1024 // 10MB
+
+	// ScriptsDirPlaceholder 脚本目录占位符
+	ScriptsDirPlaceholder = "$SCRIPTS_DIR$"
 )
+
+// CookieName Cookie 名称
+var CookieName = "BHToken"
 
 // TablePrefix 表前缀，从配置文件读取
 var TablePrefix string
@@ -198,6 +218,7 @@ var (
 	RuntimeDBPath        string
 	RuntimeDBDSN         string
 	RuntimeDBTablePrefix string
+	RuntimeDBSSLMode     string
 )
 
 // Secret JWT和密码salt密钥，运行中自动从数据库加载
@@ -212,11 +233,12 @@ var DefaultIcon = `<svg t="1766107903919" class="icon" viewBox="0 0 1024 1024" v
 // DefaultSettings 默认系统设置
 var DefaultSettings = map[string]map[string]string{
 	SectionSite: {
-		KeyTitle:      "白虎面板",
-		KeySubtitle:   "极致轻量、高性能的自动化任务调度平台",
-		KeyIcon:       DefaultIcon,
-		KeyPageSize:   "10",
-		KeyCookieDays: "7",
+		KeyTitle:       "白虎面板",
+		KeySubtitle:    "极致轻量、高性能的自动化任务调度平台",
+		KeyIcon:        DefaultIcon,
+		KeyPageSize:    "10",
+		KeyCookieDays:  "7",
+		KeyActiveWebUI: "default",
 	},
 	SectionScheduler: {
 		KeyWorkerCount:  "4",
@@ -228,8 +250,8 @@ var DefaultSettings = map[string]map[string]string{
 		// Login
 		KeyNotifyTemplateUserLoginTitle:       "用户登录(成功/失败)",
 		KeyNotifyTemplateUserLoginText:        "用户 {{username}} 在 IP {{ip}} 登录{{status_label}}\n{{message}}",
-		KeyNotifyTemplateBruteForceLoginTitle:  "系统安全警告",
-		KeyNotifyTemplateBruteForceLoginText:   "检测到 IP {{ip}} 正在尝试暴力破解用户 {{username}}",
+		KeyNotifyTemplateBruteForceLoginTitle: "系统安全警告",
+		KeyNotifyTemplateBruteForceLoginText:  "检测到 IP {{ip}} 正在尝试暴力破解用户 {{username}}",
 		KeyNotifyTemplatePasswordChangedTitle: "账户安全通知",
 		KeyNotifyTemplatePasswordChangedText:  "用户 {{username}} 刚刚修改了密码",
 		// Task

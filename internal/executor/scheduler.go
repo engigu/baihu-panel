@@ -37,6 +37,7 @@ type SchedulerConfig struct {
 	QueueSize    int           // 队列大小
 	RateInterval time.Duration // 速率限制间隔
 	Verbose      bool          // 是否开启详细日志
+	StrictQueue  bool          // 是否开启严格排队（满时拒绝执行，不降级直接执行）
 }
 
 // TaskType 任务类型
@@ -62,18 +63,21 @@ const (
 
 // ExecutionRequest 执行请求（标准接口）
 type ExecutionRequest struct {
-	TaskID    string              // 任务 ID
-	LogID     string              // 日志 ID
-	Name      string              // 任务名称
-	Type      TaskType            // 任务类型
-	Command   string              // 命令
-	WorkDir   string              // 工作目录
-	Envs      []string            // 环境变量
-	Secrets   []string            // 需要脱敏的密码
-	Timeout   int                 // 超时时间（分钟）
-	Languages []map[string]string // 语言环境配置
-	UseMise   bool                // 是否使用 mise
-	Metadata  ExecutionMetadata   // 额外元数据
+	TaskID        string              // 任务 ID
+	LogID         string              // 日志 ID
+	Name          string              // 任务名称
+	Type          TaskType            // 任务类型
+	Command       string              // 命令
+	MaskedCommand string              // 脱敏后的命令（用于日志和展示）
+	PreCommand    string              // 前置命令
+	PostCommand   string              // 后置命令
+	WorkDir       string              // 工作目录
+	Envs          []string            // 环境变量
+	Secrets       []string            // 需要脱敏的密码
+	Timeout       int                 // 超时时间（分钟）
+	Languages     []map[string]string // 语言环境配置
+	UseMise       bool                // 是否使用 mise
+	Metadata      ExecutionMetadata   // 额外元数据
 }
 
 // ExecutionMetadata 执行额外元数据
@@ -170,6 +174,16 @@ func (h *schedulerHooksAdapter) OnHeartbeat(ctx context.Context, logID string, d
 // TaskExecutor 定义任务执行函数签名
 type TaskExecutor func(ctx context.Context, req *ExecutionRequest, stdout, stderr io.Writer) (*Result, error)
 
+// WorkerStatus 定义并发池中单个 Worker 的状态
+type WorkerStatus struct {
+	ID        int    `json:"id"`
+	Status    string `json:"status"` // 状态: "idle" 或 "running"
+	TaskID    string `json:"task_id,omitempty"`
+	TaskName  string `json:"task_name,omitempty"`
+	StartTime int64  `json:"start_time,omitempty"` // 开始时间戳 (秒)
+	Duration  int64  `json:"duration,omitempty"`   // 已运行时长 (秒)
+}
+
 // Scheduler 统一调度器（独立组件，可在主服务和 Agent 中复用）
 // 调度器本身只负责队列管理和任务调度，具体的执行逻辑和事件处理由 Handler 实现
 type Scheduler struct {
@@ -177,13 +191,16 @@ type Scheduler struct {
 	handler      SchedulerEventHandler
 	executor     TaskExecutor
 	taskQueue    chan *ExecutionRequest
-	rateLimiter  <-chan time.Time
+	rateLimiter  *time.Ticker
 	stopCh       chan struct{}
 	wg           sync.WaitGroup
 	mu           sync.RWMutex
 	logger       SchedulerLogger
 	runningTasks map[string]context.CancelFunc // 记录运行中的任务，用于停止 (TaskID -> CancelFunc)
 	runningExecs map[string]context.CancelFunc // 记录运行中的执行，用于停止 (LogID -> CancelFunc)
+
+	workers      []WorkerStatus
+	workerMu     sync.RWMutex
 }
 
 // NewScheduler 创建调度器
@@ -191,8 +208,14 @@ func NewScheduler(config SchedulerConfig, handler SchedulerEventHandler) *Schedu
 	if config.WorkerCount <= 0 {
 		config.WorkerCount = 4
 	}
+	if config.WorkerCount > 1000 {
+		config.WorkerCount = 1000
+	}
 	if config.QueueSize <= 0 {
 		config.QueueSize = 100
+	}
+	if config.QueueSize > 50000 {
+		config.QueueSize = 50000
 	}
 	if config.RateInterval <= 0 {
 		config.RateInterval = 200 * time.Millisecond
@@ -204,20 +227,30 @@ func NewScheduler(config SchedulerConfig, handler SchedulerEventHandler) *Schedu
 		executor: func(ctx context.Context, req *ExecutionRequest, stdout, stderr io.Writer) (*Result, error) {
 			hooks := &schedulerHooksAdapter{handler: handler, req: req}
 			return ExecuteWithHooks(ctx, Request{
-				Command:   req.Command,
-				WorkDir:   req.WorkDir,
-				Envs:      req.Envs,
-				Timeout:   req.Timeout,
-				Languages: req.Languages,
-				UseMise:   req.UseMise,
+				Command:     req.Command,
+				PreCommand:  req.PreCommand,
+				PostCommand: req.PostCommand,
+				WorkDir:     req.WorkDir,
+				Envs:        req.Envs,
+				Timeout:     req.Timeout,
+				Languages:   req.Languages,
+				UseMise:     req.UseMise,
 			}, stdout, stderr, hooks)
 		},
 		taskQueue:    make(chan *ExecutionRequest, config.QueueSize),
-		rateLimiter:  time.Tick(config.RateInterval),
+		rateLimiter:  time.NewTicker(config.RateInterval),
 		stopCh:       make(chan struct{}),
 		logger:       &DefaultLogger{},
 		runningTasks: make(map[string]context.CancelFunc),
 		runningExecs: make(map[string]context.CancelFunc),
+		workers:      make([]WorkerStatus, config.WorkerCount),
+	}
+
+	for i := 0; i < config.WorkerCount; i++ {
+		s.workers[i] = WorkerStatus{
+			ID:     i,
+			Status: "idle",
+		}
 	}
 
 	return s
@@ -248,7 +281,18 @@ func (s *Scheduler) Start() {
 
 // Stop 停止调度器
 func (s *Scheduler) Stop() {
-	close(s.stopCh)
+	s.mu.Lock()
+	select {
+	case <-s.stopCh:
+		s.mu.Unlock()
+		return
+	default:
+		close(s.stopCh)
+		if s.rateLimiter != nil {
+			s.rateLimiter.Stop()
+		}
+	}
+	s.mu.Unlock()
 	s.wg.Wait()
 	s.logger.Infof("[Scheduler] 已停止")
 }
@@ -276,9 +320,16 @@ func (s *Scheduler) EnqueueOrExecute(req *ExecutionRequest) {
 			s.handler.OnTaskScheduled(req)
 		}
 	default:
-		// 队列满，直接执行（降级处理）
-		s.logger.Warnf("[Scheduler] 任务队列已满，直接执行任务 %s", req.TaskID)
-		go s.executeTask(req)
+		if s.config.StrictQueue {
+			s.logger.Errorf("[Scheduler] 任务队列已满，拒绝执行任务 %s", req.TaskID)
+			if s.handler != nil {
+				s.handler.OnTaskFailed(req, fmt.Errorf("任务队列已满，拒绝执行"))
+			}
+		} else {
+			// 队列满，直接执行（降级处理）
+			s.logger.Warnf("[Scheduler] 任务队列已满，直接执行任务 %s", req.TaskID)
+			go s.executeTask(req)
+		}
 	}
 }
 
@@ -317,9 +368,38 @@ func (s *Scheduler) worker(id int) {
 						s.logger.Errorf("[Scheduler] Worker %d panic while processing task %s: %v", id, req.TaskID, r)
 					}
 				}()
-				// 速率限制
-				<-s.rateLimiter
-				s.executeTask(req)
+				// 速率限制安全等待
+				select {
+				case <-s.stopCh:
+					return
+				case <-s.rateLimiter.C:
+				}
+
+				func() {
+					// 恢复 worker 状态为空闲
+					defer func() {
+						s.workerMu.Lock()
+						if id >= 0 && id < len(s.workers) {
+							s.workers[id].Status = "idle"
+							s.workers[id].TaskID = ""
+							s.workers[id].TaskName = ""
+							s.workers[id].StartTime = 0
+						}
+						s.workerMu.Unlock()
+					}()
+
+					// 更新 worker 状态为运行中
+					s.workerMu.Lock()
+					if id >= 0 && id < len(s.workers) {
+						s.workers[id].Status = "running"
+						s.workers[id].TaskID = req.TaskID
+						s.workers[id].TaskName = req.Name
+						s.workers[id].StartTime = time.Now().Unix()
+					}
+					s.workerMu.Unlock()
+
+					s.executeTask(req)
+				}()
 			}()
 		}
 	}
@@ -334,7 +414,7 @@ func (s *Scheduler) executeTask(req *ExecutionRequest) (*ExecutionResult, error)
 	}()
 	start := time.Now()
 
-	s.logger.Infof("[Scheduler] 执行任务 %s (名称: %s, 类型: %s)", req.TaskID, req.Name, req.Type)
+	s.logger.Infof("[Scheduler] 开始执行: %s (#%s) [%s]", req.Name, req.TaskID, req.Type)
 
 	// 演示模式拦截
 	if constant.DemoMode {
@@ -372,7 +452,11 @@ func (s *Scheduler) executeTask(req *ExecutionRequest) (*ExecutionResult, error)
 		req.Command = utils.BuildMiseCommand(req.Command, req.Languages)
 		req.UseMise = false
 	}
-	s.logger.Infof("[Scheduler] 实际执行命令: %s", req.Command)
+	// 确保系统级敏感信息（数据库地址、账号、密码等）始终在脱敏列表中
+	allSecrets := append([]string{}, req.Secrets...)
+	allSecrets = append(allSecrets, utils.GetSystemSecrets()...)
+
+	s.logger.Infof("[Scheduler] 命令: %s", utils.MaskSecrets(req.Command, allSecrets))
 
 	if s.config.Verbose {
 		workDir := req.WorkDir
@@ -511,8 +595,8 @@ func (s *Scheduler) executeTask(req *ExecutionRequest) (*ExecutionResult, error)
 	if execErr != nil {
 		s.logger.Errorf("[Scheduler] 任务 %s 执行失败: %v", req.TaskID, execErr)
 	} else {
-		s.logger.Infof("[Scheduler] 任务 %s 执行完成 (状态: %s, 耗时: %dms)",
-			req.TaskID, result.Status, result.Duration)
+		s.logger.Infof("[Scheduler] 执行完成: %s (#%s) [%s] (状态: %s, 耗时: %dms)",
+			req.Name, req.TaskID, req.Type, result.Status, result.Duration)
 	}
 
 	return result, execErr
@@ -569,22 +653,32 @@ func (s *Scheduler) Reload(config SchedulerConfig) {
 	s.logger.Infof("[Scheduler] 正在重载配置...")
 
 	// 停止现有 workers
-	close(s.stopCh)
+	s.mu.Lock()
+	select {
+	case <-s.stopCh:
+		// already closed
+	default:
+		close(s.stopCh)
+		if s.rateLimiter != nil {
+			s.rateLimiter.Stop()
+		}
+	}
+	s.mu.Unlock()
 	s.wg.Wait()
 
 	// 更新配置
 	s.mu.Lock()
 	s.config = config
 	s.taskQueue = make(chan *ExecutionRequest, config.QueueSize)
-	s.rateLimiter = time.Tick(config.RateInterval)
+	s.rateLimiter = time.NewTicker(config.RateInterval)
 	s.stopCh = make(chan struct{})
 	s.mu.Unlock()
 
 	// 重启 workers
 	s.Start()
 
-	s.logger.Infof("[Scheduler] 配置已重载: workers=%d, queue=%d, rate=%v",
-		config.WorkerCount, config.QueueSize, config.RateInterval)
+	s.logger.Infof("[Scheduler] 配置已重载: workers=%d, queue=%d, rate=%v, strict=%t",
+		config.WorkerCount, config.QueueSize, config.RateInterval, config.StrictQueue)
 }
 
 // GetQueueSize 获取当前队列大小
@@ -597,4 +691,25 @@ func (s *Scheduler) GetConfig() SchedulerConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.config
+}
+
+// GetWorkerStatuses 获取所有 Worker 的状态
+func (s *Scheduler) GetWorkerStatuses() []WorkerStatus {
+	s.workerMu.RLock()
+	defer s.workerMu.RUnlock()
+	// 返回副本防止外部修改
+	statuses := make([]WorkerStatus, len(s.workers))
+	now := time.Now().Unix()
+	for i, w := range s.workers {
+		statuses[i] = w
+		// 在服务端计算运行时间，彻底避免客户端与服务端时钟不一致导致的计算偏差
+		if w.Status == "running" && w.StartTime > 0 {
+			duration := now - w.StartTime
+			if duration < 0 {
+				duration = 0
+			}
+			statuses[i].Duration = duration
+		}
+	}
+	return statuses
 }

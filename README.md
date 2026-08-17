@@ -1,9 +1,10 @@
 # 白虎面板 
 
 [![Hits](https://hits.sh/github.com/engigu/baihu-panel.svg?view=today-total)](https://hits.sh/github.com/engigu/baihu-panel/)
-![Latest Version](https://ghcr-badge.egpl.dev/engigu/baihu/latest_tag?color=%2344cc11&ignore=latest%2Cmain*&label=docker+version&trim=)
+![Version](https://img.shields.io/github/v/tag/engigu/baihu-panel?color=44cc11&label=docker%20version&sort=semver)
 ![Image Size](https://ghcr-badge.egpl.dev/engigu/baihu/size?color=%2344cc11&tag=latest&label=docker+image&trim=)
 ![Image pulls](https://img.shields.io/badge/dynamic/json?url=https://ghcr-badge.elias.eu.org/api/engigu/baihu-panel/baihu&query=downloadCount&style=flat&label=docker%20pulls&color=44cc11)
+
 
 白虎面板 (Baihu Panel) 是一款极致轻量、高性能的自动化任务调度平台。采用 Go + Vue3 架构，专注于高性能与低系统开销。通过深度集成 Mise 运行时管理，它原生支持 Python、Node.js、Go、Rust、PHP 等所有主流语言环境的动态安装（几乎所有的版本）与统一依赖管理。支持 Docker/Docker-Compose 一键部署，开箱即用，是您理想的轻量化脚本托管与任务调度解决方案。
 
@@ -16,7 +17,16 @@
 ## 更新日志 ☕
 
 ### 最近更新
-
+**2026.08.10** - **企业微信推送、调度加载与安全修复**：消息推送原生集成企业微信应用（QyWeiXinApp）通知渠道（#152）；修复从备份恢复数据后定时任务调度不自动加载的 Bug（#153），现实现自动事件通知和重新加载；升级 `fast-uri` 等依赖以修复 4 项 Dependabot 安全漏洞。  
+**2026.07.31** - **标签管理与两步验证 (OTP)**：新增独立的“标签管理”服务，支持按类型过滤、分页及全局去重；Monaco 编辑器集成主流语言代码高亮；上线登录二步验证 (OTP/2FA) 及设置页面；统筹重构了标签、环境变量与互联管理小屏下的自适应布局与折行。  
+**2026.07.23** - **Windows GUI 安装包与托盘守护**：新增 Inno Setup 安装包脚本与后台托盘守护程序 (`baihu-tray.exe`)，支持标准 `.exe` 安装向导、桌面快捷方式与任务栏右下角菜单交互（浏览器一键打开、服务重启、开机自启）。  
+**2026.07.20** - **Windows 平台适配与 Linux PTY 修复**：重构并建立专有的前后端 Windows 平台包；网页终端支持 `Ctrl+C` 递归终结子进程树；xterm 终端自动换行防乱折行；Monaco 编辑器高亮并添加保存挂起风险审查；Makefile 整合 Windows 自动化发布；修复 Linux PTY 启动失败时的 already started 退化崩溃并保留命令超时。  
+**2026.07.13** - **ZSTD 日志与任务排序**：流式日志升级至 ZSTD 压缩，支持 Zlib 兼容；上线依赖自动补全交互式终端；支持任务列表及移动端、视图联动排序；全局 ESC 非侵入式退出弹窗。  
+**2026.06.28** - **节点互联与终端 UX**：全面升级节点互联架构（支持变量同步、OpenConnect 协议及同步大屏）；优化移动端终端交互，引入 Worker 边界防护防 OOM。  
+**2026.06.12** - **调度器与资源实时监控**：新增对面板运行资源、并发调度池（Worker）及内存堆栈的实时高频监控指标展示。  
+**2026.05.29** - **自定义前端 (WebUI)**：新增 WebUI 插件化管理机制，支持上传管理第三方前端包 (`.tar.gz`) 接管内置界面，支持深度主题化定制。详情请看[前端定制说明文档](docs/guide/webui.md)
+**2026.04.16** - **内建脚本助手库 (Built-in SDK)**：新增 Python 与 Node.js 的轻量化助手库，实现脚本内 “零代码配置” 通知投递；配套新增 `baihu builtininstall` 自动化安装命令。  
+**2026.04.14** - **PWA 与通知渠道增强**：支持 PWA (Progressive Web App) 动态配置，站点标题与图标可由后端实时控制；新增 **VoceChat** 通知渠道支持；增强 **Bark** 推送，支持自建服务器配置。  
 **2026.03.27** - **安全机密管理 (GitHub Secrets 风格)**：新增系统级机密（Secret）管理功能。支持 AES-GCM 工业级加密存储，秘钥内存留存销毁；支持执行日志自动脱敏打码；支持仅在计划任务调度时按需注入，终端与测试运行物理隔离，全面提升敏感配置安全性。  
 **2026.03.19** - **仓库同步增强**：新增对青龙仓库格式指令的深度兼容，支持从远程 Git 仓库自动同步脚本并基于注释解析自动创建面板任务，支持白名单、黑名单、依赖保留等高级筛选特性。  
 **2026.03.05** - **API 文档重构** 重构 OpenAPI 认证体系，支持站点级 Token 配置与 Basic Auth 保护。  
@@ -57,6 +67,7 @@
 - **移动端：** 适配移动小屏样式
 - **远程执行：** 支持远程agent执行任务，展示执行结果
 - **多语言支持：** 深度集成 Mise，支持几乎所有主流编程语言的动态安装、多版本切换及依赖管理
+- **内建助手库：** **(New)** 为 Python/Node.js 提供零配置助手库，简单 import 即可实现一键推信，无需手动管理 API Token 和 URL
 
 ## 功能特性 
 
@@ -100,6 +111,12 @@
 - 秘钥仅在内存中留存，启动读取后立即销毁（Unset）
 - 执行日志自动搜索并**屏蔽(********)**敏感机密内容
 - 严格权限隔离：机密仅在定时任务调度时注入，终端/测试环境不可见
+
+### 节点互联体系 (New)
+- 支持 OpenConnect 协议，轻松实现多台白虎面板之间的互联互通
+- 支持节点间的环境变量无缝同步（保留原有结构与 ID）
+- 集成同步管理控制台，统一查看与控制各节点状态与负载指标
+- 底层路由深度适配穿透隧道，完美支持分布式前端代理访问
 
 ### 仓库任务同步 (New)
 - 支持 青龙 仓库命令格式快捷导入
@@ -356,6 +373,8 @@ port = 8052
 host = 0.0.0.0
 # 可选：配置 URL 前缀用于反向代理，例如 /baihu
 url_prefix = 
+# 全局会话 Cookie 名称
+cookie_name = BHToken
 
 [database]
 type = sqlite
@@ -545,7 +564,7 @@ server {
     
     location / {
         proxy_pass http://172.17.0.1:8052;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
@@ -658,7 +677,7 @@ host = localhost
 port = 3306
 user = root
 password = 
-dbname = ql_panel
+dbname = bh_panel
 table_prefix = baihu_
 ```
 
@@ -671,12 +690,13 @@ table_prefix = baihu_
 | `BH_SERVER_PORT` | server.port | 服务端口 | 8052 |
 | `BH_SERVER_HOST` | server.host | 监听地址 | 0.0.0.0 |
 | `BH_SERVER_URL_PREFIX` | server.url_prefix | URL 前缀，用于反向代理子路径部署 | - |
+| `BH_COOKIE_NAME` | server.cookie_name | 全局会话 Cookie 名称 | BHToken |
 | `BH_DB_TYPE` | database.type | 数据库类型 (sqlite/mysql) | sqlite |
 | `BH_DB_HOST` | database.host | 数据库地址 | localhost |
 | `BH_DB_PORT` | database.port | 数据库端口 | 3306 |
 | `BH_DB_USER` | database.user | 数据库用户 | root |
 | `BH_DB_PASSWORD` | database.password | 数据库密码 | - |
-| `BH_DB_NAME` | database.dbname | 数据库名称 | ql_panel |
+| `BH_DB_NAME` | database.dbname | 数据库名称 | bh_panel |
 | `BH_DB_PATH` | database.path | SQLite 文件路径 | ./data/baihu.db |
 | `BH_DB_TABLE_PREFIX` | database.table_prefix | 表前缀 | baihu_ |
 | `BAIHU_SECRET_KEY` | - | 系统加密秘钥，用于机密功能（**注：仅支持环境变量设置，不支持配置文件**） | - |
@@ -716,7 +736,7 @@ location /baihu/ {
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
+    proxy_set_header Host $http_host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
@@ -753,11 +773,16 @@ location /baihu/ {
 
 ## 贡献 
 
-欢迎提交 Issue 和 Pull Request！
+欢迎提交 Issue 和 Pull Request！如果觉得本项目对你有帮助，不求大富大贵，只求顺手点个 Star，大家的 Star 是我持续更新的动力！
 
 <img src="https://f.pz.al/pzal/2026/01/07/83be93eb4e2a3.png" width="200" />
 
+## 鸣谢
+
+- Windows 安装包的简体中文语言包使用了由 [Zhenghan Yang (Kira)](https://github.com/kira-96) 维护的开源项目 [Inno-Setup-Chinese-Simplified-Translation](https://github.com/kira-96/Inno-Setup-Chinese-Simplified-Translation)，特此致谢。
+
 ## 许可证 
+
 
 本项目采用 [Apache License 2.0](LICENSE) 协议发布，并包含额外的 [NOTICE](NOTICE) 说明。
 

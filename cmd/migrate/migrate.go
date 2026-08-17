@@ -11,7 +11,7 @@ func Run(args []string) {
 	// 初始化基础环境（配置和数据库，但不运行常规 Migrate，因为我们想手动控）
 	// 不过 bootstrap.New() 会调用 Migrate().
 	// 我们可以调用 InitBasic()
-	app := bootstrap.InitBasic()
+	app := bootstrap.InitBasicForCmd()
 	if app == nil {
 		fmt.Println("Failed to initialize app")
 		return

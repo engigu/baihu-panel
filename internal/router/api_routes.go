@@ -1,9 +1,7 @@
 package router
 
 import (
-	// "github.com/engigu/baihu-panel/internal/controllers"
 	"github.com/engigu/baihu-panel/internal/middleware"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -13,16 +11,37 @@ func initPublicAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 		ctx.JSON(200, gin.H{"message": "pong"})
 	})
 
+	// api.GET("/debug/goroutines", func(ctx *gin.Context) {
+	// 	buf := make([]byte, 1024*1024)
+	// 	n := runtime.Stack(buf, true)
+	// 	ctx.Data(200, "text/plain; charset=utf-8", buf[:n])
+	// })
+
 	// Authentication routes (无需认证)
 	auth := api.Group("/auth")
 	{
 		auth.POST("/login", c.Auth.Login)
+		auth.POST("/login/otp", c.Auth.VerifyOTP)
 		auth.POST("/logout", c.Auth.Logout)
-		auth.POST("/register", c.Auth.Register)
+		// auth.POST("/register", c.Auth.Register)
 	}
 
 	// 公开的站点设置（无需认证）
 	api.GET("/settings/public", c.Settings.GetPublicSiteSettings)
+
+	// 隧道模式 (被控端反向连入，使用独立 Token 做 WebSocket 鉴权)
+	api.GET("/interconnect/tunnel", c.Interconnect.HandleTunnel)
+	// 子节点主动上报监控数据 (无中间件鉴权，内部鉴权)
+	api.POST("/interconnect/report", c.Interconnect.ReportMonitorData)
+
+	// 内部使用的 API（仅限本地调用，无需 Bearer 认证）
+	internalAPI := api.Group("/internal")
+	internalAPI.Use(middleware.LocalhostOnly())
+	{
+		internalAPI.POST("/tasks/sync-repo-status", c.Task.SyncRepoTasks)
+		internalAPI.POST("/tasks/execute/:id", c.Executor.ExecuteTask)
+		internalAPI.POST("/tasks/toggle/:id", c.Task.ToggleTask)
+	}
 }
 
 func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
@@ -32,16 +51,20 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 		// 获取当前用户 (普通用户即可访问)
 		authorized.GET("/auth/me", c.Auth.GetCurrentUser)
 
+		// OTP 两步验证管理 (普通用户即可访问，非 adminOnly)
+		otp := authorized.Group("/auth/otp")
+		{
+			otp.GET("/status", c.Auth.GetOTPStatus)
+			otp.POST("/generate", c.Auth.GenerateOTP)
+			otp.POST("/enable", c.Auth.EnableOTP)
+			otp.POST("/disable", c.Auth.DisableOTP)
+		}
+
 		// 以下管理接口需要管理员权限
 		adminOnly := authorized.Group("")
 		adminOnly.Use(middleware.AdminRequired())
 		{
-			// 仪表盘统计
-			adminOnly.GET("/stats", c.Dashboard.GetStats)
-			adminOnly.GET("/sentence", c.Dashboard.GetSentence)
-			adminOnly.GET("/sendstats", c.Dashboard.GetSendStats)
-			adminOnly.GET("/taskstats", c.Dashboard.GetTaskStats)
-
+			registerDashboardRoutes(adminOnly, c)
 			registerTaskRoutes(adminOnly, c)
 			registerEnvRoutes(adminOnly, c)
 			registerScriptRoutes(adminOnly, c)
@@ -55,6 +78,12 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 			registerWorkflowRoutes(adminOnly, c)
 			registerNotificationRoutes(adminOnly, c)
 			registerAppLogRoutes(adminOnly, c)
+			registerSystemWSRoutes(adminOnly, c)
+			registerWebUIRoutes(adminOnly, c)
+			registerMonitorRoutes(adminOnly, c)
+			registerInterconnectRoutes(adminOnly, c)
+			registerSystemRoutes(adminOnly, c)
+			registerTagRoutes(adminOnly, c)
 		}
 	}
 
@@ -66,17 +95,26 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 	}
 }
 
+func registerDashboardRoutes(g *gin.RouterGroup, c *Controllers) {
+	g.GET("/stats", c.Dashboard.GetStats)
+	g.GET("/sentence", c.Dashboard.GetSentence)
+	g.GET("/sendstats", c.Dashboard.GetSendStats)
+	g.GET("/taskstats", c.Dashboard.GetTaskStats)
+}
+
 func registerTaskRoutes(g *gin.RouterGroup, c *Controllers) {
 	tasks := g.Group("/tasks")
 	{
 		tasks.POST("", c.Task.CreateTask)
 		tasks.GET("", c.Task.GetTasks)
 		tasks.GET("/:id", c.Task.GetTask)
+		tasks.POST("/bulk_save", c.Task.BulkSaveTask)
 		tasks.PUT("/:id", c.Task.UpdateTask)
 		tasks.DELETE("/:id", c.Task.DeleteTask)
 		tasks.POST("/batch-delete", c.Task.BatchDeleteTasks)
 		tasks.DELETE("/batch-by-query", c.Task.BatchDeleteByQuery)
 		tasks.POST("/stop/:logID", c.Task.StopTask)
+		tasks.GET("/tags", c.Task.GetTags)
 	}
 
 	execution := g.Group("/execute")
@@ -91,7 +129,9 @@ func registerEnvRoutes(g *gin.RouterGroup, c *Controllers) {
 	env := g.Group("/env")
 	{
 		env.GET("/secret-status", c.Env.GetSecretStatus)
+		env.GET("/tags", c.Env.GetTags)
 		env.POST("", c.Env.CreateEnvVar)
+		env.POST("/bulk_save", c.Env.BulkSaveEnv)
 		env.GET("", c.Env.GetEnvVars)
 		env.GET("/all", c.Env.GetAllEnvVars)
 		env.GET("/:id", c.Env.GetEnvVar)
@@ -118,6 +158,7 @@ func registerFileRoutes(g *gin.RouterGroup, c *Controllers) {
 		files.GET("/tree", c.File.GetFileTree)
 		files.GET("/content", c.File.GetFileContent)
 		files.GET("/download", c.File.DownloadFile)
+		files.GET("/download-zip", c.File.DownloadZip)
 		files.POST("/content", c.File.SaveFileContent)
 		files.POST("/create", c.File.CreateFile)
 		files.POST("/delete", c.File.DeleteFile)
@@ -134,7 +175,7 @@ func registerLogRoutes(g *gin.RouterGroup, c *Controllers) {
 	{
 		logs.GET("", c.Log.GetLogs)
 		logs.POST("/clear", c.Log.ClearLogs)
-		logs.GET("/ws", c.LogWS.StreamLog)
+		logs.GET("/sse", c.LogSSE.StreamLog)
 		logs.GET("/:id", c.Log.GetLogDetail)
 		logs.DELETE("/:id", c.Log.DeleteLog)
 	}
@@ -183,7 +224,10 @@ func registerDependencyRoutes(g *gin.RouterGroup, c *Controllers) {
 		deps.POST("/reinstall/:id", c.Dependency.Reinstall)
 		deps.POST("/reinstall-all", c.Dependency.ReinstallAll)
 		deps.POST("/reinstall-all-cmd", c.Dependency.GetReinstallAllCommand)
+		deps.POST("/batch-install-cmd", c.Dependency.GetBatchInstallCommand)
+		deps.POST("/import", c.Dependency.ParseAndImport)
 		deps.GET("/installed", c.Dependency.GetInstalled)
+		deps.GET("/install-suggest-cmd", c.Dependency.GetDepInstallCommand)
 	}
 }
 
@@ -261,6 +305,18 @@ func registerAppLogRoutes(g *gin.RouterGroup, c *Controllers) {
 	}
 }
 
+func registerSystemWSRoutes(g *gin.RouterGroup, c *Controllers) {
+	g.GET("/ws/events", c.SystemWS.HandleEvents)
+}
+
+func registerMonitorRoutes(g *gin.RouterGroup, c *Controllers) {
+	monitor := g.Group("/monitor")
+	{
+		monitor.GET("", c.Monitor.GetSystemMonitor)
+		monitor.GET("/sse", c.Monitor.MonitorSSE)
+	}
+}
+
 func initAgentAPIRoutes(root *gin.RouterGroup, c *Controllers) {
 	// Agent API（供远程 Agent 调用，不使用 /v1 版本号）
 	agentAPI := root.Group("/api/agent")
@@ -272,3 +328,51 @@ func initAgentAPIRoutes(root *gin.RouterGroup, c *Controllers) {
 		agentAPI.GET("/ws", c.Agent.WSConnect)      // WebSocket 连接
 	}
 }
+
+func registerWebUIRoutes(g *gin.RouterGroup, c *Controllers) {
+	webuiGroup := g.Group("/webui")
+	{
+		webuiGroup.GET("", c.WebUI.GetWebUIs)
+		webuiGroup.POST("/upload", c.WebUI.UploadWebUI)
+		webuiGroup.PUT("/active", c.WebUI.SetActiveWebUI)
+		webuiGroup.DELETE("/:name", c.WebUI.DeleteWebUI)
+	}
+}
+
+func registerInterconnectRoutes(g *gin.RouterGroup, c *Controllers) {
+	interconnect := g.Group("/interconnect")
+	{
+		interconnect.GET("/nodes", c.Interconnect.GetNodes)
+		interconnect.POST("/nodes", c.Interconnect.CreateNode)
+		interconnect.PUT("/nodes/:id", c.Interconnect.UpdateNode)
+		interconnect.DELETE("/nodes/:id", c.Interconnect.DeleteNode)
+		interconnect.GET("/nodes/:id/status", c.Interconnect.GetNodeStatus)
+		interconnect.POST("/sync/script", c.Interconnect.SyncScript)
+		interconnect.POST("/sync/env", c.Interconnect.SyncEnv)
+		interconnect.POST("/sync/task", c.Interconnect.SyncTask)
+		
+		interconnect.GET("/child/status", c.Interconnect.GetChildStatus)
+		
+		// 代理模式 (面板穿越)
+		interconnect.Any("/proxy/:node_id/*path", c.Interconnect.ProxyRequest)
+	}
+}
+
+func registerSystemRoutes(g *gin.RouterGroup, c *Controllers) {
+	systemAPI := g.Group("/system")
+	{
+		systemAPI.POST("/export", c.Data.ExportBusinessData)
+		systemAPI.POST("/import", c.Data.ImportBusinessData)
+	}
+}
+
+func registerTagRoutes(g *gin.RouterGroup, c *Controllers) {
+	tags := g.Group("/tags")
+	{
+		tags.GET("", c.Tag.GetTags)
+		tags.POST("", c.Tag.CreateTag)
+		tags.PUT("/:id", c.Tag.UpdateTag)
+		tags.DELETE("/:id", c.Tag.DeleteTag)
+	}
+}
+

@@ -1,16 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { Send, FileText, Link, Code } from 'lucide-vue-next'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
+import BaihuDialog from '@/components/ui/BaihuDialog.vue'
 import { api, type NotifyChannel, type ChannelType, type EventType, type NotifyBinding, type Task } from '@/api'
 import { toast } from 'vue-sonner'
 import ChannelList from './components/ChannelList.vue'
@@ -18,6 +11,7 @@ import EventBinding from './components/EventBinding.vue'
 import ApiUsage from './components/ApiUsage.vue'
 import ChannelDialog from './components/ChannelDialog.vue'
 import TemplateSettings from './components/TemplateSettings.vue'
+import { copyToClipboard } from '@/utils/clipboard'
 
 const activeTab = ref('channels')
 
@@ -57,12 +51,17 @@ const channelConfigFields: Record<string, { key: string; label: string; required
     { key: 'proxy_url', label: '代理地址', required: false, placeholder: 'http/https/socks5 代理' },
   ],
   Bark: [
+    { key: 'server', label: '服务地址', required: false, placeholder: '默认 https://api.day.app' },
     { key: 'push_key', label: 'Push Key', required: true, placeholder: 'Bark Push Key' },
+    { key: 'proxy_url', label: '代理地址', required: false, placeholder: 'http/https/socks5 代理' },
     { key: 'sound', label: '推送声音', required: false, placeholder: '留空使用默认' },
+    { key: 'badge', label: '角标数量', required: false, placeholder: '例如 1' },
     { key: 'group', label: '推送分组', required: false },
     { key: 'icon', label: '推送图标', required: false, placeholder: '图标 URL' },
     { key: 'level', label: '时效性', required: false, placeholder: 'active / timeSensitive / passive' },
     { key: 'url', label: '跳转URL', required: false },
+    { key: 'copy', label: '复制内容', required: false, placeholder: '收到推送时自动复制的内容' },
+    { key: 'auto_copy', label: '自动复制', required: false, placeholder: '1 表示开启' },
   ],
   Dtalk: [
     { key: 'access_token', label: 'Access Token', required: true, placeholder: '钉钉机器人 access_token' },
@@ -70,6 +69,16 @@ const channelConfigFields: Record<string, { key: string; label: string; required
   ],
   QyWeiXin: [
     { key: 'access_token', label: 'Access Token', required: true, placeholder: '企业微信机器人 Key' },
+  ],
+  QyWeiXinApp: [
+    { key: 'corpid', label: '企业 ID', required: true, placeholder: '企业微信后台获取的 corpid' },
+    { key: 'agentid', label: '应用 ID', required: true, placeholder: '应用后台获取的 agentid' },
+    { key: 'secret', label: '应用 Secret', required: true, placeholder: '应用后台获取的 secret' },
+    { key: 'to_user', label: '接收成员', required: false, placeholder: '接收成员账号，多个用 | 分隔，默认 @all' },
+    { key: 'to_party', label: '接收部门', required: false, placeholder: '接收部门 ID，多个用 | 分隔' },
+    { key: 'to_tag', label: '接收标签', required: false, placeholder: '接收标签 ID，多个用 | 分隔' },
+    { key: 'api_host', label: 'API 地址', required: false, placeholder: '自定义 API 地址，留空使用官方' },
+    { key: 'proxy_url', label: '代理地址', required: false, placeholder: 'http/https/socks5 代理' },
   ],
   Feishu: [
     { key: 'access_token', label: 'Access Token', required: true, placeholder: '飞书机器人 access_token' },
@@ -123,6 +132,19 @@ const channelConfigFields: Record<string, { key: string; label: string; required
     { key: 'webhook', label: 'Webhook', required: false },
     { key: 'callback_url', label: '回调地址', required: false },
     { key: 'to', label: '好友令牌', required: false },
+  ],
+  VoceChat: [
+    { key: 'server', label: '服务地址', required: true, placeholder: 'https://vocechat.yourdomain.com' },
+    { key: 'api_key', label: 'API Key', required: true, placeholder: 'Bot API Key' },
+    { key: 'target_id', label: '目标 ID', required: true, placeholder: 'uid 或 gid' },
+    { key: 'target_type', label: '目标类型', required: false, placeholder: 'user (默认) / group' },
+    { key: 'note', label: '说明', required: false, placeholder: '当前仅支持 text/plain', type: 'note' },
+  ],
+  WxPusher: [
+    { key: 'app_token', label: 'AppToken', required: true, placeholder: 'AT_...' },
+    { key: 'uids', label: 'UIDs', required: false, placeholder: '用户 UID，多个用逗号分隔' },
+    { key: 'topic_ids', label: 'TopicIDs', required: false, placeholder: '主题 ID，多个用逗号分隔' },
+    { key: 'verify_pay_type', label: '付费验证', required: false, placeholder: '0:不验证, 1:仅付费, 2:仅未订阅/过期' },
   ],
 }
 
@@ -280,10 +302,10 @@ async function copyApiToken() {
     toast.error('请先生成 Token')
     return
   }
-  try {
-    await navigator.clipboard.writeText(apiToken.value)
+  const success = await copyToClipboard(apiToken.value)
+  if (success) {
     toast.success('Token 已复制到剪贴板')
-  } catch {
+  } else {
     toast.error('复制失败')
   }
 }
@@ -300,10 +322,10 @@ async function copyApiExample() {
   -H "Content-Type: application/json" \\
   -H "notify-token: ${token}" \\
   -d '{"channel_id": "${ch.id}", "title": "测试通知", "text": "来自脚本的通知"}'`
-  try {
-    await navigator.clipboard.writeText(example)
+  const success = await copyToClipboard(example)
+  if (success) {
     toast.success('API 调用示例已复制到剪贴板')
-  } catch {
+  } else {
     toast.error('复制失败')
   }
 }
@@ -323,11 +345,23 @@ onMounted(() => {
           <h2 class="text-xl sm:text-2xl font-bold tracking-tight">消息推送</h2>
           <p class="text-muted-foreground text-sm">配置通知渠道，绑定系统事件实现自动推送</p>
         </div>
-        <TabsList class="flex w-full sm:w-fit overflow-x-auto overflow-y-hidden justify-start sm:justify-center bg-muted/50 p-1 rounded-xl scrollbar-hide border border-border/50">
-          <TabsTrigger value="channels" class="flex-1 sm:flex-none whitespace-nowrap px-3 sm:px-6">渠道管理</TabsTrigger>
-          <TabsTrigger value="templates" class="flex-1 sm:flex-none whitespace-nowrap px-3 sm:px-6">推送模板</TabsTrigger>
-          <TabsTrigger value="events" class="flex-1 sm:flex-none whitespace-nowrap px-3 sm:px-6">事件绑定</TabsTrigger>
-          <TabsTrigger value="api" class="flex-1 sm:flex-none whitespace-nowrap px-3 sm:px-6">脚本调用</TabsTrigger>
+        <TabsList class="h-9 p-0.5 bg-muted/20 border border-border/40 rounded-lg w-full sm:w-auto flex">
+          <TabsTrigger value="channels" class="px-3 h-8 text-xs gap-1.5 font-medium transition-all flex-1 sm:flex-none">
+            <Send class="w-3.5 h-3.5 opacity-70" />
+            <span>渠道</span>
+          </TabsTrigger>
+          <TabsTrigger value="templates" class="px-3 h-8 text-xs gap-1.5 font-medium transition-all flex-1 sm:flex-none">
+            <FileText class="w-3.5 h-3.5 opacity-70" />
+            <span>模板</span>
+          </TabsTrigger>
+          <TabsTrigger value="events" class="px-3 h-8 text-xs gap-1.5 font-medium transition-all flex-1 sm:flex-none">
+            <Link class="w-3.5 h-3.5 opacity-70" />
+            <span>事件</span>
+          </TabsTrigger>
+          <TabsTrigger value="api" class="px-3 h-8 text-xs gap-1.5 font-medium transition-all flex-1 sm:flex-none">
+            <Code class="w-3.5 h-3.5 opacity-70" />
+            <span>脚本</span>
+          </TabsTrigger>
         </TabsList>
       </div>
 
@@ -363,19 +397,14 @@ onMounted(() => {
       @save="saveChannel" />
 
     <!-- 删除确认 -->
-    <AlertDialog :open="showDeleteConfirm" @update:open="showDeleteConfirm = $event">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>确认删除</AlertDialogTitle>
-          <AlertDialogDescription>
-            删除后将无法恢复，同时会取消该渠道的所有事件绑定。确定要删除吗？
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>取消</AlertDialogCancel>
-          <AlertDialogAction @click="deleteChannel">确认删除</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <BaihuDialog v-model:open="showDeleteConfirm" title="确认删除通知渠道?">
+      <div class="text-[15px] leading-relaxed text-muted-foreground">
+        删除后将无法恢复，同时会取消该渠道的所有事件绑定。确定要删除吗？
+      </div>
+      <template #footer>
+        <Button variant="ghost" @click="showDeleteConfirm = false">取消</Button>
+        <Button variant="destructive" class="shadow-lg shadow-destructive/20" @click="deleteChannel">确认删除</Button>
+      </template>
+    </BaihuDialog>
   </div>
 </template>

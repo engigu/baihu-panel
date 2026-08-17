@@ -1,26 +1,30 @@
 package vo
 
 import (
+	"time"
+
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 // AgentVO 代理视图对象
 type AgentVO struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Status      string            `json:"status"`
-	LastSeen    *models.LocalTime `json:"last_seen"`
-	IP          string            `json:"ip"`
-	Version     string            `json:"version"`
-	BuildTime   string            `json:"build_time"`
-	Hostname    string            `json:"hostname"`
-	OS          string            `json:"os"`
-	Arch        string            `json:"arch"`
-	ForceUpdate bool              `json:"force_update"`
-	Enabled     bool              `json:"enabled"`
-	CreatedAt   models.LocalTime  `json:"created_at"`
-	UpdatedAt   models.LocalTime  `json:"updated_at"`
+	ID              string                  `json:"id"`
+	Name            string                  `json:"name"`
+	Description     string                  `json:"description"`
+	Status          string                  `json:"status"`
+	LastSeen        *models.LocalTime       `json:"last_seen"`
+	IP              string                  `json:"ip"`
+	Version         string                  `json:"version"`
+	BuildTime       string                  `json:"build_time"`
+	Hostname        string                  `json:"hostname"`
+	OS              string                  `json:"os"`
+	Arch            string                  `json:"arch"`
+	ForceUpdate     bool                    `json:"force_update"`
+	Enabled         bool                    `json:"enabled"`
+	SchedulerConfig *AgentSchedulerConfigVO `json:"scheduler_config"`
+	CreatedAt       models.LocalTime        `json:"created_at"`
+	UpdatedAt       models.LocalTime        `json:"updated_at"`
 	// 隐藏 Token 和 MachineID
 }
 
@@ -29,22 +33,33 @@ func ToAgentVO(agent *models.Agent) *AgentVO {
 	if agent == nil {
 		return nil
 	}
+	var schedulerConfigVO *AgentSchedulerConfigVO
+	if agent.SchedulerConfig.WorkerCount > 0 {
+		schedulerConfigVO = &AgentSchedulerConfigVO{
+			WorkerCount:  agent.SchedulerConfig.WorkerCount,
+			QueueSize:    agent.SchedulerConfig.QueueSize,
+			RateInterval: int(agent.SchedulerConfig.RateInterval / time.Millisecond),
+			Verbose:      agent.SchedulerConfig.Verbose,
+			StrictQueue:  agent.SchedulerConfig.StrictQueue,
+		}
+	}
 	return &AgentVO{
-		ID:          agent.ID,
-		Name:        agent.Name,
-		Description: agent.Description,
-		Status:      agent.Status,
-		LastSeen:    agent.LastSeen,
-		IP:          agent.IP,
-		Version:     agent.Version,
-		BuildTime:   agent.BuildTime,
-		Hostname:    agent.Hostname,
-		OS:          agent.OS,
-		Arch:        agent.Arch,
-		ForceUpdate: agent.ForceUpdate,
-		Enabled:     agent.Enabled,
-		CreatedAt:   agent.CreatedAt,
-		UpdatedAt:   agent.UpdatedAt,
+		ID:              agent.ID,
+		Name:            agent.Name,
+		Description:     agent.Description,
+		Status:          agent.Status,
+		LastSeen:        agent.LastSeen,
+		IP:              agent.IP,
+		Version:         agent.Version,
+		BuildTime:       agent.BuildTime,
+		Hostname:        agent.Hostname,
+		OS:              agent.OS,
+		Arch:            agent.Arch,
+		ForceUpdate:     agent.ForceUpdate,
+		Enabled:         utils.DerefBool(agent.Enabled, true),
+		SchedulerConfig: schedulerConfigVO,
+		CreatedAt:       agent.CreatedAt,
+		UpdatedAt:       agent.UpdatedAt,
 	}
 }
 
@@ -93,7 +108,7 @@ func ToAgentTokenVO(token *models.AgentToken) *AgentTokenVO {
 		MaxUses:   token.MaxUses,
 		UsedCount: token.UsedCount,
 		ExpiresAt: token.ExpiresAt,
-		Enabled:   token.Enabled,
+		Enabled:   utils.DerefBool(token.Enabled, true),
 		CreatedAt: token.CreatedAt,
 	}
 }
@@ -117,4 +132,13 @@ func ToAgentTokenVOListFromModels(tokens []models.AgentToken) []*AgentTokenVO {
 		vos[i] = ToAgentTokenVO(&tokens[i])
 	}
 	return vos
+}
+
+// AgentSchedulerConfigVO 调度配置视图对象
+type AgentSchedulerConfigVO struct {
+	WorkerCount  int  `json:"worker_count"`
+	QueueSize    int  `json:"queue_size"`
+	RateInterval int  `json:"rate_interval"` // 毫秒
+	Verbose      bool `json:"verbose"`
+	StrictQueue  bool `json:"strict_queue"`
 }

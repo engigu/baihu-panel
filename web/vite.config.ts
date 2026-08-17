@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
+import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath, URL } from 'node:url'
 import { writeFileSync, readFileSync, readdirSync, statSync, existsSync, unlinkSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -43,11 +44,37 @@ const compressionPlugin = () => ({
   }
 } as const)
 
+// Release optimization plugin to offload fonts to CDN
+const releaseOptimizePlugin = (isOptimize: boolean) => ({
+  name: 'release-optimize-plugin',
+  transformIndexHtml(html: string) {
+    if (isOptimize) {
+      return html.replace(
+        '</head>',
+        `  <link rel="preconnect" href="https://fonts.geekzu.org">\n  <link rel="stylesheet" href="https://fonts.geekzu.org/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap">\n  </head>`
+      )
+    }
+    return html
+  },
+  transform(code: string, id: string) {
+    if (isOptimize && id.includes('index.css')) {
+      return {
+        code: code
+          .replace(/@import\s+["']@fontsource-variable\/inter\/index\.css["'];/g, '/* Removed for CDN */')
+          .replace(/@import\s+["']@fontsource-variable\/jetbrains-mono\/index\.css["'];/g, '/* Removed for CDN */'),
+        map: null
+      }
+    }
+  }
+})
+
+const isOptimize = process.env.VITE_RELEASE_OPTIMIZE === 'true'
+
 export default defineConfig({
   plugins: [
     vue(),
     tailwindcss(),
-    viteStaticCopy({
+    !isOptimize && viteStaticCopy({
       targets: [
         {
           src: 'node_modules/monaco-editor/min/vs',
@@ -55,7 +82,35 @@ export default defineConfig({
         }
       ]
     }),
-    compressionPlugin()
+    releaseOptimizePlugin(isOptimize),
+    compressionPlugin(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      injectRegister: 'auto',
+      includeAssets: ['favicon.ico', 'logo.svg', 'pwa-icon-192.png', 'pwa-icon-512.png'],
+      manifest: {
+        name: 'Baihu Panel',
+        short_name: 'Baihu',
+        description: '白虎面板 - 现代化的服务器管理面板',
+        theme_color: '#ffffff',
+        background_color: '#ffffff',
+        display: 'standalone',
+        icons: [
+          {
+            src: 'logo.svg',
+            sizes: 'any',
+            type: 'image/svg+xml',
+            purpose: 'any maskable'
+          },
+        ]
+      },
+      workbox: {
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024 // 10MB to allow monaco-editor files
+      },
+      devOptions: {
+        enabled: true
+      }
+    })
   ],
   resolve: {
     alias: {
@@ -65,12 +120,12 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8052',
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8052',
         changeOrigin: true,
         ws: true
       },
       '/openapi': {
-        target: 'http://localhost:8052',
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8052',
         changeOrigin: true
       }
     }
@@ -92,10 +147,33 @@ export default defineConfig({
           let safeName = name.replace(/[\0?*:|"<>\/\\&=$]/g, '-')
           // 去除开头可能引起静态托管平台屏蔽的下划线 '_'
           return safeName.replace(/^_/, '')
+        },
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            // 编辑器相关
+            if (id.includes('monaco-editor') || id.includes('@guolao/vue-monaco-editor')) {
+              return 'vendor-monaco'
+            }
+            // 图表相关
+            if (id.includes('apexcharts') || id.includes('chart.js') || id.includes('vue3-apexcharts') || id.includes('vue-chartjs')) {
+              return 'vendor-charts'
+            }
+            // 终端相关
+            if (id.includes('@xterm/xterm') || id.includes('xterm') || id.includes('ansi-to-html') || id.includes('ansi-to-vue3')) {
+              return 'vendor-terminal'
+            }
+            // 基础 UI 库
+            if (id.includes('radix-vue') || id.includes('reka-ui') || id.includes('lucide-vue-next') || id.includes('date-fns')) {
+              return 'vendor-ui'
+            }
+            // 其他基础依赖
+            return 'vendor'
+          }
         }
       }
     }
   },
   define: {
+    __MONACO_CDN__: isOptimize ? JSON.stringify('https://registry.npmmirror.com/monaco-editor/0.52.0/files/min/vs') : 'null'
   }
 })

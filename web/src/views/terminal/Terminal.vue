@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted } from 'vue'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Info } from 'lucide-vue-next'
+import { RefreshCw, Info, Copy, Check } from 'lucide-vue-next'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import XTerminal from '@/components/XTerminal.vue'
 import { api } from '@/api'
@@ -47,6 +47,21 @@ function handleStatusChange(status: any) {
   statusState.value = status
 
 }
+
+import { copyToClipboard } from '@/utils/clipboard'
+
+const copiedCommand = ref<string | null>(null)
+const handleCopy = async (text: string) => {
+  const success = await copyToClipboard(text)
+  if (success) {
+    copiedCommand.value = text
+    setTimeout(() => {
+      if (copiedCommand.value === text) {
+        copiedCommand.value = null
+      }
+    }, 2000)
+  }
+}
 </script>
 
 <template>
@@ -64,14 +79,33 @@ function handleStatusChange(status: any) {
             </div>
           </PopoverTrigger>
           <PopoverContent align="start" side="bottom" :side-offset="8"
-            class="w-80 border-[#3c3c3c] bg-[#252526] text-gray-300">
-            <div class="space-y-2">
-              <h4 class="text-sm font-medium text-white mb-2 pb-2 border-b border-[#3c3c3c]">内置命令说明</h4>
-              <div v-if="cmds.length === 0" class="text-xs text-gray-500">获取中...</div>
-              <div v-for="cmd in cmds" :key="cmd.name"
-                class="flex flex-col space-y-1 text-xs border-b border-[#3c3c3c] pb-2 last:border-0 last:pb-0">
-                <span class="font-bold text-blue-400">baihu {{ cmd.name }}</span>
-                <span class="text-gray-400">{{ cmd.description }}</span>
+            class="w-[380px] p-2 border-[#3c3c3c] bg-[#252526] text-gray-300 shadow-xl rounded-md">
+            <div class="flex flex-col">
+              <div class="flex items-center justify-between pb-1.5 mb-1 border-b border-[#3c3c3c]">
+                <h4 class="text-xs font-medium text-white flex items-center gap-1.5">
+                  <span>内置命令说明</span>
+                  <span class="text-[10px] text-gray-400 font-normal">({{ cmds.length }})</span>
+                </h4>
+                <span class="text-[10px] text-gray-500">点击整行快速复制</span>
+              </div>
+              <div v-if="cmds.length === 0" class="text-xs text-gray-500 py-2 text-center">获取中...</div>
+              <div v-else class="max-h-[280px] overflow-y-auto space-y-0.5 pr-0.5">
+                <div v-for="cmd in cmds" :key="cmd.name"
+                  @click="handleCopy(`baihu ${cmd.name}`)"
+                  class="group flex items-center justify-between py-1 px-1.5 hover:bg-[#333333] rounded transition-colors cursor-pointer">
+                  <code class="font-mono text-blue-400 text-[11px] font-medium shrink-0 bg-[#1e1e1e] px-1.5 py-0.5 rounded border border-[#333]">
+                    baihu {{ cmd.name }}
+                  </code>
+                  <span class="text-gray-400 text-[11px] truncate mx-2 flex-1 text-right" :title="cmd.description">
+                    {{ cmd.description }}
+                  </span>
+                  <button @click.stop.prevent="handleCopy(`baihu ${cmd.name}`)" 
+                    class="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[#444] rounded text-gray-400 hover:text-white shrink-0" 
+                    :title="copiedCommand === `baihu ${cmd.name}` ? '已复制' : '复制命令'">
+                    <Check v-if="copiedCommand === `baihu ${cmd.name}`" class="h-3 w-3 text-green-500" />
+                    <Copy v-else class="h-3 w-3" />
+                  </button>
+                </div>
               </div>
             </div>
           </PopoverContent>

@@ -1,6 +1,7 @@
 package router
 
 import (
+	"os"
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/controllers"
@@ -20,7 +21,7 @@ type Controllers struct {
 	File         *controllers.FileController
 	Dashboard    *controllers.DashboardController
 	Log          *controllers.LogController
-	LogWS        *controllers.LogWSController
+	LogSSE       *controllers.LogSSEController
 	Terminal     *controllers.TerminalController
 	Settings     *controllers.SettingsController
 	Dependency   *controllers.DependencyController
@@ -29,12 +30,21 @@ type Controllers struct {
 	Workflow     *controllers.WorkflowController
 	Notification *controllers.NotificationController
 	AppLog       *controllers.AppLogController
+	SystemWS     *controllers.SystemWSController
+	WebUI        *controllers.WebUIController
+	Monitor      *controllers.MonitorController
+	Interconnect *controllers.InterconnectController
+	Data         *controllers.DataController
+	Tag          *controllers.TagController
 }
 
 func Setup(c *Controllers) *gin.Engine {
-	gin.SetMode(gin.ReleaseMode)
+	if os.Getenv("GIN_MODE") == "" {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	router := gin.New()
 	router.Use(middleware.GinLogger(), middleware.GinRecovery())
+	router.Use(middleware.TravelProxyMiddleware())
 
 	// 获取 URL 前缀
 	cfg := services.GetConfig()

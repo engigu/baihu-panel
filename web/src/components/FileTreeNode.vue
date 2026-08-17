@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Folder, File, ChevronRight, ChevronDown, Trash2, Copy as CopyIcon } from 'lucide-vue-next'
+import { Folder, File, ChevronRight, ChevronDown, Trash2, Copy as CopyIcon, Download } from 'lucide-vue-next'
 import type { FileNode } from '@/api'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 defineOptions({
   name: 'FileTreeNode'
@@ -21,6 +22,7 @@ const emit = defineEmits<{
   move: [oldPath: string, newPath: string]
   rename: [path: string]
   downloadFile: [path: string]
+  downloadZip: [path: string]
   duplicate: [path: string]
 }>()
 
@@ -86,7 +88,16 @@ function handleDrop(e: DragEvent) {
       <span v-else class="w-3" />
       <Folder v-if="node.isDir" class="h-3 w-3 text-yellow-500 flex-shrink-0" />
       <File v-else class="h-3 w-3 text-blue-500 flex-shrink-0" />
-      <span class="truncate">{{ node.name }}</span>
+      <TooltipProvider :delay-duration="400">
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <span class="truncate">{{ node.name }}</span>
+          </TooltipTrigger>
+          <TooltipContent side="top" :side-offset="5" class="max-w-[300px] break-all px-2 py-1">
+            <p class="text-xs">{{ node.name }}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <div v-if="!node.isDir"
         class="opacity-0 group-hover:opacity-100 flex items-center gap-1 ml-auto shrink-0 pr-1 transition-opacity">
         <span @click.stop="$emit('duplicate', node.path)" class="cursor-pointer text-blue-500 hover:text-blue-500/80"
@@ -100,6 +111,10 @@ function handleDrop(e: DragEvent) {
       </div>
       <div v-else
         class="opacity-0 group-hover:opacity-100 flex items-center gap-1 ml-auto shrink-0 pr-1 transition-opacity">
+        <span @click.stop="$emit('downloadZip', node.path)" class="cursor-pointer text-blue-500 hover:text-blue-500/80"
+          title="下载为压缩包">
+          <Download class="h-3 w-3" />
+        </span>
         <span @click.stop="$emit('delete', node.path)" class="cursor-pointer text-destructive hover:text-destructive/80"
           title="删除">
           <Trash2 class="h-3 w-3" />
@@ -111,7 +126,8 @@ function handleDrop(e: DragEvent) {
         :selected-path="selectedPath" :depth="depth + 1" @select="$emit('select', $event)"
         @create="$emit('create', $event)" @move="(oldPath, newPath) => $emit('move', oldPath, newPath)"
         @rename="$emit('rename', $event)" @delete="$emit('delete', $event)"
-        @download-file="$emit('downloadFile', $event)" @duplicate="$emit('duplicate', $event)" />
+        @download-file="$emit('downloadFile', $event)" @download-zip="$emit('downloadZip', $event)"
+        @duplicate="$emit('duplicate', $event)" />
     </template>
   </div>
 </template>

@@ -29,7 +29,7 @@ func NotifyTokenAuth() gin.HandlerFunc {
 			return
 		}
 
-		if strings.ToLower(token) != strings.ToLower(savedToken) {
+		if !strings.EqualFold(token, savedToken) {
 			utils.Unauthorized(c, "通知 Token 无效")
 			c.Abort()
 			return

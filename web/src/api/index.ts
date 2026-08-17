@@ -9,15 +9,97 @@ interface ApiResponse<T> {
   data: T
 }
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${url}`, {
-    ...options,
-    credentials: 'include', // 携带 Cookie
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers
-    }
-  })
+export interface MonitorStats {
+  env: {
+    os: string
+    arch: string
+    go_version: string
+    num_cpu: number
+    goroutines: number
+  }
+  host: {
+    cpu_percent: number
+    mem_total: number
+    mem_used: number
+    mem_percent: number
+    disk_total: number
+    disk_used: number
+    disk_percent: number
+    uptime: number
+    platform: string
+  }
+  mem: {
+    alloc: number
+    total_alloc: number
+    sys: number
+    lookups: number
+    mallocs: number
+    frees: number
+  }
+  heap: {
+    heap_alloc: number
+    heap_sys: number
+    heap_idle: number
+    heap_inuse: number
+    heap_released: number
+    heap_objects: number
+  }
+  gc: {
+    next_gc: number
+    last_gc: number
+    pause_total_ns: number
+    num_gc: number
+  }
+  scheduler: {
+    scheduled: number
+    running: number
+    queue_size: number
+    worker_count: number
+    workers: {
+      id: number
+      status: string
+      task_id?: string
+      task_name?: string
+      start_time?: number
+      duration?: number
+    }[]
+  }
+}
+export let activeInterconnectNodeId = localStorage.getItem('activeInterconnectNodeId') || ''
+export let activeInterconnectNodeName = localStorage.getItem('activeInterconnectNodeName') || ''
+
+export function setActiveInterconnectNodeId(id: string, name?: string) {
+  activeInterconnectNodeId = id
+  if (name !== undefined) {
+    activeInterconnectNodeName = name
+  }
+  localStorage.removeItem('site_settings_cache')
+  if (id) {
+    localStorage.setItem('activeInterconnectNodeId', id)
+    if (name) localStorage.setItem('activeInterconnectNodeName', name)
+    document.cookie = `active_interconnect_node_id=${id}; path=/; max-age=${7 * 24 * 3600}`
+  } else {
+    localStorage.removeItem('activeInterconnectNodeId')
+    localStorage.removeItem('activeInterconnectNodeName')
+    activeInterconnectNodeName = ''
+    document.cookie = `active_interconnect_node_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC`
+  }
+}
+
+export async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE_URL}${url}`, {
+      ...options,
+      credentials: 'include', // 携带 Cookie
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers
+      }
+    })
+  } catch (err: any) {
+    throw err
+  }
 
   const json: ApiResponse<T> = await res.json()
 
@@ -51,11 +133,19 @@ export async function checkAuth(): Promise<boolean> {
 export const api = {
   auth: {
     login: (data: { username: string; password: string }) =>
-      request<{ user: string }>('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+      request<{ user: string; require_otp?: boolean; otp_pending_token?: string }>('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+    loginOtp: (data: { otp_pending_token: string; code: string }) =>
+      request<{ user: string }>('/auth/login/otp', { method: 'POST', body: JSON.stringify(data) }),
     logout: () => request('/auth/logout', { method: 'POST' }),
     me: () => request<{ username: string; role: string }>('/auth/me'),
     register: (data: { username: string; password: string; email: string }) =>
-      request('/auth/register', { method: 'POST', body: JSON.stringify(data) })
+      request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+    getOtpStatus: () => request<{ otp_enabled: boolean }>('/auth/otp/status'),
+    generateOtp: () => request<{ secret: string; url: string }>('/auth/otp/generate', { method: 'POST' }),
+    enableOtp: (data: { secret: string; code: string }) =>
+      request<void>('/auth/otp/enable', { method: 'POST', body: JSON.stringify(data) }),
+    disableOtp: (data: { code: string }) =>
+      request<void>('/auth/otp/disable', { method: 'POST', body: JSON.stringify(data) })
   },
   workflows: {
     list: (params?: { page?: number; page_size?: number; name?: string; }) => {
@@ -72,7 +162,7 @@ export const api = {
     run: (id: string, envs?: string[]) => request<void>(`/workflows/${id}/run`, { method: 'POST', body: JSON.stringify({ envs }) })
   },
   tasks: {
-    list: (params?: { page?: number; page_size?: number; name?: string; agent_id?: string; tags?: string; type?: string }) => {
+    list: (params?: { page?: number; page_size?: number; name?: string; agent_id?: string; tags?: string; type?: string; sort_by?: string; order?: string }) => {
       const query = new URLSearchParams()
       if (params?.page) query.set('page', String(params.page))
       if (params?.page_size) query.set('page_size', String(params.page_size))
@@ -80,11 +170,18 @@ export const api = {
       if (params?.tags) query.set('tags', params.tags)
       if (params?.agent_id) query.set('agent_id', params.agent_id)
       if (params?.type) query.set('type', params.type)
+      if (params?.sort_by) query.set('sort_by', params.sort_by)
+      if (params?.order) query.set('order', params.order)
       return request<TaskListResponse>(`/tasks?${query}`)
     },
     create: (data: Partial<Task>) => request<Task>('/tasks', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: Partial<Task>) => request<Task>(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    delete: (id: string) => request(`/tasks/${id}`, { method: 'DELETE' }),
+    delete: (id: string, params?: { delete_files?: boolean }) => {
+      const query = new URLSearchParams()
+      if (params?.delete_files !== undefined) query.set('delete_files', String(params.delete_files))
+      const queryString = query.toString()
+      return request(`/tasks/${id}${queryString ? '?' + queryString : ''}`, { method: 'DELETE' })
+    },
     batchDelete: (ids: string[]) => request<{ count: number }>('/tasks/batch-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
     batchDeleteByQuery: (params?: { name?: string, agent_id?: string, tags?: string, type?: string }) => {
       const query = new URLSearchParams()
@@ -95,7 +192,8 @@ export const api = {
       return request<{ count: number }>(`/tasks/batch-by-query?${query.toString()}`, { method: 'DELETE' })
     },
     execute: (id: string) => request<ExecutionResult>(`/execute/task/${id}`, { method: 'POST' }),
-    stop: (logID: string) => request(`/tasks/stop/${logID}`, { method: 'POST' })
+    stop: (logID: string) => request(`/tasks/stop/${logID}`, { method: 'POST' }),
+    tags: () => request<string[]>('/tasks/tags')
   },
   scripts: {
     list: () => request<Script[]>('/scripts'),
@@ -104,14 +202,16 @@ export const api = {
     delete: (id: string) => request(`/scripts/${id}`, { method: 'DELETE' })
   },
   env: {
-    list: (params?: { page?: number; page_size?: number; name?: string; type?: string }) => {
+    list: (params?: { page?: number; page_size?: number; name?: string; type?: string; tags?: string }) => {
       const query = new URLSearchParams()
       if (params?.page) query.set('page', String(params.page))
       if (params?.page_size) query.set('page_size', String(params.page_size))
       if (params?.name) query.set('name', params.name)
       if (params?.type && params.type !== 'all') query.set('type', params.type)
+      if (params?.tags) query.set('tags', params.tags)
       return request<EnvListResponse>(`/env?${query}`)
     },
+    tags: () => request<string[]>('/env/tags'),
     secretStatus: () => request<boolean>('/env/secret-status'),
     all: () => request<EnvVar[]>('/env/all'),
     tasks: (id: string) => request<Task[]>(`/env/${id}/tasks`),
@@ -128,6 +228,19 @@ export const api = {
   execute: {
     command: (command: string) => request('/execute/command', { method: 'POST', body: JSON.stringify({ command }) }),
     results: () => request('/execute/results')
+  },
+  tags: {
+    list: (params?: { page?: number; page_size?: number; name?: string; type?: string }) => {
+      const query = new URLSearchParams()
+      if (params?.page) query.set('page', String(params.page))
+      if (params?.page_size) query.set('page_size', String(params.page_size))
+      if (params?.name) query.set('name', params.name)
+      if (params?.type && params.type !== 'all') query.set('type', params.type)
+      return request<TagListResponse>(`/tags?${query}`)
+    },
+    create: (data: { name: string; type: string }) => request<TagItem>('/tags', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: { name: string }) => request<void>(`/tags/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request<void>(`/tags/${id}`, { method: 'DELETE' })
   },
   logs: {
     list: (params?: { page?: number; page_size?: number; task_id?: string; task_name?: string; status?: string; workflow_id?: string; workflow_run_id?: string }) => {
@@ -153,6 +266,7 @@ export const api = {
     taskStats: (days?: number) => request<TaskStatsItem[]>(`/taskstats${days ? `?days=${days}` : ''}`)
   },
   settings: {
+    getMonitor: () => request<MonitorStats>('/monitor'),
     changePassword: (data: { old_username?: string; username?: string; old_password: string; new_password?: string }) =>
       request('/settings/password', { method: 'POST', body: JSON.stringify(data) }),
     getSite: () => request<SiteSettings>('/settings/site'),
@@ -202,6 +316,7 @@ export const api = {
     tree: () => request<FileNode[]>('/files/tree'),
     getContent: (path: string) => request<{ path: string; content: string }>(`/files/content?path=${encodeURIComponent(path)}`),
     download: (path: string) => `${API_BASE_URL}/files/download?path=${encodeURIComponent(path)}`,
+    downloadZip: (path: string) => `${API_BASE_URL}/files/download-zip?path=${encodeURIComponent(path)}`,
     saveContent: (path: string, content: string) => request('/files/content', { method: 'POST', body: JSON.stringify({ path, content }) }),
     create: (path: string, isDir: boolean) => request('/files/create', { method: 'POST', body: JSON.stringify({ path, isDir }) }),
     delete: (path: string) => request('/files/delete', { method: 'POST', body: JSON.stringify({ path }) }),
@@ -276,16 +391,21 @@ export const api = {
       if (lang_version) query.set('lang_version', lang_version)
       return request<{ command: string }>(`/deps/reinstall-all-cmd?${query}`, { method: 'POST' })
     },
+    getBatchInstallCmd: (data: { items: { name: string; version?: string; language: string; lang_version?: string }[] }) =>
+      request<{ command: string }>('/deps/batch-install-cmd', { method: 'POST', body: JSON.stringify(data) }),
+    import: (data: { language: string; lang_version?: string; content: string; import_db?: boolean }) =>
+      request<{ dependencies: Dependency[]; command: string }>('/deps/import', { method: 'POST', body: JSON.stringify(data) }),
     getInstalled: (language: string, lang_version?: string) => {
       const query = new URLSearchParams({ language })
       if (lang_version) query.set('lang_version', lang_version)
       return request<Dependency[]>(`/deps/installed?${query}`)
-    }
+    },
+    getInstallSuggestCmd: (logID: string) => request<{ command: string }>(`/deps/install-suggest-cmd?log_id=${logID}`)
   },
   agents: {
     list: () => request<Agent[]>('/agents'),
     getVersion: () => request<{ version: string; platforms: { os: string; arch: string; filename: string }[] }>('/agents/version'),
-    update: (id: string, data: { name: string; description?: string; enabled: boolean }) =>
+    update: (id: string, data: { name: string; description?: string; enabled: boolean; scheduler_config: SchedulerConfig | null }) =>
       request('/agents/' + id, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => request('/agents/' + id, { method: 'DELETE' }),
     forceUpdate: (id: string) => request('/agents/' + id + '/update', { method: 'POST' }),
@@ -344,13 +464,46 @@ export const api = {
     },
     markAsRead: (data: { id?: string; category?: string }) => request('/app-logs/read', { method: 'POST', body: JSON.stringify(data) }),
     clear: (category: string) => request('/app-logs/clear', { method: 'POST', body: JSON.stringify({ category }) })
+  },
+  webui: {
+    list: () => request<WebUI[]>('/webui'),
+    upload: async (file: File) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`${API_BASE_URL}/webui/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData
+      })
+      const json: ApiResponse<{ message: string, theme: string }> = await res.json()
+      if (json.code === 401) {
+        window.location.href = BASE_URL + '/login'
+        throw new Error('请先登录')
+      }
+      if (json.code !== 200) throw new Error(json.msg || '上传失败')
+      return json.data
+    },
+    setActive: (name: string) => request<{ message: string }>('/webui/active', { method: 'PUT', body: JSON.stringify({ name }) }),
+    delete: (name: string) => request<{ message: string }>(`/webui/${name}`, { method: 'DELETE' })
+  },
+  system: {
+    export: (data: { task_ids?: string[], env_ids?: string[] }) => request<any>('/system/export', { method: 'POST', body: JSON.stringify(data) })
   }
+}
+
+export interface WebUI {
+  name: string
+  version: string
+  author: string
+  description: string
+  min_panel_version: string
 }
 
 export interface FileNode {
   name: string
   path: string
   isDir: boolean
+  modTime: number
   children?: FileNode[]
 }
 
@@ -359,6 +512,8 @@ export interface Task {
   name: string
   remark: string
   command: string
+  pre_command: string
+  post_command: string
   tags: string
   type: string
   trigger_type: string
@@ -371,11 +526,14 @@ export interface Task {
   retry_count: number
   retry_interval: number
   random_range: number
+  pin_type: 'none' | 'top'
   languages: { name: string; version: string }[]
   agent_id: string | null
   enabled: boolean
   last_run: string
   next_run: string
+  running_status?: string
+  repo_task_id?: string
   created_at?: string
   updated_at?: string
 }
@@ -395,17 +553,23 @@ export interface RepoConfig {
   dependence?: string
   extensions?: string
   auto_add_cron?: boolean
+  commenttotask?: string
   concurrency?: number
   repo_source?: string
+  repo_dir_name?: string
 }
 
 export interface ExecutionResult {
-  TaskID: string
-  Success: boolean
-  Output: string
-  Error: string
-  Start: string
-  End: string
+  task_id: string
+  log_id?: string
+  success: boolean
+  status?: string
+  output?: string
+  error?: string
+  duration?: number
+  exit_code?: number
+  start_time?: string
+  end_time?: string
 }
 
 export interface TaskListResponse {
@@ -429,6 +593,9 @@ export interface EnvVar {
   type: string
   hidden: boolean
   enabled: boolean
+  tags: string
+  created_at?: string
+  updated_at?: string
 }
 
 export interface EnvListResponse {
@@ -511,6 +678,9 @@ export interface SiteSettings {
   push_log_max_count?: string
   login_log_days?: string
   login_log_max_count?: string
+  scheduler_log_days?: string
+  scheduler_log_max_count?: string
+  active_webui?: string
 }
 
 export interface SchedulerSettings {
@@ -577,8 +747,17 @@ export interface Agent {
   os: string
   arch: string
   enabled: boolean
+  scheduler_config: SchedulerConfig | null
   created_at: string
   updated_at: string
+}
+
+export interface SchedulerConfig {
+  worker_count: number
+  queue_size: number
+  rate_interval: number
+  verbose: boolean
+  strict_queue: boolean
 }
 
 export interface AgentToken {
@@ -686,7 +865,8 @@ export interface AppLogListResponse {
 export const LOG_CATEGORY = {
   SYSTEM_NOTICE: 'system_notice',
   PUSH_LOG: 'push_log',
-  LOGIN_LOG: 'login_log'
+  LOGIN_LOG: 'login_log',
+  SCHEDULER_LOG: 'scheduler_log'
 } as const
 
 export const LOG_LEVEL = {
@@ -724,3 +904,17 @@ export const WORKFLOW = {
   },
   VIRTUAL_TASK_ID: '-1'
 } as const
+
+export interface TagItem {
+  id: string
+  name: string
+  type: 'task_tag' | 'env_tag'
+  association_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface TagListResponse {
+  data: TagItem[]
+  total: number
+}

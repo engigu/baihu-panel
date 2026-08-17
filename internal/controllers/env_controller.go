@@ -1,8 +1,12 @@
 package controllers
 
 import (
+	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/database"
+	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
+	"github.com/engigu/baihu-panel/internal/services/relation"
 	"github.com/engigu/baihu-panel/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -42,12 +46,13 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 	userID := c.GetString("userID")
 
 	var req struct {
-		Name   string `json:"name" binding:"required"`
-		Value  string `json:"value" binding:"required"`
-		Remark string `json:"remark"`
-		Type   string `json:"type"`
-		Hidden *bool  `json:"hidden"`
+		Name    string `json:"name" binding:"required"`
+		Value   string `json:"value" binding:"required"`
+		Remark  string `json:"remark"`
+		Type    string `json:"type"`
+		Hidden  *bool  `json:"hidden"`
 		Enabled *bool  `json:"enabled"`
+		Tags    string `json:"tags"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -56,7 +61,7 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 	}
 
 	if req.Type == "" {
-		req.Type = "normal"
+		req.Type = constant.EnvTypeNormal
 	}
 
 	hidden := true
@@ -70,6 +75,14 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 	}
 
 	envVar := ec.envService.CreateEnvVar(req.Name, req.Value, req.Remark, req.Type, hidden, enabled, userID)
+	if envVar != nil {
+		relation.DataRelation.SaveTags(envVar.ID, constant.RelationTypeEnvTag, req.Tags)
+		envVar.Tags = req.Tags
+	}
+	
+	// Broadcast tasks to all agents because global envs changed
+	services.GetAgentWSManager().BroadcastTasksToAll()
+	
 	utils.Success(c, vo.ToEnvVO(envVar))
 }
 
@@ -84,6 +97,7 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
 // @Param type query string false "按类型筛选"
+// @Param tags query string false "按标签筛选"
 // @Success 200 {object} utils.Response{data=utils.PaginationData{data=[]vo.EnvVO}}
 // @Router /env [get]
 func (ec *EnvController) GetEnvVars(c *gin.Context) {
@@ -91,7 +105,8 @@ func (ec *EnvController) GetEnvVars(c *gin.Context) {
 	p := utils.ParsePagination(c)
 	name := c.DefaultQuery("name", "")
 	envType := c.DefaultQuery("type", "")
-	envVars, total := ec.envService.GetEnvVarsWithPagination(userID, name, envType, p.Page, p.PageSize)
+	tags := c.DefaultQuery("tags", "")
+	envVars, total := ec.envService.GetEnvVarsWithPagination(userID, name, envType, tags, p.Page, p.PageSize)
 	utils.PaginatedResponse(c, vo.ToEnvVOListFromModels(envVars), total, p)
 }
 
@@ -163,6 +178,7 @@ func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
 		Type    string `json:"type"`
 		Hidden  *bool  `json:"hidden"`
 		Enabled *bool  `json:"enabled"`
+		Tags    string `json:"tags"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -171,7 +187,7 @@ func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
 	}
 
 	if req.Type == "" {
-		req.Type = "normal"
+		req.Type = constant.EnvTypeNormal
 	}
 
 	// 对于更新，获取现有数据
@@ -183,19 +199,25 @@ func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
 
 	hidden := existing.Hidden
 	if req.Hidden != nil {
-		hidden = *req.Hidden
+		hidden = req.Hidden
 	}
 
 	enabled := existing.Enabled
 	if req.Enabled != nil {
-		enabled = *req.Enabled
+		enabled = req.Enabled
 	}
 
-	envVar := ec.envService.UpdateEnvVar(id, req.Name, req.Value, req.Remark, req.Type, hidden, enabled)
+	envVar := ec.envService.UpdateEnvVar(id, req.Name, req.Value, req.Remark, req.Type, utils.DerefBool(hidden, true), utils.DerefBool(enabled, true))
 	if envVar == nil {
 		utils.NotFound(c, "环境变量不存在")
 		return
 	}
+
+	relation.DataRelation.SaveTags(envVar.ID, constant.RelationTypeEnvTag, req.Tags)
+	envVar.Tags = req.Tags
+
+	// Broadcast tasks to all agents because global envs changed
+	services.GetAgentWSManager().BroadcastTasksToAll()
 
 	utils.Success(c, vo.ToEnvVO(envVar))
 }
@@ -237,6 +259,9 @@ func (ec *EnvController) DeleteEnvVar(c *gin.Context) {
 		return
 	}
 
+	// Broadcast tasks to all agents because global envs changed
+	services.GetAgentWSManager().BroadcastTasksToAll()
+
 	utils.SuccessMsg(c, "删除成功")
 }
 
@@ -258,4 +283,107 @@ func (ec *EnvController) GetAssociatedTasks(c *gin.Context) {
 	}
 	tasks := ec.envService.GetAssociatedTasks(id)
 	utils.Success(c, vo.ToTaskVOListFromModels(tasks))
+}
+
+// GetTags 获取所有环境变量标签
+// @Summary 获取所有环境变量标签
+// @Description 获取所有环境变量中使用的标签列表
+// @Tags 环境变量
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.Response{data=[]string}
+// @Router /env/tags [get]
+func (ec *EnvController) GetTags(c *gin.Context) {
+	tags, err := ec.envService.GetAllEnvTags()
+	if err != nil {
+		utils.ServerError(c, "获取标签失败")
+		return
+	}
+	utils.Success(c, tags)
+}
+
+// BulkSaveEnv 批量保存环境变量
+func (ec *EnvController) BulkSaveEnv(c *gin.Context) {
+	var reqs []struct {
+		ID      string `json:"id"`
+		Name    string `json:"name" binding:"required"`
+		Value   string `json:"value" binding:"required"`
+		Remark  string `json:"remark"`
+		Type    string `json:"type"`
+		Hidden  *bool  `json:"hidden"`
+		Enabled *bool  `json:"enabled"`
+	}
+
+	if err := c.ShouldBindJSON(&reqs); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	userID := c.GetString("userID")
+
+	for _, req := range reqs {
+		if req.Type == constant.EnvTypeSecret {
+			continue // 二次严苛拦截，机密变量不应下发/保存
+		}
+
+		hidden := true
+		if req.Hidden != nil {
+			hidden = *req.Hidden
+		}
+		enabled := true
+		if req.Enabled != nil {
+			enabled = *req.Enabled
+		}
+
+		var existingEnv *models.EnvironmentVariable
+		// 优先按 ID 匹配
+		if req.ID != "" {
+			var e models.EnvironmentVariable
+			if err := database.DB.Where("id = ?", req.ID).First(&e).Error; err == nil {
+				existingEnv = &e
+			}
+		}
+		// 如果 ID 没找到，按 Name 匹配
+		if existingEnv == nil {
+			var e models.EnvironmentVariable
+			if err := database.DB.Where("name = ?", req.Name).First(&e).Error; err == nil {
+				existingEnv = &e
+			}
+		}
+
+		if existingEnv != nil {
+			existingEnv.Name = req.Name
+			existingEnv.Value = models.BigText(req.Value)
+			existingEnv.Remark = req.Remark
+			existingEnv.Type = req.Type
+			existingEnv.Hidden = &hidden
+			existingEnv.Enabled = &enabled
+			database.DB.Save(existingEnv)
+			
+			if req.ID != "" && existingEnv.ID != req.ID {
+				database.DB.Model(existingEnv).Update("id", req.ID)
+			}
+		} else {
+			envVar := &models.EnvironmentVariable{
+				ID:        req.ID,
+				Name:      req.Name,
+				Value:     models.BigText(req.Value),
+				Remark:    req.Remark,
+				Type:      req.Type,
+				Hidden:    &hidden,
+				Enabled:   &enabled,
+				UserID:    userID,
+				CreatedAt: models.Now(),
+				UpdatedAt: models.Now(),
+			}
+			if envVar.ID == "" {
+				envVar.ID = utils.GenerateID()
+			}
+			database.DB.Create(envVar)
+		}
+	}
+
+	services.GetAgentWSManager().BroadcastTasksToAll()
+	utils.Success(c, nil)
 }

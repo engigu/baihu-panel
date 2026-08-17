@@ -33,7 +33,14 @@ func (s *LoginLogService) Create(username, ip, userAgent, status, message string
 		RefID:    ip,
 		ErrorMsg: models.BigText(message),
 	}
-	return database.DB.Create(log).Error
+	err := database.DB.Create(log).Error
+	if err == nil {
+		eventbus.DefaultBus.Publish(eventbus.Event{
+			Type:    constant.EventAppLogAdded,
+			Payload: log,
+		})
+	}
+	return err
 }
 
 // SubscribeEvents 注册订阅事件
