@@ -8,30 +8,28 @@
 
 | 命令 | 描述 | 适用场景 |
 | :--- | :--- | :--- |
-| [`baihu server`](#1-baihu-server-服务启动) | 启动面板后台服务主进程 | 单文件/系统服务部署、后台守护运行 |
-| [`baihu task`](#2-baihu-task-任务运维控制) | 任务查询、手动触发、启停控制及日志跟踪 | 命令行快速运维、CI/CD 触发、故障排查 |
-| [`baihu reposync`](#3-baihu-reposync-仓库与脚本同步) | 远程 Git 仓库及文件流同步、规则过滤与任务提取 | 脚本自动化同步、仓库定时拉取 |
-| [`baihu resetpwd`](#4-baihu-resetpwd-管理员密码重置) | 交互式或命令行快速重置管理员密码 | 管理员密码遗忘应急找回 |
-| [`baihu restore`](#5-baihu-restore-数据备份恢复) | 从本地 `.zip` 备份包全量恢复数据库与配置 | 系统迁移、灾难恢复 |
-| [`baihu webui`](#6-baihu-webui-前端主题管理) | 管理、切换、重置第三方 WebUI 前端包 | 自定义主题包管理、界面回退 |
-| [`baihu depinstall`](#7-baihu-depinstall-依赖一键自动补全) | 智能分析执行日志并自动安装缺失的依赖包 | 脚本依赖报错快速排查与自动补齐 |
-| [`baihu builtininstall`](#8-baihu-builtininstall-内建助手库安装) | 为所有 Python / Node.js 运行时安装面板原生 SDK | 新增多版本解释器后一键注入 SDK |
-| [`baihu completion`](#9-baihu-completion-shell-自动补全) | 生成 PowerShell / Bash / Zsh 的 Tab 自动补全脚本 | 提升终端交互与命令敲击体验 |
-| [`baihu version`](#10-baihu-version-版本查询) | 查看当前二进制版本号 (同 `-v`, `-V`) | 环境排查、版本确认 |
+| [`baihu server`](#baihu-server) | 启动面板后台服务主进程 | 单文件/系统服务部署、后台守护运行 |
+| [`baihu task`](#baihu-task) | 任务查询、手动触发、启停控制及日志跟踪 | 命令行快速运维、CI/CD 触发、故障排查 |
+| [`baihu reposync`](#baihu-reposync) | 远程 Git 仓库及文件流同步、规则过滤与任务提取 | 脚本自动化同步、仓库定时拉取 |
+| [`baihu resetpwd`](#baihu-resetpwd) | 交互式或命令行快速重置管理员密码 | 管理员密码遗忘应急找回 |
+| [`baihu restore`](#baihu-restore) | 从本地 `.zip` 备份包全量恢复数据库与配置 | 系统迁移、灾难恢复 |
+| [`baihu webui`](#baihu-webui) | 管理、切换、重置第三方 WebUI 前端包 | 自定义主题包管理、界面回退 |
+| [`baihu depinstall`](#baihu-depinstall) | 智能分析执行日志并自动安装缺失的依赖包 | 脚本依赖报错快速排查与自动补齐 |
+| [`baihu builtininstall`](#baihu-builtininstall) | 为所有 Python / Node.js 运行时安装面板原生 SDK | 新增多版本解释器后一键注入 SDK |
+| [`baihu completion`](#baihu-completion) | 生成 PowerShell / Bash / Zsh 的 Tab 自动补全脚本 | 提升终端交互与命令敲击体验 |
+| [`baihu version`](#baihu-version) | 查看当前二进制版本号 (同 `-v`, `-V`) | 环境排查、版本确认 |
 
 ---
 
-## 详细命令场景与 Demo 示例
-
-### 1. `baihu server` 服务启动
+## `baihu server`
 
 启动白虎面板核心后台服务（内置 Web 界面、任务调度引擎与 WebSocket 服务）。
 
-#### 常见使用场景
+### 常见使用场景
 - **直接前台运行**：测试或调试面板运行状态；
 - **后台守护运行**：结合 `nohup`、`systemd` 或 Windows 服务在后台长期运行。
 
-#### 示例
+### 示例
 ```bash
 # 1. 前台直接运行（输出实时运行日志）
 ./baihu server
@@ -45,14 +43,14 @@ Start-Process -FilePath ".\baihu.exe" -ArgumentList "server" -WindowStyle Hidden
 
 ---
 
-### 2. `baihu task` 任务运维控制
+## `baihu task`
 
 专为纯终端操作与自动化工作流打造的轻量级任务管理工具，无需打开浏览器即可快速管理任务与查看执行日志。
 
 > [!TIP]
 > 目标识别非常智能：支持传入**任务 ID**、**任务名称（模糊/精准搜索）**，或直接传入字面量 **`repo`** 快捷操作主力仓库任务。
 
-#### 子命令与参数详解
+### 子命令与参数详解
 
 | 子命令 | 参数 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
@@ -68,9 +66,9 @@ Start-Process -FilePath ".\baihu.exe" -ArgumentList "server" -WindowStyle Hidden
 | `history`| `<目标>` | *(必填)* | 查看近期执行历史流水 |
 | | `-limit` | `10` | 展示的历史流水记录条数 |
 
-#### 场景与 Demo 示例
+### 场景与 Demo 示例
 
-##### (1) 查看任务列表
+#### (1) 查看任务列表
 ```bash
 # 默认展示第 1 页（20 条）
 baihu task list
@@ -85,7 +83,7 @@ baihu task list -type repo -size 50
 baihu task list -page 2 -size 10
 ```
 
-##### (2) 手动触发执行任务
+#### (2) 手动触发执行任务
 ```bash
 # 按任务 ID 触发
 baihu task run a1b2c3d4e5
@@ -97,7 +95,7 @@ baihu task run "每日签到"
 baihu task run repo
 ```
 
-##### (3) 启用 / 禁用任务
+#### (3) 启用 / 禁用任务
 ```bash
 # 启用某个任务
 baihu task enable a1b2c3d4e5
@@ -106,7 +104,7 @@ baihu task enable a1b2c3d4e5
 baihu task disable repo
 ```
 
-##### (4) 查看任务执行日志与退出状态
+#### (4) 查看任务执行日志与退出状态
 ```bash
 # 查看指定任务最近一次执行的详细信息（包含状态、耗时、退出码及解压后的标准输出）
 baihu task status a1b2c3d4e5
@@ -118,7 +116,7 @@ baihu task status repo
 baihu task status a1b2c3d4e5 clk8901234567890
 ```
 
-##### (5) 查询任务历史流水
+#### (5) 查询任务历史流水
 ```bash
 # 查看任务最近 10 次执行记录
 baihu task history a1b2c3d4e5
@@ -129,11 +127,11 @@ baihu task history repo -limit 30
 
 ---
 
-### 3. `baihu reposync` 仓库与脚本同步
+## `baihu reposync`
 
 用于将远程 Git 仓库或文件直链高速同步到本地目录，支持青龙注释解析、过滤白名单、黑名单关键字剔除等。
 
-#### 参数列表
+### 参数列表
 
 | 参数名 | 默认值 | 描述 |
 | :--- | :--- | :--- |
@@ -157,9 +155,9 @@ baihu task history repo -limit 30
 | `--repo-name` | `""` | 自定义保存的本地仓库文件夹名称（不指定时自动根据仓库 URL 识别） |
 | `--task-timeout` | `30` | 同步命令执行超时时间（分钟） |
 
-#### 场景与 Demo 示例
+### 场景与 Demo 示例
 
-##### (1) 最简同步（不指定 `--target-path`，自动存入默认 scripts 目录）
+#### (1) 最简同步（不指定 `--target-path`，自动存入默认 scripts 目录）
 > 💡 `--target-path` 参数**完全可选**。当不指定时，系统会自动在 `scripts/` 目录下按仓库标识创建对应文件夹：
 ```bash
 # 最简拉取：自动在 scripts 目录下同步并使用 ghproxy 代理加速
@@ -174,7 +172,7 @@ baihu reposync \
   --proxy ghproxy
 ```
 
-##### (2) 稀疏检出 (Sparse Checkout) 仅同步特定子目录
+#### (2) 稀疏检出 (Sparse Checkout) 仅同步特定子目录
 当仓库体积巨大（包含大量无关文件）时，仅拉取所需的脚本目录：
 ```bash
 baihu reposync \
@@ -183,7 +181,7 @@ baihu reposync \
   --proxy mirror
 ```
 
-##### (3) 单文件下载模式
+#### (3) 单文件下载模式
 仅下载远程仓库中的某单个脚本文件：
 ```bash
 baihu reposync \
@@ -192,7 +190,7 @@ baihu reposync \
   --path "checkin.py"
 ```
 
-##### (4) 过滤黑名单并自动解析脚本注释注册定时任务（--commenttotask）
+#### (4) 过滤黑名单并自动解析脚本注释注册定时任务（--commenttotask）
 开启 `--commenttotask true` 后，系统在拉取脚本后会自动扫描脚本头部（前 15 行内），**直接从脚本注释或代码中提取任务名称和 Cron 表达式自动注册到定时任务列表**，完全避免同步后手动逐个创建和配置任务：
 ```bash
 baihu reposync \
@@ -205,11 +203,11 @@ baihu reposync \
 
 ---
 
-#### 💡 脚本头部注释规范与自动解析支持范围
+### 💡 脚本头部注释规范与自动解析支持范围
 
 同步引擎在扫描脚本时（支持 `.js`、`.py`、`.ts`、`.sh` 等），在前 15 行内支持以下多种注释规范自动提取元数据：
 
-##### 1. 任务名称 (Task Name) 支持范围与格式
+#### 1. 任务名称 (Task Name) 支持范围与格式
 
 | 格式规范 | 示例 | 适用语言/场景 |
 | :--- | :--- | :--- |
@@ -219,7 +217,7 @@ baihu reposync \
 | **首行注释回退** | `// 百度贴吧一键签到助手` 或 `# 阿里云盘自动签到` | 当未显式指定 Env/name 时，自动使用前 15 行内的第一行非空注释作为任务名称 |
 | **文件名兜底** | `task_daily_checkin` | 若无任何有效注释，自动回退使用文件名（去掉后缀）作为名称 |
 
-##### 2. 执行频率 (Cron 表达式) 支持范围与格式
+#### 2. 执行频率 (Cron 表达式) 支持范围与格式
 
 | 格式规范 | 示例 | 说明 |
 | :--- | :--- | :--- |
@@ -228,9 +226,9 @@ baihu reposync \
 | **关联文件名的 Cron 行** | `// 0 0 12 * * checkin.js` 或 `# 30 8 * * * checkin.py` | 经典青龙 Perl 兼容写法，Cron 表达式后跟当前脚本文件名 |
 | **纯 Cron 独立注释行** | `// 0 9 * * 1-5` | 独立的 Cron 表达式行，自动校验合法性后提取 |
 
-##### 3. 多语言脚本头部标准 Demo 示例
+#### 3. 多语言脚本头部标准 Demo 示例
 
-###### (1) JavaScript / TypeScript (`.js` / `.ts`) 示例
+##### (1) JavaScript / TypeScript (`.js` / `.ts`) 示例
 ```javascript
 /**
  * name: 京东多合一签到
@@ -247,7 +245,7 @@ async function main() {
 main();
 ```
 
-###### (2) Python (`.py`) 示例
+##### (2) Python (`.py`) 示例
 ```python
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
@@ -266,7 +264,7 @@ if __name__ == "__main__":
     main()
 ```
 
-###### (3) Shell / Bash (`.sh`) 示例
+##### (3) Shell / Bash (`.sh`) 示例
 ```bash
 #!/usr/bin/env bash
 # name: 系统磁盘与内存自动清理
@@ -277,7 +275,7 @@ find /tmp -type f -mtime +7 -delete
 echo "清理完成！"
 ```
 
-##### (5) 指定分支与白名单保护路径（--branch, --whitelist-paths, --repo-name）
+#### (5) 指定分支与白名单保护路径（--branch, --whitelist-paths, --repo-name）
 ```bash
 # 指定拉取 dev 分支，自定义保存文件夹名称为 my_dev_scripts，并保护 config 目录不被清理
 baihu reposync \
@@ -287,7 +285,7 @@ baihu reposync \
   --whitelist-paths "config|assets"
 ```
 
-##### (6) 自动为发现的任务注入前置与后置命令（--pre-command, --post-command）
+#### (6) 自动为发现的任务注入前置与后置命令（--pre-command, --post-command）
 ```bash
 # 同步脚本并在自动创建任务时，为所有任务统一配置运行前拉取依赖、运行后清理临时文件的钩子
 baihu reposync \
@@ -297,7 +295,7 @@ baihu reposync \
   --post-command "rm -rf /tmp/cache_*"
 ```
 
-##### (7) 自定义代理前缀与本地 HTTP 代理（--proxy custom, --proxy-url, --http-proxy）
+#### (7) 自定义代理前缀与本地 HTTP 代理（--proxy custom, --proxy-url, --http-proxy）
 ```bash
 # 场景 A: 使用自定义的 GitHub 反代加速节点
 baihu reposync \
@@ -311,7 +309,7 @@ baihu reposync \
   --http-proxy "http://127.0.0.1:7890"
 ```
 
-##### (8) 私有仓库鉴权与单文件直链下载（--auth-token, --source-type url, --task-timeout）
+#### (8) 私有仓库鉴权与单文件直链下载（--auth-token, --source-type url, --task-timeout）
 ```bash
 # 场景 A: 携带 GitHub Token 拉取私有仓库，设置超时 15 分钟
 baihu reposync \
@@ -328,13 +326,13 @@ baihu reposync \
 
 ---
 
-### 4. `baihu resetpwd` 管理员密码重置
+## `baihu resetpwd`
 
 忘记登录密码时的应急处理工具。可直接在宿主机或容器内直接重置管理员密码。
 
-#### 场景与 Demo 示例
+### 场景与 Demo 示例
 
-##### (1) 交互式重置（进入 Docker 容器或本地终端）
+#### (1) 交互式重置（进入 Docker 容器或本地终端）
 ```bash
 # 在 Docker 容器内执行
 docker exec -it baihu baihu resetpwd
@@ -344,23 +342,23 @@ docker exec -it baihu baihu resetpwd
 ```
 *提示输入新密码时，直接按回车可自动生成 12 位高强度随机密码并显示在屏幕上。*
 
-##### (2) 指定用户重置
+#### (2) 指定用户重置
 ```bash
 baihu resetpwd admin
 ```
 
 ---
 
-### 5. `baihu restore` 数据备份恢复
+## `baihu restore`
 
 将导出的 `.zip` 数据备份包全量覆盖恢复到当前面板中（包含数据库配置、定时任务、变量机密、通知渠道等）。
 
-#### 参数说明
+### 参数说明
 ```bash
 baihu restore <备份文件路径.zip>
 ```
 
-#### 场景与 Demo 示例
+### 场景与 Demo 示例
 ```bash
 # 恢复本地指定备份
 ./baihu restore /data/backup/baihu-backup-20260817.zip
@@ -373,17 +371,17 @@ docker exec -it baihu baihu restore /app/data/backup_20260817.zip
 
 ---
 
-### 6. `baihu webui` 前端主题管理
+## `baihu webui`
 
 白虎面板支持插件化替换前端 Web 界面。通过 `baihu webui` 子命令可以在终端轻松管理和切换不同的前端包。
 
-#### 支持子命令
+### 支持子命令
 - `list`：列出当前已安装的所有 WebUI 资源包及其激活状态；
 - `set <name>`：切换并激活指定的 WebUI 前端；
 - `reset`：一键回退到系统内置的官方默认 WebUI；
 - `delete <name>`：从系统中删除指定的前端包。
 
-#### 场景与 Demo 示例
+### 场景与 Demo 示例
 
 ```bash
 # 1. 查看当前安装的前端包列表
@@ -409,16 +407,16 @@ baihu webui delete dark-cyberpunk
 
 ---
 
-### 7. `baihu depinstall` 依赖一键自动补全
+## `baihu depinstall`
 
 当脚本执行报错（如 Python `ModuleNotFoundError: No module named 'requests'` 或 Node.js `Cannot find module 'axios'`）时，该命令能够根据**日志 ID** 自动分析错误输出，精准识别缺失的依赖包名并自动安装到对应运行环境中。
 
-#### 参数说明
+### 参数说明
 ```bash
 baihu depinstall <日志ID>
 ```
 
-#### 场景与 Demo 示例
+### 场景与 Demo 示例
 ```bash
 # 1. 假设任务执行失败，从历史或 status 中获知日志 ID 为 c0ab123456
 baihu depinstall c0ab123456
@@ -433,13 +431,13 @@ baihu depinstall c0ab123456
 
 ---
 
-### 8. `baihu builtininstall` 内建助手库安装
+## `baihu builtininstall`
 
 白虎面板内置了开箱即用的原生消息推送 SDK（支持 Python 的 `from baihu import notify` 与 Node.js 的 `const { notify } = require('baihu-notify')`）。
 
 当您在面板中通过 Mise 新增安装了新的 Python 或 Node.js 版本后，运行此命令可**自动为所有已安装的解释器版本全局注册注入 SDK**，无需手动重复 `pip install` 或 `npm install`。
 
-#### 场景与 Demo 示例
+### 场景与 Demo 示例
 ```bash
 # 为所有本地已安装的 Node.js 和 Python 版本批量注入白虎助手 SDK
 baihu builtininstall
@@ -455,13 +453,13 @@ baihu builtininstall
 
 ---
 
-### 9. `baihu completion` Shell 自动补全
+## `baihu completion`
 
 白虎面板 CLI 针对 **PowerShell**、**Bash** 与 **Zsh** 提供了原生的 Tab 键命令、子命令及参数自动补全支持。
 
-#### 场景与配置示例
+### 场景与配置示例
 
-##### (1) PowerShell (Windows / pwsh)
+#### (1) PowerShell (Windows / pwsh)
 ```powershell
 # 临时在当前窗口启用:
 baihu completion powershell | Out-String | Invoke-Expression
@@ -471,7 +469,7 @@ if (!(Test-Path $PROFILE)) { New-Item -Type File -Path $PROFILE -Force }
 baihu completion powershell | Out-File -Append -Encoding utf8 $PROFILE
 ```
 
-##### (2) Bash (Linux / macOS)
+#### (2) Bash (Linux / macOS)
 ```bash
 # 临时在当前会话生效:
 source <(baihu completion bash)
@@ -481,7 +479,7 @@ baihu completion bash > ~/.baihu_completion.bash
 echo 'source ~/.baihu_completion.bash' >> ~/.bashrc
 ```
 
-##### (3) Zsh (Linux / macOS)
+#### (3) Zsh (Linux / macOS)
 ```zsh
 # 永久生效 (写入 ~/.zshrc):
 baihu completion zsh > ~/.baihu_completion.zsh
@@ -490,11 +488,11 @@ echo 'source ~/.baihu_completion.zsh' >> ~/.zshrc
 
 ---
 
-### 10. `baihu version` 版本查询
+## `baihu version`
 
 打印当前编译的白虎面板版本号及发布构建信息。
 
-#### 示例
+### 示例
 ```bash
 baihu version
 # 或简写
