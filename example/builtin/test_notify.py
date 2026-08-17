@@ -15,7 +15,7 @@ def main():
         # 内部会自动使用 BHPKG_NOTIFY_TOKEN & BHPKG_NOTIFY_CHANNEL 进行鉴权和投递
         response = baihu.notify(
             title="Python 任务提醒",
-            content="这是一条来自 Python 示例脚本的通知消息。调用非常简单！"
+            text="这是一条来自 Python 示例脚本的通知消息。调用非常简单！"
         )
         print("发送请求已处理。")
         if response:

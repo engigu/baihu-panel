@@ -30,9 +30,8 @@ type NotifyChannel struct {
 
 // NotifyMessage 通知消息
 type NotifyMessage struct {
-	Title   string `json:"title"`
-	Content string `json:"content"`
-	Format  string `json:"format"` // text/markdown/html，为空则自动检测
+	Title string `json:"title"`
+	Text  string `json:"text"`
 }
 
 // NotifyResult 发送结果
@@ -233,20 +232,14 @@ func (s *NotificationService) GetBindingsByEvent(bindingType, event, dataID stri
 
 // SendToChannel 使用 messenger SDK 发送通知到指定渠道
 func (s *NotificationService) SendToChannel(channel NotifyChannel, msg *NotifyMessage) *NotifyResult {
-	m := &messenger.Message{Title: msg.Title}
-	switch msg.Format {
-	case "html":
-		m.HTML = msg.Content
-	case "markdown":
-		m.Markdown = msg.Content
-	default:
-		m.Text = msg.Content
-	}
-	result, err := messenger.Send(channel.Type, messenger.ChannelConfig(channel.Config), m)
+	result, err := messenger.Send(channel.Type, messenger.ChannelConfig(channel.Config), &messenger.Message{
+		Title: msg.Title,
+		Text:  msg.Text,
+	})
 
 	payload := map[string]interface{}{
 		"title":        msg.Title,
-		"content":      msg.Content,
+		"content":      msg.Text,
 		"channel_id":   channel.ID,
 		"channel_name": channel.Name,
 		"success":      false,
@@ -536,7 +529,7 @@ func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 			}
 
 			go func(channel NotifyChannel, msgTitle, msgText string) {
-				result := s.SendToChannel(channel, &NotifyMessage{Title: msgTitle, Content: msgText})
+				result := s.SendToChannel(channel, &NotifyMessage{Title: msgTitle, Text: msgText})
 				if !result.Success {
 					logger.Warnf("[Notify] 发送事件 %s 到渠道 %s(%s) 失败: %s", e.Type, channel.Name, channel.Type, result.Error)
 				}
