@@ -39,40 +39,38 @@ const isRefreshing = ref(false)
 useEventBus(Object.values(TASK_EVENTS), (payload, type) => {
   const { log_id, status, duration, end_time } = payload
   
-  // 查找列表中的记录
+  // 查找列表中的记录并更新
   const logItem = logs.value.find(l => l.id === log_id)
-  
   if (logItem) {
-    // 更新已有记录状态
     logItem.status = status
     if (duration !== undefined) logItem.duration = duration
     if (end_time !== undefined) logItem.end_time = end_time
-    
-    // 如果详情页打开的是这个记录，也同步更新
-    if (selectedLog.value && (selectedLog.value.id === log_id || selectedLog.value.task_id === payload.task_id)) {
-      selectedLog.value = {
-        ...selectedLog.value,
-        status: status,
-        duration: duration !== undefined ? duration : selectedLog.value.duration,
-        end_time: end_time !== undefined ? end_time : selectedLog.value.end_time
-      }
-      
-      // 如果任务完成了，停止详情页的轮询定时器并断开 SSE
-      if (status !== TASK_STATUS.RUNNING) {
-        if (durationTimer) {
-          clearInterval(durationTimer)
-          durationTimer = null
-        }
-        if (logSource) {
-          logSource.close()
-          logSource = null
-        }
-      }
-    }
-  } else if (type === TASK_EVENTS.RUNNING) {
-    // 新任务开始执行，如果在第一页且没有特定筛选条件，则刷新列表
+  } else if (type === TASK_EVENTS.RUNNING || status !== TASK_STATUS.RUNNING) {
+    // 新任务启动或任务完成时，如果在第一页且无特定过滤，刷新列表以获取最新条目
     if (currentPage.value === 1 && !filterTaskId.value && !filterKeyword.value && (!filterStatus.value || filterStatus.value === 'all')) {
       loadLogs()
+    }
+  }
+  
+  // 如果详情页打开的是这个记录，也同步更新
+  if (selectedLog.value && (selectedLog.value.id === log_id || selectedLog.value.task_id === payload.task_id)) {
+    selectedLog.value = {
+      ...selectedLog.value,
+      status: status,
+      duration: duration !== undefined ? duration : selectedLog.value.duration,
+      end_time: end_time !== undefined ? end_time : selectedLog.value.end_time
+    }
+    
+    // 如果任务完成了，停止详情页的轮询定时器并断开 SSE
+    if (status !== TASK_STATUS.RUNNING) {
+      if (durationTimer) {
+        clearInterval(durationTimer)
+        durationTimer = null
+      }
+      if (logSource) {
+        logSource.close()
+        logSource = null
+      }
     }
   }
 })
@@ -167,55 +165,73 @@ async function selectLog(log: TaskLog) {
     durationTimer = null
   }
 
-  selectedLog.value = log
-
-  // 如果是运行中状态，启动定时器本地更新耗时，状态变更依靠 EventBus
-  if (log.status === TASK_STATUS.RUNNING) {
-    const updateLog = () => {
-      if (selectedLog.value && selectedLog.value.id === log.id && selectedLog.value.status === TASK_STATUS.RUNNING) {
-        if (selectedLog.value.start_time) {
-          const startMs = new Date(selectedLog.value.start_time).getTime()
-          if (!isNaN(startMs)) {
-            selectedLog.value.duration = Date.now() - startMs
-          } else {
-            selectedLog.value.duration += 1000
-          }
-        } else {
-          selectedLog.value.duration += 1000
-        }
-        
-        // 同步更新列表中的数据
-        const listItem = logs.value.find(l => l.id === log.id)
-        if (listItem) {
-          listItem.duration = selectedLog.value.duration
-        }
-      }
-    }
-    durationTimer = setInterval(updateLog, 1000)
-  }
-
   wsContent.value = ''
   isWsLoading.value = true
 
-  if (log.status !== TASK_STATUS.RUNNING) {
-    try {
-      const res = await api.logs.get(log.id)
-      wsContent.value = res.output
-    } catch {
-      toast.error('加载详情失败')
-    } finally {
-      isWsLoading.value = false
+  // 校验最新的真实数据与状态（防止前端状态滞后导致已完成任务误连 SSE）
+  let currentLog = log
+  try {
+    const detail = await api.logs.get(log.id)
+    if (detail) {
+      currentLog = {
+        ...log,
+        status: detail.status,
+        duration: detail.duration ?? log.duration,
+        end_time: detail.end_time ?? log.end_time
+      } as TaskLog
+      selectedLog.value = currentLog
+      
+      // 同步更新列表项
+      const listItem = logs.value.find(l => l.id === log.id)
+      if (listItem) {
+        listItem.status = currentLog.status
+        listItem.duration = currentLog.duration
+        listItem.end_time = currentLog.end_time
+      }
+
+      if (currentLog.status !== TASK_STATUS.RUNNING) {
+        wsContent.value = detail.output || ''
+        isWsLoading.value = false
+        return
+      }
     }
-    return
+  } catch (e) {
+    if (log.status !== TASK_STATUS.RUNNING) {
+      toast.error('加载详情失败')
+      isWsLoading.value = false
+      return
+    }
   }
-  
+
+  // 确认仍为运行中状态，启动定时器本地更新耗时
+  const updateLog = () => {
+    if (selectedLog.value && selectedLog.value.id === currentLog.id && selectedLog.value.status === TASK_STATUS.RUNNING) {
+      if (selectedLog.value.start_time) {
+        const startMs = new Date(selectedLog.value.start_time).getTime()
+        if (!isNaN(startMs)) {
+          selectedLog.value.duration = Date.now() - startMs
+        } else {
+          selectedLog.value.duration += 1000
+        }
+      } else {
+        selectedLog.value.duration += 1000
+      }
+      
+      const listItem = logs.value.find(l => l.id === currentLog.id)
+      if (listItem) {
+        listItem.duration = selectedLog.value.duration
+      }
+    }
+  }
+  durationTimer = setInterval(updateLog, 1000)
+
   wsContent.value = 'raw:'
   
   const protocol = window.location.protocol
   const host = window.location.host
   const baseUrl = (window as any).__BASE_URL__ || ''
   const apiVersion = (window as any).__API_VERSION__ || '/api/v1'
-  const sseUrl = `${protocol}//${host}${baseUrl}${apiVersion}/logs/sse?log_id=${log.id}`
+  const sseUrl = `${protocol}//${host}${baseUrl}${apiVersion}/logs/sse?log_id=${currentLog.id}`
 
   logSource = new EventSource(sseUrl)
 

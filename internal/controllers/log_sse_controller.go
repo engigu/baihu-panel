@@ -31,7 +31,7 @@ func (lc *LogSSEController) StreamLog(c *gin.Context) {
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 	c.Header("Transfer-Encoding", "chunked")
-	// c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("X-Accel-Buffering", "no")
 
 	// 1. 检查数据库中是否已结束
 	var taskLog models.TaskLog
