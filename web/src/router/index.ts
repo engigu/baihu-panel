@@ -49,13 +49,16 @@ const router = createRouter({
         { path: 'workflows/:id', name: 'workflowDetail', component: () => import('@/views/workflows/WorkflowEdit.vue') },
         { path: 'editor', name: 'editor', component: () => import('@/views/editor/Editor.vue') },
         { path: 'environments', name: 'environments', component: () => import('@/views/environments/Environments.vue') },
+        { path: 'tags', name: 'tags', component: () => import('@/views/tags/Tags.vue') },
         { path: 'dependencies', name: 'dependencies', component: () => import('@/views/dependencies/Dependencies.vue') },
         { path: 'languages', name: 'languages', component: () => import('@/views/languages/Languages.vue') },
         { path: 'agents', name: 'agents', component: () => import('@/views/agents/Agents.vue') },
         { path: 'history', name: 'history', component: () => import('@/views/history/History.vue') },
-        { path: 'logs', name: 'logs', component: () => import('@/views/loginlogs/LoginLogs.vue') },
+        { path: 'logs', name: 'logs', component: () => import('@/views/logs/MessageLogs.vue') },
         { path: 'terminal', name: 'terminal', component: () => import('@/views/terminal/Terminal.vue') },
         { path: 'notify', name: 'notify', component: () => import('@/views/notify/Notify.vue') },
+        { path: 'monitor', name: 'monitor', component: () => import('@/views/monitor/Monitor.vue') },
+        { path: 'interconnect', name: 'interconnect', component: () => import('@/views/interconnect/index.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/views/settings/Settings.vue') }
       ]
     },

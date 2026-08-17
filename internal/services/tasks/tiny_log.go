@@ -4,12 +4,21 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"unicode/utf8"
 
+	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/utils"
+)
+
+const (
+	// maxLogBufferLen 定义了没有换行符时的最大缓冲长度 (4KB)
+	maxLogBufferLen = 4096
 )
 
 var (
@@ -55,7 +64,7 @@ type TinyLog struct {
 	path        string
 	writer      *bufio.Writer
 	subscribers []chan []byte
-	remainder   []byte // Leftover bytes from previous write (partial multi-byte characters)
+	remainder   []byte   // Leftover bytes from previous write (partial lines)
 	masks       []string // Secrets to mask
 	closed      bool
 }
@@ -88,50 +97,73 @@ func (l *TinyLog) Write(p []byte) (n int, err error) {
 		return 0, os.ErrClosed
 	}
 
-	// 1. 合并上次调用剩余的字节（可能是半个 UTF-8 字符）
 	originalInputLen := len(p)
-	payload := p
+	var payload []byte
 	if len(l.remainder) > 0 {
-		payload = append(l.remainder, p...)
+		// 为了防止 p 和 l.remainder 底层数组有重叠或不可预期的修改，这里分配新内存
+		payload = make([]byte, len(l.remainder)+len(p))
+		copy(payload, l.remainder)
+		copy(payload[len(l.remainder):], p)
 		l.remainder = nil
+	} else {
+		payload = p
 	}
 
-	// 2. 识别结尾不完整的 UTF-8 序列
-	lastSafe := len(payload)
-	// UTF-8 字符最多 4 字节，检查最后几个字节
-	for i := len(payload) - 1; i >= 0 && i >= len(payload)-4; i-- {
-		if utf8.RuneStart(payload[i]) {
-			if !utf8.FullRune(payload[i:]) {
-				// 发现末尾存在不完整字符
-				lastSafe = i
-				l.remainder = make([]byte, len(payload)-i)
-				copy(l.remainder, payload[i:])
+	// 1. 寻找最后一个换行符 (\n 或 \r)
+	lastLineBreak := bytes.LastIndexAny(payload, "\n\r")
+	var completeBytes []byte
+	var remainder []byte
+
+	if lastLineBreak != -1 {
+		// 2. 提取出完整的行
+		completeBytes = payload[:lastLineBreak+1]
+		remainder = payload[lastLineBreak+1:]
+	} else {
+		// 3. 没有换行符，且如果长度超过最大缓冲，强制截断并输出，防止内存无限制增长
+		if len(payload) > maxLogBufferLen {
+			// 寻找最后一个完整的 UTF-8 字符边界，避免乱码
+			lastSafe := maxLogBufferLen
+			for i := maxLogBufferLen; i > 0 && i > maxLogBufferLen-4; i-- {
+				if utf8.RuneStart(payload[i-1]) {
+					if !utf8.FullRune(payload[i-1 : maxLogBufferLen]) {
+						lastSafe = i - 1
+					}
+					break
+				}
 			}
-			break
+			completeBytes = payload[:lastSafe]
+			remainder = payload[lastSafe:]
+		} else {
+			// 保留当前所有内容到下一轮 (必须 copy，因为 payload 底层可能是 io.Copy 的复用 buf)
+			l.remainder = make([]byte, len(payload))
+			copy(l.remainder, payload)
+			return originalInputLen, nil
 		}
 	}
 
-	// 如果整个负载都不完整且不超过一个 UTF-8 字符的最大长度，
-	// 则全部保留到下次调用
-	if lastSafe == 0 && len(l.remainder) > 0 {
-		return originalInputLen, nil
+	// 4. 将剩余部分保存 (必须 copy，防止后续 Read 覆盖底层数组)
+	if len(remainder) > 0 {
+		l.remainder = make([]byte, len(remainder))
+		copy(l.remainder, remainder)
+	} else {
+		l.remainder = nil
 	}
 
-	// 3. 仅将完整的部分转换为 UTF-8，并调用封装的函数进行脱敏处理
-	text := utils.MaskSecrets(utils.ToUTF8(payload[:lastSafe]), l.masks)
-	data := []byte(text)
+	// 5. 将完整行转换为 UTF-8 并脱敏
+	text := utils.MaskSecrets(utils.ToUTF8(completeBytes), l.masks)
+	outData := []byte(text)
 
-	// 4. 写入文件缓冲区
-	_, err = l.writer.Write(data)
+	// 6. 输出安全部分
+	_, err = l.writer.Write(outData)
 	if err != nil {
 		return 0, err
 	}
 
-	// 5. 广播给所有订阅者
+	// 6. 广播给所有订阅者
 	if len(l.subscribers) > 0 {
 		for _, ch := range l.subscribers {
 			select {
-			case ch <- data:
+			case ch <- outData:
 			default:
 				// 如果订阅者处理太慢，丢弃消息以避免阻塞写入
 			}
@@ -164,7 +196,6 @@ func (l *TinyLog) Unsubscribe(ch chan []byte) {
 	for i, sub := range l.subscribers {
 		if sub == ch {
 			l.subscribers = append(l.subscribers[:i], l.subscribers[i+1:]...)
-			close(ch)
 			break
 		}
 	}
@@ -228,15 +259,52 @@ func (l *TinyLog) CompressAndCleanup() (string, error) {
 		os.Remove(l.path) // Cleanup
 	}()
 
+	// 获取文件大小
+	stat, err := f.Stat()
+	if err != nil {
+		return "", err
+	}
+	size := stat.Size()
+
+	// 如果日志极短，免去压缩和 Base64 编码，直接以 raw: 明文形式返回
+	if size <= int64(utils.MinCompressSize) {
+		content, err := io.ReadAll(f)
+		if err != nil {
+			return "", err
+		}
+		return "raw:" + string(content), nil
+	}
+
 	// 创建压缩输出缓冲区
 	var buf bytes.Buffer
 	b64Writer := base64.NewEncoder(base64.StdEncoding, &buf)
 
 	// 使用 Pool 优化压缩
-	zw := utils.GetZlibWriter(b64Writer)
-	defer utils.PutZlibWriter(zw)
+	zw := utils.GetZstdWriter(b64Writer)
+	defer utils.PutZstdWriter(zw)
 
-	// 流处理: 文件 -> Zlib -> Base64 -> 缓冲区
+	maxSize := int64(constant.MaxLogSize)
+	if maxSize < 1024*1024 {
+		maxSize = 1024 * 1024
+	}
+
+	var readStart int64 = 0
+	if size > maxSize {
+		readStart = size - maxSize
+		// 写入一条截断提示
+		truncatedMsg := fmt.Sprintf("\n\n[System] 日志过长，已自动截断，仅保留末尾 %d MB...\n\n", maxSize/1024/1024)
+		if _, err := zw.Write([]byte(truncatedMsg)); err != nil {
+			return "", err
+		}
+	}
+
+	if readStart > 0 {
+		if _, err := f.Seek(readStart, io.SeekStart); err != nil {
+			return "", err
+		}
+	}
+
+	// 流处理: 文件 -> Zstd -> Base64 -> 缓冲区
 	if _, err := io.Copy(zw, f); err != nil {
 		return "", err
 	}
@@ -249,7 +317,7 @@ func (l *TinyLog) CompressAndCleanup() (string, error) {
 		return "", err
 	}
 
-	return buf.String(), nil
+	return "zstd:" + buf.String(), nil
 }
 
 // ReadLastLines 返回日志的最后 n 行
@@ -294,4 +362,24 @@ func (l *TinyLog) ReadLastLines(n int) ([]byte, error) {
 // GetPath 返回临时文件路径
 func (l *TinyLog) GetPath() string {
 	return l.path
+}
+
+// CleanupOrphanedTinyLogs 启动时清理残留的临时日志文件
+func CleanupOrphanedTinyLogs() {
+	tmpDir := os.TempDir()
+	files, err := os.ReadDir(tmpDir)
+	if err != nil {
+		return
+	}
+
+	count := 0
+	for _, file := range files {
+		if !file.IsDir() && len(file.Name()) > 9 && file.Name()[:9] == "task_log_" && filepath.Ext(file.Name()) == ".log" {
+			os.Remove(filepath.Join(tmpDir, file.Name()))
+			count++
+		}
+	}
+	if count > 0 {
+		logger.Infof("[System] 清理了 %d 个残留的任务日志临时文件", count)
+	}
 }

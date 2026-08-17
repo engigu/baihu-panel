@@ -2,7 +2,7 @@ name: Build-Deploy-Server
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
   workflow_dispatch:
 
 concurrency:
@@ -31,13 +31,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -45,10 +45,12 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
             type=raw,value=latest-amd64${{ matrix.tag_suffix }},enable={{is_default_branch}}
             type=ref,event=branch,suffix=-amd64${{ matrix.tag_suffix }}
@@ -59,7 +61,7 @@ jobs:
         run: echo "time=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile
@@ -84,19 +86,18 @@ jobs:
           password: ${{ secrets.DEPLOY_PASSWORD }}
           port: ${{ secrets.DEPLOY_PORT }}
           script: |
-            cd ${{ secrets.DEPLOY_PATH }}
-            docker-compose -f docker-compose.yml pull
-            docker-compose -f docker-compose.yml up -d
+            ${{ secrets.DEPLOY_SCRIPT }}
 
-      - name: Deploy to X server
-        if: github.ref == 'refs/heads/main' && matrix.base_type == 'debian'
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          password: ${{ secrets.DEPLOY_PASSWORD }}
-          port: ${{ secrets.DEPLOY_PORT }}
-          script: |
-            cd ${{ secrets.DEPLOY_X_PATH }}
-            docker-compose -f docker-compose.yml pull
-            docker-compose -f docker-compose.yml up -d
+
+      # - name: Deploy to X server
+      #   if: github.ref == 'refs/heads/main' && matrix.base_type == 'debian'
+      #   uses: appleboy/ssh-action@v1.2.0
+      #   with:
+      #     host: ${{ secrets.DEPLOY_HOST }}
+      #     username: ${{ secrets.DEPLOY_USER }}
+      #     password: ${{ secrets.DEPLOY_PASSWORD }}
+      #     port: ${{ secrets.DEPLOY_PORT }}
+      #     script: |
+      #       cd ${{ secrets.DEPLOY_X_PATH }}
+      #       docker-compose -f docker-compose.yml pull
+      #       docker-compose -f docker-compose.yml up -d

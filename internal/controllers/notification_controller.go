@@ -77,8 +77,8 @@ func (nc *NotificationController) TestChannel(c *gin.Context) {
 	}
 
 	result := nc.notifyService.SendToChannel(req, &services.NotifyMessage{
-		Title: "🔔 白虎面板测试通知",
-		Text:  "如果你看到这条消息，说明通知渠道配置正确！",
+		Title:   "🔔 白虎面板测试通知",
+		Content: "如果你看到这条消息，说明通知渠道配置正确！",
 	})
 
 	utils.Success(c, result)
@@ -174,6 +174,8 @@ func (nc *NotificationController) SendNotification(c *gin.Context) {
 		ChannelID string `json:"channel_id"`
 		Title     string `json:"title"`
 		Text      string `json:"text"`
+		Content   string `json:"content"`
+		Format    string `json:"format"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -185,9 +187,16 @@ func (nc *NotificationController) SendNotification(c *gin.Context) {
 		return
 	}
 
+	// 兼容旧版 text 字段：优先使用 content，为空则回退到 text
+	body := req.Content
+	if body == "" {
+		body = req.Text
+	}
+
 	result := nc.notifyService.SendByChannelID(req.ChannelID, &services.NotifyMessage{
-		Title: req.Title,
-		Text:  req.Text,
+		Title:   req.Title,
+		Content: body,
+		Format:  req.Format,
 	})
 
 	utils.Success(c, result)

@@ -1,12 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@fontsource/inter/300.css";
-@import "@fontsource/inter/400.css";
-@import "@fontsource/inter/500.css";
-@import "@fontsource/inter/600.css";
-@import "@fontsource/inter/700.css";
-@import "@fontsource/jetbrains-mono/400.css";
-@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource-variable/inter/index.css";
+
+@import "@fontsource-variable/jetbrains-mono/index.css";
 
 /* Sonner toast styles */
 [data-sonner-toaster] {
@@ -22,6 +18,7 @@
   border: 1px solid var(--border) !important;
   border-radius: var(--radius) !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  font-family: var(--font-main) !important;
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -66,6 +63,7 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+  --breakpoint-3xl: 1921px;
 }
 
 :root {
@@ -97,6 +95,13 @@
   --sidebar-accent-foreground: #333333;
   --sidebar-border: #e5e7eb;
   --sidebar-ring: #9ca3af;
+  
+  /* 字体栈定义 - 优先使用 Inter Variable 以获得最佳的可变字体支持 */
+  --font-main: 'Inter Variable', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Source Han Sans CN", sans-serif;
+}
+
+.is-windows {
+  --font-main: 'Inter Variable', 'Inter', 'Noto Sans SC', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Source Han Sans CN", sans-serif;
 }
 
 /* OKLCH support targeting modern browsers */
@@ -212,18 +217,30 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    @apply bg-background text-foreground;
+    /* 增强字体栈与高级特性优化 */
+    font-family: var(--font-main);
     font-size: 14px;
     line-height: 1.5;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.011em;
+    
+    /* Inter 字体高级特性优化: 
+       cv05: l 增加尾钩 (提升识别)
+       cv08: G 增加尖角
+       cv11: 单层小写 a
+       ss01: 开口数字 (更现代)
+       ss03: 圆形 0 
+    */
+    font-feature-settings: "cv05", "cv08", "cv11", "ss01", "ss03";
+    font-optical-sizing: auto;
+
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
 
   input, textarea, button, select {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+    font-family: var(--font-main) !important;
   }
 
   .font-code,
@@ -241,10 +258,12 @@
 @media (max-width: 639px) {
   body {
     font-size: 15.5px;
-    font-weight: 500;
     line-height: 1.55;
-    letter-spacing: -0.01em;
-    /* 移动端使用 antialiased 以匹配高 DPI 渲染，开启字重补偿 */
+    letter-spacing: -0.011em;
+    /* 移动端增强字体渲染 */
+    font-family: var(--font-main);
+    font-feature-settings: "cv05", "cv08", "cv11", "ss01", "ss03";
+    font-optical-sizing: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -256,28 +275,28 @@
     line-height: 1.3;
   }
 
-  /* 正文与描述类文字同步加厚，避免手机端自动淡出造成的纤细感 */
+  /* 正文与描述类文字回归 400，依靠 15.5px 的字号保证清晰度 */
   p,
   span:not([class*="icon"]),
   label,
   [class*="description"],
   [class*="muted"],
   .text-muted-foreground {
-    font-weight: 480;
+    font-weight: 400;
     line-height: 1.6;
   }
 
-  /* 针对移动端小字进行强制加粗补偿（400 在手机上易由于笔画过细而消失） */
+  /* 针对移动端小字保持适度加重 */
   .text-xs {
     font-size: 12.5px;
-    font-weight: 550;
+    font-weight: 500;
     line-height: 1.4;
     letter-spacing: 0.01em;
   }
 
   .text-sm {
     font-size: 14.5px;
-    font-weight: 500;
+    font-weight: 400;
     line-height: 1.5;
   }
 
@@ -612,4 +631,9 @@ input[type="time"]:hover::-webkit-calendar-picker-indicator {
 
 .apexcharts-tooltip-title {
   display: none !important;
+}
+
+/* 禁用图表聚焦时的默认白色边框 */
+.apexcharts-canvas:focus {
+  outline: none !important;
 }

@@ -34,7 +34,7 @@ const siteSettings = ref<SiteSettings>(cachedSettings || {
   cookie_days: '7'
 })
 
-// 立即应用缓存的设置
+// 立即应用缓存的设置，防止标题闪烁或空白
 if (cachedSettings) {
   if (cachedSettings.title) {
     document.title = cachedSettings.title
@@ -42,6 +42,8 @@ if (cachedSettings) {
   if (cachedSettings.icon) {
     updateFavicon(cachedSettings.icon)
   }
+} else {
+  document.title = siteSettings.value.title
 }
 
 let loaded = false
@@ -72,10 +74,16 @@ export function useSiteSettings() {
       siteSettings.value = res
       saveToCache(res) // 保存到缓存
       document.title = res.title || '白虎面板'
-      if (res.icon) updateFavicon(res.icon)
+      if (res.icon) {
+        updateFavicon(res.icon)
+      }
       loaded = true
-    } catch {
+    } catch (error) {
       // 使用默认值或缓存值
+      document.title = siteSettings.value.title || '白虎面板'
+      if (siteSettings.value.icon) {
+        updateFavicon(siteSettings.value.icon)
+      }
     }
   }
 

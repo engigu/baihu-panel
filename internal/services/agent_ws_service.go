@@ -7,6 +7,7 @@ import (
 
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
+	"github.com/engigu/baihu-panel/internal/executor"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
 
@@ -16,9 +17,9 @@ import (
 // AgentWSManager WebSocket 连接管理器
 type AgentWSManager struct {
 	connections   map[string]*AgentConnection             // Agent ID -> 连接对象
-	ipConnections map[string]int                        // IP -> 连接数
-	ipLastAttempt map[string]time.Time                  // IP -> 最后连接尝试时间
-	ipFailCount   map[string]int                        // IP -> 连续失败次数
+	ipConnections map[string]int                          // IP -> 连接数
+	ipLastAttempt map[string]time.Time                    // IP -> 最后连接尝试时间
+	ipFailCount   map[string]int                          // IP -> 连续失败次数
 	remoteWaiters map[string]chan *models.AgentTaskResult // 日志 ID -> 结果通道
 	mu            sync.RWMutex
 }
@@ -78,7 +79,11 @@ func GetAgentWSManager() *AgentWSManager {
 			ipFailCount:   make(map[string]int),
 			remoteWaiters: make(map[string]chan *models.AgentTaskResult),
 		}
-		go agentWSManager.cleanupLoop()
+		// 启动时，先将所有 "online" 状态的 Agent 重置为 "offline"
+		NewAgentService().ResetAllAgentsToOffline()
+
+		// 将清理任务注册到系统内部 Cron，每 30 秒执行一次
+		executor.GetSysCron().AddJob("@every 30s", agentWSManager.cleanupLoop)
 	})
 	return agentWSManager
 }
@@ -194,6 +199,14 @@ func (m *AgentWSManager) GetConnection(agentID string) *AgentConnection {
 	return m.connections[agentID]
 }
 
+// IsAgentOnline 检查指定 Agent 是否在线
+func (m *AgentWSManager) IsAgentOnline(agentID string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	_, exists := m.connections[agentID]
+	return exists
+}
+
 // SendToAgent 发送消息给指定 Agent
 func (m *AgentWSManager) SendToAgent(agentID string, msgType string, data interface{}) error {
 	conn := m.GetConnection(agentID)
@@ -220,6 +233,20 @@ func (m *AgentWSManager) BroadcastTasks(agentID string) {
 	m.SendToAgent(agentID, WSTypeTasks, map[string]interface{}{
 		"tasks": tasks,
 	})
+}
+
+// BroadcastTasksToAll 广播任务更新给所有在线 Agent
+func (m *AgentWSManager) BroadcastTasksToAll() {
+	m.mu.RLock()
+	var agentIDs []string
+	for agentID := range m.connections {
+		agentIDs = append(agentIDs, agentID)
+	}
+	m.mu.RUnlock()
+
+	for _, agentID := range agentIDs {
+		m.BroadcastTasks(agentID)
+	}
 }
 
 // RegisterRemoteWaiter 注册远程任务结果等待者
@@ -260,66 +287,51 @@ func (m *AgentWSManager) OnlineCount() int {
 	return len(m.connections)
 }
 
-// cleanupLoop 清理超时连接
+// cleanupLoop 清理超时连接 (由 SysCron 每 30 秒调用一次)
 func (m *AgentWSManager) cleanupLoop() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf("[AgentWS] cleanupLoop panic: %v", r)
+		}
+	}()
 
-	// 启动时，先将所有 "online" 状态的 Agent 重置为 "offline"
-	// 因为 WebSocket 连接在应用启动时是空的，所有 Agent 客观上都是离线状态
-	// 等它们重新连接上来后，会变为 "online"
-	NewAgentService().ResetAllAgentsToOffline()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := time.Now()
 
-	for range ticker.C {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					logger.Errorf("[AgentWS] cleanupLoop panic: %v", r)
-				}
-			}()
-			m.mu.Lock()
-			now := time.Now()
-
-			// 清理超时连接
-			for agentID, conn := range m.connections {
-				if now.Sub(conn.LastPing) > 2*time.Minute {
-					// 减少 IP 连接计数
-					if conn.IP != "" {
-						if count, ok := m.ipConnections[conn.IP]; ok && count > 0 {
-							m.ipConnections[conn.IP] = count - 1
-						}
-					}
-					conn.Close()
-					delete(m.connections, agentID)
-					// 更新数据库状态
-					database.DB.Model(&models.Agent{}).Where("id = ?", agentID).Update("status", constant.AgentStatusOffline)
-					logger.Infof("[AgentWS] Agent #%s 心跳超时，已断开", agentID)
+	// 清理超时连接
+	for agentID, conn := range m.connections {
+		if now.Sub(conn.LastPing) > 2*time.Minute {
+			// 减少 IP 连接计数
+			if conn.IP != "" {
+				if count, ok := m.ipConnections[conn.IP]; ok && count > 0 {
+					m.ipConnections[conn.IP] = count - 1
 				}
 			}
+			conn.Close()
+			delete(m.connections, agentID)
+			// 更新数据库状态
+			database.DB.Model(&models.Agent{}).Where("id = ?", agentID).Update("status", constant.AgentStatusOffline)
+			logger.Infof("[AgentWS] Agent #%s 心跳超时，已断开", agentID)
+		}
+	}
 
-			// 定期清理数据库中的过期状态（处理服务重启或异常终止的情况）
-			// 有些 Agent 虽然没有连接，但数据库状态可能是 "online"
-			cutoff := now.Add(-2 * time.Minute)
-			database.DB.Model(&models.Agent{}).
-				Where("status = ? AND last_seen < ?", constant.AgentStatusOnline, cutoff).
-				Update("status", constant.AgentStatusOffline)
+	// 定期清理数据库中的过期状态（处理服务重启或异常终止的情况）
+	cutoff := now.Add(-2 * time.Minute)
+	database.DB.Model(&models.Agent{}).
+		Where("status = ? AND last_seen < ?", constant.AgentStatusOnline, cutoff).
+		Update("status", constant.AgentStatusOffline)
 
-			// 清理过期的限流记录（超过 10 分钟未活动）
-
-			// 清理过期的限流记录（超过 10 分钟未活动）
-			for ip, lastAttempt := range m.ipLastAttempt {
-				if now.Sub(lastAttempt) > 10*time.Minute {
-					delete(m.ipLastAttempt, ip)
-					delete(m.ipFailCount, ip)
-					// 只清理没有活跃连接的 IP 计数
-					if m.ipConnections[ip] == 0 {
-						delete(m.ipConnections, ip)
-					}
-				}
+	// 清理过期的限流记录（超过 10 分钟未活动）
+	for ip, lastAttempt := range m.ipLastAttempt {
+		if now.Sub(lastAttempt) > 10*time.Minute {
+			delete(m.ipLastAttempt, ip)
+			delete(m.ipFailCount, ip)
+			// 只清理没有活跃连接的 IP 计数
+			if m.ipConnections[ip] == 0 {
+				delete(m.ipConnections, ip)
 			}
-
-			m.mu.Unlock()
-		}()
+		}
 	}
 }
 

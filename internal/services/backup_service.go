@@ -8,13 +8,16 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/cache"
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
+	"github.com/engigu/baihu-panel/internal/eventbus"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/systime"
+	"github.com/rs/xid"
 	"gorm.io/gorm"
 )
 
@@ -43,30 +46,29 @@ type tableConfig struct {
 
 func (s *BackupService) getTableConfigs() []tableConfig {
 	return []tableConfig{
-		{"users.json", s.exportTable(&[]models.User{}, true), s.restoreTable(&[]models.User{})},
-		{"tasks.json", s.exportTable(&[]models.Task{}, true), s.restoreTable(&[]models.Task{})},
-		{"task_logs.json", s.exportTable(&[]models.TaskLog{}, false), s.restoreTable(&[]models.TaskLog{})},
-		{"envs.json", s.exportTable(&[]models.EnvironmentVariable{}, true), s.restoreTable(&[]models.EnvironmentVariable{})},
-		{"scripts.json", s.exportTable(&[]models.Script{}, true), s.restoreTable(&[]models.Script{})},
+		{"users.json", s.exportTable(&[]models.User{}), s.restoreTable(&[]models.User{})},
+		{"tasks.json", s.exportTable(&[]models.Task{}), s.restoreTable(&[]models.Task{})},
+		{"task_logs.json", s.exportTable(&[]models.TaskLog{}), s.restoreTable(&[]models.TaskLog{})},
+		{"envs.json", s.exportTable(&[]models.EnvironmentVariable{}), s.restoreTable(&[]models.EnvironmentVariable{})},
+		{"scripts.json", s.exportTable(&[]models.Script{}), s.restoreTable(&[]models.Script{})},
 		{"settings.json", s.exportSettings, s.restoreSettings},
-		{"send_stats.json", s.exportTable(&[]models.SendStats{}, false), s.restoreTable(&[]models.SendStats{})},
+		{"send_stats.json", s.exportTable(&[]models.SendStats{}), s.restoreTable(&[]models.SendStats{})},
 
-		{"agents.json", s.exportTable(&[]models.Agent{}, true), s.restoreTable(&[]models.Agent{})},
-		{"tokens.json", s.exportTable(&[]models.AgentToken{}, true), s.restoreTable(&[]models.AgentToken{})},
-		{"languages.json", s.exportTable(&[]models.Language{}, true), s.restoreTable(&[]models.Language{})},
-		{"deps.json", s.exportTable(&[]models.Dependency{}, true), s.restoreTable(&[]models.Dependency{})},
-		{"notify_ways.json", s.exportTable(&[]models.NotifyWay{}, true), s.restoreTable(&[]models.NotifyWay{})},
-		{"notify_bindings.json", s.exportTable(&[]models.NotifyBinding{}, true), s.restoreTable(&[]models.NotifyBinding{})},
-		{"app_logs.json", s.exportTable(&[]models.AppLog{}, false), s.restoreTable(&[]models.AppLog{})},
+		{"agents.json", s.exportTable(&[]models.Agent{}), s.restoreTable(&[]models.Agent{})},
+		{"tokens.json", s.exportTable(&[]models.AgentToken{}), s.restoreTable(&[]models.AgentToken{})},
+		{"languages.json", s.exportTable(&[]models.Language{}), s.restoreTable(&[]models.Language{})},
+		{"deps.json", s.exportTable(&[]models.Dependency{}), s.restoreTable(&[]models.Dependency{})},
+		{"notify_ways.json", s.exportTable(&[]models.NotifyWay{}), s.restoreTable(&[]models.NotifyWay{})},
+		{"notify_bindings.json", s.exportTable(&[]models.NotifyBinding{}), s.restoreTable(&[]models.NotifyBinding{})},
+		{"app_logs.json", s.exportTable(&[]models.AppLog{}), s.restoreTable(&[]models.AppLog{})},
+		{"data_storage.json", s.exportTable(&[]models.DataStorage{}), s.restoreTable(&[]models.DataStorage{})},
+		{"data_relations.json", s.exportTable(&[]models.DataRelation{}), s.restoreTable(&[]models.DataRelation{})},
 	}
 }
 
-func (s *BackupService) exportTable(modelPtr any, unscoped bool) func(io.Writer) error {
+func (s *BackupService) exportTable(modelPtr any) func(io.Writer) error {
 	return func(w io.Writer) error {
 		db := database.DB
-		if unscoped {
-			db = db.Unscoped()
-		}
 
 		if _, err := w.Write([]byte("[\n")); err != nil {
 			return err
@@ -222,21 +224,23 @@ func (s *BackupService) Restore(zipPath string) error {
 	// 开启全局事务
 	err = database.DB.Transaction(func(tx *gorm.DB) error {
 		// 1. 清空现有数据（物理删除）
-		tx.Unscoped().Where("1=1").Delete(&models.User{})
-		tx.Unscoped().Where("1=1").Delete(&models.Task{})
-		tx.Unscoped().Where("1=1").Delete(&models.TaskLog{})
-		tx.Unscoped().Where("1=1").Delete(&models.EnvironmentVariable{})
-		tx.Unscoped().Where("1=1").Delete(&models.Script{})
-		tx.Unscoped().Where("section != ?", BackupSection).Delete(&models.Setting{})
-		tx.Unscoped().Where("1=1").Delete(&models.SendStats{})
+		tx.Where("1=1").Delete(&models.User{})
+		tx.Where("1=1").Delete(&models.Task{})
+		tx.Where("1=1").Delete(&models.TaskLog{})
+		tx.Where("1=1").Delete(&models.EnvironmentVariable{})
+		tx.Where("1=1").Delete(&models.Script{})
+		tx.Where("section != ?", BackupSection).Delete(&models.Setting{})
+		tx.Where("1=1").Delete(&models.SendStats{})
 
-		tx.Unscoped().Where("1=1").Delete(&models.Agent{})
-		tx.Unscoped().Where("1=1").Delete(&models.AgentToken{})
-		tx.Unscoped().Where("1=1").Delete(&models.Language{})
-		tx.Unscoped().Where("1=1").Delete(&models.Dependency{})
-		tx.Unscoped().Where("1=1").Delete(&models.NotifyWay{})
-		tx.Unscoped().Where("1=1").Delete(&models.NotifyBinding{})
-		tx.Unscoped().Where("1=1").Delete(&models.AppLog{})
+		tx.Where("1=1").Delete(&models.Agent{})
+		tx.Where("1=1").Delete(&models.AgentToken{})
+		tx.Where("1=1").Delete(&models.Language{})
+		tx.Where("1=1").Delete(&models.Dependency{})
+		tx.Where("1=1").Delete(&models.NotifyWay{})
+		tx.Where("1=1").Delete(&models.NotifyBinding{})
+		tx.Where("1=1").Delete(&models.AppLog{})
+		tx.Where("1=1").Delete(&models.DataStorage{})
+		tx.Where("1=1").Delete(&models.DataRelation{})
 
 		// 2. 依次恢复每个表
 		for _, cfg := range configs {
@@ -257,6 +261,9 @@ func (s *BackupService) Restore(zipPath string) error {
 		// 备份恢复成功后，需要同时刷新内存中的配置缓存以免数据不一致导致异常
 		constant.Secret = s.settingsService.Get(constant.SectionSecurity, constant.KeySecret)
 		cache.LoadSiteCache()
+		eventbus.DefaultBus.Publish(eventbus.Event{
+			Type: constant.EventBackupRestored,
+		})
 	}
 
 	return err
@@ -319,7 +326,7 @@ func (s *BackupService) restoreFromZipFile(tx *gorm.DB, f *zip.File, filename st
 	case "users.json":
 		return restoreStreamBatch[models.User](tx, decoder)
 	case "tasks.json":
-		return restoreStreamBatch[models.Task](tx, decoder)
+		return s.restoreTasks(tx, decoder)
 	case "task_logs.json":
 		return restoreStreamBatch[models.TaskLog](tx, decoder)
 	case "envs.json":
@@ -343,9 +350,111 @@ func (s *BackupService) restoreFromZipFile(tx *gorm.DB, f *zip.File, filename st
 		return restoreStreamBatch[models.NotifyBinding](tx, decoder)
 	case "app_logs.json":
 		return restoreStreamBatch[models.AppLog](tx, decoder)
+	case "data_storage.json":
+		return restoreStreamBatch[models.DataStorage](tx, decoder)
+	case "data_relations.json":
+		return restoreStreamBatch[models.DataRelation](tx, decoder)
 	default:
 		return nil
 	}
+}
+
+func (s *BackupService) restoreTasks(tx *gorm.DB, decoder *json.Decoder) error {
+	batchSize := 1000
+	var batch []*models.Task
+
+	for decoder.More() {
+		var m models.Task
+		if err := decoder.Decode(&m); err != nil {
+			return err
+		}
+		batch = append(batch, &m)
+
+		if len(batch) >= batchSize {
+			if err := s.insertTasksBatch(tx, batch); err != nil {
+				return err
+			}
+			batch = nil // reset
+		}
+	}
+
+	if len(batch) > 0 {
+		return s.insertTasksBatch(tx, batch)
+	}
+
+	return nil
+}
+
+func (s *BackupService) insertTasksBatch(tx *gorm.DB, batch []*models.Task) error {
+	if err := tx.Select("*").CreateInBatches(batch, len(batch)).Error; err != nil {
+		return err
+	}
+
+	// [COMPATIBILITY CODE - TEMPORARY]
+	// 为旧版备份数据做向下兼容（在旧版本中 tags/envs 还是直接存储在 tasks.json 中）。
+	// 此段代码将旧数据迁移到新的 data_relations 和 data_storages 中，确保旧备份包能正常恢复。
+	// 由于新版本的备份中 tasks.json 已不再包含这些字段，未来某次大版本更新后，这段兼容代码将被移除。
+	for _, t := range batch {
+		if t.Tags != "" {
+			tags := strings.Split(t.Tags, ",")
+			for _, tag := range tags {
+				tag = strings.TrimSpace(tag)
+				if tag == "" {
+					continue
+				}
+				var storage models.DataStorage
+				res := tx.Where("type = ? AND name = ?", constant.RelationTypeTaskTag, tag).Limit(1).Find(&storage)
+				if res.RowsAffected == 0 {
+					storage = models.DataStorage{
+						ID:        xid.New().String(),
+						Type:      constant.RelationTypeTaskTag,
+						Name:      tag,
+						CreatedAt: models.Now(),
+						UpdatedAt: models.Now(),
+					}
+					tx.Create(&storage)
+				}
+				
+				var count int64
+				tx.Model(&models.DataRelation{}).Where("data_id = ? AND relate_id = ? AND type = ?", t.ID, storage.ID, constant.RelationTypeTaskTag).Count(&count)
+				if count == 0 {
+					relation := models.DataRelation{
+						ID:        xid.New().String(),
+						DataID:    t.ID,
+						RelateID:  storage.ID,
+						Type:      constant.RelationTypeTaskTag,
+						CreatedAt: models.Now(),
+						UpdatedAt: models.Now(),
+					}
+					tx.Create(&relation)
+				}
+			}
+		}
+
+		if string(t.Envs) != "" {
+			envs := strings.Split(string(t.Envs), ",")
+			for _, envID := range envs {
+				envID = strings.TrimSpace(envID)
+				if envID == "" {
+					continue
+				}
+				var count int64
+				tx.Model(&models.DataRelation{}).Where("data_id = ? AND relate_id = ? AND type = ?", t.ID, envID, constant.RelationTypeTaskEnv).Count(&count)
+				if count == 0 {
+					relation := models.DataRelation{
+						ID:        xid.New().String(),
+						DataID:    t.ID,
+						RelateID:  envID,
+						Type:      constant.RelationTypeTaskEnv,
+						CreatedAt: models.Now(),
+						UpdatedAt: models.Now(),
+					}
+					tx.Create(&relation)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // insertRecords, restoreFromData 方法已合并入 restoreFromZipFile，此处删除冗余方法
@@ -374,7 +483,6 @@ func (s *BackupService) restoreScriptsDir(r *zip.ReadCloser) {
 		}
 	}
 }
-
 
 func (s *BackupService) addDirToZip(zipWriter *zip.Writer, srcDir, prefix string) error {
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {

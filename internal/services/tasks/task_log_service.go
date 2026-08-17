@@ -62,7 +62,14 @@ func (s *TaskLogService) CreateEmptyLog(taskID string, command string, wfID *str
 func (s *TaskLogService) SaveTaskLog(taskLog *models.TaskLog) error {
 	var err error
 	if taskLog.ID != "" {
-		err = database.DB.Model(taskLog).Where("id = ?", taskLog.ID).Updates(taskLog).Error
+		// 先检查记录是否存在，如果不存在则创建，存在则更新
+		var count int64
+		database.DB.Model(&models.TaskLog{}).Where("id = ?", taskLog.ID).Count(&count)
+		if count > 0 {
+			err = database.DB.Model(taskLog).Where("id = ?", taskLog.ID).Updates(taskLog).Error
+		} else {
+			err = database.DB.Create(taskLog).Error
+		}
 	} else {
 		taskLog.ID = utils.GenerateID()
 		if taskLog.CreatedAt.Time().IsZero() {
@@ -89,6 +96,11 @@ func (s *TaskLogService) SaveTaskLog(taskLog *models.TaskLog) error {
 // UpdateTaskDuration 更新任务耗时（心跳）
 func (s *TaskLogService) UpdateTaskDuration(logID string, duration int64) error {
 	return database.DB.Model(&models.TaskLog{}).Where("id = ?", logID).Update("duration", duration).Error
+}
+
+// UpdateLogCommand 更新日志中的命令内容（用于动态生成的命令脱敏）
+func (s *TaskLogService) UpdateLogCommand(logID string, command string) error {
+	return database.DB.Model(&models.TaskLog{}).Where("id = ?", logID).Update("command", models.BigText(command)).Error
 }
 
 // UpdateTaskStats 更新任务统计
@@ -142,7 +154,7 @@ func (s *TaskLogService) CleanTaskLogs(taskID string) {
 	}
 
 	if deleted > 0 {
-		logger.Infof("[TaskLog] 清理任务 #%s 的 %d 条日志", taskID, deleted)
+		logger.Infof("[TaskLog] 清理旧日志: #%s 共 %d 条", taskID, deleted)
 	}
 }
 
@@ -164,15 +176,21 @@ func (s *TaskLogService) ProcessTaskCompletion(taskLog *models.TaskLog) error {
 
 // CreateTaskLogFromAgentResult 从 Agent 结果创建任务日志
 func (s *TaskLogService) CreateTaskLogFromAgentResult(result *models.AgentTaskResult) (*models.TaskLog, error) {
-	// 压缩输出
-	compressed, err := utils.CompressToBase64(result.Output)
+	// 裁剪并压缩输出
+	trimmedOutput := utils.TrimLog(result.Output, constant.MaxLogSize)
+	compressed, err := utils.CompressToBase64(trimmedOutput)
 	if err != nil {
 		logger.Errorf("[TaskLog] 压缩日志失败: %v", err)
 		compressed = ""
 	}
 
+	logID := result.LogID
+	if logID == "" {
+		logID = utils.GenerateID()
+	}
+
 	taskLog := &models.TaskLog{
-		ID:        utils.GenerateID(),
+		ID:        logID,
 		TaskID:    result.TaskID,
 		AgentID:   &result.AgentID,
 		Command:   models.BigText(result.Command),
@@ -205,8 +223,9 @@ func (s *TaskLogService) CreateTaskLogFromLocalExecution(taskID string, command,
 	if isCompressed {
 		compressed = output
 	} else {
-		// 压缩输出
-		compressed, err = utils.CompressToBase64(output)
+		// 裁剪并压缩输出
+		trimmedOutput := utils.TrimLog(output, constant.MaxLogSize)
+		compressed, err = utils.CompressToBase64(trimmedOutput)
 		if err != nil {
 			logger.Errorf("[TaskLog] 压缩日志失败: %v", err)
 			compressed = ""

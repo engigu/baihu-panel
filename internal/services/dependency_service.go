@@ -111,3 +111,30 @@ func (s *DependencyService) GetVerifyCommand(language, langVersion string) (stri
 	}
 	return m.GetVerifyCommand(langVersion)
 }
+
+// GetBatchInstallCommand 获取批量安装命令
+func (s *DependencyService) GetBatchInstallCommand(depsList []models.Dependency) (string, error) {
+	if len(depsList) == 0 {
+		return "", errors.New("依赖包列表不能为空")
+	}
+
+	firstDep := depsList[0]
+	m := deps.GetManager(firstDep.Language)
+	if m == nil {
+		return "", errors.New("不支持的依赖类型: " + firstDep.Language)
+	}
+
+	return m.GetBatchInstallCommand(depsList)
+}
+
+// ImportDependencies 批量导入依赖并自动入库去重
+func (s *DependencyService) ImportDependencies(depsList []models.Dependency) ([]models.Dependency, error) {
+	var imported []models.Dependency
+	for i := range depsList {
+		dep := &depsList[i]
+		if err := s.Create(dep); err == nil {
+			imported = append(imported, *dep)
+		}
+	}
+	return imported, nil
+}

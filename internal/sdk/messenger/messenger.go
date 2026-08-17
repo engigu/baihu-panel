@@ -20,6 +20,18 @@ import (
 	"sync"
 )
 
+// Copyright (c) 2026 engigu (Baihu Panel). All rights reserved.
+// Use of this source code is governed by the Apache License 2.0.
+// 
+// 【重要声明 / IMPORTANT NOTICE】
+// 本代码（包括其架构设计与核心实现）属于白虎面板（Baihu Panel）开源项目的一部分。
+// 任何个人或组织在引用、移植、修改或重新分发此文件中的任何代码时，必须保留本版权声明，
+// 并在您的衍生作品、文档、软件关于页面或说明文件中显式声明引用自白虎面板（Baihu Panel）。
+// 
+// Anyone referencing, porting, modifying, or redistributing this code must retain this 
+// copyright notice and explicitly state the source: Baihu Panel (github.com/engigu/baihu-panel).
+
+
 // 重导出 channels 包的类型，方便外部使用
 type (
 	Channel       = channels.Channel
@@ -48,6 +60,9 @@ const (
 	ChannelNtfy            = channels.ChannelNtfy
 	ChannelGotify          = channels.ChannelGotify
 	ChannelPushPlus        = channels.ChannelPushPlus
+	ChannelVoceChat        = channels.ChannelVoceChat
+	ChannelWxPusher        = channels.ChannelWxPusher
+	ChannelQyWeiXinApp     = channels.ChannelQyWeiXinApp
 )
 
 // 重导出辅助函数
@@ -80,6 +95,9 @@ func init() {
 	RegisterChannel(ChannelWeChatOFAccount, func() Channel { return channels.NewWeChatOFAccountChannel() })
 	RegisterChannel(ChannelAliyunSMS, func() Channel { return channels.NewAliyunSMSChannel() })
 	RegisterChannel(ChannelPushPlus, func() Channel { return channels.NewPushPlusChannel() })
+	RegisterChannel(ChannelVoceChat, func() Channel { return channels.NewVoceChatChannel() })
+	RegisterChannel(ChannelWxPusher, func() Channel { return channels.NewWxPusherChannel() })
+	RegisterChannel(ChannelQyWeiXinApp, func() Channel { return channels.NewQyWeiXinAppChannel() })
 }
 
 // RegisterChannel 注册自定义渠道（可用于扩展）
@@ -112,20 +130,6 @@ func ListChannels() []string {
 }
 
 // Send 发送消息的便捷函数
-//
-// 参数：
-//   - channelType: 渠道类型（如 "Telegram", "Dtalk" 等）
-//   - config: 渠道必要的认证配置
-//   - msg: 消息内容
-//
-// 使用示例：
-//
-//	result, err := messenger.Send("Ntfy", messenger.ChannelConfig{
-//	    "topic": "my-topic",
-//	}, &messenger.Message{
-//	    Title: "Alert",
-//	    Text:  "Something happened!",
-//	})
 func Send(channelType string, config ChannelConfig, msg *Message) (*Result, error) {
 	ch, err := GetChannel(channelType)
 	if err != nil {
@@ -148,16 +152,6 @@ func NewClient() *Client {
 }
 
 // SetDefaultConfig 为指定渠道设置默认配置
-//
-// 使用示例：
-//
-//	client := messenger.NewClient()
-//	client.SetDefaultConfig("Telegram", messenger.ChannelConfig{
-//	    "bot_token": "default-token",
-//	    "chat_id":   "default-chat",
-//	})
-//	// 后续发送时不需要再传 config 的相关字段
-//	result, err := client.Send("Telegram", nil, &messenger.Message{...})
 func (c *Client) SetDefaultConfig(channelType string, config ChannelConfig) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -5,10 +5,108 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+func CreateZip(dst io.Writer, basePaths []string) (err error) {
+	w := zip.NewWriter(dst)
+	defer func() {
+		if closeErr := w.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+
+	for _, basePath := range basePaths {
+		info, err := os.Lstat(basePath)
+		if err != nil {
+			return err
+		}
+
+		if info.Mode()&os.ModeSymlink != 0 {
+			continue
+		}
+
+		if info.Mode().IsRegular() {
+			if err := addZipFile(w, basePath, filepath.Base(basePath), info); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if info.IsDir() {
+			baseName := filepath.Base(basePath)
+			if err := filepath.WalkDir(basePath, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if d.Type()&fs.ModeSymlink != 0 {
+					return nil
+				}
+
+				rel, err := filepath.Rel(basePath, path)
+				if err != nil || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." {
+					return nil
+				}
+
+				name := baseName
+				if rel != "." {
+					name = filepath.Join(baseName, rel)
+				}
+				name = filepath.ToSlash(name)
+
+				info, err := d.Info()
+				if err != nil {
+					return err
+				}
+
+				if d.IsDir() {
+					header, err := zip.FileInfoHeader(info)
+					if err != nil {
+						return err
+					}
+					header.Name = name + "/"
+					_, err = w.CreateHeader(header)
+					return err
+				}
+
+				if info.Mode().IsRegular() {
+					return addZipFile(w, path, name, info)
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func addZipFile(w *zip.Writer, path, name string, info os.FileInfo) error {
+	header, err := zip.FileInfoHeader(info)
+	if err != nil {
+		return err
+	}
+	header.Name = filepath.ToSlash(name)
+	header.Method = zip.Deflate
+
+	writer, err := w.CreateHeader(header)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = io.Copy(writer, file)
+	return err
+}
 
 func ExtractZip(src, dest string) error {
 	r, err := zip.OpenReader(src)

@@ -2,6 +2,8 @@ package database
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/logger"
@@ -26,6 +28,7 @@ type Config struct {
 	DBName   string
 	Path     string // for sqlite
 	DSN      string // for mysql/mariadb unix socket or custom dsn
+	SSLMode  string // postgres: disable/require/verify-ca/verify-full; mysql: true/skip-verify
 }
 
 func Init(cfg *Config) error {
@@ -35,31 +38,36 @@ func Init(cfg *Config) error {
 	loc := systime.CST
 	time.Local = loc
 
+	dsn, err := buildDSN(cfg)
+	if err != nil {
+		return err
+	}
+
 	var dialector gorm.Dialector
 
 	switch cfg.Type {
 	case "sqlite":
-		dialector = sqlite.Open(cfg.Path + "?_busy_timeout=5000")
+		dialector = sqlite.Open(dsn)
 	case "mysql":
-		dsn := cfg.DSN
-		if dsn == "" {
-			dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Asia%%2FShanghai",
-				cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.DBName)
-		}
 		dialector = mysql.Open(dsn)
 	case "postgres":
-		dsn := cfg.DSN
-		if dsn == "" {
-			dsn = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable TimeZone=Asia/Shanghai",
-				cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName)
-		}
 		dialector = postgres.Open(dsn)
 	default:
 		return fmt.Errorf("unsupported database type: %s", cfg.Type)
 	}
 
+	newLogger := gormlogger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
+		gormlogger.Config{
+			SlowThreshold:             time.Millisecond * 500, // 慢 SQL 阈值，默认是 200ms，这里改为 500ms
+			LogLevel:                  gormlogger.Warn,        // 日志级别
+			IgnoreRecordNotFoundError: true,                   // 忽略 ErrRecordNotFound（找不到记录）错误
+			Colorful:                  true,                   // 禁用彩色打印
+		},
+	)
+
 	DB, err = gorm.Open(dialector, &gorm.Config{
-		Logger: gormlogger.Default.LogMode(gormlogger.Warn),
+		Logger: newLogger,
 		NowFunc: func() time.Time {
 			return time.Now().In(loc)
 		},
@@ -89,4 +97,34 @@ func AutoMigrate(models ...interface{}) error {
 
 func GetDB() *gorm.DB {
 	return DB
+}
+
+func buildDSN(cfg *Config) (string, error) {
+	switch cfg.Type {
+	case "sqlite":
+		return cfg.Path + "?_busy_timeout=5000", nil
+	case "mysql":
+		if cfg.DSN != "" {
+			return cfg.DSN, nil
+		}
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Asia%%2FShanghai",
+			cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.DBName)
+		if cfg.SSLMode != "" {
+			dsn += "&tls=" + cfg.SSLMode
+		}
+		return dsn, nil
+	case "postgres":
+		if cfg.DSN != "" {
+			return cfg.DSN, nil
+		}
+		sslMode := cfg.SSLMode
+		if sslMode == "" {
+			sslMode = "disable"
+		}
+		dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s TimeZone=Asia/Shanghai",
+			cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, sslMode)
+		return dsn, nil
+	default:
+		return "", fmt.Errorf("unsupported database type: %s", cfg.Type)
+	}
 }

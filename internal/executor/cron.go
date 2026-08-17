@@ -1,9 +1,9 @@
 package executor
 
 import (
+	"fmt"
 	"math/rand"
 	"strings"
-	"fmt"
 	"sync"
 	"time"
 
@@ -22,6 +22,7 @@ type CronManager struct {
 	entryMap  map[string]cron.EntryID // task ID -> cron entry ID
 	mu        sync.RWMutex
 	logger    SchedulerLogger
+	OnTrigger func(task CronTask) *ExecutionRequest // 任务触发时的请求构造工厂
 }
 
 // NewCronManager 创建一个新的计划任务管理器
@@ -50,6 +51,13 @@ func (m *CronManager) SetLogger(logger SchedulerLogger) {
 	m.logger = logger
 }
 
+// SetScheduler 更新关联的调度器实例
+func (m *CronManager) SetScheduler(scheduler *Scheduler) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.scheduler = scheduler
+}
+
 // Start 启动调度器
 func (m *CronManager) Start() {
 	m.cron.Start()
@@ -62,7 +70,6 @@ func (m *CronManager) Stop() {
 	<-ctx.Done()
 	m.logger.Infof("[CronManager] 调度管理服务已停止")
 }
-
 
 // AddTask 添加或更新计划任务
 func (m *CronManager) AddTask(task CronTask) error {
@@ -97,14 +104,19 @@ func (m *CronManager) AddTask(task CronTask) error {
 
 		// 构造执行请求的 Builder
 		reqBuilder := func() *ExecutionRequest {
+			if m.OnTrigger != nil {
+				return m.OnTrigger(task)
+			}
 			return &ExecutionRequest{
-				TaskID:    taskID,
-				Name:      name,
-				Command:   cmd,
-				Type:      TaskTypeCron,
-				Timeout:   timeout,
-				WorkDir:   workDir,
-				Envs:      func() []string {
+				TaskID:      taskID,
+				Name:        name,
+				Command:     cmd,
+				PreCommand:  task.GetPreCommand(),
+				PostCommand: task.GetPostCommand(),
+				Type:        TaskTypeCron,
+				Timeout:     timeout,
+				WorkDir:     workDir,
+				Envs: func() []string {
 					if vars := task.GetEnvVars(); len(vars) > 0 {
 						return vars
 					}
@@ -116,19 +128,23 @@ func (m *CronManager) AddTask(task CronTask) error {
 			}
 		}
 
+		m.mu.RLock()
+		sched := m.scheduler
+		m.mu.RUnlock()
+
 		randomRange := task.GetRandomRange()
-		if randomRange > 0 && m.scheduler != nil {
+		if randomRange > 0 && sched != nil {
 			// 生成 0 到 randomRange 之间的随机秒数
 			delaySeconds := rand.Intn(randomRange)
 			delay := time.Duration(delaySeconds) * time.Second
-			m.logger.Infof("[CronManager] 任务 #%s 将随机延迟 %v (范围: %ds) 后入队执行", taskID, delay, randomRange)
+			m.logger.Infof("[CronManager] 任务 %s (#%s) 将随机延迟 %v (范围: %ds) 后入队", name, taskID, delay, randomRange)
 
 			// 使用调度器的延时投递功能，不阻塞当前 Cron 协程
-			m.scheduler.EnqueueDelayed(delay, reqBuilder)
+			sched.EnqueueDelayed(delay, reqBuilder)
 		} else {
-			m.logger.Infof("[CronManager] 触发计划任务 #%s (%s)", taskID, name)
-			if m.scheduler != nil {
-				m.scheduler.EnqueueOrExecute(reqBuilder())
+			m.logger.Infof("[CronManager] 触发计划任务: %s (#%s)", name, taskID)
+			if sched != nil {
+				sched.EnqueueOrExecute(reqBuilder())
 			}
 		}
 
@@ -142,7 +158,7 @@ func (m *CronManager) AddTask(task CronTask) error {
 	}
 
 	m.entryMap[taskID] = entryID
-	m.logger.Infof("[CronManager] 任务已添加调度 #%s %s (%s)", taskID, name, task.GetSchedule())
+	m.logger.Infof("[CronManager] 已添加调度: %s (#%s) [%s]", name, taskID, task.GetSchedule())
 
 	// 初始触发一次下次运行时间通知
 	go func() {
@@ -168,6 +184,18 @@ func (m *CronManager) RemoveTask(taskID string) {
 		delete(m.entryMap, taskID)
 		m.logger.Infof("[CronManager] 任务已移除 #%s", taskID)
 	}
+}
+
+// ClearTasks 清空所有计划任务
+func (m *CronManager) ClearTasks() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for taskID, entryID := range m.entryMap {
+		m.cron.Remove(entryID)
+		delete(m.entryMap, taskID)
+	}
+	m.logger.Infof("[CronManager] 已清空所有计划任务调度")
 }
 
 // triggerNextRunEvent 触发下次运行时间更新事件

@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, onUnmounted, nextTick, shallowRef } from 'vue'
+import { ref, onMounted, computed, onUnmounted, nextTick, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import XTerminal from '@/components/XTerminal.vue'
-import { Save, Play, Pencil, Eye, X, Download, Trash2 } from 'lucide-vue-next'
+import { Save, Play, FilePen, TextCursorInput, Eye, X, Download, Trash2 } from 'lucide-vue-next'
 import { api, type FileNode, type MiseLanguage } from '@/api'
 import { toast } from 'vue-sonner'
-import { PATHS, FILE_RUNNERS } from '@/constants'
+import { PATHS } from '@/constants'
 
-// New component imports
 import FileSidebar from './components/FileSidebar.vue'
 import RunConfigDialog from './components/RunConfigDialog.vue'
 import FileActionDialogs from './components/FileActionDialogs.vue'
+import UnsavedConfirmDialog from './components/UnsavedConfirmDialog.vue'
+import BaihuDialog from '@/components/ui/BaihuDialog.vue'
+import { buildExecutionCommand } from './utils'
+import { checkWindowsScriptWarnings } from '@/windows/scriptCheck'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,6 +33,12 @@ const isLoading = ref(false)
 const isRefreshing = ref(false)
 const isEditMode = ref(false)
 const hasChanges = computed(() => fileContent.value !== originalContent.value)
+
+const confirmLeave = ref({
+  show: false,
+  path: '',
+  onConfirm: () => {}
+})
 
 // Component Refs
 const dialogsRef = ref<InstanceType<typeof FileActionDialogs> | null>(null)
@@ -57,6 +66,12 @@ const showTerminalDialog = ref(false)
 const runCommand = ref('')
 const scriptsDir = ref('')
 
+// Windows script warning state
+const showScriptWarningDialog = ref(false)
+const scriptWarningMessage = ref('')
+const onWarningConfirm = ref<(() => void) | null>(null)
+
+
 async function fetchInstalledLangs() {
   try {
     installedLangs.value = await api.mise.list()
@@ -65,41 +80,7 @@ async function fetchInstalledLangs() {
   }
 }
 
-function getLangIcon(plugin: string) {
-  const name = plugin.toLowerCase().trim()
-  const mapping: Record<string, string> = {
-    'python': 'python/python-original.svg',
-    'node': 'nodejs/nodejs-original.svg',
-    'nodejs': 'nodejs/nodejs-original.svg',
-    'go': 'go/go-original.svg',
-    'rust': 'rust/rust-original.svg',
-    'ruby': 'ruby/ruby-plain.svg',
-    'php': 'php/php-plain.svg',
-    'java': 'java/java-plain.svg',
-    'deno': 'deno/deno-plain.svg',
-    'bun': 'bun/bun-plain.svg',
-    'zig': 'zig/zig-original.svg',
-    'dotnet': 'dot-net/dot-net-original.svg',
-    '.net': 'dot-net/dot-net-original.svg',
-    'elixir': 'elixir/elixir-original.svg',
-    'erlang': 'erlang/erlang-original.svg',
-    'crystal': 'crystal/crystal-original.svg',
-    'lua': 'lua/lua-original.svg',
-    'julia': 'julia/julia-original.svg',
-    'nim': 'nim/nim-original.svg',
-    'perl': 'perl/perl-original.svg',
-    'scala': 'scala/scala-original.svg',
-    'kotlin': 'kotlin/kotlin-original.svg',
-    'clojure': 'clojure/clojure-line.svg',
-    'dart': 'dart/dart-original.svg',
-    'flutter': 'flutter/flutter-original.svg',
-    'terraform': 'terraform/terraform-original.svg',
-    'docker': 'docker/docker-original.svg',
-    'kubernetes': 'kubernetes/kubernetes-plain.svg',
-    'ansible': 'ansible/ansible-original.svg',
-  }
-  return mapping[name] ? `https://fastly.jsdelivr.net/gh/devicons/devicon/icons/${mapping[name]}` : ''
-}
+import { getLangIcon } from '@/utils/icons'
 
 async function fetchPaths() {
   try {
@@ -142,10 +123,54 @@ function handleResize() {
   isSmallScreen.value = window.innerWidth < 1024
 }
 
+// Sorting state
+type SortMethod = 'name_asc' | 'name_desc' | 'time_desc' | 'time_asc'
+const sortMethod = ref<SortMethod>('name_asc')
+
+function sortTree(nodes: FileNode[]) {
+  nodes.sort((a, b) => {
+    if (a.isDir && !b.isDir) return -1
+    if (!a.isDir && b.isDir) return 1
+    
+    switch (sortMethod.value) {
+      case 'name_asc':
+        return a.name.localeCompare(b.name)
+      case 'name_desc':
+        return b.name.localeCompare(a.name)
+      case 'time_desc':
+        return (b.modTime || 0) - (a.modTime || 0)
+      case 'time_asc':
+        return (a.modTime || 0) - (b.modTime || 0)
+      default:
+        return 0
+    }
+  })
+  
+  for (const node of nodes) {
+    if (node.children) sortTree(node.children)
+  }
+}
+
+watch(sortMethod, (newVal) => {
+  sortTree(fileTree.value)
+  api.settings.setSection('ui', { file_sort_method: newVal }).catch(() => {})
+})
+
+async function initSortMethod() {
+  try {
+    const val = await api.settings.get('ui', 'file_sort_method')
+    if (val && ['name_asc', 'name_desc', 'time_desc', 'time_asc'].includes(val)) {
+      sortMethod.value = val as SortMethod
+    }
+  } catch {}
+}
+
 async function loadTree() {
   isRefreshing.value = true
   try {
-    fileTree.value = await api.files.tree()
+    const nodes = await api.files.tree()
+    sortTree(nodes)
+    fileTree.value = nodes
   } catch {
     toast.error('加载文件树失败')
   } finally {
@@ -166,7 +191,17 @@ async function handleSelect(node: FileNode) {
     expandedDirs.value = new Set(expandedDirs.value)
     selectedFile.value = null
   } else {
-    if (hasChanges.value && !confirm('当前文件有未保存的更改，是否放弃？')) return
+    if (hasChanges.value) {
+      confirmLeave.value = {
+        show: true,
+        path: node.path,
+        onConfirm: () => {
+          originalContent.value = fileContent.value // 假装保存或标记为已确认放弃
+          loadFile(node.path)
+        }
+      }
+      return
+    }
     await loadFile(node.path)
   }
 }
@@ -190,6 +225,24 @@ async function loadFile(path: string) {
 }
 
 async function saveFile() {
+  if (!selectedFile.value) return
+
+  // Windows 脚本执行风险检测
+  const warnings = checkWindowsScriptWarnings(selectedFile.value, fileContent.value)
+  if (warnings.length > 0) {
+    scriptWarningMessage.value = warnings.join('\n\n')
+    showScriptWarningDialog.value = true
+    onWarningConfirm.value = () => {
+      showScriptWarningDialog.value = false
+      executeSave()
+    }
+    return
+  }
+
+  await executeSave()
+}
+
+async function executeSave() {
   if (!selectedFile.value) return
   try {
     await api.files.saveContent(selectedFile.value, fileContent.value)
@@ -279,6 +332,15 @@ async function handleDownload(path: string) {
   toast.success('下载中')
 }
 
+async function handleDownloadZip(path: string) {
+  const url = api.files.downloadZip(path)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = (path.split('/').pop() || 'archive') + '.zip'
+  a.click()
+  toast.success('下载中')
+}
+
 async function handleCopyFile(path: string) {
   try {
     const parts = path.split('/')
@@ -343,27 +405,10 @@ async function runScript() {
 
 async function startExecution() {
   if (!selectedFile.value) return
-  const parts = selectedFile.value.split('/')
-  const fileName = parts.pop() || selectedFile.value
-  const dirPath = parts.join('/')
-  const ext = fileName.split('.').pop()?.toLowerCase() || ''
-  let runner = FILE_RUNNERS[ext] || ''
-
-  const validEnvs = selectedEnvs.value.filter(e => e.plugin && e.version)
-  let cmd = ''
-    if (validEnvs.length > 0) {
-    const specs = validEnvs.map(e => `${e.plugin}@${e.version}`).join(' ')
-    if (!runner && !['sh', 'bash'].includes(ext)) {
-       const first = validEnvs[0]!.plugin
-       runner = (first === 'node' ? 'node' : first)
-    }
-    cmd = `mise exec ${specs} -- ${runner ? `${runner} ${fileName}` : `./${fileName}`}`
-  } else {
-    cmd = runner ? `${runner} ${fileName}` : `./${fileName}`
-  }
-
+  
   const base = scriptsDir.value || PATHS.SCRIPTS_DIR
-  runCommand.value = `cd ${base}${dirPath ? '/' + dirPath : ''} && ${cmd}`
+  runCommand.value = buildExecutionCommand(selectedFile.value, selectedEnvs.value, base)
+  
   showRunDialog.value = false
   showTerminalDialog.value = true
   await nextTick()
@@ -384,11 +429,66 @@ function closeTerminal() {
 }
 
 function getLanguage(path: string): string {
-  const ext = path.split('.').pop()?.toLowerCase()
+  const filename = path.split('/').pop()?.toLowerCase() || ''
+  const ext = filename.split('.').pop() || ''
+  
+  if (filename === 'dockerfile') return 'dockerfile'
+  
   const langMap: Record<string, string> = {
-    sh: 'shell', js: 'javascript', ts: 'typescript', py: 'python', json: 'json', yaml: 'yaml', md: 'markdown'
+    // 脚本与系统语言
+    sh: 'shell',
+    bash: 'shell',
+    zsh: 'shell',
+    bat: 'bat',
+    cmd: 'bat',
+    ps1: 'powershell',
+    py: 'python',
+    js: 'javascript',
+    ts: 'typescript',
+    go: 'go',
+    php: 'php',
+    lua: 'lua',
+    pl: 'perl',
+    pm: 'perl',
+    rb: 'ruby',
+    
+    // 编译型语言
+    c: 'cpp',
+    h: 'cpp',
+    cpp: 'cpp',
+    cc: 'cpp',
+    hpp: 'cpp',
+    rs: 'rust',
+    java: 'java',
+    cs: 'csharp',
+    swift: 'swift',
+    kt: 'kotlin',
+    dart: 'dart',
+    
+    // 网页与前端样式
+    html: 'html',
+    htm: 'html',
+    vue: 'html',
+    css: 'css',
+    less: 'less',
+    scss: 'scss',
+    sass: 'scss',
+    
+    // 数据与配置格式
+    json: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+    toml: 'toml',
+    ini: 'ini',
+    conf: 'ini',
+    cfg: 'ini',
+    xml: 'xml',
+    sql: 'sql',
+    properties: 'properties',
+    md: 'markdown',
+    dockerfile: 'dockerfile'
   }
-  return langMap[ext || ''] || 'plaintext'
+  return langMap[ext] || 'plaintext'
 }
 
 function expandParentDirs(path: string) {
@@ -424,8 +524,11 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
-  initFromUrl(); fetchPaths(); fetchInstalledLangs()
+onMounted(async () => {
+  await initSortMethod()
+  initFromUrl()
+  fetchPaths()
+  fetchInstalledLangs()
   window.addEventListener('resize', handleResize)
   window.addEventListener('keydown', handleGlobalKeydown)
 })
@@ -443,11 +546,13 @@ onUnmounted(() => {
       :expanded-dirs="expandedDirs"
       :selected-path="selectedPath"
       :is-refreshing="isRefreshing"
+      v-model:sortMethod="sortMethod"
       @refresh="loadTree"
       @select="handleSelect"
       @delete="(path: string) => dialogsRef?.openDelete(path)"
       @create="(parent: string) => dialogsRef?.openCreate(parent)"
       @download="handleDownload"
+      @download-zip="handleDownloadZip"
       @move="handleMove"
       @rename="(path: string) => dialogsRef?.openRename(path)"
       @duplicate="handleCopyFile"
@@ -463,7 +568,7 @@ onUnmounted(() => {
         </span>
         <div v-if="selectedPath" class="flex gap-1 shrink-0">
           <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="dialogsRef?.openRename(selectedPath)">
-            <Pencil class="h-3 w-3" /> <span class="hidden sm:inline">重命名</span>
+            <TextCursorInput class="h-3 w-3" /> <span class="hidden sm:inline">重命名</span>
           </Button>
           <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2 hover:bg-destructive/10 transition-colors" @click="dialogsRef?.openDelete(selectedPath)">
             <Trash2 class="h-3 w-3" /> <span class="hidden sm:inline">删除</span>
@@ -474,7 +579,7 @@ onUnmounted(() => {
               <Download class="h-3 w-3" /> <span class="hidden sm:inline">下载</span>
             </Button>
             <Button v-if="!isEditMode" variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="isEditMode = true">
-              <Pencil class="h-3 w-3" /> <span class="hidden sm:inline">编辑</span>
+              <FilePen class="h-3 w-3" /> <span class="hidden sm:inline">编辑</span>
             </Button>
             <template v-else>
               <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="isEditMode = false; fileContent = originalContent">
@@ -502,6 +607,7 @@ onUnmounted(() => {
 
     <FileActionDialogs
       ref="dialogsRef"
+      :file-tree="fileTree"
       @create="createItem"
       @delete="deleteItem"
       @rename="renameItem"
@@ -528,5 +634,37 @@ onUnmounted(() => {
         </div>
       </DialogContent>
     </Dialog>
+
+    <UnsavedConfirmDialog
+      v-model:open="confirmLeave.show"
+      :path="confirmLeave.path"
+      @confirm="confirmLeave.onConfirm()"
+    />
+
+    <!-- Windows 脚本保存冲突警告 -->
+    <BaihuDialog
+      v-model:open="showScriptWarningDialog"
+      title="Windows 脚本保存警告"
+      icon="AlertCircle"
+      size="sm"
+    >
+      <div class="flex flex-col sm:flex-row items-center sm:items-start gap-4 p-1">
+        <div class="h-12 w-12 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+          <AlertCircle class="h-6 w-6 text-amber-500" />
+        </div>
+        <div class="flex-1 text-center sm:text-left">
+          <p class="text-sm text-foreground/90 leading-relaxed font-medium">检测到潜在的执行风险命令</p>
+          <div class="text-[13px] text-muted-foreground mt-2 whitespace-pre-line leading-relaxed text-left">
+            {{ scriptWarningMessage }}
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="flex flex-col-reverse sm:flex-row gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+          <Button variant="outline" @click="showScriptWarningDialog = false" class="w-full sm:w-24">取消</Button>
+          <Button variant="destructive" @click="onWarningConfirm?.()" class="w-full sm:w-auto px-6">仍然保存</Button>
+        </div>
+      </template>
+    </BaihuDialog>
   </div>
 </template>

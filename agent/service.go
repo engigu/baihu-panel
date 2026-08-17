@@ -27,7 +27,7 @@ func getLockFile() string {
 // tryLock 尝试获取文件锁，确保只有一个实例运行
 func tryLock() bool {
 	os.MkdirAll(dataDir, 0755)
-	
+
 	fileLock = flock.New(getLockFile())
 	locked, err := fileLock.TryLock()
 	if err != nil || !locked {

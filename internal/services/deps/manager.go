@@ -16,6 +16,7 @@ type Manager interface {
 	Uninstall(dep *models.Dependency) error
 	GetInstalledPackages(language, langVersion string) ([]models.Dependency, error)
 	GetInstallCommand(dep *models.Dependency) (string, error)
+	GetBatchInstallCommand(deps []models.Dependency) (string, error)
 	GetReinstallAllCommand(deps []models.Dependency) (string, error)
 	GetVerifyCommand(langVersion string) (string, error)
 }
@@ -71,6 +72,33 @@ func (m *BaseManager) GetInstallCommand(dep *models.Dependency) (string, error) 
 	args = append(args, packageSpec)
 
 	fullCmd := utils.BuildMiseCommandSimple(strings.Join(args, " "), m.Language, dep.LangVersion)
+	return fullCmd + " && echo \"__INSTALL_SUCCESS__\" || echo \"__INSTALL_FAILED__\"", nil
+}
+
+func (m *BaseManager) GetBatchInstallCommand(deps []models.Dependency) (string, error) {
+	if len(deps) == 0 {
+		return "echo \"没有需要安装的依赖\"", nil
+	}
+
+	var packageSpecs []string
+	var langVersion string
+	var language string
+	for _, dep := range deps {
+		language = dep.Language
+		if dep.LangVersion != "" {
+			langVersion = dep.LangVersion
+		}
+		if dep.Version != "" {
+			packageSpecs = append(packageSpecs, dep.Name+m.Separator+dep.Version)
+		} else {
+			packageSpecs = append(packageSpecs, dep.Name)
+		}
+	}
+
+	args := append([]string{}, m.InstallCmd...)
+	args = append(args, packageSpecs...)
+
+	fullCmd := utils.BuildMiseCommandSimple(strings.Join(args, " "), language, langVersion)
 	return fullCmd + " && echo \"__INSTALL_SUCCESS__\" || echo \"__INSTALL_FAILED__\"", nil
 }
 

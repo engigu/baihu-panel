@@ -12,7 +12,7 @@ RUN sed -i 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.li
     && ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-         tzdata git curl wget vim htop ca-certificates rsync \
+         tzdata git curl wget vim htop ca-certificates rsync openssh-client \
     && curl https://mise.run | MISE_INSTALL_PATH=/usr/local/bin/mise sh \
     && mkdir -p /opt/mise-base \
     && rm -rf /var/lib/apt/lists/* \

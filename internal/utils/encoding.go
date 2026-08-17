@@ -41,3 +41,22 @@ func (r *byteReader) Read(p []byte) (n int, err error) {
 	r.pos += n
 	return n, nil
 }
+
+// TrimLastRunes 从字符串尾部保留最多 maxRunes 个字符（不仅限于 ASCII，支持中英文混排的真实字符数量）
+func TrimLastRunes(s string, maxRunes int) string {
+	// 如果字符串的总字节数小于等于 maxRunes，那么它的字符数一定也小于等于 maxRunes
+	if len(s) <= maxRunes {
+		return s
+	}
+
+	count := 0
+	for i := len(s); i > 0; {
+		_, size := utf8.DecodeLastRuneInString(s[:i])
+		i -= size
+		count++
+		if count == maxRunes {
+			return s[i:]
+		}
+	}
+	return s
+}

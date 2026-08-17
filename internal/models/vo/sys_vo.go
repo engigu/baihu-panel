@@ -3,6 +3,7 @@ package vo
 import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 // UserVO 用户视图对象
@@ -37,6 +38,7 @@ type EnvVO struct {
 	Value     string           `json:"value"`
 	Remark    string           `json:"remark"`
 	Type      string           `json:"type"`
+	Tags      string           `json:"tags"`
 	Hidden    bool             `json:"hidden"`
 	Enabled   bool             `json:"enabled"`
 	CreatedAt models.LocalTime `json:"created_at"`
@@ -58,8 +60,9 @@ func ToEnvVO(env *models.EnvironmentVariable) *EnvVO {
 		Value:     val,
 		Remark:    env.Remark,
 		Type:      env.Type,
-		Hidden:    env.Hidden,
-		Enabled:   env.Enabled,
+		Tags:      env.Tags,
+		Hidden:    utils.DerefBool(env.Hidden, true),
+		Enabled:   utils.DerefBool(env.Enabled, true),
 		CreatedAt: env.CreatedAt,
 		UpdatedAt: env.UpdatedAt,
 	}

@@ -1,6 +1,6 @@
 # 系统配置手册
 
-白虎面板支持通过环境变量和配置文件两种核心方式进行系统参数微调。
+baihu-panel支持通过环境变量和配置文件两种核心方式进行系统参数微调。
 
 ## 环境变量配置 (优先级最高)
 
@@ -13,6 +13,7 @@
 | `BH_SERVER_PORT` | server.port | 服务监听端口 | 8052 |
 | `BH_SERVER_HOST` | server.host | 监听地址 | 0.0.0.0 |
 | `BH_SERVER_URL_PREFIX` | server.url_prefix | URL 前缀，用于反向代理子路径部署 | - |
+| `BH_COOKIE_NAME` | server.cookie_name | 全局会话 Cookie 名称 | BHToken |
 | `BH_DB_TYPE` | database.type | 数据库类型 (sqlite/mysql) | sqlite |
 | `BH_DB_HOST` | database.host | 数据库实例地址 | localhost |
 | `BH_DB_PORT` | database.port | 数据库端口 | 3306 |
@@ -22,6 +23,7 @@
 | `BH_DB_PATH` | database.path | SQLite 物理文件存储路径 | ./data/baihu.db |
 | `BH_DB_DSN` | database.dsn | 数据库 DSN (仅 mysql/postgres, 优先级高。**需对应设置 type**) | - |
 | `BH_DB_TABLE_PREFIX` | database.table_prefix | 数据库表前缀 | baihu_ |
+| `BH_DB_SSL_MODE` | database.ssl_mode | SSL 模式: postgres 支持 disable/require/verify-ca/verify-full; mysql 支持 true/skip-verify | - |
 | `BAIHU_SECRET_KEY` | - | 系统加密秘钥，用于机密变量功能（**注：仅支持环境变量设置，不支持配置文件**） | - |
 
 ---
@@ -43,6 +45,8 @@ port = 8052
 host = 0.0.0.0
 # 配置 URL 前缀用于反向代理，例如 /baihu/
 url_prefix = /baihu
+# 全局会话 Cookie 名称
+cookie_name = BHToken
 
 [database]
 type = sqlite
@@ -68,7 +72,7 @@ table_prefix = baihu_
 
 ## 机密管理 (Secret Management)
 
-白虎面板提供了一套基于 **AES-GCM** 工业级标准的安全机密管理系统，其设计理念参考了 GitHub Actions Secrets。
+baihu-panel提供了一套基于 **AES-GCM** 工业级标准的安全机密管理系统，其设计理念参考了 GitHub Actions Secrets。
 
 ### 核心特性
 

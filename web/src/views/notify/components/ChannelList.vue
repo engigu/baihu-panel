@@ -6,6 +6,7 @@ import { Plus, Trash2, TestTube, Pencil, Bell, Calendar, Copy, Check } from 'luc
 import type { NotifyChannel, ChannelType } from '@/api'
 import { ref } from 'vue'
 import { toast } from 'vue-sonner'
+import { copyToClipboard } from '@/utils/clipboard'
 
 defineProps<{
   channels: NotifyChannel[]
@@ -26,13 +27,15 @@ function getChannelTypeName(type: string, channelTypes: ChannelType[]): string {
 
 const copiedBlock = ref<string | null>(null)
 
-function copyToClipboard(text: string, blockId: string) {
-  navigator.clipboard.writeText(text).then(() => {
-    copiedBlock.value = blockId
-    toast.success('已复制长 ID')
-    setTimeout(() => {
-      copiedBlock.value = null
-    }, 2000)
+function handleCopy(text: string, blockId: string) {
+  copyToClipboard(text).then((success) => {
+    if (success) {
+      copiedBlock.value = blockId
+      toast.success('已复制长 ID')
+      setTimeout(() => {
+        copiedBlock.value = null
+      }, 2000)
+    }
   })
 }
 </script>
@@ -94,7 +97,7 @@ function copyToClipboard(text: string, blockId: string) {
             <div class="flex items-center gap-1">
               <Button variant="ghost" size="icon"
                 class="h-8 w-8 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                @click="copyToClipboard(ch.id, 'channel-' + ch.id)" title="复制 ID">
+                @click="handleCopy(ch.id, 'channel-' + ch.id)" title="复制 ID">
                 <Check v-if="copiedBlock === 'channel-' + ch.id" class="w-4 h-4 text-emerald-500" />
                 <Copy v-else class="w-4 h-4" />
               </Button>

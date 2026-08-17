@@ -4,6 +4,7 @@ declare global {
     __BASE_URL__?: string
     __API_VERSION__?: string
   }
+  const __MONACO_CDN__: string | null
 }
 
 export {}

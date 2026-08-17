@@ -25,29 +25,28 @@ const (
 	colorGray   = "\033[37m" // debug
 )
 
-// customCore 实现 zapcore.Core 以提供与 logrus 一模一样的格式
-type customCore struct {
-	level  zapcore.LevelEnabler
-	writer zapcore.WriteSyncer
+// CustomCore 实现 zapcore.Core 以提供统一日志格式
+type CustomCore struct {
+	Level  zapcore.LevelEnabler
+	Writer zapcore.WriteSyncer
 }
 
-func (c *customCore) Enabled(l zapcore.Level) bool {
-	return c.level.Enabled(l)
+func (c *CustomCore) Enabled(l zapcore.Level) bool {
+	return c.Level.Enabled(l)
 }
 
-func (c *customCore) With(fields []zapcore.Field) zapcore.Core {
-	// 目前忽略字段，以保持与旧 logrus 格式一模一样（旧格式只输出 entry.Message）
+func (c *CustomCore) With(fields []zapcore.Field) zapcore.Core {
 	return c
 }
 
-func (c *customCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+func (c *CustomCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
 	if c.Enabled(ent.Level) {
 		return ce.AddCore(ent, c)
 	}
 	return ce
 }
 
-func (c *customCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
+func (c *CustomCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 	// 统一使用东八区时间
 	timestamp := systime.InCST(ent.Time).Format("2006-01-02 15:04:05")
 	level := strings.ToUpper(ent.Level.String())
@@ -67,20 +66,24 @@ func (c *customCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 	}
 
 	msg := fmt.Sprintf("[%s]%s[%s]%s %s\n", timestamp, levelColor, level, colorReset, ent.Message)
-	_, err := c.writer.Write([]byte(msg))
+	_, err := c.Writer.Write([]byte(msg))
 	return err
 }
 
-func (c *customCore) Sync() error {
-	return c.writer.Sync()
+func (c *CustomCore) Sync() error {
+	return c.Writer.Sync()
+}
+
+// NewCustomCore 创建通用导出的 Zap Core 实例
+func NewCustomCore(level zapcore.LevelEnabler, writer zapcore.WriteSyncer) zapcore.Core {
+	return &CustomCore{
+		Level:  level,
+		Writer: writer,
+	}
 }
 
 func newLogger(output zapcore.WriteSyncer) *zap.Logger {
-	core := &customCore{
-		level:  atomicLevel,
-		writer: output,
-	}
-	return zap.New(core)
+	return zap.New(NewCustomCore(atomicLevel, output))
 }
 
 func init() {

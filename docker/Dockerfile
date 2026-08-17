@@ -37,7 +37,7 @@ RUN VERSION_VAL="${VERSION:-dev-$(TZ=Asia/Shanghai date '+%Y%m%d%H%M%S')}" && \
 # ================================
 # Stage 2: Build backend
 # ================================
-FROM --platform=$BUILDPLATFORM golang:1.25 AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.26 AS backend-builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -80,7 +80,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # ================================
 # Stage 3: Build Agent (all platforms)
 # ================================
-FROM --platform=$BUILDPLATFORM golang:1.25 AS agent-builder
+FROM --platform=$BUILDPLATFORM golang:1.26 AS agent-builder
 
 
 WORKDIR /app
@@ -111,14 +111,18 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     # Helper to build and compress
     build_agent() { \
         local os=$1; local arch=$2; local suffix=$3; \
-        CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="${LDFLAGS}" -o baihu-agent$suffix . && \
-        tar -czvf /opt/agent/baihu-agent-$os-$arch.tar.gz baihu-agent$suffix config.example.ini && \
-        rm baihu-agent$suffix; \
-    } && \
-    build_agent linux amd64 "" && \
-    build_agent linux arm64 "" && \
-    build_agent darwin amd64 "" && \
-    build_agent darwin arm64 "" && \
+        local tmpdir="build-$os-$arch"; \
+        mkdir -p $tmpdir && cp config.example.ini $tmpdir/ && \
+        CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="${LDFLAGS}" -o $tmpdir/baihu-agent$suffix . && \
+        (cd $tmpdir && tar -czvf /opt/agent/baihu-agent-$os-$arch.tar.gz baihu-agent$suffix config.example.ini) && \
+        rm -rf $tmpdir; \
+    } ; \
+    build_agent linux amd64 "" & pid1=$!; \
+    build_agent linux arm64 "" & pid2=$!; \
+    build_agent android arm64 "" & pid3=$!; \
+    build_agent darwin amd64 "" & pid4=$!; \
+    build_agent darwin arm64 "" & pid5=$!; \
+    wait $pid1 && wait $pid2 && wait $pid3 && wait $pid4 && wait $pid5 && \
     echo "Agent build completed for all platforms"
 # ================================
 # Stage 4: Final image
@@ -154,6 +158,7 @@ COPY --from=frontend-builder /app/web/dist /www/baihu
 # Copy configs and entrypoint
 COPY --from=backend-builder /app/configs ./configs
 COPY --from=backend-builder /app/example ./example
+COPY builtin/ /www/builtin
 COPY docker/docker-entrypoint.sh .
 
 
@@ -167,6 +172,8 @@ RUN chmod +x docker-entrypoint.sh \
     && cat /etc/profile.d/mise-hook.sh >> /etc/bash.bashrc \
     && echo "set encoding=utf-8" >> /etc/vim/vimrc \
     && ln -sf /app/baihu /usr/local/bin/baihu
+
+ENV MISE_TRUSTED_CONFIG_PATHS=/app/data/scripts
 
 EXPOSE 8052
 

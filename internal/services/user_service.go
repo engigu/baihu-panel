@@ -148,3 +148,10 @@ func (us *UserService) UpdateAccount(userID string, newUsername string) error {
 
 	return database.DB.Model(&user).Updates(updates).Error
 }
+
+func (us *UserService) UpdateOTP(userID string, secret string, enabled bool) error {
+	return database.DB.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+		"otp_secret":  secret,
+		"otp_enabled": enabled,
+	}).Error
+}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/engigu/baihu-panel/internal/utils"
 
@@ -34,6 +35,7 @@ type FileNode struct {
 	Name     string      `json:"name"`
 	Path     string      `json:"path"`
 	IsDir    bool        `json:"isDir"`
+	ModTime  int64       `json:"modTime"`
 	Children []*FileNode `json:"children,omitempty"`
 }
 
@@ -83,6 +85,12 @@ func (fc *FileController) GetFileTree(c *gin.Context) {
 		relPath, _ := filepath.Rel(fc.workDir, path)
 		parts := strings.Split(relPath, string(filepath.Separator))
 
+		info, err := d.Info()
+		var modTime int64
+		if err == nil {
+			modTime = info.ModTime().UnixMilli()
+		}
+
 		current := root
 		for i, part := range parts {
 			found := false
@@ -97,9 +105,10 @@ func (fc *FileController) GetFileTree(c *gin.Context) {
 				isLast := i == len(parts)-1
 				isDir := !isLast || d.IsDir()
 				node := &FileNode{
-					Name:  part,
-					Path:  strings.Join(parts[:i+1], "/"),
-					IsDir: isDir,
+					Name:    part,
+					Path:    strings.Join(parts[:i+1], "/"),
+					IsDir:   isDir,
+					ModTime: modTime,
 				}
 				if isDir {
 					node.Children = []*FileNode{}
@@ -491,4 +500,51 @@ func (fc *FileController) DownloadFile(c *gin.Context) {
 	c.Header("Content-Disposition", "attachment; filename="+filepath.Base(fullPath))
 	c.Header("Content-Type", "application/octet-stream")
 	c.File(fullPath)
+}
+
+func (fc *FileController) DownloadZip(c *gin.Context) {
+	paths := c.QueryArray("path")
+	if len(paths) == 0 || c.ContentType() == "application/json" {
+		var req struct {
+			Paths []string `json:"paths"`
+		}
+		if err := c.ShouldBindJSON(&req); err == nil && len(paths) == 0 {
+			paths = req.Paths
+		}
+	}
+
+	if len(paths) == 0 {
+		utils.BadRequest(c, "path参数必填")
+		return
+	}
+
+	validatedAbsPaths := make([]string, 0, len(paths))
+	for _, path := range paths {
+		fullPath, safe := fc.checkPath(path, false)
+		if !safe {
+			utils.Forbidden(c, "访问被拒绝")
+			return
+		}
+
+		if _, err := os.Stat(fullPath); err != nil {
+			utils.NotFound(c, "文件不存在")
+			return
+		}
+
+		validatedAbsPaths = append(validatedAbsPaths, fullPath)
+	}
+
+	fileName := "baihu-export-" + time.Now().Format("20060102-150405") + ".zip"
+	if len(validatedAbsPaths) == 1 {
+		fileName = filepath.Base(validatedAbsPaths[0]) + ".zip"
+	}
+
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Transfer-Encoding", "binary")
+	c.Header("Content-Disposition", "attachment; filename="+fileName)
+	c.Header("Content-Type", "application/zip")
+
+	if err := utils.CreateZip(c.Writer, validatedAbsPaths); err != nil {
+		return
+	}
 }

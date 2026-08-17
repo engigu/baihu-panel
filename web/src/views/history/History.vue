@@ -1,32 +1,23 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { TASK_STATUS, TASK_TYPE } from '@/constants'
+import { TASK_STATUS, TASK_TYPE, TASK_STATUS_TEXT, TASK_EVENTS } from '@/constants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import LogViewer from './LogViewer.vue'
-import Ansi from 'ansi-to-vue3'
 import {
-  RefreshCw, X, Search, Maximize2, GitBranch, Terminal,
-  CheckCircle2, XCircle, AlertCircle, Ban, Clock, Zap as ZapIcon, Check, Trash2
+  RefreshCw, Search, GitBranch, Terminal, Trash2
 } from 'lucide-vue-next'
 import { api, type TaskLog } from '@/api'
-import { Badge } from '@/components/ui/badge'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import LogDetailCard from '@/components/LogDetailCard.vue'
+import BaihuDialog from '@/components/ui/BaihuDialog.vue'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
 import TextOverflow from '@/components/TextOverflow.vue'
+import StatusDot from '@/components/StatusDot.vue'
+import { useEventBus } from '@/composables/useEventBus'
 
 const route = useRoute()
 const { pageSize } = useSiteSettings()
@@ -44,6 +35,46 @@ let durationTimer: ReturnType<typeof setInterval> | null = null
 
 const isRefreshing = ref(false)
 
+// 监听实时任务事件
+useEventBus(Object.values(TASK_EVENTS), (payload, type) => {
+  const { log_id, status, duration, end_time } = payload
+  
+  // 查找列表中的记录并更新
+  const logItem = logs.value.find(l => l.id === log_id)
+  if (logItem) {
+    logItem.status = status
+    if (duration !== undefined) logItem.duration = duration
+    if (end_time !== undefined) logItem.end_time = end_time
+  } else if (type === TASK_EVENTS.RUNNING || status !== TASK_STATUS.RUNNING) {
+    // 新任务启动或任务完成时，如果在第一页且无特定过滤，刷新列表以获取最新条目
+    if (currentPage.value === 1 && !filterTaskId.value && !filterKeyword.value && (!filterStatus.value || filterStatus.value === 'all')) {
+      loadLogs()
+    }
+  }
+  
+  // 如果详情页打开的是这个记录，也同步更新
+  if (selectedLog.value && (selectedLog.value.id === log_id || selectedLog.value.task_id === payload.task_id)) {
+    selectedLog.value = {
+      ...selectedLog.value,
+      status: status,
+      duration: duration !== undefined ? duration : selectedLog.value.duration,
+      end_time: end_time !== undefined ? end_time : selectedLog.value.end_time
+    }
+    
+    // 如果任务完成了，停止详情页的轮询定时器并断开 SSE
+    if (status !== TASK_STATUS.RUNNING) {
+      if (durationTimer) {
+        clearInterval(durationTimer)
+        durationTimer = null
+      }
+      if (logSource) {
+        logSource.close()
+        logSource = null
+      }
+    }
+  }
+})
+
 // 全屏查看
 const showFullscreen = ref(false)
 
@@ -56,7 +87,21 @@ const deleteLogId = ref<string | null>(null)
 
 const wsContent = ref('')
 const isWsLoading = ref(false)
-let logSocket: WebSocket | null = null
+let logSource: EventSource | null = null
+let logBuffer: string[] = []
+let logFlushInterval: ReturnType<typeof setInterval> | null = null
+
+function cleanupLogSocket() {
+  if (logSource) {
+    logSource.close()
+    logSource = null
+  }
+  if (logFlushInterval) {
+    clearInterval(logFlushInterval)
+    logFlushInterval = null
+  }
+  logBuffer = []
+}
 
 
 import { decompressFromBase64 } from '@/utils/decompress'
@@ -113,13 +158,7 @@ function handlePageChange(page: number) {
 }
 
 async function selectLog(log: TaskLog) {
-  if (logSocket) {
-    logSocket.onopen = null
-    logSocket.onmessage = null
-    logSocket.onerror = null
-    logSocket.onclose = null
-    logSocket.close()
-  }
+  cleanupLogSocket()
 
   // 清理旧定时器
   if (durationTimer) {
@@ -127,87 +166,164 @@ async function selectLog(log: TaskLog) {
     durationTimer = null
   }
 
-  selectedLog.value = log
-
-  // 如果是运行中状态，启动定时器轮询最新日志信息（主要是更新耗时）
-  if (log.status === TASK_STATUS.RUNNING) {
-    const updateLog = async () => {
-      try {
-        const res = await api.logs.get(log.id)
-        if (res && selectedLog.value && selectedLog.value.id === log.id) {
-          // 只更新需要变动的字段
-          selectedLog.value.duration = res.duration
-          // 同步更新列表中的数据
-          const listItem = logs.value.find(l => l.id === log.id)
-          if (listItem) {
-            listItem.duration = res.duration
-          }
-          // 如果状态变了，更新状态并停止轮询
-          if (res.status !== TASK_STATUS.RUNNING) {
-            selectedLog.value.status = res.status
-            selectedLog.value.end_time = res.end_time
-            if (listItem) {
-              listItem.status = res.status
-              listItem.end_time = res.end_time
-            }
-            if (durationTimer) {
-              clearInterval(durationTimer)
-              durationTimer = null
-            }
-          }
-        }
-      } catch { /* ignore */ }
-    }
-    durationTimer = setInterval(updateLog, 3000)
-  }
-
   wsContent.value = ''
   isWsLoading.value = true
 
-  if (log.status !== TASK_STATUS.RUNNING) {
-    try {
-      const res = await api.logs.get(log.id)
-      wsContent.value = res.output
-    } catch {
-      toast.error('加载详情失败')
-    } finally {
-      isWsLoading.value = false
+  // 校验最新的真实数据与状态（防止前端状态滞后导致已完成任务误连 SSE）
+  let currentLog = log
+  try {
+    const detail = await api.logs.get(log.id)
+    if (detail) {
+      currentLog = {
+        ...log,
+        status: detail.status,
+        duration: detail.duration ?? log.duration,
+        end_time: detail.end_time ?? log.end_time
+      } as TaskLog
+      selectedLog.value = currentLog
+      
+      // 同步更新列表项
+      const listItem = logs.value.find(l => l.id === log.id)
+      if (listItem) {
+        listItem.status = currentLog.status
+        listItem.duration = currentLog.duration
+        listItem.end_time = currentLog.end_time
+      }
+
+      if (currentLog.status !== TASK_STATUS.RUNNING) {
+        wsContent.value = detail.output || ''
+        isWsLoading.value = false
+        return
+      }
     }
-    return
+  } catch (e) {
+    if (log.status !== TASK_STATUS.RUNNING) {
+      toast.error('加载详情失败')
+      isWsLoading.value = false
+      return
+    }
   }
 
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  // 确认仍为运行中状态，启动定时器本地更新耗时
+  const updateLog = () => {
+    if (selectedLog.value && selectedLog.value.id === currentLog.id && selectedLog.value.status === TASK_STATUS.RUNNING) {
+      if (selectedLog.value.start_time) {
+        const startMs = new Date(selectedLog.value.start_time).getTime()
+        if (!isNaN(startMs)) {
+          selectedLog.value.duration = Date.now() - startMs
+        } else {
+          selectedLog.value.duration += 1000
+        }
+      } else {
+        selectedLog.value.duration += 1000
+      }
+      
+      const listItem = logs.value.find(l => l.id === currentLog.id)
+      if (listItem) {
+        listItem.duration = selectedLog.value.duration
+      }
+    }
+  }
+  durationTimer = setInterval(updateLog, 1000)
+
+  wsContent.value = 'raw:'
+  
+  const protocol = window.location.protocol
   const host = window.location.host
   const baseUrl = (window as any).__BASE_URL__ || ''
   const apiVersion = (window as any).__API_VERSION__ || '/api/v1'
-  const wsUrl = `${protocol}//${host}${baseUrl}${apiVersion}/logs/ws?log_id=${log.id}`
+  const sseUrl = `${protocol}//${host}${baseUrl}${apiVersion}/logs/sse?log_id=${currentLog.id}`
 
-  logSocket = new WebSocket(wsUrl)
+  logSource = new EventSource(sseUrl)
 
-  logSocket.onopen = () => {
+  logSource.onopen = () => {
     isWsLoading.value = false
-    console.log('[LogWS] Connection opened')
+    console.log('[LogSSE] Connection opened')
   }
 
-  logSocket.onmessage = (event) => {
+  logSource.onmessage = (event) => {
     isWsLoading.value = false
-    wsContent.value += event.data
-    // 自动滚动到底部
-    nextTick(() => {
-      const pre = document.querySelector('.log-pre')
-      if (pre) pre.scrollTop = pre.scrollHeight
-    })
+    let parsed: any = null
+    let text = ''
+    try {
+      parsed = JSON.parse(event.data)
+      text = parsed.text || ''
+    } catch {
+      text = event.data
+    }
+
+    if (text) {
+      logBuffer.push(text)
+    }
+
+    if (!logFlushInterval) {
+      logFlushInterval = setInterval(() => {
+        if (logBuffer.length > 0) {
+          wsContent.value += logBuffer.join('')
+          logBuffer = []
+          
+          // 自动滚动到底部
+          nextTick(() => {
+            const pre = document.querySelector('.log-pre')
+            if (pre) pre.scrollTop = pre.scrollHeight
+          })
+        }
+      }, 150)
+    }
+
+    // 收到 finish 结构帧，流即状态：直接利用帧内最终元数据闭环
+    if (parsed && parsed.type === 'finish') {
+      if (durationTimer) {
+        clearInterval(durationTimer)
+        durationTimer = null
+      }
+      cleanupLogSocket()
+      
+      const newStatus = parsed.status || 'success'
+      const newDuration = parsed.duration !== undefined ? parsed.duration : selectedLog.value?.duration || 0
+      const newEndTime = parsed.end_time || selectedLog.value?.end_time || '-'
+
+      if (selectedLog.value) {
+        selectedLog.value = {
+          ...selectedLog.value,
+          status: newStatus,
+          duration: newDuration,
+          end_time: newEndTime
+        } as TaskLog
+      }
+
+      // 同步更新列表中的状态与耗时
+      const listItem = logs.value.find(l => l.id === currentLog.id)
+      if (listItem) {
+        listItem.status = newStatus
+        listItem.duration = newDuration
+        listItem.end_time = newEndTime
+      }
+
+      loadLogs()
+    }
   }
 
-  logSocket.onerror = (e) => {
+  logSource.onerror = async (e) => {
     isWsLoading.value = false
-    console.error('[LogWS] Connection error', e)
-    toast.error('日志连接异常')
-  }
-
-  logSocket.onclose = (e) => {
-    isWsLoading.value = false
-    console.log('[LogWS] Connection closed', e.code, e.reason)
+    console.log('[LogSSE] Connection error/closed', e)
+    cleanupLogSocket()
+    try {
+      const detail = await api.logs.get(currentLog.id)
+      if (detail && detail.status !== TASK_STATUS.RUNNING && selectedLog.value) {
+        if (durationTimer) {
+          clearInterval(durationTimer)
+          durationTimer = null
+        }
+        selectedLog.value = {
+          ...selectedLog.value,
+          status: detail.status,
+          duration: detail.duration,
+          end_time: detail.end_time
+        } as TaskLog
+        loadLogs()
+      }
+    } catch {}
   }
 }
 
@@ -216,14 +332,7 @@ function closeDetail() {
     clearInterval(durationTimer)
     durationTimer = null
   }
-  if (logSocket) {
-    logSocket.onopen = null
-    logSocket.onmessage = null
-    logSocket.onerror = null
-    logSocket.onclose = null
-    logSocket.close()
-    logSocket = null
-  }
+  cleanupLogSocket()
   selectedLog.value = null
   wsContent.value = ''
 }
@@ -271,8 +380,9 @@ async function handleDeleteLog() {
     await api.logs.delete(deleteLogId.value)
     toast.success('该日志已删除')
 
-    // 如果当前选中的是这条日志，关闭详情页
+    // 如果当前选中的是这条日志，关闭详情页及全屏弹窗
     if (selectedLog.value?.id === deleteLogId.value) {
+      showFullscreen.value = false
       closeDetail()
     }
 
@@ -283,24 +393,7 @@ async function handleDeleteLog() {
   }
 }
 
-function getStatusBadgeClass(status: string) {
-  switch (status) {
-    case TASK_STATUS.SUCCESS:
-      return 'bg-green-500/10 text-green-600 border-green-500/20 dark:bg-green-500/20 dark:text-green-400 dark:border-green-500/30 shadow-[0_0_8px_-2px_rgba(34,197,94,0.15)]'
-    case TASK_STATUS.FAILED:
-      return 'bg-red-500/10 text-red-600 border-red-500/20 dark:bg-red-500/20 dark:text-red-400 dark:border-red-500/30'
-    case TASK_STATUS.RUNNING:
-      return 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30'
-    case TASK_STATUS.PENDING:
-      return 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30'
-    case TASK_STATUS.TIMEOUT:
-      return 'bg-orange-500/10 text-orange-600 border-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30'
-    case TASK_STATUS.CANCELLED:
-      return 'bg-muted/50 text-muted-foreground border-muted-foreground/10'
-    default:
-      return 'bg-secondary text-secondary-foreground border-transparent'
-  }
-}
+
 
 function getTaskTypeTitle(type: string) {
   return type === TASK_TYPE.REPO ? '仓库同步' : '普通任务'
@@ -348,11 +441,11 @@ watch(() => route.query, (newQuery) => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">所有状态</SelectItem>
-              <SelectItem value="running">正在运行</SelectItem>
-              <SelectItem value="success">成功</SelectItem>
-              <SelectItem value="failed">失败</SelectItem>
-              <SelectItem value="timeout">超时</SelectItem>
-              <SelectItem value="cancelled">取消</SelectItem>
+              <SelectItem :value="TASK_STATUS.RUNNING">{{ TASK_STATUS_TEXT[TASK_STATUS.RUNNING] }}</SelectItem>
+              <SelectItem :value="TASK_STATUS.SUCCESS">{{ TASK_STATUS_TEXT[TASK_STATUS.SUCCESS] }}</SelectItem>
+              <SelectItem :value="TASK_STATUS.FAILED">{{ TASK_STATUS_TEXT[TASK_STATUS.FAILED] }}</SelectItem>
+              <SelectItem :value="TASK_STATUS.TIMEOUT">{{ TASK_STATUS_TEXT[TASK_STATUS.TIMEOUT] }}</SelectItem>
+              <SelectItem :value="TASK_STATUS.CANCELLED">{{ TASK_STATUS_TEXT[TASK_STATUS.CANCELLED] }}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -367,33 +460,32 @@ watch(() => route.query, (newQuery) => {
       </div>
     </div>
 
-    <div class="flex flex-col lg:flex-row gap-4" style="height: 520px;">
+    <div class="flex flex-col lg:flex-row gap-4 lg:h-[calc(100vh-190px)] lg:min-h-[480px]">
       <!-- 日志列表 -->
-      <div class="flex-1 min-w-0 rounded-lg border bg-card overflow-hidden flex flex-col">
+      <div class="flex-1 min-w-0 rounded-lg border bg-card overflow-hidden flex-col"
+        :class="selectedLog ? 'hidden lg:flex' : 'flex'">
         <!-- 小屏表头 -->
         <div
-          class="flex sm:hidden items-center gap-2 px-3 py-2 border-b bg-muted/20 text-xs text-muted-foreground font-medium">
-          <span class="w-14 shrink-0">序号</span>
+          class="flex sm:hidden items-center gap-2 px-3 h-[28px] border-b bg-muted/20 text-xs text-muted-foreground font-medium">
+          <span class="w-14 shrink-0 pl-1">序号</span>
           <span class="w-8 shrink-0 text-center">类型</span>
           <span class="flex-1 min-w-0">任务名称</span>
-          <span class="w-8 shrink-0 text-center">状态</span>
           <span class="w-16 text-right shrink-0">耗时</span>
           <span class="w-8 text-center shrink-0"></span>
         </div>
         <!-- 大屏表头 -->
         <div
-          class="hidden sm:flex items-center gap-4 px-4 h-11 border-b bg-muted/20 text-sm text-muted-foreground font-medium">
-          <span class="w-16 shrink-0">序号</span>
+          class="hidden sm:flex items-center gap-4 px-4 h-[28px] border-b bg-muted/20 text-xs text-muted-foreground font-medium">
+          <span class="w-16 shrink-0 pl-1">序号</span>
           <span class="w-12 shrink-0 text-center">类型</span>
           <span class="w-36 shrink-0">任务名称</span>
           <span class="flex-1 min-w-0">命令</span>
-          <span class="w-12 shrink-0 text-center">状态</span>
           <span class="w-16 text-right shrink-0">耗时</span>
           <span v-if="!selectedLog" class="w-40 text-right shrink-0 hidden md:block">执行时间</span>
           <span class="w-10 shrink-0 text-center"></span>
         </div>
         <!-- 列表 -->
-        <div class="divide-y flex-1">
+        <div class="divide-y flex-1 overflow-y-auto custom-scrollbar">
           <div v-if="logs.length === 0" class="text-sm text-muted-foreground text-center py-8">
             暂无日志
           </div>
@@ -403,39 +495,13 @@ watch(() => route.query, (newQuery) => {
           ]" @click="selectLog(log)">
             <!-- 小屏行 -->
             <div class="flex sm:hidden items-center gap-2 px-3 py-2">
-              <span class="w-14 shrink-0 text-muted-foreground text-xs">#{{ total - (currentPage - 1) * pageSize - index
-                }}</span>
+              <StatusDot :state="log.status" />
+              <span class="w-14 shrink-0 text-muted-foreground text-[10px] tabular-nums">#{{ total - (currentPage - 1) * pageSize - index }}</span>
               <span class="w-8 shrink-0 flex justify-center" :title="getTaskTypeTitle(log.task_type || 'task')">
                 <GitBranch v-if="log.task_type === TASK_TYPE.REPO" class="h-3.5 w-3.5 text-primary" />
                 <Terminal v-else class="h-3.5 w-3.5 text-primary" />
               </span>
               <span class="flex-1 min-w-0 font-medium truncate text-xs">{{ log.task_name }}</span>
-              <span class="w-8 flex justify-center shrink-0">
-                <div v-if="log.status === TASK_STATUS.SUCCESS"
-                  class="h-5 w-5 rounded-full bg-green-500/10 flex items-center justify-center">
-                  <Check class="h-3 w-3 text-green-500 stroke-[3]" />
-                </div>
-                <div v-else-if="log.status === TASK_STATUS.FAILED"
-                  class="h-5 w-5 rounded-full bg-red-500/10 flex items-center justify-center">
-                  <X class="h-3 w-3 text-red-500 stroke-[3]" />
-                </div>
-                <div v-else-if="log.status === TASK_STATUS.RUNNING"
-                  class="h-5 w-5 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                  <ZapIcon class="h-3 w-3 text-yellow-500 fill-yellow-500 animate-pulse" />
-                </div>
-                <div v-else-if="log.status === TASK_STATUS.PENDING"
-                  class="h-5 w-5 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                  <Clock class="h-3 w-3 text-yellow-500" />
-                </div>
-                <div v-else-if="log.status === TASK_STATUS.TIMEOUT"
-                  class="h-5 w-5 rounded-full bg-orange-500/10 flex items-center justify-center">
-                  <AlertCircle class="h-3 w-3 text-orange-500" />
-                </div>
-                <div v-else-if="log.status === TASK_STATUS.CANCELLED"
-                  class="h-5 w-5 rounded-full bg-muted flex items-center justify-center">
-                  <Ban class="h-3 w-3 text-muted-foreground" />
-                </div>
-              </span>
               <span class="w-16 text-right shrink-0 text-muted-foreground text-xs whitespace-nowrap">{{ formatDuration(log.duration)
                 }}</span>
               <span class="w-8 shrink-0 flex justify-center opacity-100">
@@ -447,43 +513,17 @@ watch(() => route.query, (newQuery) => {
               </span>
             </div>
             <!-- 大屏行 -->
-            <div class="hidden sm:flex items-center gap-4 px-4 py-2">
-              <span class="w-16 shrink-0 text-muted-foreground text-sm">#{{ total - (currentPage - 1) * pageSize - index
-                }}</span>
+            <div class="hidden sm:flex items-center gap-2 px-4 py-2">
+              <StatusDot :state="log.status" />
+              <span class="w-16 shrink-0 text-muted-foreground text-[11px] tabular-nums">#{{ total - (currentPage - 1) * pageSize - index }}</span>
               <span class="w-10 shrink-0 flex justify-center" :title="getTaskTypeTitle(log.task_type || 'task')">
                 <GitBranch v-if="log.task_type === TASK_TYPE.REPO" class="h-4 w-4 text-primary" />
                 <Terminal v-else class="h-4 w-4 text-primary" />
               </span>
               <span class="w-36 shrink-0 font-medium truncate text-sm">{{ log.task_name }}</span>
               <code class="flex-1 min-w-0 text-muted-foreground truncate text-xs bg-muted/40 px-2 py-1 rounded">
-                <TextOverflow :text="log.command" title="执行命令" />
+                <TextOverflow :text="log.command" title="执行命令" disable-dialog />
               </code>
-              <span class="w-12 flex justify-center shrink-0">
-                <div v-if="log.status === TASK_STATUS.SUCCESS"
-                  class="h-6 w-6 rounded-full bg-green-500/10 flex items-center justify-center">
-                  <Check class="h-3.5 w-3.5 text-green-500 stroke-[3]" />
-                </div>
-                <div v-else-if="log.status === TASK_STATUS.FAILED"
-                  class="h-6 w-6 rounded-full bg-red-500/10 flex items-center justify-center">
-                  <X class="h-3.5 w-3.5 text-red-500 stroke-[3]" />
-                </div>
-                <div v-else-if="log.status === TASK_STATUS.RUNNING"
-                  class="h-6 w-6 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                  <ZapIcon class="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 animate-pulse" />
-                </div>
-                <div v-else-if="log.status === TASK_STATUS.PENDING"
-                  class="h-6 w-6 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                  <Clock class="h-3.5 w-3.5 text-yellow-500" />
-                </div>
-                <div v-else-if="log.status === TASK_STATUS.TIMEOUT"
-                  class="h-6 w-6 rounded-full bg-orange-500/10 flex items-center justify-center">
-                  <AlertCircle class="h-3.5 w-3.5 text-orange-500" />
-                </div>
-                <div v-else-if="log.status === TASK_STATUS.CANCELLED"
-                  class="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
-                  <Ban class="h-3.5 w-3.5 text-muted-foreground" />
-                </div>
-              </span>
               <span class="w-16 text-right shrink-0 text-muted-foreground text-xs">{{ formatDuration(log.duration)
                 }}</span>
               <span v-if="!selectedLog"
@@ -506,165 +546,49 @@ watch(() => route.query, (newQuery) => {
       <!-- 日志详情侧边栏 -->
       <div v-if="selectedLog"
         class="w-full lg:w-[480px] rounded-lg border bg-card flex flex-col overflow-hidden shrink-0">
-        <div class="flex items-center justify-between px-4 h-11 border-b bg-muted/20">
-          <div class="flex items-center gap-2">
-            <span class="text-sm font-normal text-muted-foreground">日志详情</span>
-            <Button v-if="selectedLog.status === TASK_STATUS.RUNNING" variant="destructive" size="sm"
-              class="h-6 px-2 text-[10px]" :disabled="isStopping" @click="stopTask">
-              {{ isStopping ? '停止中...' : '停止任务' }}
-            </Button>
-          </div>
-          <div class="flex items-center gap-1">
-            <Button variant="ghost" size="icon" class="h-7 w-7 text-muted-foreground hover:text-destructive"
-              title="删除该日志" @click="confirmDeleteLog(selectedLog.id)">
-              <Trash2 class="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" class="h-7 w-7" @click="closeDetail" title="关闭">
-              <X class="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
-        <div class="px-4 py-3 border-b space-y-2 text-sm text-foreground/80">
-          <div class="flex justify-between items-center h-6">
-            <span class="text-sm font-normal text-muted-foreground">任务名称</span>
-            <span class="text-sm font-normal text-muted-foreground">{{ selectedLog.task_name }}</span>
-          </div>
-          <div class="flex justify-between items-center h-8">
-            <span class="text-sm font-normal text-muted-foreground">状态</span>
-            <Badge variant="outline" :class="[
-              'capitalize px-3 py-1 font-normal rounded-full border shadow-sm transition-all duration-300 ring-4 ring-transparent hover:ring-primary/5',
-              getStatusBadgeClass(selectedLog.status)
-            ]">
-              <div class="flex items-center gap-1.5">
-                <CheckCircle2 v-if="selectedLog.status === TASK_STATUS.SUCCESS" class="h-3.5 w-3.5 fill-green-500/20" />
-                <XCircle v-else-if="selectedLog.status === TASK_STATUS.FAILED" class="h-3.5 w-3.5 fill-red-500/20" />
-                <ZapIcon v-else-if="selectedLog.status === TASK_STATUS.RUNNING"
-                  class="h-3.5 w-3.5 fill-current animate-pulse text-blue-500" />
-                <Clock v-else-if="selectedLog.status === TASK_STATUS.PENDING" class="h-3.5 w-3.5 fill-amber-500/20" />
-                <AlertCircle v-else-if="selectedLog.status === TASK_STATUS.TIMEOUT" class="h-3.5 w-3.5 fill-orange-500/20" />
-                <Ban v-else-if="selectedLog.status === TASK_STATUS.CANCELLED" class="h-3.5 w-3.5" />
-                <span class="text-[10px] font-normal uppercase">{{ selectedLog.status === TASK_STATUS.SUCCESS ? 'SUCCESS' : selectedLog.status }}</span>
-              </div>
-            </Badge>
-          </div>
-          <div class="flex justify-between items-center h-6">
-            <span class="text-sm font-normal text-muted-foreground">耗时</span>
-            <span class="text-sm font-normal text-muted-foreground">{{ formatDuration(selectedLog.duration) }}</span>
-          </div>
-          <div class="flex justify-between items-center h-6">
-            <span class="text-sm font-normal text-muted-foreground">开始时间</span>
-            <span class="text-sm font-normal text-muted-foreground">{{ selectedLog.start_time || '-' }}</span>
-          </div>
-          <div class="flex justify-between items-center h-6">
-            <span class="text-sm font-normal text-muted-foreground">结束时间</span>
-            <span class="text-sm font-normal text-muted-foreground">{{ selectedLog.end_time || '-' }}</span>
-          </div>
-          <div class="pt-1.5">
-            <span class="text-sm font-normal text-muted-foreground block mb-1">执行命令</span>
-            <code
-              class="block font-mono bg-muted/40 px-3 py-2 rounded text-xs break-all border border-muted-foreground/10">
-              {{ selectedLog.command }}
-            </code>
-          </div>
-        </div>
-        <div class="flex-1 flex flex-col overflow-hidden">
-          <div v-if="selectedLog.error" class="px-4 py-3 border-b bg-red-500/5 space-y-2 text-sm">
-            <div class="flex items-center gap-2 text-red-500 font-medium">
-              <X class="h-4 w-4" />
-              <span class="font-normal">系统错误</span>
-            </div>
-            <code class="block font-mono bg-red-500/10 text-red-600 px-2 py-1 rounded text-xs break-all">
-              {{ selectedLog.error }}
-            </code>
-          </div>
-          <div class="px-4 py-2.5 text-sm text-muted-foreground border-b bg-muted/20 flex items-center justify-between">
-            <span class="text-sm font-normal text-muted-foreground">日志输出</span>
-            <Button variant="ghost" size="icon" class="h-6 w-6" @click="showFullscreen = true" title="全屏查看">
-              <Maximize2 class="h-3.5 w-3.5" />
-            </Button>
-          </div>
-          <div class="flex-1 overflow-auto bg-black/5 dark:bg-white/5 min-h-[240px] flex flex-col">
-            <template v-if="isWsLoading">
-              <div class="flex-1 flex flex-col items-center justify-center p-8 select-none">
-                <div class="relative w-12 h-12 mb-4">
-                  <div class="absolute inset-0 rounded-full border-2 border-primary/10"></div>
-                  <div class="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
-                </div>
-                <span class="text-sm text-muted-foreground font-medium animate-pulse">正在获取日志内容</span>
-              </div>
-            </template>
-            <template v-else-if="!decompressedOutput.trim()">
-              <div class="flex-1 flex flex-col items-center justify-center p-8 select-none">
-                <div class="w-12 h-12 rounded-2xl bg-muted/30 flex items-center justify-center mb-4 border border-muted-foreground/5">
-                  <AlertCircle class="h-6 w-6 text-muted-foreground/40" />
-                </div>
-                <span class="text-sm text-muted-foreground font-medium">无输出内容</span>
-                <p class="text-[11px] text-muted-foreground/50 mt-1">此任务执行期间未产生标准输出日志</p>
-              </div>
-            </template>
-            <template v-else>
-              <div class="p-4 text-xs font-mono whitespace-pre-wrap break-all log-pre leading-relaxed">
-                <Ansi>{{ decompressedOutput }}</Ansi>
-              </div>
-            </template>
-          </div>
-        </div>
+        <LogDetailCard 
+          :log="selectedLog" 
+          :content="decompressedOutput" 
+          :loading="isWsLoading" 
+          :is-stopping="isStopping"
+          @close="closeDetail"
+          @stop="stopTask"
+          @delete="confirmDeleteLog"
+          @maximize="showFullscreen = true"
+        />
       </div>
     </div>
 
     <!-- 全屏查看日志 -->
-    <LogViewer v-model:open="showFullscreen" :title="`日志输出 - ${selectedLog?.task_name || ''}`"
-      :content="decompressedOutput" :status="selectedLog?.status" />
+    <LogViewer v-model:open="showFullscreen"
+      :log="selectedLog"
+      :is-stopping="isStopping"
+      :content="decompressedOutput"
+      @stop="stopTask"
+      @delete="confirmDeleteLog" />
 
     <!-- 清空日志确认弹窗 -->
-    <AlertDialog :open="showClearDialog" @update:open="showClearDialog = $event">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>确认清空日志?</AlertDialogTitle>
-          <AlertDialogDescription>
-            此操作将永久删除{{ filterTaskId ? '当前任务的' : '所有' }}任务历史记录，包括控制台输出，并且无法撤销。
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>取消</AlertDialogCancel>
-          <AlertDialogAction @click="handleClearLogs"
-            class="bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:text-white dark:hover:bg-red-700">
-            清空
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <BaihuDialog v-model:open="showClearDialog" title="确认清空日志?">
+      <div class="text-sm text-muted-foreground leading-relaxed">
+        此操作将永久删除{{ filterTaskId ? '当前任务的' : '所有' }}任务历史记录，包括控制台输出，并且无法撤销。
+        <p class="mt-2 text-destructive font-medium">⚠️ 风险：该操作不可撤销。</p>
+      </div>
+      <template #footer>
+        <Button variant="ghost" @click="showClearDialog = false">取消</Button>
+        <Button variant="destructive" class="shadow-lg shadow-destructive/20" @click="handleClearLogs">立即清空</Button>
+      </template>
+    </BaihuDialog>
 
     <!-- 单条删除确认弹窗 -->
-    <AlertDialog :open="showDeleteDialog" @update:open="showDeleteDialog = $event">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>确认删除这条日志?</AlertDialogTitle>
-          <AlertDialogDescription>
-            此操作将永久删除该次运行记录和日志文件，且不可恢复。
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>取消</AlertDialogCancel>
-          <AlertDialogAction @click="handleDeleteLog"
-            class="bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:text-white dark:hover:bg-red-700">
-            删除
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <BaihuDialog v-model:open="showDeleteDialog" title="确认删除这条日志?">
+      <div class="text-sm text-muted-foreground leading-relaxed">
+        此操作将永久删除该次运行记录和日志文件，且不可恢复。
+      </div>
+      <template #footer>
+        <Button variant="ghost" @click="showDeleteDialog = false">取消</Button>
+        <Button variant="destructive" class="shadow-lg shadow-destructive/20" @click="handleDeleteLog">确认删除</Button>
+      </template>
+    </BaihuDialog>
   </div>
 </template>
 
-<style scoped>
-:deep(.log-pre code) {
-  display: block;
-  padding: 0 !important;
-  margin: 0 !important;
-  background: transparent !important;
-}
-
-:deep(.log-pre span) {
-  vertical-align: top;
-}
-</style>

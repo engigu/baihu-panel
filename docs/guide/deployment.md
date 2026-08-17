@@ -129,9 +129,9 @@ volumes:
 
 ## 自动更新 Docker 镜像
 
-如果您希望白虎面板能够自动拉取最新镜像并无感更新，推荐使用 **Watchtower**。Watchtower 会定期检查被监控容器的基础镜像，当发现有新版本推送时，它会自动拉取新镜像、使用与原容器完全相同的配置重启容器。
+如果您希望baihu-panel能够自动拉取最新镜像并无感更新，推荐使用 **Watchtower**。Watchtower 会定期检查被监控容器的基础镜像，当发现有新版本推送时，它会自动拉取新镜像、使用与原容器完全相同的配置重启容器。
 
-由于白虎面板采用持久化挂载（数据和环境都在外部），因此自动更新不会造成任何数据丢失。
+由于baihu-panel采用持久化挂载（数据和环境都在外部），因此自动更新不会造成任何数据丢失。
 
 ### 方式一：独立一行命令运行 Watchtower（推荐）
 
@@ -179,3 +179,66 @@ services:
 ```
 
 修改完成后，执行 `docker compose up -d` 生效即可。
+
+---
+
+## 方式四：二进制单文件运行 (Linux / Windows)
+
+除了 Docker 容器化部署外，白虎面板也支持以原生单文件二进制的方式直接在宿主机（Linux 或 Windows）运行。
+
+### 🐧 Linux 平台部署
+
+**1. 安装前置依赖 `mise`**
+
+单文件直接运行依赖宿主机系统环境，请务必先安装 [mise](https://mise.jdx.dev/getting-started.html) 供任务调度及多语言环境管理使用：
+
+```bash
+curl https://mise.run | sh
+export PATH="~/.local/share/mise/bin:~/.local/share/mise/shims:$PATH"
+```
+
+**2. 运行面板**
+
+从 GitHub Release 中下载对应架构的 `.tar.gz` 包（例如 `baihu-linux-amd64.tar.gz`），然后使用以下命令解压并运行：
+
+```bash
+tar -xzvf baihu-linux-amd64.tar.gz
+chmod +x baihu-linux-amd64
+./baihu-linux-amd64 server
+```
+
+---
+
+### 🪟 Windows 平台部署
+
+#### 方式 A：GUI 安装向导（推荐 🌟）
+
+1. 从 GitHub Release 页面下载 `BaihuPanel-Setup-vX.X.X-windows-amd64.exe` 安装包。
+2. 双击安装包按照向导提示进行安装，勾选创建“桌面快捷方式”与“开机启动托盘程序”。
+3. 安装完成后会自动启动任务栏托盘程序（右下角图标），右键托盘图标可进行：
+   - 🌐 **打开面板**：在默认浏览器中打开 `http://localhost:8052`
+   - 🔄 **重启服务**：一键重启白虎面板后台服务
+   - 📌 **开机自启**：随时开关系统自启策略
+   - 🚪 **退出**：完全停止面板服务并退出托盘
+
+#### 方式 B：解压绿化运行（Zip）
+
+从 GitHub Release 下载 Windows 压缩包（`baihu-windows-amd64.zip`），解压后运行：
+- 双击运行 `baihu-tray.exe`（后台静默托盘守护运行）。
+- 或在 PowerShell 中运行命令行端：
+  ```powershell
+  .\baihu.exe server
+  ```
+
+---
+
+**前置依赖说明（Windows 平台）：**
+- **PowerShell 7+ (`pwsh.exe`)**：面板在 Windows 系统下执行任务及依赖检测需要 `pwsh.exe`（可通过 `winget install Microsoft.PowerShell` 安装）。
+- **`mise` 管理工具**（可选，用于多语言动态环境）：可通过 `winget install jdx.mise` 安装。
+
+### 访问面板
+
+启动成功后，使用浏览器访问：`http://localhost:8052`
+* **默认账号**：用户名 `admin`，初始随机密码会在控制台首次启动日志中打印，登录后请第一时间修改密码。
+
+

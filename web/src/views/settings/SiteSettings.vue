@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { api, type SiteSettings } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
+import { copyToClipboard as copyTextToClipboard } from '@/utils/clipboard'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { RefreshCw, Copy, AlertTriangle, ExternalLink, Info, Clock } from 'lucide-vue-next'
@@ -36,7 +37,9 @@ const form = ref<SiteSettings>({
   push_log_days: '15',
   push_log_max_count: '5000',
   login_log_days: '30',
-  login_log_max_count: '1000'
+  login_log_max_count: '1000',
+  scheduler_log_days: '30',
+  scheduler_log_max_count: '10000'
 })
 const loading = ref(false)
 const showOpenapiConfirmDialog = ref(false)
@@ -72,9 +75,12 @@ async function saveSettings() {
       push_log_days: String(form.value.push_log_days || '15'),
       push_log_max_count: String(form.value.push_log_max_count || '5000'),
       login_log_days: String(form.value.login_log_days || '30'),
-      login_log_max_count: String(form.value.login_log_max_count || '1000')
+      login_log_max_count: String(form.value.login_log_max_count || '1000'),
+      scheduler_log_days: String(form.value.scheduler_log_days || '30'),
+      scheduler_log_max_count: String(form.value.scheduler_log_max_count || '10000')
     })
     await refreshSettings()
+    await loadSettings()
     toast.success('保存成功')
   } catch {
     toast.error('保存失败')
@@ -102,10 +108,10 @@ async function generateOpenapiToken() {
 
 async function copyOpenapiToken() {
   if (!form.value.openapi_token) return
-  try {
-    await navigator.clipboard.writeText(form.value.openapi_token)
+  const success = await copyTextToClipboard(form.value.openapi_token)
+  if (success) {
     toast.success('Token 已复制到剪贴板')
-  } catch {
+  } else {
     toast.error('复制失败，请手动复制')
   }
 }
@@ -114,93 +120,106 @@ function openSwaggerDocs() {
   window.open('https://engigu.github.io/baihu-panel/guide/api.html', '_blank')
 }
 
-
 onMounted(loadSettings)
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-      <Label class="sm:text-right">站点标题</Label>
-      <Input v-model="form.title" placeholder="白虎面板" class="sm:col-span-3" />
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-      <Label class="sm:text-right">站点标语</Label>
-      <Input v-model="form.subtitle" placeholder="轻量级定时任务管理系统" class="sm:col-span-3" />
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-      <Label class="sm:text-right">站点图标</Label>
-      <div class="sm:col-span-3 flex items-center gap-2">
-        <Input v-model="form.icon" placeholder="<svg>...</svg>" class="flex-1 font-mono text-xs" />
-        <div v-if="iconPreview"
-          class="p-1.5 border rounded bg-white dark:bg-white w-8 h-8 flex items-center justify-center shrink-0 [&>svg]:w-5 [&>svg]:h-5"
-          v-html="iconPreview" />
+  <div class="space-y-6">
+    <!-- 站点基础参数 -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="space-y-1.5">
+        <Label class="text-xs font-medium text-foreground">站点标题</Label>
+        <Input v-model="form.title" placeholder="白虎面板" class="h-9" />
+      </div>
+      <div class="space-y-1.5">
+        <Label class="text-xs font-medium text-foreground">站点标语</Label>
+        <Input v-model="form.subtitle" placeholder="轻量级定时任务管理系统" class="h-9" />
       </div>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-      <Label class="sm:text-right text-muted-foreground whitespace-nowrap sm:pt-0 pt-1">分页/Cookie</Label>
-      <div class="sm:col-span-3 grid grid-cols-2 gap-0">
-        <div class="flex items-center gap-1.5 pr-4">
-          <Input v-model="form.page_size" type="number" class="w-full h-8 text-xs sm:h-9 sm:text-sm" />
-          <span class="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">条/页</span>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="space-y-1.5">
+        <Label class="text-xs font-medium text-foreground">站点图标 (SVG 代码)</Label>
+        <div class="flex items-center gap-2">
+          <Input v-model="form.icon" placeholder="<svg>...</svg>" class="flex-1 font-mono text-xs h-9" />
+          <div v-if="iconPreview"
+            class="p-1.5 border rounded bg-white dark:bg-white w-9 h-9 flex items-center justify-center shrink-0 [&>svg]:w-5 [&>svg]:h-5"
+            v-html="iconPreview" />
         </div>
-        <div class="flex items-center gap-1.5 border-l pl-4 border-border/50">
-          <Input v-model="form.cookie_days" type="number" class="w-full h-8 text-xs sm:h-9 sm:text-sm" />
-          <span class="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">天过期</span>
+      </div>
+      <div class="space-y-1.5">
+        <Label class="text-xs font-medium text-foreground">系统常规配置</Label>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="relative">
+            <Input v-model="form.page_size" type="number" class="h-9 pr-12 text-sm" />
+            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">条/页</span>
+          </div>
+          <div class="relative">
+            <Input v-model="form.cookie_days" type="number" class="h-9 pr-14 text-sm" />
+            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">天过期</span>
+          </div>
         </div>
       </div>
     </div>
 
     <div class="pt-6 border-t mt-6">
-      <h3 class="text-lg font-medium text-foreground mb-4">日志清理策略</h3>
-      <p class="text-sm text-muted-foreground mb-4">自动清理超过指定天数或数量的日志记录，保持系统性能。</p>
+      <h3 class="text-lg font-medium text-foreground mb-1">日志清理策略</h3>
+      <p class="text-xs text-muted-foreground mb-4">自动清理超过指定天数或数量的日志记录，保持系统性能。</p>
 
-      <div class="space-y-5 sm:space-y-4">
-        <div class="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-          <Label class="sm:text-right text-muted-foreground whitespace-nowrap sm:pt-0 pt-1">系统通知</Label>
-          <div class="sm:col-span-3 grid grid-cols-2 gap-0">
-            <div class="flex items-center gap-1.5 pr-4">
-              <Input v-model="form.system_notice_days" type="number" class="w-full h-8 text-xs sm:h-9 sm:text-sm"
-                min="0" />
-              <span class="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">天清理</span>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="space-y-1.5">
+          <Label class="text-xs font-medium text-foreground">系统通知清理</Label>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="relative">
+              <Input v-model="form.system_notice_days" type="number" class="h-9 pr-14 text-sm" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">天清理</span>
             </div>
-            <div class="flex items-center gap-1.5 border-l pl-4 border-border/50">
-              <span class="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">保留</span>
-              <Input v-model="form.system_notice_max_count" type="number" class="w-full h-8 text-xs sm:h-9 sm:text-sm"
-                min="0" />
-              <span class="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">条</span>
+            <div class="relative">
+              <Input v-model="form.system_notice_max_count" type="number" class="h-9 pr-14 text-sm" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">条保留</span>
             </div>
           </div>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-          <Label class="sm:text-right text-muted-foreground whitespace-nowrap sm:pt-0 pt-1">推送日志</Label>
-          <div class="sm:col-span-3 grid grid-cols-2 gap-0">
-            <div class="flex items-center gap-1.5 pr-4">
-              <Input v-model="form.push_log_days" type="number" class="w-full h-8 text-xs sm:h-9 sm:text-sm" min="0" />
-              <span class="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">天清理</span>
+        <div class="space-y-1.5">
+          <Label class="text-xs font-medium text-foreground">推送日志清理</Label>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="relative">
+              <Input v-model="form.push_log_days" type="number" class="h-9 pr-14 text-sm" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">天清理</span>
             </div>
-            <div class="flex items-center gap-1.5 border-l pl-4 border-border/50">
-              <span class="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">保留</span>
-              <Input v-model="form.push_log_max_count" type="number" class="w-full h-8 text-xs sm:h-9 sm:text-sm"
-                min="0" />
-              <span class="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">条</span>
+            <div class="relative">
+              <Input v-model="form.push_log_max_count" type="number" class="h-9 pr-14 text-sm" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">条保留</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+        <div class="space-y-1.5">
+          <Label class="text-xs font-medium text-foreground">登录日志清理</Label>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="relative">
+              <Input v-model="form.login_log_days" type="number" class="h-9 pr-14 text-sm" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">天清理</span>
+            </div>
+            <div class="relative">
+              <Input v-model="form.login_log_max_count" type="number" class="h-9 pr-14 text-sm" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">条保留</span>
             </div>
           </div>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-          <Label class="sm:text-right text-muted-foreground whitespace-nowrap sm:pt-0 pt-1">登录日志</Label>
-          <div class="sm:col-span-3 grid grid-cols-2 gap-0">
-            <div class="flex items-center gap-1.5 pr-4">
-              <Input v-model="form.login_log_days" type="number" class="w-full h-8 text-xs sm:h-9 sm:text-sm" min="0" />
-              <span class="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">天清理</span>
+        <div class="space-y-1.5">
+          <Label class="text-xs font-medium text-foreground">调度日志清理</Label>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="relative">
+              <Input v-model="form.scheduler_log_days" type="number" class="h-9 pr-14 text-sm" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">天清理</span>
             </div>
-            <div class="flex items-center gap-1.5 border-l pl-4 border-border/50">
-              <span class="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">保留</span>
-              <Input v-model="form.login_log_max_count" type="number"
-                class="w-full h-full h-8 text-xs sm:h-9 sm:text-sm" min="0" />
-              <span class="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">条</span>
+            <div class="relative">
+              <Input v-model="form.scheduler_log_max_count" type="number" class="h-9 pr-14 text-sm" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">条保留</span>
             </div>
           </div>
         </div>
@@ -225,7 +244,7 @@ onMounted(loadSettings)
           <div class="space-y-1">
             <p class="text-sm font-medium">执行周期说明</p>
             <p class="text-xs text-muted-foreground leading-relaxed">
-              清理任务在白虎面板后端服务启动时立即执行一次。在运行期间，系统将自动开启后台巡检计数器，每隔 24 小时进行周期性自动清理。
+              清理任务在白虎面板后端服务启动时立即执行一次。在运行期间，系统将自动开启后台巡检计数器，每隔 1 小时进行周期性自动清理。
             </p>
           </div>
         </div>
@@ -252,30 +271,30 @@ onMounted(loadSettings)
           </div>
         </div>
       </div>
-      <p class="text-sm text-muted-foreground mb-4">开启全局 OpenAPI 直接访问能力，配置后可通过请求头 <code
-          class="bg-muted px-1.5 py-0.5 rounded text-xs select-all font-sans">Authorization: Bearer &lt;在此生成的Token&gt;</code>
+      <p class="text-xs text-muted-foreground mb-4 leading-relaxed">开启全局 OpenAPI 直接访问能力，配置后可通过请求头 <code
+          class="bg-muted px-1.5 py-0.5 rounded text-[11px] select-all font-sans">Authorization: Bearer &lt;在此生成的Token&gt;</code>
         以第三方身份调用系统的所有接口，请妥善保管 Token 并设置合理的有效期。<span
-          class="text-amber-600 dark:text-amber-500 font-medium ml-1">注意：必须先开启本功能才能查看接口文档页面和对接调用。</span></p>
+          class="text-amber-600 dark:text-amber-500 font-medium">注意：必须先开启本功能才能查看接口文档页面和对接调用。</span></p>
 
-      <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4 mb-4">
-        <Label class="sm:text-right text-muted-foreground">Token 密钥</Label>
-        <div class="sm:col-span-3 flex w-full max-w-sm items-center space-x-2">
-          <Input v-model="form.openapi_token" placeholder="点击右侧按钮生成 32 位随机 Token" class="text-sm" />
-          <Button type="button" variant="outline" size="icon" @click="showOpenapiConfirmDialog = true" title="随机生成">
-            <RefreshCw class="w-4 h-4" />
-          </Button>
-          <Button type="button" variant="outline" size="icon" @click="copyOpenapiToken" title="复制"
-            :disabled="!form.openapi_token">
-            <Copy class="w-4 h-4" />
-          </Button>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="space-y-1.5">
+          <Label class="text-xs font-medium text-foreground">Token 密钥</Label>
+          <div class="flex items-center space-x-2">
+            <Input v-model="form.openapi_token" placeholder="点击右侧按钮生成 32 位随机 Token" class="text-sm h-9" />
+            <Button type="button" variant="outline" size="icon" class="h-9 w-9 shrink-0" @click="showOpenapiConfirmDialog = true" title="随机生成">
+              <RefreshCw class="w-4 h-4" />
+            </Button>
+            <Button type="button" variant="outline" size="icon" class="h-9 w-9 shrink-0" @click="copyOpenapiToken" title="复制"
+              :disabled="!form.openapi_token">
+              <Copy class="w-4 h-4" />
+            </Button>
+          </div>
         </div>
-      </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-        <Label class="sm:text-right text-muted-foreground">截止有效期</Label>
-        <div class="sm:col-span-3">
-          <Input v-model="form.openapi_token_expire" type="date" class="w-full max-w-xs dark:[color-scheme:dark]" />
-          <div class="text-xs text-muted-foreground mt-1.5 ml-1">超过此日期后该 Token 将失效，置空代表该特性完全关闭。</div>
+        <div class="space-y-1.5">
+          <Label class="text-xs font-medium text-foreground">截止有效期</Label>
+          <Input v-model="form.openapi_token_expire" type="date" class="w-full dark:[color-scheme:dark] h-9" />
+          <p class="text-[10px] text-muted-foreground">超过此日期后该 Token 将失效，置空代表该特性完全关闭</p>
         </div>
       </div>
     </div>

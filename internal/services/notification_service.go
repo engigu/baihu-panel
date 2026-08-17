@@ -30,8 +30,9 @@ type NotifyChannel struct {
 
 // NotifyMessage 通知消息
 type NotifyMessage struct {
-	Title string `json:"title"`
-	Text  string `json:"text"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
+	Format  string `json:"format"` // text/markdown/html，为空则按 text 处理
 }
 
 // NotifyResult 发送结果
@@ -46,6 +47,7 @@ var SupportedChannelTypes = []map[string]string{
 	{"type": messenger.ChannelBark, "label": "Bark"},
 	{"type": messenger.ChannelDtalk, "label": "钉钉"},
 	{"type": messenger.ChannelQyWeiXin, "label": "企业微信"},
+	{"type": messenger.ChannelQyWeiXinApp, "label": "企业微信应用"},
 	{"type": messenger.ChannelFeishu, "label": "飞书"},
 	{"type": messenger.ChannelEmail, "label": "邮件"},
 	{"type": messenger.ChannelCustom, "label": "自定义Webhook"},
@@ -55,6 +57,8 @@ var SupportedChannelTypes = []map[string]string{
 	// {"type": messenger.ChannelWeChatOFAccount, "label": "微信公众号"},
 	{"type": messenger.ChannelAliyunSMS, "label": "阿里云短信"},
 	{"type": messenger.ChannelPushPlus, "label": "PushPlus"},
+	{"type": messenger.ChannelVoceChat, "label": "VoceChat"},
+	{"type": messenger.ChannelWxPusher, "label": "WxPusher"},
 }
 
 // SupportedEvents 支持的事件类型
@@ -103,7 +107,7 @@ func (s *NotificationService) SaveChannel(channel NotifyChannel) error {
 			Name:    channel.Name,
 			Type:    channel.Type,
 			Config:  models.BigText(configJSON),
-			Enabled: channel.Enabled,
+			Enabled: utils.BoolPtr(channel.Enabled),
 		}
 		return database.DB.Create(notifyWay).Error
 	}
@@ -113,7 +117,7 @@ func (s *NotificationService) SaveChannel(channel NotifyChannel) error {
 		"name":    channel.Name,
 		"type":    channel.Type,
 		"config":  models.BigText(configJSON),
-		"enabled": channel.Enabled,
+		"enabled": &channel.Enabled,
 	}
 	return database.DB.Model(&models.NotifyWay{}).Where("id = ?", channel.ID).Updates(updates).Error
 }
@@ -131,12 +135,12 @@ func (s *NotificationService) DeleteChannel(id string) error {
 	}
 
 	// 删除渠道
-	if err := database.DB.Unscoped().Where("id = ?", id).Delete(&models.NotifyWay{}).Error; err != nil {
+	if err := database.DB.Where("id = ?", id).Delete(&models.NotifyWay{}).Error; err != nil {
 		return err
 	}
 
 	// 同时清理事件绑定中引用此渠道的配置
-	if err := database.DB.Unscoped().Where("way_id = ?", id).Delete(&models.NotifyBinding{}).Error; err != nil {
+	if err := database.DB.Where("way_id = ?", id).Delete(&models.NotifyBinding{}).Error; err != nil {
 		logger.Errorf("[Notify] 清理事件绑定失败: %v", err)
 	}
 
@@ -178,7 +182,7 @@ func (s *NotificationService) BatchSaveBindings(bindingType, dataID string, bind
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 		// 如果指定了 dataID，先清理该对象的所有现有绑定
 		if dataID != "" {
-			if err := tx.Unscoped().Where("type = ? AND data_id = ?", bindingType, dataID).Delete(&models.NotifyBinding{}).Error; err != nil {
+			if err := tx.Where("type = ? AND data_id = ?", bindingType, dataID).Delete(&models.NotifyBinding{}).Error; err != nil {
 				return err
 			}
 		}
@@ -198,7 +202,7 @@ func (s *NotificationService) BatchSaveBindings(bindingType, dataID string, bind
 
 // DeleteBinding 删除事件绑定
 func (s *NotificationService) DeleteBinding(id string) error {
-	return database.DB.Unscoped().Where("id = ?", id).Delete(&models.NotifyBinding{}).Error
+	return database.DB.Where("id = ?", id).Delete(&models.NotifyBinding{}).Error
 }
 
 // GetBindingsByEvent 根据事件类型和数据ID获取绑定
@@ -229,14 +233,20 @@ func (s *NotificationService) GetBindingsByEvent(bindingType, event, dataID stri
 
 // SendToChannel 使用 messenger SDK 发送通知到指定渠道
 func (s *NotificationService) SendToChannel(channel NotifyChannel, msg *NotifyMessage) *NotifyResult {
-	result, err := messenger.Send(channel.Type, messenger.ChannelConfig(channel.Config), &messenger.Message{
-		Title: msg.Title,
-		Text:  msg.Text,
-	})
+	m := &messenger.Message{Title: msg.Title}
+	switch msg.Format {
+	case "html":
+		m.HTML = msg.Content
+	case "markdown":
+		m.Markdown = msg.Content
+	default:
+		m.Text = msg.Content
+	}
+	result, err := messenger.Send(channel.Type, messenger.ChannelConfig(channel.Config), m)
 
 	payload := map[string]interface{}{
 		"title":        msg.Title,
-		"content":      msg.Text,
+		"content":      msg.Content,
 		"channel_id":   channel.ID,
 		"channel_name": channel.Name,
 		"success":      false,
@@ -281,7 +291,7 @@ func (s *NotificationService) SendByChannelID(channelID string, msg *NotifyMessa
 		return &NotifyResult{Success: false, Error: "渠道不存在"}
 	}
 
-	if !notifyWay.Enabled {
+	if !utils.DerefBool(notifyWay.Enabled, true) {
 		return &NotifyResult{Success: false, Error: "渠道已禁用"}
 	}
 
@@ -294,7 +304,7 @@ func (s *NotificationService) SendByChannelID(channelID string, msg *NotifyMessa
 		ID:      notifyWay.ID,
 		Name:    notifyWay.Name,
 		Type:    notifyWay.Type,
-		Enabled: notifyWay.Enabled,
+		Enabled: utils.DerefBool(notifyWay.Enabled, true),
 		Config:  config,
 	}
 	return s.SendToChannel(ch, msg)
@@ -373,6 +383,88 @@ func (s *NotificationService) getDefaultMessage(eventType string, payload map[st
 	return title, text
 }
 
+// resolveEvent 解析不同事件类型，返回对应的模板Key、静态内容（非模板事件）和原始任务输出
+func (s *NotificationService) resolveEvent(eventType string, payload map[string]interface{}) (tmplTitleKey, tmplTextKey, title, text, rawOutput string, ok bool) {
+	switch eventType {
+	case constant.EventUserLogin:
+		tmplTitleKey = constant.KeyNotifyTemplateUserLoginTitle
+		tmplTextKey = constant.KeyNotifyTemplateUserLoginText
+		// 特殊处理登录状态
+		status, _ := payload["status"].(string)
+		if status == "success" {
+			payload["status_label"] = "成功"
+		} else {
+			payload["status_label"] = "失败"
+		}
+
+	case constant.EventBruteForceLogin:
+		tmplTitleKey = constant.KeyNotifyTemplateBruteForceLoginTitle
+		tmplTextKey = constant.KeyNotifyTemplateBruteForceLoginText
+
+	case constant.EventPasswordChanged:
+		tmplTitleKey = constant.KeyNotifyTemplatePasswordChangedTitle
+		tmplTextKey = constant.KeyNotifyTemplatePasswordChangedText
+
+	case constant.EventTaskSuccess, constant.EventTaskFailed, constant.EventTaskTimeout:
+		switch eventType {
+		case constant.EventTaskSuccess:
+			tmplTitleKey = constant.KeyNotifyTemplateTaskSuccessTitle
+			tmplTextKey = constant.KeyNotifyTemplateTaskSuccessText
+		case constant.EventTaskFailed:
+			tmplTitleKey = constant.KeyNotifyTemplateTaskFailedTitle
+			tmplTextKey = constant.KeyNotifyTemplateTaskFailedText
+		case constant.EventTaskTimeout:
+			tmplTitleKey = constant.KeyNotifyTemplateTaskTimeoutTitle
+			tmplTextKey = constant.KeyNotifyTemplateTaskTimeoutText
+		}
+
+		// 处理输出内容，避免过长
+		if output, ok := payload["output"].(string); ok {
+			rawOutput = output
+			// trimmed := utils.TrimLastRunes(output, 1000)
+			// if len(trimmed) < len(output) {
+			// 	payload["output"] = trimmed + "\n...(截断)"
+			// }
+		}
+
+	case constant.EventSystemNotice:
+		title, _ = payload["title"].(string)
+		text, _ = payload["content"].(string)
+	default:
+		return "", "", "", "", "", false
+	}
+	return tmplTitleKey, tmplTextKey, title, text, rawOutput, true
+}
+
+// buildMessage 匹配并解析模板内容，提供兜底消息并拼接全局前缀
+func (s *NotificationService) buildMessage(eventType string, tmplTitleKey, tmplTextKey, defaultTitle, defaultText, prefix string, payload map[string]interface{}) (title, text string) {
+	title = defaultTitle
+	text = defaultText
+
+	if tmplTitleKey != "" {
+		tmplTitle := s.settingsService.Get(constant.SectionNotify, tmplTitleKey)
+		tmplText := s.settingsService.Get(constant.SectionNotify, tmplTextKey)
+
+		if tmplTitle != "" {
+			title = s.parseTemplate(tmplTitle, payload)
+		}
+		if tmplText != "" {
+			text = s.parseTemplate(tmplText, payload)
+		}
+
+		// 如果模板为空，使用兜底默认逻辑（保持向上兼容）
+		if title == "" || text == "" {
+			title, text = s.getDefaultMessage(eventType, payload)
+		}
+	}
+
+	// 添加全局前缀
+	if prefix != "" && title != "" {
+		title = fmt.Sprintf("%s %s", prefix, title)
+	}
+	return title, text
+}
+
 // handleEvent 处理事件订阅并发送通知
 func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 	return func(e eventbus.Event) {
@@ -386,85 +478,25 @@ func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 			dataID = id
 		}
 
-		var title, text string
-
-		// 获取全局前缀和模板配置
+		// 获取全局前缀并解析事件数据
 		prefix := s.settingsService.Get(constant.SectionNotify, constant.KeyNotifyPrefix)
-		var tmplTitleKey, tmplTextKey string
-
-		switch e.Type {
-		case constant.EventUserLogin:
-			tmplTitleKey = constant.KeyNotifyTemplateUserLoginTitle
-			tmplTextKey = constant.KeyNotifyTemplateUserLoginText
-			// 特殊处理登录状态
-			status, _ := payload["status"].(string)
-			if status == "success" {
-				payload["status_label"] = "成功"
-			} else {
-				payload["status_label"] = "失败"
-			}
-
-		case constant.EventBruteForceLogin:
-			tmplTitleKey = constant.KeyNotifyTemplateBruteForceLoginTitle
-			tmplTextKey = constant.KeyNotifyTemplateBruteForceLoginText
-
-		case constant.EventPasswordChanged:
-			tmplTitleKey = constant.KeyNotifyTemplatePasswordChangedTitle
-			tmplTextKey = constant.KeyNotifyTemplatePasswordChangedText
-
-		case constant.EventTaskSuccess, constant.EventTaskFailed, constant.EventTaskTimeout:
-			if e.Type == constant.EventTaskSuccess {
-				tmplTitleKey = constant.KeyNotifyTemplateTaskSuccessTitle
-				tmplTextKey = constant.KeyNotifyTemplateTaskSuccessText
-			} else if e.Type == constant.EventTaskFailed {
-				tmplTitleKey = constant.KeyNotifyTemplateTaskFailedTitle
-				tmplTextKey = constant.KeyNotifyTemplateTaskFailedText
-			} else {
-				tmplTitleKey = constant.KeyNotifyTemplateTaskTimeoutTitle
-				tmplTextKey = constant.KeyNotifyTemplateTaskTimeoutText
-			}
-
-			// 处理输出内容，避免过长
-			if output, ok := payload["output"].(string); ok {
-				// 如果输出包含了压缩后的 Base64 (以 "base64:" 开头)，由于是推送到通知，我们尽量不发大段 Base64
-				// 这里简单处理：如果过长则截断，或者如果是压缩的则记录一下
-				if len(output) > 1000 {
-					payload["output"] = output[len(output)-1000:] + "\n...(截断)"
-				}
-			}
-
-		case constant.EventSystemNotice:
-			title, _ = payload["title"].(string)
-			text, _ = payload["content"].(string)
-		default:
+		tmplTitleKey, tmplTextKey, title, text, rawOutput, ok := s.resolveEvent(e.Type, payload)
+		if !ok {
 			return
 		}
 
-		if tmplTitleKey != "" {
-			tmplTitle := s.settingsService.Get(constant.SectionNotify, tmplTitleKey)
-			tmplText := s.settingsService.Get(constant.SectionNotify, tmplTextKey)
-
-			if tmplTitle != "" {
-				title = s.parseTemplate(tmplTitle, payload)
-			}
-			if tmplText != "" {
-				text = s.parseTemplate(tmplText, payload)
-			}
-
-			// 如果模板为空，使用兜底默认逻辑（保持向上兼容）
-			if title == "" || text == "" {
-				title, text = s.getDefaultMessage(e.Type, payload)
-			}
-		}
-
-		// 添加全局前缀
-		if prefix != "" {
-			title = fmt.Sprintf("%s %s", prefix, title)
-		}
+		// 构建最终的通知标题和正文文本
+		title, text = s.buildMessage(e.Type, tmplTitleKey, tmplTextKey, title, text, prefix, payload)
 
 		bindings := s.GetBindingsByEvent(bindingType, e.Type, dataID)
 		if len(bindings) == 0 {
 			return
+		}
+
+		var cleanLog string
+		if rawOutput != "" {
+			// cleanLog = stripAnsi(rawOutput)
+			cleanLog = rawOutput
 		}
 
 		channels := s.GetChannels()
@@ -494,18 +526,17 @@ func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 
 			// 如果开启了日志推送
 			if extra.EnableLog {
-				if output, ok := payload["output"].(string); ok && output != "" {
-					// 仅保留指定字数的日志内容并移除 ANSI 颜色代码
-					logSnippet := stripAnsi(output)
-					if len(logSnippet) > extra.LogLimit {
-						logSnippet = "...\n" + logSnippet[len(logSnippet)-extra.LogLimit:]
+				if cleanLog != "" {
+					trimmed := utils.TrimLastRunes(cleanLog, extra.LogLimit)
+					if len(trimmed) < len(cleanLog) {
+						trimmed = "...\n" + trimmed
 					}
-					currentText += "\n\n[执行日志]\n" + logSnippet
+					currentText += "\n\n[执行日志]\n" + trimmed
 				}
 			}
 
 			go func(channel NotifyChannel, msgTitle, msgText string) {
-				result := s.SendToChannel(channel, &NotifyMessage{Title: msgTitle, Text: msgText})
+				result := s.SendToChannel(channel, &NotifyMessage{Title: msgTitle, Content: msgText})
 				if !result.Success {
 					logger.Warnf("[Notify] 发送事件 %s 到渠道 %s(%s) 失败: %s", e.Type, channel.Name, channel.Type, result.Error)
 				}
@@ -532,7 +563,7 @@ func (s *NotificationService) getChannelsInternal() []NotifyChannel {
 			ID:        nw.ID,
 			Name:      nw.Name,
 			Type:      nw.Type,
-			Enabled:   nw.Enabled,
+			Enabled:   utils.DerefBool(nw.Enabled, true),
 			CreatedAt: nw.CreatedAt,
 			Config:    config,
 		})

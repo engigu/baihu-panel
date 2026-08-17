@@ -2,29 +2,43 @@ package resetpwd
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
 
-	"github.com/engigu/baihu-panel/internal/bootstrap"
+	"github.com/engigu/baihu-panel/cmd/clibase"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/utils"
 )
 
+func printHelp() {
+	clibase.PrintSubCommandUsage("白虎面板用户密码重置工具", "baihu resetpwd [用户名]", "  baihu resetpwd admin", nil)
+}
+
 func Run(args []string) {
-	// 基础环境初始化
-	bootstrap.InitBasic()
-	settingsService := services.NewSettingsService()
-	if err := settingsService.InitSettings(); err != nil {
-		fmt.Printf("初始化系统设置失败: %v\n", err)
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		printHelp()
+		return
+	}
+
+	fs := flag.NewFlagSet("resetpwd", flag.ExitOnError)
+	fs.Usage = printHelp
+
+	if err := fs.Parse(args); err != nil {
+		return
+	}
+
+	if err := clibase.InitContext(true); err != nil {
+		fmt.Println(err)
 		return
 	}
 	userService := services.NewUserService()
 
 	var username string
-
-	if len(args) >= 1 {
-		username = args[0]
+	parsedArgs := fs.Args()
+	if len(parsedArgs) >= 1 {
+		username = parsedArgs[0]
 	} else {
 		username = "admin"
 	}
@@ -50,6 +64,7 @@ func Run(args []string) {
 	user := userService.GetUserByUsername(username)
 	if user == nil {
 		fmt.Printf("找不到用户 [%s]\n", username)
+		clibase.PrintDBConfigHint("resetpwd " + username)
 		return
 	}
 

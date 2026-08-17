@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -14,6 +14,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/utils"
+	"github.com/engigu/baihu-panel/internal/windows"
 )
 
 // Task 任务基础接口
@@ -21,6 +22,8 @@ type Task interface {
 	GetID() string
 	GetName() string
 	GetCommand() string
+	GetPreCommand() string
+	GetPostCommand() string
 	GetTimeout() int
 	GetWorkDir() string
 	GetEnvs() string
@@ -40,12 +43,14 @@ type CronTask interface {
 
 // Request 任务执行请求
 type Request struct {
-	Command   string
-	WorkDir   string
-	Envs      []string
-	Timeout   int // 任务超时时间（分钟）
-	Languages []map[string]string
-	UseMise   bool
+	Command     string
+	PreCommand  string
+	PostCommand string
+	WorkDir     string
+	Envs        []string
+	Timeout     int // 任务超时时间（分钟）
+	Languages   []map[string]string
+	UseMise     bool
 }
 
 // Result 任务执行结果
@@ -77,8 +82,26 @@ func Execute(ctx context.Context, req Request, stdout, stderr io.Writer) (*Resul
 }
 
 // ExecuteWithHooks 执行命令（带钩子支持）
-func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer, hooks Hooks) (*Result, error) {
+func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer, hooks Hooks) (res *Result, err error) {
 	start := time.Now()
+
+	// 捕获任务执行过程中的 Panic 异常并输出 Go 层面的堆栈信息 (Stack Trace)
+	defer func() {
+		if r := recover(); r != nil {
+			stackTrace := string(debug.Stack())
+			logger.Errorf("[Executor] 任务执行发生 Panic 异常: %v\n%s", r, stackTrace)
+			err = fmt.Errorf("系统 Runtime Panic: %v", r)
+			res = &Result{
+				Status:    constant.TaskStatusFailed,
+				Error:     err.Error(),
+				Duration:  time.Since(start).Milliseconds(),
+				ExitCode:  1,
+				StartTime: start,
+				EndTime:   time.Now(),
+			}
+			writeDiagnosticError(stdout, start, req.WorkDir, req.Command, false, err.Error(), 1, stackTrace)
+		}
+	}()
 
 	// 演示模式拦截
 	if constant.DemoMode {
@@ -108,10 +131,14 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 
 	// 2. 执行命令
 	timeout := req.Timeout
-	if timeout <= 0 {
-		timeout = 30
+	var execCtx context.Context
+	var cancel context.CancelFunc
+
+	if timeout > 0 {
+		execCtx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Minute)
+	} else {
+		execCtx, cancel = context.WithCancel(ctx)
 	}
-	execCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Minute)
 	defer cancel()
 
 	// 如果指定使用 mise，则预先构建好带 mise 的命令，这样 PreExecute 记录的就是完整命令
@@ -121,18 +148,31 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		req.UseMise = false
 	}
 
+	// 组合指令（如果存在前置或后置指令）
+	if req.PreCommand != "" || req.PostCommand != "" {
+		finalCmd := ""
+		if req.PreCommand != "" {
+			finalCmd += req.PreCommand + "\n"
+		}
+		finalCmd += req.Command
+		if req.PostCommand != "" {
+			finalCmd += "\n" + req.PostCommand
+		}
+		req.Command = finalCmd
+	}
+
 	// 1. 执行前钩子
 	var logID string
 	if hooks != nil {
-		id, err := hooks.PreExecute(ctx, req)
-		if err != nil {
+		id, hookErr := hooks.PreExecute(ctx, req)
+		if hookErr != nil {
 			return &Result{
 				Status:    constant.TaskStatusFailed,
 				Duration:  0,
 				ExitCode:  1,
 				StartTime: start,
 				EndTime:   time.Now(),
-			}, err
+			}, hookErr
 		}
 		logID = id
 	}
@@ -140,11 +180,21 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	shell, args := utils.GetShellCommand(req.Command)
 	cmd := exec.CommandContext(execCtx, shell, args...)
 
-	// 设置工作目录
+	usePty := !windows.IsWindows() && stdout != nil && (stdout == stderr || stdout == io.Discard)
+	SetProcessGroupAndCancel(cmd, usePty)
+
+	if !usePty {
+		// 在 Windows 平台（或非交互式管道下）将 Stdin 重定向到空 Reader
+		// 避免运行 bat 或命令时因为读取 stdin（例如 pause、set /p 等）而无限挂起
+		cmd.Stdin = strings.NewReader("")
+	}
+
 	// 设置工作目录
 	workDir := strings.TrimSpace(req.WorkDir)
 	if workDir != "" {
 		cmd.Dir = workDir
+	} else {
+		workDir, _ = os.Getwd()
 	}
 
 	// 设置环境变量（始终继承系统环境变量）
@@ -152,6 +202,8 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	if len(req.Envs) > 0 {
 		cmd.Env = append(cmd.Env, req.Envs...)
 	}
+	// 针对 Windows 平台修复 PATH 优先级，避免 GNU/MSYS 命令行冲突
+	cmd.Env = windows.FixPathEnv(cmd.Env)
 	// 强制注入终端环境标识及禁用输出缓冲的标志
 	cmd.Env = append(cmd.Env,
 		"TERM=xterm",
@@ -159,14 +211,14 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		"NODE_NO_WARNINGS=1",
 	)
 
+	var pipeReader *os.File
 	var pipeWriter *os.File
 	var ptyFile *os.File
 	var copyDone chan struct{}
-	var err error
 
 	var started bool
 	// 尝试开启 PTY 模式（Unix/macOS 且输出合并时）
-	if runtime.GOOS != "windows" && stdout != nil && (stdout == stderr || stdout == io.Discard) {
+	if !windows.IsWindows() && stdout != nil && (stdout == stderr || stdout == io.Discard) {
 		// 强制注入终端环境标识及禁用输出缓冲的标志，确保 PTY 模式下最佳实时性能
 		cmd.Env = append(cmd.Env,
 			"TERM=xterm",
@@ -175,7 +227,7 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		)
 		f, ptyErr := pty.Start(cmd)
 		if ptyErr == nil {
-			logger.Infof("[Executor] 任务 #%s 启动于 PTY 模式", logID)
+			logger.Infof("[Executor] #%s 启动于 PTY 模式", logID)
 			ptyFile = f
 			started = true
 			copyDone = make(chan struct{})
@@ -186,7 +238,17 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 				f.Close()
 			}()
 		} else {
-			logger.Errorf("[Executor] 任务 #%s PTY 启动失败: %v", logID, ptyErr)
+			logger.Warnf("[Executor] 任务 #%s PTY 启动失败，正在回退至管道(Pipe)模式: %v", logID, ptyErr)
+			// PTY 启动失败时，由于 cmd.Start() 已经在 pty.Start 内部被调用，cmd 状态已变为已启动。
+			// 我们必须在此处重新构建一个新的 cmd 实例，并重新拷贝原 cmd 的所有属性，以便后续 Pipe 模式能正常启动。
+			newCmd := exec.CommandContext(execCtx, shell, args...)
+			newCmd.Stdin = strings.NewReader("")
+			if workDir != "" {
+				newCmd.Dir = workDir
+			}
+			newCmd.Env = cmd.Env
+			SetProcessGroupAndCancel(newCmd, false)
+			cmd = newCmd
 		}
 	}
 
@@ -196,12 +258,13 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		if stdout != stderr && stdout != io.Discard {
 			logger.Debugf("[Executor] 任务 #%d stdout (%p) 和 stderr (%p) 不同，回退到 Pipe 模式。", logID, stdout, stderr)
 		}
-		logger.Infof("[Executor] 任务 #%s 启动于 Pipe 模式", logID)
+		logger.Infof("[Executor] #%s 启动于 Pipe 模式", logID)
 		if stdout != nil && stdout == stderr {
-			pr, pw, err := os.Pipe()
-			if err == nil {
+			pr, pw, pipeErr := os.Pipe()
+			if pipeErr == nil {
 				cmd.Stdout = pw
 				cmd.Stderr = pw
+				pipeReader = pr
 				pipeWriter = pw
 				copyDone = make(chan struct{})
 				go func() {
@@ -224,6 +287,12 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 			if pipeWriter != nil {
 				pipeWriter.Close()
 			}
+			if pipeReader != nil {
+				pipeReader.Close()
+			}
+			// 仅在进程拉起失败时向日志写入诊断信息
+			writeDiagnosticError(stdout, start, workDir, req.Command, usePty, fmt.Sprintf("进程 fork/exec 启动失败: %v", err), 1, "")
+
 			// 启动失败的处理
 			end := time.Now()
 			result := &Result{
@@ -276,6 +345,13 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		ptyFile.Close()
 	}
 
+	// 强制关闭管道读端
+	// 避免子进程如果启动了后台服务进程，继承并保持了 stdout/stderr 句柄不释放，
+	// 导致 io.Copy 处于无限阻塞状态，从而使 copyDone 无法收到信号，整个执行流程卡死。
+	if pipeReader != nil {
+		pipeReader.Close()
+	}
+
 	// 等待日志复制完成
 	if copyDone != nil {
 		<-copyDone
@@ -302,6 +378,15 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		result.ExitCode = 0
 	}
 
+	// 仅在任务执行失败/异常退出时向日志流追加写入诊断尾部
+	if result.Status != constant.TaskStatusSuccess {
+		var stack string
+		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+			stack = string(exitErr.Stderr)
+		}
+		writeDiagnosticError(stdout, start, workDir, req.Command, usePty, result.Error, result.ExitCode, stack)
+	}
+
 	// 3. 执行后钩子
 	if hooks != nil {
 		if hookErr := hooks.PostExecute(ctx, logID, result); hookErr != nil {
@@ -311,6 +396,45 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 	}
 
 	return result, err
+}
+
+// writeDiagnosticError 统一向 stdout 追加格式化的诊断失败信息块及堆栈跟踪
+func writeDiagnosticError(w io.Writer, start time.Time, workDir, command string, usePty bool, errStr string, exitCode int, stackTrace string) {
+	if w == nil {
+		return
+	}
+	modeStr := "Pipe 模式"
+	if usePty {
+		modeStr = "PTY 伪终端模式"
+	}
+	detail := errStr
+	if exitCode > 0 && errStr != "" && !strings.Contains(errStr, "Exit Code:") {
+		detail = fmt.Sprintf("Exit Code: %d, Error: %s", exitCode, errStr)
+	} else if exitCode > 0 && errStr == "" {
+		detail = fmt.Sprintf("Exit Code: %d", exitCode)
+	}
+
+	stackBlock := ""
+	if strings.TrimSpace(stackTrace) != "" {
+		stackBlock = fmt.Sprintf("\n[Task StackTrace]\n%s", strings.TrimSpace(stackTrace))
+	}
+
+	block := fmt.Sprintf(
+		"\n================================================================================\n"+
+			"[Task Error] 任务执行失败 (%s)%s\n"+
+			"[Task Log] 开始时间 : %s\n"+
+			"[Task Log] 工作目录 : %s\n"+
+			"[Task Log] 运行命令 : %s\n"+
+			"[Task Log] 运行模式 : %s\n"+
+			"================================================================================\n",
+		detail,
+		stackBlock,
+		start.Format(time.DateTime),
+		workDir,
+		command,
+		modeStr,
+	)
+	w.Write([]byte(block))
 }
 
 // ParseEnvVars 解析环境变量字符串 "KEY1=VALUE1,KEY2=VALUE2"

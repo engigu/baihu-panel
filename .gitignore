@@ -23,7 +23,7 @@ agent/config.ini
 agent/agent.pid
 agent/baihu-agent
 web/dist/
-
+web/dev-dist/
 
 # IDE
 .idea/
@@ -52,6 +52,7 @@ bin/
 *.log
 
 # VitePress
+docs/.vitepress/dist/
 docs/.vitepress/cache/
 docs/node_modules/
 docs/public/swagger.json
@@ -59,3 +60,12 @@ docs/public/swagger.yaml
 
 # OpenAPI
 openapi_docs/
+
+# Builtin SDK (Force Include)
+!builtin/
+!builtin/**
+builtin/**/__pycache__/
+builtin/**/*.pyc
+
+.agents/
+

@@ -71,8 +71,9 @@ function initTerminal(forceConnect = false) {
 
   terminal = new Terminal({
     cursorBlink: true,
+    convertEol: true,
     fontSize: props.fontSize,
-    lineHeight: 1.15,
+    lineHeight: 1.25,
     fontFamily: 'Consolas, Monaco, "Courier New", monospace',
     theme: {
       background: '#1e1e1e',
@@ -93,6 +94,18 @@ function initTerminal(forceConnect = false) {
       // 忽略 fit 错误
     }
   }, 50)
+
+  // 支持 Ctrl+C 复制选中内容
+  terminal.attachCustomKeyEventHandler((e) => {
+    if (e.ctrlKey && e.code === 'KeyC' && e.type === 'keydown') {
+      const selection = terminal?.getSelection()
+      if (selection) {
+        navigator.clipboard.writeText(selection)
+        return false // 阻止默认的终端 Ctrl+C 行为
+      }
+    }
+    return true
+  })
 
   terminal.focus()
 
@@ -155,6 +168,13 @@ function initTerminal(forceConnect = false) {
       inputBuffer = ''
       historyIndex = commandHistory.length
       terminal?.write('^C\r\n')
+    } else if (data === '\x0c') {
+      if (!inputBuffer) {
+        ws.send('clear\r\n')
+      } else {
+        terminal?.clear()
+        terminal?.write(inputBuffer)
+      }
     } else if (data >= ' ' || data === '\t') {
       inputBuffer += data
       terminal?.write(data)
@@ -189,7 +209,7 @@ function connectWebSocket() {
     if (props.initialCommand) {
       setTimeout(() => {
         if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(props.initialCommand + '\r')
+          ws.send(props.initialCommand + '\n')
         }
       }, 100)
     }
@@ -302,6 +322,8 @@ onUnmounted(() => {
   scrollbar-width: thin;
   scrollbar-color: #4a4a4a #1e1e1e;
   background: #1e1e1e !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 .terminal-container :deep(.xterm-screen) {
