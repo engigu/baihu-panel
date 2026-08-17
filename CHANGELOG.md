@@ -1,13 +1,15 @@
-# 更新日志 (v1.1.25)
+# 更新日志 (v1.1.26)
 
-### 2026.08.10 - 企业微信应用通知、备份恢复自动调度刷新与安全漏洞修复
+### 2026.08.17 - 通知内容统一与 Options SDK 支持、SSE 实时流状态帧协议、日志全屏删除修复与 Go 1.26 升级
 
 🎉 **新增与优化**
-* **企业微信应用通道支持 (New)**：消息推送原生集成企业微信应用（QyWeiXinApp）通知渠道（#152），支持更全面的企业级推送能力。
+* **通知内容统一与 Options SDK 支持 (New)**：后端全面统一通知内容字段为 `content`（同时兼容历史旧版本 `text` 入参），并新增 `format` 格式定义（`text`/`markdown`/`html`）（#161）；Node.js (`builtin/nodejs/notify.js`) 及 Python (`builtin/python/baihu/notify.py`) 内置 SDK 均统一采用 Options 模式设计（`notify(title, content, options)`），支持多渠道及富文本渲染，且保持完全向下兼容。
+* **日志 SSE Stream-as-State 协议 (New)**：重构了任务执行实时日志 SSE 通信机制，引入结构化 `finish` 帧实现任务状态与实时日志流在前端的强一致性联动同步，解决了并发场景下的执行状态延迟和刷新不及时问题。
 
 **✨ 修复与改进**
-* **备份恢复调度自动加载 (Fix)**：修复了从备份中恢复任务后，定时任务必须重新禁用启用才生效的 Bug（#153）。现在备份恢复成功后会自动向事件总线发布事件，以刷新并重新加载内存中的定时任务调度。
-* **依赖安全漏洞修复 (Security)**：升级了 `fast-uri`、`dompurify`、`nanoid`、`brace-expansion` 等受漏洞影响的第三方依赖，彻底修复了 Dependabot 检测出的 4 个安全漏洞。
+* **历史日志全屏删除修复 (Fix)**：修复了执行历史中全屏日志查看弹窗（`LogViewer.vue`）因未向外层透传 `@delete` 事件导致删除历史日志不生效的缺陷（#157）。
+* **调度器稳定性与锁优化 (Fix)**：修复了取消订阅日志流时偶发的 channel 重复关闭 panic；对 cron 触发读取 scheduler 调度器指针增加读锁保护；优化了重载配置时的锁范围以避免潜在死锁。
+* **运行环境与依赖升级**：全面升级 Go 运行时至 1.26，并将两步验证 (`otp`) 升级为直接依赖。
 
 > 💡 **提示**：出于安全及环境隔离考虑，推荐使用 Docker/Compose 部署方式。[镜像地址](https://github.com/engigu/baihu-panel/pkgs/container/baihu)
 
