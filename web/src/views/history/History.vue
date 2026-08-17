@@ -242,14 +242,18 @@ async function selectLog(log: TaskLog) {
 
   logSource.onmessage = (event) => {
     isWsLoading.value = false
+    let parsed: any = null
     let text = ''
     try {
-      const data = JSON.parse(event.data)
-      text = data.text || ''
+      parsed = JSON.parse(event.data)
+      text = parsed.text || ''
     } catch {
       text = event.data
     }
-    logBuffer.push(text)
+
+    if (text) {
+      logBuffer.push(text)
+    }
 
     if (!logFlushInterval) {
       logFlushInterval = setInterval(() => {
@@ -266,24 +270,36 @@ async function selectLog(log: TaskLog) {
       }, 150)
     }
 
-    if (text.includes('--- 任务已结束 ---')) {
-      setTimeout(async () => {
-        if (durationTimer) {
-          clearInterval(durationTimer)
-          durationTimer = null
-        }
-        cleanupLogSocket()
-        try {
-          const detail = await api.logs.get(log.id)
-          selectedLog.value = {
-            ...selectedLog.value,
-            status: detail.status || 'success',
-            duration: detail.duration || selectedLog.value?.duration || 0,
-            end_time: detail.end_time || selectedLog.value?.end_time || '-'
-          } as TaskLog
-        } catch {}
-        loadLogs()
-      }, 300)
+    // 收到 finish 结构帧，流即状态：直接利用帧内最终元数据闭环
+    if (parsed && parsed.type === 'finish') {
+      if (durationTimer) {
+        clearInterval(durationTimer)
+        durationTimer = null
+      }
+      cleanupLogSocket()
+      
+      const newStatus = parsed.status || 'success'
+      const newDuration = parsed.duration !== undefined ? parsed.duration : selectedLog.value?.duration || 0
+      const newEndTime = parsed.end_time || selectedLog.value?.end_time || '-'
+
+      if (selectedLog.value) {
+        selectedLog.value = {
+          ...selectedLog.value,
+          status: newStatus,
+          duration: newDuration,
+          end_time: newEndTime
+        } as TaskLog
+      }
+
+      // 同步更新列表中的状态与耗时
+      const listItem = logs.value.find(l => l.id === currentLog.id)
+      if (listItem) {
+        listItem.status = newStatus
+        listItem.duration = newDuration
+        listItem.end_time = newEndTime
+      }
+
+      loadLogs()
     }
   }
 
@@ -292,8 +308,8 @@ async function selectLog(log: TaskLog) {
     console.log('[LogSSE] Connection error/closed', e)
     cleanupLogSocket()
     try {
-      const detail = await api.logs.get(log.id)
-      if (detail.status !== TASK_STATUS.RUNNING && selectedLog.value) {
+      const detail = await api.logs.get(currentLog.id)
+      if (detail && detail.status !== TASK_STATUS.RUNNING && selectedLog.value) {
         if (durationTimer) {
           clearInterval(durationTimer)
           durationTimer = null

@@ -479,14 +479,18 @@ async function viewLogs(taskId: string, logId?: string) {
 
     logSource = new EventSource(sseUrl)
     logSource.onmessage = (event) => {
+      let parsed: any = null
       let text = ''
       try {
-        const data = JSON.parse(event.data)
-        text = data.text || ''
+        parsed = JSON.parse(event.data)
+        text = parsed.text || ''
       } catch {
         text = event.data
       }
-      logBuffer.push(text)
+
+      if (text) {
+        logBuffer.push(text)
+      }
 
       if (!logFlushInterval) {
         logFlushInterval = setInterval(() => {
@@ -497,31 +501,28 @@ async function viewLogs(taskId: string, logId?: string) {
         }, 150)
       }
 
-      // 如果接收到任务已结束的标语，说明后端流已完结，主动关闭连接并拉取最终状态
-      if (text.includes('--- 任务已结束 ---')) {
-        setTimeout(async () => {
-          cleanupDurationTimer()
-          cleanupLogSocket()
-          try {
-            const detail = await api.logs.get(latestLog.id)
-            selectedLog.value = {
-              ...selectedLog.value,
-              status: detail.status || 'success',
-              duration: detail.duration || selectedLog.value?.duration || 0,
-              end_time: detail.end_time || selectedLog.value?.end_time || '-'
-            } as TaskLog
-          } catch {}
-          loadTasks()
-        }, 300)
+      // 如果接收到 finish 结构帧，流即状态：直接利用帧内的真实元数据闭环
+      if (parsed && parsed.type === 'finish') {
+        cleanupDurationTimer()
+        cleanupLogSocket()
+        if (selectedLog.value) {
+          selectedLog.value = {
+            ...selectedLog.value,
+            status: parsed.status || 'success',
+            duration: parsed.duration !== undefined ? parsed.duration : selectedLog.value.duration,
+            end_time: parsed.end_time || selectedLog.value.end_time || '-'
+          } as TaskLog
+        }
+        loadTasks()
       }
     }
     logSource.onerror = async (e) => {
       console.log('[LogSSE] Connection closed/finished', e)
       cleanupLogSocket()
-      // 连接断开后拉取一次最新状态，若已结束则停止计时
+      // 连接断开兜底：若已结束则停止计时
       try {
         const detail = await api.logs.get(latestLog.id)
-        if (detail.status !== TASK_STATUS.RUNNING && selectedLog.value) {
+        if (detail && detail.status !== TASK_STATUS.RUNNING && selectedLog.value) {
           cleanupDurationTimer()
           selectedLog.value = {
             ...selectedLog.value,
