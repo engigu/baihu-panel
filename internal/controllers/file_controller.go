@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"io/fs"
+	"mime"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -141,6 +143,21 @@ func (fc *FileController) GetFileContent(c *gin.Context) {
 		return
 	}
 
+	isBin, err := utils.IsBinaryFile(fullPath)
+	if err != nil {
+		utils.ServerError(c, err.Error())
+		return
+	}
+
+	if isBin {
+		utils.Success(c, gin.H{
+			"path":     filePath,
+			"content":  "",
+			"isBinary": true,
+		})
+		return
+	}
+
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
 		utils.NotFound(c, "文件不存在")
@@ -148,8 +165,9 @@ func (fc *FileController) GetFileContent(c *gin.Context) {
 	}
 
 	utils.Success(c, gin.H{
-		"path":    filePath,
-		"content": string(content),
+		"path":     filePath,
+		"content":  string(content),
+		"isBinary": false,
 	})
 }
 
@@ -498,7 +516,31 @@ func (fc *FileController) DownloadFile(c *gin.Context) {
 	c.Header("Content-Description", "File Transfer")
 	c.Header("Content-Transfer-Encoding", "binary")
 	c.Header("Content-Disposition", "attachment; filename="+filepath.Base(fullPath))
-	c.Header("Content-Type", "application/octet-stream")
+	
+	// 动态检测/猜测 MIME 类型
+	contentType := "application/octet-stream"
+	if ext := filepath.Ext(fullPath); ext != "" {
+		importMimeType := mime.TypeByExtension(ext)
+		if importMimeType != "" {
+			contentType = importMimeType
+		}
+	}
+	
+	// 如果无法通过后缀获取，尝试读取文件开头进行嗅探
+	if contentType == "application/octet-stream" {
+		if file, err := os.Open(fullPath); err == nil {
+			buffer := make([]byte, 512)
+			if n, err := file.Read(buffer); err == nil && n > 0 {
+				importMimeType := http.DetectContentType(buffer[:n])
+				if importMimeType != "" {
+					contentType = importMimeType
+				}
+			}
+			file.Close()
+		}
+	}
+	
+	c.Header("Content-Type", contentType)
 	c.File(fullPath)
 }
 

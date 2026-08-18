@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import XTerminal from '@/components/XTerminal.vue'
-import { Save, Play, FilePen, TextCursorInput, Eye, X, Download, Trash2 } from 'lucide-vue-next'
+import { Save, Play, FilePen, TextCursorInput, Eye, X, Download, Trash2, AlertCircle } from 'lucide-vue-next'
 import { api, type FileNode, type MiseLanguage } from '@/api'
 import { toast } from 'vue-sonner'
 import { PATHS } from '@/constants'
@@ -32,7 +32,10 @@ const originalContent = ref('')
 const isLoading = ref(false)
 const isRefreshing = ref(false)
 const isEditMode = ref(false)
-const hasChanges = computed(() => fileContent.value !== originalContent.value)
+const hasChanges = computed(() => {
+  if (isBinaryFile.value || isImageFile.value) return false
+  return fileContent.value !== originalContent.value
+})
 
 const confirmLeave = ref({
   show: false,
@@ -115,8 +118,6 @@ const editorOptions = computed(() => ({
 
 function handleEditorMount(editor: any) {
   editorRef.value = editor
-  const model = editor.getModel()
-  if (model) model.setEOL(0)
 }
 
 function handleResize() {
@@ -206,13 +207,22 @@ async function handleSelect(node: FileNode) {
   }
 }
 
+const isBinaryFile = ref(false)
+const isImageFile = computed(() => {
+  if (!selectedFile.value) return false
+  const ext = selectedFile.value.split('.').pop()?.toLowerCase() || ''
+  return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp'].includes(ext)
+})
+
 async function loadFile(path: string) {
   isLoading.value = true
   isEditMode.value = false
+  isBinaryFile.value = false
   try {
     const res = await api.files.getContent(path)
     if (res) {
       selectedFile.value = path
+      isBinaryFile.value = !!res.isBinary
       fileContent.value = res.content
       originalContent.value = res.content
     }
@@ -433,6 +443,7 @@ function getLanguage(path: string): string {
   const ext = filename.split('.').pop() || ''
   
   if (filename === 'dockerfile') return 'dockerfile'
+  if (filename === 'makefile') return 'makefile'
   
   const langMap: Record<string, string> = {
     // 脚本与系统语言
@@ -511,6 +522,7 @@ async function initFromUrl() {
       const res = await api.files.getContent(q)
       if (res) {
         selectedFile.value = q
+        isBinaryFile.value = !!res.isBinary
         fileContent.value = res.content
         originalContent.value = res.content
       }
@@ -578,26 +590,55 @@ onUnmounted(() => {
             <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="handleDownload(selectedFile)">
               <Download class="h-3 w-3" /> <span class="hidden sm:inline">下载</span>
             </Button>
-            <Button v-if="!isEditMode" variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="isEditMode = true">
-              <FilePen class="h-3 w-3" /> <span class="hidden sm:inline">编辑</span>
-            </Button>
-            <template v-else>
-              <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="isEditMode = false; fileContent = originalContent">
-                <Eye class="h-3 w-3" /> <span class="hidden sm:inline">查看</span>
+            <template v-if="!isBinaryFile && !isImageFile">
+              <Button v-if="!isEditMode" variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="isEditMode = true">
+                <FilePen class="h-3 w-3" /> <span class="hidden sm:inline">编辑</span>
               </Button>
-              <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" :disabled="!hasChanges" @click="saveFile">
-                <Save class="h-3 w-3" /> <span class="hidden sm:inline">保存</span>
+              <template v-else>
+                <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="isEditMode = false; fileContent = originalContent">
+                  <Eye class="h-3 w-3" /> <span class="hidden sm:inline">查看</span>
+                </Button>
+                <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" :disabled="!hasChanges" @click="saveFile">
+                  <Save class="h-3 w-3" /> <span class="hidden sm:inline">保存</span>
+                </Button>
+              </template>
+              <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="runScript">
+                <Play class="h-3 w-3" /> <span class="hidden sm:inline">运行</span>
               </Button>
             </template>
-            <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="runScript">
-              <Play class="h-3 w-3" /> <span class="hidden sm:inline">运行</span>
-            </Button>
           </template>
         </div>
       </div>
       <div class="flex-1">
-        <vue-monaco-editor v-if="selectedFile" v-model:value="fileContent" :language="getLanguage(selectedFile)"
-          theme="vs-dark" :options="editorOptions" @mount="handleEditorMount" />
+        <template v-if="selectedFile">
+          <div v-if="isImageFile" class="h-full flex items-center justify-center p-4 bg-[#1a1a1a] overflow-auto select-none">
+            <div class="relative max-w-full max-h-full flex flex-col items-center">
+              <img :src="api.files.download(selectedFile)" alt="Image preview" class="max-w-full max-h-[70vh] object-contain rounded border border-[#333] shadow-lg bg-[radial-gradient(#2e2e2e_20%,_transparent_20%)] bg-[size:16px_16px] p-2" />
+              <div class="mt-3 px-3 py-1 bg-black/60 rounded-full text-[11px] text-gray-300 backdrop-blur">
+                {{ selectedFile.split('/').pop() }}
+              </div>
+            </div>
+          </div>
+          <div v-else-if="isBinaryFile" class="h-full flex flex-col items-center justify-center text-muted-foreground p-4 bg-background/30 select-none">
+            <div class="p-2.5 rounded-full bg-primary/5 mb-3 border border-primary/10">
+              <AlertCircle class="h-6 w-6 text-primary/60" />
+            </div>
+            <h3 class="text-sm font-semibold text-foreground mb-1">二进制文件暂不支持预览</h3>
+            <p class="text-[11px] text-muted-foreground max-w-[240px] text-center mb-4 leading-relaxed">
+              系统已限制直接渲染以避免页面卡顿，建议您直接下载该文件。
+            </p>
+            <div class="flex gap-2">
+              <Button size="sm" variant="default" class="h-7 text-xs gap-1 px-3 shadow-sm" @click="handleDownload(selectedFile)">
+                <Download class="h-3 w-3" /> 直接下载
+              </Button>
+              <Button size="sm" variant="outline" class="h-7 text-xs gap-1 px-3" @click="handleDownloadZip(selectedFile)">
+                打包 ZIP
+              </Button>
+            </div>
+          </div>
+          <vue-monaco-editor v-else v-model:value="fileContent" :language="getLanguage(selectedFile)"
+            theme="vs-dark" :options="editorOptions" @mount="handleEditorMount" />
+        </template>
         <div v-else class="h-full flex items-center justify-center text-muted-foreground text-sm">
           <span class="lg:hidden">从上方选择文件开始编辑</span>
           <span class="hidden lg:inline">从左侧选择文件开始编辑</span>

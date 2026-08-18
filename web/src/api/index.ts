@@ -298,7 +298,7 @@ export const api = {
   },
   files: {
     tree: () => request<FileNode[]>('/files/tree'),
-    getContent: (path: string) => request<{ path: string; content: string }>(`/files/content?path=${encodeURIComponent(path)}`),
+    getContent: (path: string) => request<{ path: string; content: string; isBinary?: boolean }>(`/files/content?path=${encodeURIComponent(path)}`),
     download: (path: string) => `${API_BASE_URL}/files/download?path=${encodeURIComponent(path)}`,
     downloadZip: (path: string) => `${API_BASE_URL}/files/download-zip?path=${encodeURIComponent(path)}`,
     saveContent: (path: string, content: string) => request('/files/content', { method: 'POST', body: JSON.stringify({ path, content }) }),
