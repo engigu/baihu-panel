@@ -45,6 +45,8 @@ const (
 	KeyLoginLogMaxCount     = "login_log_max_count"
 	KeySchedulerLogDays     = "scheduler_log_days"
 	KeySchedulerLogMaxCount = "scheduler_log_max_count"
+	KeyFilterLogDays        = "filter_log_days"
+	KeyFilterLogMaxCount    = "filter_log_max_count"
 
 	// Scheduler Settings Key 常量
 	KeyWorkerCount  = "worker_count"
@@ -142,6 +144,7 @@ const (
 	LogCategoryPushLog      = "push_log"
 	LogCategoryLoginLog     = "login_log"
 	LogCategorySchedulerLog = "scheduler_log"
+	LogCategoryFilterLog    = "filter_log"
 
 	// AppLog 级别
 	LogLevelInfo    = "info"

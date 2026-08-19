@@ -27,6 +27,7 @@ var allModels = []interface{}{
 	&models.Language{},
 	&models.NotifyWay{},
 	&models.NotifyBinding{},
+	&models.NotifyFilter{},
 	&models.DataRelation{},
 	&models.DataStorage{},
 	&models.InterconnectNode{},

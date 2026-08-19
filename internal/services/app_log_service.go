@@ -138,6 +138,10 @@ func (s *AppLogService) GetRetentionConfigs() map[string]LogRetentionConfig {
 			Days:     utils.ToInt(s.settingsService.Get(constant.SectionSystem, constant.KeySchedulerLogDays), 30),
 			MaxCount: utils.ToInt(s.settingsService.Get(constant.SectionSystem, constant.KeySchedulerLogMaxCount), 10000),
 		},
+		constant.LogCategoryFilterLog: {
+			Days:     utils.ToInt(s.settingsService.Get(constant.SectionSystem, constant.KeyFilterLogDays), 15),
+			MaxCount: utils.ToInt(s.settingsService.Get(constant.SectionSystem, constant.KeyFilterLogMaxCount), 2000),
+		},
 		constant.LogCategoryDefault: {
 			Days:     30,
 			MaxCount: 10000,
@@ -161,7 +165,13 @@ func (s *AppLogService) AddSchedulerLog(title, content, level string) error {
 
 func (s *AppLogService) CleanUp() {
 	configs := s.GetRetentionConfigs()
-	categories := []string{constant.LogCategorySystemNotice, constant.LogCategoryPushLog, constant.LogCategoryLoginLog, constant.LogCategorySchedulerLog}
+	categories := []string{
+		constant.LogCategorySystemNotice, 
+		constant.LogCategoryPushLog, 
+		constant.LogCategoryLoginLog, 
+		constant.LogCategorySchedulerLog,
+		constant.LogCategoryFilterLog,
+	}
 
 	var totalDeleted int64
 	var summaryBuilder strings.Builder
@@ -211,6 +221,8 @@ func (s *AppLogService) CleanUp() {
 				catLabel = "登录日志"
 			case constant.LogCategorySchedulerLog:
 				catLabel = "调度日志"
+			case constant.LogCategoryFilterLog:
+				catLabel = "过滤日志"
 			default:
 				catLabel = cat
 			}
@@ -343,15 +355,39 @@ func (s *AppLogService) SubscribeEvents(bus *eventbus.EventBus) {
 		})
 	})
 
-	// 4. [订阅] 调度日志写入
+	// 4. [订阅] 调度日志与过滤日志写入
 	bus.Subscribe(constant.EventSchedulerLog, func(e eventbus.Event) {
 		payload, ok := e.Payload.(map[string]interface{})
 		if !ok {
 			return
 		}
+		
+		logType, _ := payload["type"].(string)
 		title, _ := payload["title"].(string)
 		content, _ := payload["content"].(string)
 		level, _ := payload["level"].(string)
-		s.AddSchedulerLog(title, content, level)
+		
+		if logType == "filter" {
+			filterID, _ := payload["filter_id"].(string)
+			filterName, _ := payload["filter_name"].(string)
+			s.AddFilterLog(title, content, level, filterID, filterName)
+		} else {
+			s.AddSchedulerLog(title, content, level)
+		}
+	})
+}
+
+func (s *AppLogService) AddFilterLog(title, content, level string, filterID, filterName string) error {
+	if level == "" {
+		level = constant.LogLevelInfo
+	}
+	return s.Add(&models.AppLog{
+		Category: constant.LogCategoryFilterLog,
+		Title:    title,
+		Content:  models.BigText(content),
+		Level:    level,
+		Status:   constant.LogStatusRead,
+		RefID:    filterID,
+		ErrorMsg: models.BigText(filterName), // 使用 ErrorMsg 借用存储过滤规则名称以备展示
 	})
 }

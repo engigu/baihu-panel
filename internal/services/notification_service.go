@@ -205,6 +205,27 @@ func (s *NotificationService) DeleteBinding(id string) error {
 	return database.DB.Where("id = ?", id).Delete(&models.NotifyBinding{}).Error
 }
 
+// GetFilters 获取通知过滤规则列表
+func (s *NotificationService) GetFilters() []models.NotifyFilter {
+	var filters []models.NotifyFilter
+	database.DB.Order("created_at desc").Find(&filters)
+	return filters
+}
+
+// SaveFilter 保存/更新通知过滤规则
+func (s *NotificationService) SaveFilter(filter *models.NotifyFilter) error {
+	if filter.ID == "" {
+		filter.ID = utils.GenerateID()
+		return database.DB.Create(filter).Error
+	}
+	return database.DB.Save(filter).Error
+}
+
+// DeleteFilter 删除通知过滤规则
+func (s *NotificationService) DeleteFilter(id string) error {
+	return database.DB.Where("id = ?", id).Delete(&models.NotifyFilter{}).Error
+}
+
 // GetBindingsByEvent 根据事件类型和数据ID获取绑定
 func (s *NotificationService) GetBindingsByEvent(bindingType, event, dataID string) []models.NotifyBinding {
 	var bindings []models.NotifyBinding
@@ -488,15 +509,15 @@ func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 		// 构建最终的通知标题和正文文本
 		title, text = s.buildMessage(e.Type, tmplTitleKey, tmplTextKey, title, text, prefix, payload)
 
-		bindings := s.GetBindingsByEvent(bindingType, e.Type, dataID)
-		if len(bindings) == 0 {
-			return
-		}
-
 		var cleanLog string
 		if rawOutput != "" {
 			// cleanLog = stripAnsi(rawOutput)
 			cleanLog = rawOutput
+		}
+
+		bindings := s.GetBindingsByEvent(bindingType, e.Type, dataID)
+		if len(bindings) == 0 {
+			return
 		}
 
 		channels := s.GetChannels()
@@ -504,6 +525,99 @@ func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 		for _, ch := range channels {
 			channelMap[ch.ID] = ch
 		}
+
+		// 检查是否有至少一个启用的渠道能接收到该通知，避免没渠道启用时产生过滤日志
+		hasActiveChannel := false
+		for _, binding := range bindings {
+			if ch, ok := channelMap[binding.WayID]; ok && ch.Enabled {
+				hasActiveChannel = true
+				break
+			}
+		}
+		if !hasActiveChannel {
+			return
+		}
+
+		// --- 注入全局通知匹配和过滤规则逻辑 ---
+		var filters []models.NotifyFilter
+		if err := database.DB.Where("enabled = ?", true).Find(&filters).Error; err == nil && len(filters) > 0 {
+			for _, filter := range filters {
+				// 匹配事件类型 ("all" 或特定事件类型)
+				if filter.Event != "all" && filter.Event != e.Type {
+					continue
+				}
+
+				// 确定要检测的内容字段
+				checkStr := ""
+				switch filter.MatchField {
+				case "content":
+					checkStr = text
+				case "log":
+					checkStr = cleanLog
+				default:
+					checkStr = title + " " + text + " " + cleanLog
+				}
+
+				// 检测关键字匹配
+				matched := false
+				if filter.IsRegex {
+					if matched, _ = regexp.MatchString(filter.Keyword, checkStr); matched {
+						matched = true
+					}
+				} else {
+					if strings.Contains(checkStr, filter.Keyword) {
+						matched = true
+					}
+				}
+
+				if matched {
+					origTitle := title
+					origText := text
+					
+					if filter.Action == "silent" {
+						logger.Infof("[Notify] 规则 %s(%s) 拦截成功，本次通知已静默", filter.Name, filter.ID)
+						
+						// 保存静默拦截日志
+						eventbus.DefaultBus.Publish(eventbus.Event{
+							Type: constant.EventSchedulerLog,
+							Payload: map[string]interface{}{
+								"type": "filter",
+								"filter_id": filter.ID,
+								"filter_name": filter.Name,
+								"action": "silent",
+								"title": origTitle,
+								"content": fmt.Sprintf("匹配关键字: %s\n动作: 静默拦截(丢弃通知)\n原始正文:\n%s", filter.Keyword, origText),
+								"level": constant.LogLevelWarning,
+							},
+						})
+						return // 静默拦截直接返回，不再下发
+					} else if filter.Action == "custom" {
+						logger.Infof("[Notify] 规则 %s(%s) 匹配成功，已替换为自定义通知内容", filter.Name, filter.ID)
+						if filter.CustomTitle != "" {
+							title = s.parseTemplate(filter.CustomTitle, payload)
+						}
+						if filter.CustomText != "" {
+							text = s.parseTemplate(filter.CustomText, payload)
+						}
+						
+						// 保存替换内容日志
+						eventbus.DefaultBus.Publish(eventbus.Event{
+							Type: constant.EventSchedulerLog,
+							Payload: map[string]interface{}{
+								"type": "filter",
+								"filter_id": filter.ID,
+								"filter_name": filter.Name,
+								"action": "custom",
+								"title": title,
+								"content": fmt.Sprintf("匹配关键字: %s\n动作: 内容修改替换\n原始标题: %s\n原始正文:\n%s\n\n新标题: %s\n新正文:\n%s", filter.Keyword, origTitle, origText, title, text),
+								"level": constant.LogLevelInfo,
+							},
+						})
+					}
+				}
+			}
+		}
+		// --- 过滤逻辑结束 ---
 
 		for _, binding := range bindings {
 			ch, ok := channelMap[binding.WayID]

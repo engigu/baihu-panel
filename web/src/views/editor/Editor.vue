@@ -439,7 +439,8 @@ function closeTerminal() {
 }
 
 function getLanguage(path: string): string {
-  const filename = path.split('/').pop()?.toLowerCase() || ''
+  // 兼容 Windows 反斜杠 \ 和常规正斜杠 /
+  const filename = path.replace(/\\/g, '/').split('/').pop()?.toLowerCase() || ''
   const ext = filename.split('.').pop() || ''
   
   if (filename === 'dockerfile') return 'dockerfile'
@@ -623,10 +624,7 @@ onUnmounted(() => {
             <div class="p-2.5 rounded-full bg-primary/5 mb-3 border border-primary/10">
               <AlertCircle class="h-6 w-6 text-primary/60" />
             </div>
-            <h3 class="text-sm font-semibold text-foreground mb-1">二进制文件暂不支持预览</h3>
-            <p class="text-[11px] text-muted-foreground max-w-[240px] text-center mb-4 leading-relaxed">
-              系统已限制直接渲染以避免页面卡顿，建议您直接下载该文件。
-            </p>
+            <h3 class="text-sm font-semibold text-foreground mb-4">二进制文件暂不支持预览</h3>
             <div class="flex gap-2">
               <Button size="sm" variant="default" class="h-7 text-xs gap-1 px-3 shadow-sm" @click="handleDownload(selectedFile)">
                 <Download class="h-3 w-3" /> 直接下载
@@ -636,7 +634,7 @@ onUnmounted(() => {
               </Button>
             </div>
           </div>
-          <vue-monaco-editor v-else v-model:value="fileContent" :language="getLanguage(selectedFile)"
+          <vue-monaco-editor v-else :key="selectedFile" v-model:value="fileContent" :language="getLanguage(selectedFile)"
             theme="vs-dark" :options="editorOptions" @mount="handleEditorMount" />
         </template>
         <div v-else class="h-full flex items-center justify-center text-muted-foreground text-sm">

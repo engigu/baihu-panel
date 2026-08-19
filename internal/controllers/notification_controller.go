@@ -201,3 +201,45 @@ func (nc *NotificationController) SendNotification(c *gin.Context) {
 
 	utils.Success(c, result)
 }
+
+// GetFilters 获取通知过滤规则列表
+func (nc *NotificationController) GetFilters(c *gin.Context) {
+	utils.Success(c, nc.notifyService.GetFilters())
+}
+
+// SaveFilter 保存/更新通知过滤规则
+func (nc *NotificationController) SaveFilter(c *gin.Context) {
+	var req models.NotifyFilter
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数解析错误: "+err.Error())
+		return
+	}
+
+	if req.Name == "" || req.Event == "" || req.Keyword == "" || req.MatchField == "" || req.Action == "" {
+		utils.BadRequest(c, "必填项不能为空")
+		return
+	}
+
+	if err := nc.notifyService.SaveFilter(&req); err != nil {
+		utils.ServerError(c, err.Error())
+		return
+	}
+
+	utils.Success(c, req)
+}
+
+// DeleteFilter 删除通知过滤规则
+func (nc *NotificationController) DeleteFilter(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		utils.BadRequest(c, "缺少规则ID")
+		return
+	}
+
+	if err := nc.notifyService.DeleteFilter(id); err != nil {
+		utils.ServerError(c, err.Error())
+		return
+	}
+
+	utils.SuccessMsg(c, "删除成功")
+}

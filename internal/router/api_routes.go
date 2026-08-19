@@ -280,6 +280,9 @@ func registerNotificationRoutes(g *gin.RouterGroup, c *Controllers) {
 		notify.POST("/bindings", c.Notification.SaveBinding)
 		notify.POST("/bindings/batch", c.Notification.BatchSaveBindings)
 		notify.DELETE("/bindings/:id", c.Notification.DeleteBinding)
+		notify.GET("/filters", c.Notification.GetFilters)
+		notify.POST("/filters", c.Notification.SaveFilter)
+		notify.DELETE("/filters/:id", c.Notification.DeleteFilter)
 	}
 }
 

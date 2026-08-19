@@ -433,7 +433,12 @@ export const api = {
       request('/notify/bindings/batch', { method: 'POST', body: JSON.stringify(data) }),
     deleteBinding: (id: string) => request('/notify/bindings/' + id, { method: 'DELETE' }),
     send: (data: { channel_id: string; title: string; text: string }) =>
-      request<NotifyResult>('/notify/send', { method: 'POST', body: JSON.stringify(data) })
+      request<NotifyResult>('/notify/send', { method: 'POST', body: JSON.stringify(data) }),
+
+    getFilters: () => request<NotifyFilter[]>('/notify/filters'),
+    saveFilter: (data: Partial<NotifyFilter>) =>
+      request<NotifyFilter>('/notify/filters', { method: 'POST', body: JSON.stringify(data) }),
+    deleteFilter: (id: string) => request('/notify/filters/' + id, { method: 'DELETE' })
   },
   appLogs: {
     list: (params?: { page?: number; page_size?: number; category?: string; status?: string; level?: string; keyword?: string }) => {
@@ -793,6 +798,21 @@ export interface NotifyBinding {
   updated_at?: string
 }
 
+export interface NotifyFilter {
+  id: string
+  name: string
+  event: string
+  keyword: string
+  match_field: 'all' | 'content' | 'log'
+  is_regex: boolean
+  action: 'silent' | 'custom'
+  custom_title?: string
+  custom_text?: string
+  enabled: boolean
+  created_at?: string
+  updated_at?: string
+}
+
 export interface BindingExtra {
   enable_log: boolean
   log_limit: number
@@ -826,7 +846,8 @@ export const LOG_CATEGORY = {
   SYSTEM_NOTICE: 'system_notice',
   PUSH_LOG: 'push_log',
   LOGIN_LOG: 'login_log',
-  SCHEDULER_LOG: 'scheduler_log'
+  SCHEDULER_LOG: 'scheduler_log',
+  FILTER_LOG: 'filter_log'
 } as const
 
 export const LOG_LEVEL = {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Send, FileText, Link, Code } from 'lucide-vue-next'
+import { Send, FileText, Link, Code, ShieldAlert } from 'lucide-vue-next'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
@@ -11,6 +11,7 @@ import EventBinding from './components/EventBinding.vue'
 import ApiUsage from './components/ApiUsage.vue'
 import ChannelDialog from './components/ChannelDialog.vue'
 import TemplateSettings from './components/TemplateSettings.vue'
+import FilterRules from './components/FilterRules.vue'
 import { copyToClipboard } from '@/utils/clipboard'
 
 const activeTab = ref('channels')
@@ -378,8 +379,11 @@ onMounted(() => {
 
       <!-- 事件绑定 -->
       <TabsContent value="events">
-        <EventBinding :channels="channels" :channel-types="channelTypes" :event-types="eventTypes" :bindings="bindings"
-          :tasks="allTasks" @save="saveBindings" @delete="deleteBinding" />
+        <div class="space-y-6">
+          <EventBinding :channels="channels" :channel-types="channelTypes" :event-types="eventTypes" :bindings="bindings"
+            :tasks="allTasks" @save="saveBindings" @delete="deleteBinding" />
+          <FilterRules :event-types="eventTypes" />
+        </div>
       </TabsContent>
 
       <!-- 脚本调用 -->
