@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Send, FileText, Link, Code, ShieldAlert } from 'lucide-vue-next'
+import { Send, FileText, Link, Code } from 'lucide-vue-next'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
