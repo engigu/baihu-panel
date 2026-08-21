@@ -66,6 +66,31 @@ function initTerminal() {
     textarea.readOnly = true
   }
 
+  // 优化手机端滑动体验
+  let lastTouchY = 0
+  terminalRef.value.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches[0]) {
+      lastTouchY = e.touches[0].clientY
+    }
+  }, { passive: true })
+
+  terminalRef.value.addEventListener('touchmove', (e) => {
+    if (terminal && e.touches && e.touches[0]) {
+      const currentY = e.touches[0].clientY
+      const deltaY = lastTouchY - currentY
+      lastTouchY = currentY
+      
+      const viewport = terminalRef.value?.querySelector('.xterm-viewport')
+      if (viewport) {
+        viewport.scrollTop += deltaY
+      }
+      
+      if (e.cancelable) {
+        e.preventDefault()
+      }
+    }
+  }, { passive: false })
+
   // 支持 Ctrl+C 复制选中内容
   terminal.attachCustomKeyEventHandler((e) => {
     if (e.ctrlKey && e.code === 'KeyC' && e.type === 'keydown') {

@@ -165,24 +165,24 @@ watch(() => props.log, (newLog) => {
     <!-- 任务元数据 (仅在 Full 模式下展示) -->
     <div v-if="variant === 'full'"
       class="px-4 py-3 border-b space-y-2 text-sm text-foreground/80 shrink-0 overflow-y-auto max-h-[40vh]">
-      <div class="flex justify-between items-center h-6">
-        <span class="text-sm font-normal text-muted-foreground">任务名称</span>
-        <span class="text-xs font-normal text-muted-foreground">{{ log.task_name }}</span>
+      <div class="flex justify-between items-start gap-4 min-h-6 py-0.5">
+        <span class="text-sm font-normal text-muted-foreground shrink-0">任务名称</span>
+        <span class="text-xs font-normal text-muted-foreground break-all text-right">{{ log.task_name }}</span>
       </div>
-      <div class="flex justify-between items-center h-8">
-        <span class="text-sm font-normal text-muted-foreground">状态</span>
+      <div class="flex justify-between items-center gap-4 min-h-8 py-0.5">
+        <span class="text-sm font-normal text-muted-foreground shrink-0">状态</span>
         <StatusBadge :status="log.status" />
       </div>
-      <div class="flex justify-between items-center h-6">
-        <span class="text-sm font-normal text-muted-foreground">耗时</span>
+      <div class="flex justify-between items-center gap-4 min-h-6 py-0.5">
+        <span class="text-sm font-normal text-muted-foreground shrink-0">耗时</span>
         <span class="text-xs font-normal text-muted-foreground">{{ formatDuration(currentDuration) }}</span>
       </div>
-      <div class="flex justify-between items-center h-6">
-        <span class="text-sm font-normal text-muted-foreground">开始时间</span>
+      <div class="flex justify-between items-center gap-4 min-h-6 py-0.5">
+        <span class="text-sm font-normal text-muted-foreground shrink-0">开始时间</span>
         <span class="text-xs font-normal text-muted-foreground">{{ log.start_time || '-' }}</span>
       </div>
-      <div class="flex justify-between items-center h-6">
-        <span class="text-sm font-normal text-muted-foreground">结束时间</span>
+      <div class="flex justify-between items-center gap-4 min-h-6 py-0.5">
+        <span class="text-sm font-normal text-muted-foreground shrink-0">结束时间</span>
         <span class="text-xs font-normal text-muted-foreground">{{ log.end_time || '-' }}</span>
       </div>
       <div class="pt-1.5 pb-1">
@@ -218,7 +218,7 @@ watch(() => props.log, (newLog) => {
       </div>
 
       <!-- 日志列表 -->
-      <div class="flex-1 overflow-auto">
+      <div class="flex-1 overflow-hidden">
         <LogContent 
           class="h-full"
           :content="content" 
