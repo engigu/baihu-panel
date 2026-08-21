@@ -82,7 +82,7 @@ function initTerminal() {
       
       const viewport = terminalRef.value?.querySelector('.xterm-viewport')
       if (viewport) {
-        viewport.scrollTop += deltaY
+        viewport.scrollTop += deltaY * 2.5
       }
       
       if (e.cancelable) {
