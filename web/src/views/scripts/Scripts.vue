@@ -11,7 +11,7 @@ import { VueMonacoEditor } from '@guolao/vue-monaco-editor'
 import FileTreeNode from '@/components/FileTreeNode.vue'
 import DirTreeSelect from '@/components/DirTreeSelect.vue'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { ArrowDownAZ, ArrowUpZA, Clock } from 'lucide-vue-next'
+import { ArrowDownAZ, ArrowUpZA, Clock, Search, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 const route = useRoute()
@@ -19,6 +19,87 @@ const router = useRouter()
 
 const fileTree = ref<FileNode[]>([])
 const expandedDirs = ref<Set<string>>(new Set())
+const tempSearchQuery = ref('')
+const searchQuery = ref('')
+
+let debounceTimeout: number | undefined
+watch(tempSearchQuery, (newVal) => {
+  if (debounceTimeout) {
+    clearTimeout(debounceTimeout)
+  }
+  if (!newVal.trim()) {
+    searchQuery.value = ''
+    return
+  }
+  debounceTimeout = window.setTimeout(() => {
+    searchQuery.value = newVal
+  }, 250)
+})
+
+function clearSearch() {
+  tempSearchQuery.value = ''
+  searchQuery.value = ''
+  if (debounceTimeout) {
+    clearTimeout(debounceTimeout)
+  }
+}
+
+const filteredFileTree = computed(() => {
+  if (!searchQuery.value.trim()) return fileTree.value
+
+  const query = searchQuery.value.toLowerCase().trim()
+
+  const filterNodes = (nodes: FileNode[]): FileNode[] => {
+    const result: FileNode[] = []
+    for (const node of nodes) {
+      const nodeCopy = { ...node }
+      if (nodeCopy.isDir && nodeCopy.children) {
+        const filteredChildren = filterNodes(nodeCopy.children)
+        if (nodeCopy.name.toLowerCase().includes(query) || filteredChildren.length > 0) {
+          nodeCopy.children = filteredChildren
+          result.push(nodeCopy)
+        }
+      } else {
+        if (nodeCopy.name.toLowerCase().includes(query)) {
+          result.push(nodeCopy)
+        }
+      }
+    }
+    return result
+  }
+
+  return filterNodes(fileTree.value)
+})
+
+const computedExpandedDirs = computed(() => {
+  if (!searchQuery.value.trim()) return expandedDirs.value
+
+  const expanded = new Set(expandedDirs.value)
+  const query = searchQuery.value.toLowerCase().trim()
+  
+  const collectPaths = (nodes: FileNode[]) => {
+    for (const node of nodes) {
+      if (node.isDir && node.children) {
+        const hasMatchingDescendant = (n: FileNode): boolean => {
+          if (n.name.toLowerCase().includes(query)) return true
+          if (n.children) {
+            return n.children.some(hasMatchingDescendant)
+          }
+          return false
+        }
+        
+        if (node.children.some(hasMatchingDescendant)) {
+          expanded.add(node.path)
+        }
+        collectPaths(node.children)
+      }
+    }
+  }
+  
+  collectPaths(fileTree.value)
+  return expanded
+})
+
 const selectedFile = ref<string | null>(null)
 const selectedDir = ref<string | null>(null)  // 当前选中的文件夹
 const fileContent = ref('')
@@ -411,12 +492,21 @@ onMounted(async () => {
           </Button>
         </div>
       </div>
-
-      <div class="flex-1 overflow-auto p-1">
-        <div v-if="fileTree.length === 0" class="text-xs text-muted-foreground text-center py-4">
-          暂无文件
+      <!-- 搜索过滤输入框 -->
+      <div class="px-2 py-1.5 border-b bg-muted/5">
+        <div class="relative flex items-center">
+          <Search class="absolute left-2.5 h-3 w-3 text-muted-foreground/50" />
+          <Input v-model="tempSearchQuery" placeholder="搜索文件名..." class="h-7 pl-7 pr-6 w-full text-[11px] placeholder:text-[11px] bg-background/50 border-muted-foreground/15 rounded-md focus-visible:ring-1 focus-visible:ring-ring/30" />
+          <button v-if="tempSearchQuery" class="absolute right-2 text-muted-foreground/60 hover:text-foreground transition-colors focus:outline-none" @click="clearSearch">
+            <X class="w-3 h-3" />
+          </button>
         </div>
-        <FileTreeNode v-for="node in fileTree" :key="node.path" :node="node" :expanded-dirs="expandedDirs"
+      </div>
+      <div class="flex-1 overflow-auto p-1">
+        <div v-if="filteredFileTree.length === 0" class="text-xs text-muted-foreground text-center py-4">
+          暂无匹配文件
+        </div>
+        <FileTreeNode v-for="node in filteredFileTree" :key="node.path" :node="node" :expanded-dirs="computedExpandedDirs"
           :selected-path="selectedFile || selectedDir" @select="handleSelect" @delete="confirmDeleteFile"
           @download-file="handleDownload" @download-zip="handleDownloadZip" @duplicate="handleCopyFile" />
       </div>
