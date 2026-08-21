@@ -85,7 +85,7 @@ function handleDrop(e: DragEvent) {
         <ChevronDown v-if="isExpanded" class="h-3 w-3 flex-shrink-0" />
         <ChevronRight v-else class="h-3 w-3 flex-shrink-0" />
       </template>
-      <span v-else class="w-3" />
+      <span v-else class="w-3 flex-shrink-0" />
       <Folder v-if="node.isDir" class="h-3 w-3 text-yellow-500 flex-shrink-0" />
       <File v-else class="h-3 w-3 text-blue-500 flex-shrink-0" />
       <TooltipProvider :delay-duration="400">
