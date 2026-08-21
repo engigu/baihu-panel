@@ -633,7 +633,15 @@ input[type="time"]:hover::-webkit-calendar-picker-indicator {
   display: none !important;
 }
 
-/* 禁用图表聚焦时的默认白色边框 */
-.apexcharts-canvas:focus {
+/* 禁用图表及 SVG 聚焦时产生的默认白色边框 */
+.apexcharts-canvas,
+.apexcharts-canvas *,
+.apexcharts-svg,
+.apexcharts-svg *,
+#stats-chart,
+#pie-chart,
+#stats-chart:focus,
+#pie-chart:focus {
   outline: none !important;
+  box-shadow: none !important;
 }
