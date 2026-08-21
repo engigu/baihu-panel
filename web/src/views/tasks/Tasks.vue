@@ -821,11 +821,11 @@ watch(() => route.query.agent_id, (newVal: any) => {
             @enter="handleSearch" @update:modelValue="handleSearch" />
         </div>
 
-        <div class="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
+        <div class="flex items-center gap-1.5 w-full sm:gap-2 sm:w-auto sm:justify-end">
           <!-- 移动端类型与排序切换 -->
-          <div class="xl:hidden flex items-center gap-2 flex-1 shrink-0">
+          <div class="xl:hidden flex items-center gap-1.5 flex-1 min-w-0">
              <Select v-model="filterType" @update:model-value="(_v: any) => handleTypeChange()">
-               <SelectTrigger class="h-9 w-full text-sm bg-muted/20 border-muted-foreground/10">
+               <SelectTrigger class="h-9 w-full text-xs sm:text-sm bg-muted/20 border-muted-foreground/10 min-w-0">
                  <SelectValue />
                </SelectTrigger>
                <SelectContent>
@@ -834,7 +834,7 @@ watch(() => route.query.agent_id, (newVal: any) => {
                </SelectContent>
              </Select>
              <Select :model-value="`${sortBy}:${order}`" @update:model-value="(val: any) => handleSortChange(val)">
-               <SelectTrigger class="h-9 w-full text-sm bg-muted/20 border-muted-foreground/10">
+               <SelectTrigger class="h-9 w-full text-xs sm:text-sm bg-muted/20 border-muted-foreground/10 min-w-0">
                  <SelectValue placeholder="排序规则" />
                </SelectTrigger>
                <SelectContent>
@@ -861,7 +861,7 @@ watch(() => route.query.agent_id, (newVal: any) => {
             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loading }" />
           </Button>
 
-          <div class="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
+          <div class="flex items-center gap-1.5 shrink-0 ml-auto sm:ml-0 sm:gap-2">
             <Button variant="outline" class="shrink-0 px-2 xl:px-3 h-9 shadow-sm text-destructive border-destructive/20 hover:bg-destructive/10" @click="confirmBatchDelete" title="批量删除">
               <Trash2 class="h-4 w-4 xl:mr-2" /> <span class="hidden xl:inline">批量删除</span>
             </Button>

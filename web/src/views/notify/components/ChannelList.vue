@@ -42,11 +42,11 @@ function handleCopy(text: string, blockId: string) {
 
 <template>
   <Card>
-    <CardHeader>
+    <CardHeader class="pb-5">
       <div class="flex items-center justify-between">
         <div>
           <CardTitle>通知渠道</CardTitle>
-          <CardDescription>管理消息推送渠道配置</CardDescription>
+          <CardDescription class="text-xs sm:text-sm">管理消息推送渠道配置</CardDescription>
         </div>
         <Button size="sm" @click="emit('add')">
           <Plus class="w-4 h-4 mr-1" />

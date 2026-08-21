@@ -156,12 +156,12 @@ function setLogLimit(binding: NotifyBinding, limit: number) {
   <div class="space-y-6">
     <!-- 系统事件卡片 -->
     <Card>
-      <CardHeader>
-        <div class="flex items-center gap-2">
-          <Shield class="w-5 h-5 text-primary" />
+      <CardHeader class="pb-5">
+        <div class="flex items-start gap-2.5">
+          <Shield class="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div>
             <CardTitle>系统事件</CardTitle>
-            <CardDescription>配置帐号登录、安全告警等系统级事件的通知推送</CardDescription>
+            <CardDescription class="text-xs sm:text-sm">配置帐号登录、安全告警等系统级事件的通知推送</CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -222,13 +222,13 @@ function setLogLimit(binding: NotifyBinding, limit: number) {
 
     <!-- 任务事件卡片 -->
     <Card>
-      <CardHeader>
+      <CardHeader class="pb-5">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div class="flex items-center gap-2">
-            <Terminal class="w-5 h-5 text-primary" />
+          <div class="flex items-start gap-2.5">
+            <Terminal class="w-5 h-5 text-primary shrink-0 mt-0.5" />
             <div>
               <CardTitle>任务事件</CardTitle>
-              <CardDescription>配置定时任务执行状态的通知行为（需选择具体任务）</CardDescription>
+              <CardDescription class="text-xs sm:text-sm">配置定时任务执行状态的通知行为（需选择具体任务）</CardDescription>
             </div>
           </div>
 

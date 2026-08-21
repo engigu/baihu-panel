@@ -173,16 +173,16 @@ onMounted(() => {
 
 <template>
   <Card>
-    <CardHeader>
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <ShieldAlert class="w-5 h-5 text-primary" />
+    <CardHeader class="pb-5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="flex items-start gap-2.5">
+          <ShieldAlert class="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div>
             <CardTitle>通知匹配过滤规则</CardTitle>
-            <CardDescription>根据事件内容、日志中的关键字，对全局通知进行静默拦截或转换自定义通知格式</CardDescription>
+            <CardDescription class="text-xs sm:text-sm">根据事件内容、日志中的关键字，对全局通知进行静默拦截或转换自定义通知格式</CardDescription>
           </div>
         </div>
-        <Button size="sm" @click="openNewDialog">
+        <Button size="sm" @click="openNewDialog" class="w-full sm:w-auto shrink-0">
           <Plus class="w-4 h-4 mr-1" />
           添加规则
         </Button>
