@@ -31,8 +31,6 @@ let fitAddon: FitAddon | null = null
 let ws: WebSocket | null = null
 let isPtyMode = false
 let inputBuffer = ''
-let commandHistory: string[] = []
-let historyIndex = -1
 
 const statusMessage = ref<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
 
@@ -117,14 +115,19 @@ function initTerminal(forceConnect = false) {
     }, 200)
   }
 
-  // 清除当前输入行（Windows 模式用）
-  function clearLine() {
-    for (let i = 0; i < inputBuffer.length; i++) {
-      terminal?.write('\b \b')
+  // 复制选中内容
+  terminal.attachCustomKeyEventHandler((e) => {
+    if (e.ctrlKey && e.code === 'KeyC' && e.type === 'keydown') {
+      const selection = terminal?.getSelection()
+      if (selection) {
+        navigator.clipboard.writeText(selection)
+        return false
+      }
     }
-  }
+    return true
+  })
 
-  // 处理用户输入
+  // 处理用户输入：PTY 模式下全量透传输入字节，交由底层 Shell/ConPTY 原生处理
   terminal.onData((data) => {
     if (!ws || ws.readyState !== WebSocket.OPEN) return
 
@@ -136,28 +139,9 @@ function initTerminal(forceConnect = false) {
     if (data === '\r') {
       terminal?.write('\r\n')
       if (inputBuffer.trim()) {
-        commandHistory.push(inputBuffer)
-        historyIndex = commandHistory.length
         ws.send(inputBuffer + '\r\n')
       }
       inputBuffer = ''
-    } else if (data === '\x1b[A') {
-      if (commandHistory.length > 0 && historyIndex > 0) {
-        clearLine()
-        historyIndex--
-        inputBuffer = commandHistory[historyIndex] ?? ''
-        terminal?.write(inputBuffer)
-      }
-    } else if (data === '\x1b[B') {
-      clearLine()
-      if (historyIndex < commandHistory.length - 1) {
-        historyIndex++
-        inputBuffer = commandHistory[historyIndex] ?? ''
-        terminal?.write(inputBuffer)
-      } else {
-        historyIndex = commandHistory.length
-        inputBuffer = ''
-      }
     } else if (data === '\x7f' || data === '\b') {
       if (inputBuffer.length > 0) {
         inputBuffer = inputBuffer.slice(0, -1)
@@ -166,7 +150,6 @@ function initTerminal(forceConnect = false) {
     } else if (data === '\x03') {
       ws.send('\x03')
       inputBuffer = ''
-      historyIndex = commandHistory.length
       terminal?.write('^C\r\n')
     } else if (data === '\x0c') {
       if (!inputBuffer) {
@@ -204,29 +187,24 @@ function connectWebSocket() {
   ws.onopen = () => {
     statusMessage.value = { text: '已连接到终端', type: 'success' }
     emit('connected')
-
-    // 如果有初始命令，延迟发送（PTY 会自动回显命令）
-    if (props.initialCommand) {
-      setTimeout(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(props.initialCommand + '\r\n')
-        }
-      }, 100)
-    }
     terminal?.focus()
-    // 连接成功后立即触发一次尺寸同步
     handleResize()
   }
 
+  let initialCommandSent = false
+
   ws.onmessage = (event) => {
-    if (event.data === '__PTY_MODE__') {
-      isPtyMode = true
-      handleResize() // 关键：模式确认后立即同步一次尺寸
-      return
-    }
-    if (event.data === '__PIPE_MODE__') {
-      isPtyMode = false
+    if (event.data === '__PTY_MODE__' || event.data === '__PIPE_MODE__') {
+      isPtyMode = (event.data === '__PTY_MODE__')
       handleResize()
+      if (props.initialCommand && !initialCommandSent) {
+        initialCommandSent = true
+        setTimeout(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(props.initialCommand + '\r\n')
+          }
+        }, 150)
+      }
       return
     }
     terminal?.write(event.data)
