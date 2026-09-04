@@ -137,7 +137,7 @@ function updateEnvVersion(index: number, version: string) {
       </div>
       <DialogFooter class="gap-2 sm:gap-0">
         <Button variant="outline" size="sm" class="h-8 text-xs px-4" @click="emit('update:open', false)">取消</Button>
-        <Button size="sm" class="h-8 text-xs px-4" @click="emit('confirm')">确认运行</Button>
+        <Button size="sm" class="h-8 text-xs px-4" @click="emit('confirm')">确定</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

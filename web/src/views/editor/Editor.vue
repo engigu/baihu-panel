@@ -2,9 +2,8 @@
 import { ref, onMounted, computed, onUnmounted, nextTick, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
 import XTerminal from '@/components/XTerminal.vue'
-import { Save, Play, FilePen, TextCursorInput, Eye, X, Download, Trash2, AlertCircle } from 'lucide-vue-next'
+import { Save, Play, FilePen, TextCursorInput, Eye, X, Download, Trash2, AlertCircle, Terminal as TerminalIcon, RotateCcw, Eraser, Maximize2, Minimize2, SlidersHorizontal } from 'lucide-vue-next'
 import { api, type FileNode, type MiseLanguage } from '@/api'
 import { toast } from 'vue-sonner'
 import { PATHS } from '@/constants'
@@ -65,7 +64,7 @@ const langGroups = computed(() => {
 })
 
 // State for Terminal
-const showTerminalDialog = ref(false)
+const isTerminalMaximized = ref(false)
 const runCommand = ref('')
 const scriptsDir = ref('')
 
@@ -408,29 +407,41 @@ async function handleFilesUpload(files: FileList, paths: string[], target: strin
   }
 }
 
+// State for Bottom Terminal (VSCode Style)
+const showTerminalPanel = ref(false)
+const terminalStatus = ref<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
+
 async function runScript() {
   if (!selectedFile.value) return
   const ext = selectedFile.value.split('.').pop()?.toLowerCase() || ''
   
+  let hasSaved = false
   try {
     const saved = localStorage.getItem('run_config_global')
     if (saved) {
       selectedEnvs.value = JSON.parse(saved)
-      showRunDialog.value = true
-      return
+      hasSaved = true
     }
   } catch (e) {
     console.error('Failed to load saved run config:', e)
   }
 
-  const extToLang: Record<string, string> = { 'py': 'python', 'js': 'node', 'ts': 'node', 'go': 'go' }
-  const inferred = extToLang[ext]
-  selectedEnvs.value = []
-  if (inferred) {
-    const firstV = installedLangs.value.find(l => l.plugin === inferred)?.version
-    if (firstV) selectedEnvs.value.push({ plugin: inferred, version: firstV })
+  if (!hasSaved) {
+    const extToLang: Record<string, string> = { 'py': 'python', 'js': 'node', 'ts': 'node', 'go': 'go' }
+    const inferred = extToLang[ext]
+    selectedEnvs.value = []
+    if (inferred) {
+      const firstV = installedLangs.value.find(l => l.plugin === inferred)?.version
+      if (firstV) selectedEnvs.value.push({ plugin: inferred, version: firstV })
+    }
+    // 首次自动推断环境并持久化
+    try {
+      localStorage.setItem('run_config_global', JSON.stringify(selectedEnvs.value))
+    } catch {}
   }
-  showRunDialog.value = true
+
+  // 直接使用配置环境运行，显示底部面板
+  await startExecution()
 }
 
 async function startExecution() {
@@ -440,17 +451,21 @@ async function startExecution() {
   runCommand.value = buildExecutionCommand(selectedFile.value, selectedEnvs.value, base)
   
   showRunDialog.value = false
-  showTerminalDialog.value = true
+  showTerminalPanel.value = true
   await nextTick()
-  setTimeout(() => {
-    if (terminalRef.value) {
-      terminalRef.value.initTerminal(true)
-    }
-  }, 100)
+  if (terminalRef.value) {
+    terminalRef.value.initTerminal(true)
+  }
 }
 
-function closeTerminal() {
-  showTerminalDialog.value = false
+function restartTerminalExecution() {
+  if (terminalRef.value) {
+    terminalRef.value.initTerminal(true)
+  }
+}
+
+function closeTerminalPanel() {
+  showTerminalPanel.value = false
   setTimeout(() => {
     if (terminalRef.value) {
       terminalRef.value.dispose()
@@ -623,14 +638,17 @@ onUnmounted(() => {
                   <Save class="h-3 w-3" /> <span class="hidden sm:inline">保存</span>
                 </Button>
               </template>
-              <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" @click="runScript">
-                <Play class="h-3 w-3" /> <span class="hidden sm:inline">运行</span>
+              <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2" title="配置运行环境" @click="showRunDialog = true">
+                <SlidersHorizontal class="h-3 w-3" /> <span class="hidden sm:inline">配置</span>
+              </Button>
+              <Button variant="ghost" size="sm" class="h-6 text-xs gap-1 px-2 text-primary hover:text-primary" @click="runScript">
+                <Play class="h-3 w-3 fill-primary" /> <span class="hidden sm:inline font-medium">运行</span>
               </Button>
             </template>
           </template>
         </div>
       </div>
-      <div class="flex-1">
+      <div class="flex-1 flex flex-col min-h-0 overflow-hidden relative">
         <template v-if="selectedFile">
           <div v-if="isImageFile" class="h-full flex items-center justify-center p-4 bg-[#1a1a1a] overflow-auto select-none">
             <div class="relative max-w-full max-h-full flex flex-col items-center">
@@ -661,6 +679,64 @@ onUnmounted(() => {
           <span class="lg:hidden">从上方选择文件开始编辑</span>
           <span class="hidden lg:inline">从左侧选择文件开始编辑</span>
         </div>
+
+        <!-- VSCode 风格底部 Terminal 控制面板 -->
+        <transition
+          enter-active-class="transition-all duration-300 ease-out"
+          enter-from-class="translate-y-full opacity-0"
+          enter-to-class="translate-y-0 opacity-100"
+          leave-active-class="transition-all duration-200 ease-in"
+          leave-from-class="translate-y-0 opacity-100"
+          leave-to-class="translate-y-full opacity-0"
+        >
+          <div
+            v-if="showTerminalPanel"
+            class="absolute bottom-0 left-0 right-0 z-20 flex flex-col bg-[#1e1e1e] border-t border-[#333] shadow-2xl transition-all"
+            :class="isTerminalMaximized ? 'h-full' : 'h-[45%] min-h-[220px] max-h-[80%]'"
+          >
+            <div class="flex items-center justify-between px-3 py-1.5 bg-[#252526] border-b border-[#333] select-none shrink-0">
+              <div class="flex items-center gap-2 text-xs text-gray-300">
+                <TerminalIcon class="h-3.5 w-3.5 text-primary" />
+                <span class="font-medium tracking-wide uppercase text-[11px] text-gray-400">Terminal</span>
+                <span class="text-gray-600">|</span>
+                <span class="text-gray-300 font-mono text-[11px] truncate max-w-[280px] sm:max-w-md">
+                  {{ selectedFile ? selectedFile.split('/').pop() : '执行面板' }}
+                </span>
+                <span v-if="terminalStatus" class="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.2 rounded bg-black/40"
+                  :class="terminalStatus.type === 'error' ? 'text-red-400' : terminalStatus.type === 'success' ? 'text-green-400' : 'text-blue-400'">
+                  ● {{ terminalStatus.text }}
+                </span>
+              </div>
+              <div class="flex items-center gap-1">
+                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded" title="配置运行环境" @click="showRunDialog = true">
+                  <SlidersHorizontal class="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded" title="重新运行" @click="restartTerminalExecution">
+                  <RotateCcw class="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded" title="清空控制台" @click="terminalRef?.initTerminal(true)">
+                  <Eraser class="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded" :title="isTerminalMaximized ? '还原高度' : '最大化控制台'" @click="isTerminalMaximized = !isTerminalMaximized">
+                  <Minimize2 v-if="isTerminalMaximized" class="h-3.5 w-3.5" />
+                  <Maximize2 v-else class="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded" title="关闭控制台" @click="closeTerminalPanel">
+                  <X class="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+            <div class="flex-1 overflow-hidden p-1">
+              <XTerminal
+                ref="terminalRef"
+                :font-size="isSmallScreen ? 12 : 13"
+                :initial-command="runCommand"
+                :auto-connect="false"
+                @status-change="(s) => terminalStatus = s"
+              />
+            </div>
+          </div>
+        </transition>
       </div>
     </div>
 
@@ -679,20 +755,6 @@ onUnmounted(() => {
       :get-lang-icon="getLangIcon"
       @confirm="startExecution"
     />
-
-    <Dialog v-model:open="showTerminalDialog">
-      <DialogContent class="w-[calc(100%-1rem)] sm:max-w-[90vw] lg:max-w-4xl h-[60vh] sm:h-[80vh] flex flex-col p-0 overflow-hidden bg-[#1e1e1e] border-none shadow-2xl [&>button]:hidden">
-        <div class="flex items-center justify-between px-3 py-2 border-b border-[#3c3c3c]">
-          <span class="text-xs sm:text-sm font-medium text-gray-300">运行脚本</span>
-          <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white" @click="closeTerminal">
-            <X class="h-4 w-4" />
-          </Button>
-        </div>
-        <div class="flex-1 overflow-hidden">
-          <XTerminal v-if="showTerminalDialog" ref="terminalRef" :font-size="isSmallScreen ? 12 : 13" :initial-command="runCommand" :auto-connect="false" />
-        </div>
-      </DialogContent>
-    </Dialog>
 
     <UnsavedConfirmDialog
       v-model:open="confirmLeave.show"

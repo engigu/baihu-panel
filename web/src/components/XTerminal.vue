@@ -209,7 +209,7 @@ function connectWebSocket() {
     if (props.initialCommand) {
       setTimeout(() => {
         if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(props.initialCommand + '\n')
+          ws.send(props.initialCommand + '\r\n')
         }
       }, 100)
     }
