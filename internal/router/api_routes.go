@@ -111,6 +111,7 @@ func registerTaskRoutes(g *gin.RouterGroup, c *Controllers) {
 		tasks.PUT("/:id", c.Task.UpdateTask)
 		tasks.DELETE("/:id", c.Task.DeleteTask)
 		tasks.POST("/batch-delete", c.Task.BatchDeleteTasks)
+		tasks.POST("/batch-update", c.Task.BatchUpdateTasks)
 		tasks.DELETE("/batch-by-query", c.Task.BatchDeleteByQuery)
 		tasks.POST("/stop/:logID", c.Task.StopTask)
 		tasks.GET("/tags", c.Task.GetTags)

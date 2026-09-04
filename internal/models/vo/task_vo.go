@@ -55,6 +55,37 @@ type TaskUpdateReq struct {
 	PinType       string               `json:"pin_type" example:"time"`
 }
 
+// TaskBatchUpdateFields 批量更新的具体字段内容
+type TaskBatchUpdateFields struct {
+	LanguageUpdateMode string               `json:"language_update_mode"` // "replace" (替换对应语言版本) 或 "overwrite" (完全重置)
+	Languages          models.TaskLanguages `json:"languages"`
+	Timeout            *int                 `json:"timeout,omitempty"`
+	Tags               *string              `json:"tags,omitempty"`
+	PreCommand         *string              `json:"pre_command,omitempty"`
+	PostCommand        *string              `json:"post_command,omitempty"`
+	AgentID            *string              `json:"agent_id,omitempty"`
+	RetryCount         *int                 `json:"retry_count,omitempty"`
+	RetryInterval      *int                 `json:"retry_interval,omitempty"`
+	RandomRange        *int                 `json:"random_range,omitempty"`
+	CleanConfig        *string              `json:"clean_config,omitempty"`
+	Envs               *string              `json:"envs,omitempty"`
+}
+
+// TaskBatchUpdateFilter 批量更新的筛选条件
+type TaskBatchUpdateFilter struct {
+	Tag             string `json:"tag"`
+	HasLanguage     string `json:"has_language"`     // 原有环境语言名称 (如 "node")
+	LanguageVersion string `json:"language_version"` // 原有环境语言版本 (可选，如 "18.12.0")
+	Type            string `json:"type"`             // 任务类型
+}
+
+// TaskBatchUpdateReq 任务批量更新请求
+type TaskBatchUpdateReq struct {
+	IDs          []string              `json:"ids"`
+	Filter       *TaskBatchUpdateFilter `json:"filter"`
+	UpdateFields TaskBatchUpdateFields `json:"update_fields" binding:"required"`
+}
+
 // TaskVO 任务视图对象
 type TaskVO struct {
 	ID            string               `json:"id"`

@@ -13,7 +13,7 @@ import { Plus, X, ChevronDown, Search, AlertCircle, Terminal, Zap, Lock, Variabl
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { api, type Task, type EnvVar, type Agent } from '@/api'
-import { PATHS, TRIGGER_TYPE } from '@/constants'
+import { PATHS, TRIGGER_TYPE, TASK_TYPE } from '@/constants'
 import { toast } from 'vue-sonner'
 
 import TaskNotificationConfig from './components/TaskNotificationConfig.vue'
@@ -26,6 +26,8 @@ const props = defineProps<{
   open: boolean
   task?: Partial<Task>
   isEdit: boolean
+  isBatch?: boolean
+  selectedIds?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -45,6 +47,9 @@ const envSearchQuery = ref('')
 // 为每个执行位置保存独立的工作目录配置
 const workDirCache = ref<Record<string, string>>({})
 const commentToTaskEnabled = ref(false)
+const allTasks = ref<Task[]>([])
+const selectedBatchTaskIds = ref<string[]>([])
+const taskSearchQuery = ref('')
 const allEnvsEnabled = ref(false)
 const scriptsDir = ref<string>(PATHS.SCRIPTS_DIR)
 
@@ -96,15 +101,23 @@ const notificationConfigRef = ref<InstanceType<typeof TaskNotificationConfig> | 
 
 watch(() => props.open, async (val: boolean) => {
   if (val) {
-    form.value = {
-      retry_count: props.task?.retry_count ?? 0,
-      retry_interval: props.task?.retry_interval ?? 0,
-      random_range: props.task?.random_range ?? 0,
-      timeout: props.task?.timeout ?? 30,
-      pin_type: props.task?.pin_type ?? 'none',
-      pre_command: props.task?.pre_command ?? '',
-      post_command: props.task?.post_command ?? '',
-      ...props.task
+    if (props.isBatch) {
+      form.value = {}
+      selectedLangs.value = []
+      selectedEnvIds.value = []
+      selectedBatchTaskIds.value = []
+      taskSearchQuery.value = ''
+    } else {
+      form.value = {
+        retry_count: props.task?.retry_count ?? 0,
+        retry_interval: props.task?.retry_interval ?? 0,
+        random_range: props.task?.random_range ?? 0,
+        timeout: props.task?.timeout ?? 30,
+        pin_type: props.task?.pin_type ?? 'none',
+        pre_command: props.task?.pre_command ?? '',
+        post_command: props.task?.post_command ?? '',
+        ...props.task
+      }
     }
     // 配置清理会在 TaskAdvancedConfig 中自动处理
     // 解析任务配置
@@ -172,15 +185,46 @@ watch(() => props.open, async (val: boolean) => {
 
 async function loadData() {
   try {
-    const [envs, agents, paths] = await Promise.all([
+    const [envs, agents, paths, taskListRes] = await Promise.all([
       api.env.all(),
       api.agents.list(),
-      api.settings.getPaths().catch(() => ({ scripts_dir: PATHS.SCRIPTS_DIR }))
+      api.settings.getPaths().catch(() => ({ scripts_dir: PATHS.SCRIPTS_DIR })),
+      props.isBatch ? api.tasks.list({ page: 1, page_size: 9999 }) : Promise.resolve({ data: [] })
     ])
     allEnvVars.value = envs
     allAgents.value = agents
     scriptsDir.value = paths?.scripts_dir || PATHS.SCRIPTS_DIR
+    if (taskListRes && taskListRes.data) {
+      // 过滤排除仓库同步任务，仅保留普通定时任务
+      allTasks.value = taskListRes.data.filter((t: any) => t.type !== TASK_TYPE.REPO)
+    }
   } catch { /* ignore */ }
+}
+
+const filteredTasks = computed(() => {
+  const q = taskSearchQuery.value.toLowerCase().trim()
+  if (!q) return allTasks.value
+  return allTasks.value.filter(t => 
+    t.name.toLowerCase().includes(q) || 
+    (t.remark && t.remark.toLowerCase().includes(q)) ||
+    (t.tags && t.tags.toLowerCase().includes(q))
+  )
+})
+
+function toggleSelectTask(id: string) {
+  const idx = selectedBatchTaskIds.value.indexOf(id)
+  if (idx > -1) {
+    selectedBatchTaskIds.value.splice(idx, 1)
+  } else {
+    selectedBatchTaskIds.value.push(id)
+  }
+}
+
+function removeSelectedTask(id: string) {
+  const idx = selectedBatchTaskIds.value.indexOf(id)
+  if (idx > -1) {
+    selectedBatchTaskIds.value.splice(idx, 1)
+  }
 }
 
 function addEnv(id: string) {
@@ -262,7 +306,44 @@ async function save() {
       ? encodeLocalWorkDir(currentWorkDir.value)
       : currentWorkDir.value
 
-    if (props.isEdit && form.value.id) {
+    if (props.isBatch) {
+      const update_fields: any = {}
+      if (selectedLangs.value.length > 0) {
+        update_fields.language_update_mode = 'replace'
+        update_fields.languages = selectedLangs.value.map((l: { name: string; version: string }) => ({
+          name: l.name,
+          version: l.version
+        }))
+      }
+      if (form.value.timeout) update_fields.timeout = Number(form.value.timeout)
+      if (form.value.tags !== undefined) update_fields.tags = form.value.tags
+      if (form.value.pre_command !== undefined) update_fields.pre_command = form.value.pre_command
+      if (form.value.post_command !== undefined) update_fields.post_command = form.value.post_command
+      if (selectedAgentId.value) update_fields.agent_id = selectedAgentId.value === 'local' ? '' : selectedAgentId.value
+      if (form.value.retry_count !== undefined) update_fields.retry_count = Number(form.value.retry_count)
+      if (form.value.retry_interval !== undefined) update_fields.retry_interval = Number(form.value.retry_interval)
+      if (form.value.random_range !== undefined) update_fields.random_range = Number(form.value.random_range)
+      if (form.value.clean_config !== undefined) update_fields.clean_config = form.value.clean_config
+      if (selectedEnvIds.value.length > 0) update_fields.envs = selectedEnvIds.value.join(',')
+
+      const payload: any = { update_fields }
+      if (selectedBatchTaskIds.value.length > 0) {
+        payload.ids = selectedBatchTaskIds.value
+      } else if (props.selectedIds && props.selectedIds.length > 0) {
+        payload.ids = props.selectedIds
+      }
+
+      const res = await api.tasks.batchUpdate(payload)
+      
+      // 如果配置了通知渠道，遍历为所有被更新的任务批量保存通知绑定设置
+      const targetIds = payload.ids || res.updated_ids || []
+      if (targetIds.length > 0 && notificationConfigRef.value) {
+        for (const id of targetIds) {
+          await notificationConfigRef.value.saveConfig(id)
+        }
+      }
+      toast.success(`成功批量更新 ${res.count} 个任务的配置`)
+    } else if (props.isEdit && form.value.id) {
       const task = await api.tasks.update(form.value.id, form.value)
       await notificationConfigRef.value?.saveConfig(task.id)
       toast.success('任务已更新')
@@ -287,12 +368,71 @@ async function save() {
       <div class="flex flex-col max-h-[85vh]">
         <DialogHeader class="px-6 pr-12 pt-6 pb-2 shrink-0 border-b border-muted/50">
           <DialogTitle class="text-xl font-bold py-2">
-            {{ isEdit ? '编辑任务' : '新建任务' }}
+            {{ isBatch ? '批量修改配置与环境' : (isEdit ? '编辑任务' : '新建任务') }}
           </DialogTitle>
         </DialogHeader>
 
         <ScrollArea class="flex-1 min-h-0 px-6">
           <div class="space-y-10 py-6 pb-10">
+            <!-- 批量修改目标范围 Task Scope 下拉+搜索多选 -->
+            <section v-if="isBatch" class="space-y-4">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="h-4 w-1 bg-primary rounded-full shadow-sm shadow-primary/20" />
+                <h3 class="text-sm font-bold text-foreground/90">选择目标任务</h3>
+              </div>
+              <div class="grid gap-4 pl-3 border-l border-muted">
+                <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold pt-2">选择任务</Label>
+                  <div class="sm:col-span-3 space-y-2">
+                    <Popover>
+                      <PopoverTrigger as-child>
+                        <Button variant="outline" class="w-full justify-between h-9 bg-muted/10 border-muted-foreground/15 text-xs rounded-xl">
+                          <span v-if="selectedBatchTaskIds.length === 0" class="text-muted-foreground">下拉搜索选择需要批量修改的任务...</span>
+                          <span v-else class="text-foreground font-semibold">已选择 {{ selectedBatchTaskIds.length }} 个任务</span>
+                          <ChevronDown class="h-4 w-4 opacity-30" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent class="p-0 w-[calc(100vw-32px)] sm:w-[480px] md:w-[540px] max-h-[480px] overflow-hidden rounded-2xl shadow-2xl border-primary/10 transition-all duration-300" align="center" :align-offset="0" :side-offset="12">
+                        <div class="px-4 py-3.5 border-b bg-muted/20 backdrop-blur-md sticky top-0 z-10">
+                          <div class="relative group">
+                            <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
+                            <Input v-model="taskSearchQuery" placeholder="输入搜索任务名称、备注或标签..." class="pl-9 h-9 bg-background/50 border-primary/10 focus:border-primary/30 transition-all rounded-lg text-[13px]" />
+                          </div>
+                        </div>
+                        <ScrollArea class="h-[280px] px-2 py-1.5 overflow-x-hidden">
+                          <div v-if="filteredTasks.length === 0" class="py-12 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+                            <Search class="h-5 w-5 opacity-20" />
+                            未找到相关任务
+                          </div>
+                          <div v-for="t in filteredTasks" :key="t.id" @click.stop="toggleSelectTask(t.id)"
+                            class="flex items-center justify-between p-2.5 rounded-lg hover:bg-primary/5 cursor-pointer transition-all duration-200 border border-transparent hover:border-primary/10 mb-0.5 group">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                              <input type="checkbox" :checked="selectedBatchTaskIds.includes(t.id)" class="rounded text-primary pointer-events-none" />
+                              <div class="flex flex-col min-w-0">
+                                <span class="text-xs font-semibold text-foreground truncate group-hover:text-primary transition-colors">{{ t.name }}</span>
+                                <span class="text-[10px] text-muted-foreground/60 truncate">{{ t.remark || '无备注' }}</span>
+                              </div>
+                            </div>
+                            <div v-if="t.tags" class="flex items-center gap-1 shrink-0">
+                              <Badge v-for="tag in t.tags.split(',').filter(Boolean).slice(0, 2)" :key="tag" variant="outline" class="text-[9px] px-1 py-0.2">{{ tag }}</Badge>
+                            </div>
+                          </div>
+                        </ScrollArea>
+                      </PopoverContent>
+                    </Popover>
+
+                    <!-- 已选任务 Tag 列表 -->
+                    <div v-if="selectedBatchTaskIds.length > 0" class="flex flex-wrap gap-1.5 p-2.5 rounded-xl bg-muted/10 border border-muted-foreground/10 max-h-32 overflow-y-auto custom-scrollbar">
+                      <div v-for="id in selectedBatchTaskIds" :key="id" class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-background border border-muted-foreground/15 text-[11px] font-medium">
+                        <span class="max-w-[140px] truncate">{{ allTasks.find(t => t.id === id)?.name || id }}</span>
+                        <X class="h-3 w-3 text-muted-foreground hover:text-destructive cursor-pointer" @click="removeSelectedTask(id)" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <!-- 基本信息 Section -->
             <section class="space-y-4">
               <div class="flex items-center gap-2 mb-2">
@@ -300,14 +440,16 @@ async function save() {
                 <h3 class="text-sm font-bold text-foreground/90">基本信息</h3>
               </div>
               <div class="grid gap-5 pl-3 border-l border-muted">
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">任务名称</Label>
-                  <Input v-model="form.name" placeholder="输入任务描述性名称" :class="cn('sm:col-span-3 h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50', form.name ? 'text-sm font-medium' : 'text-[11px] font-normal')" />
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">任务备注</Label>
-                  <Input v-model="form.remark" placeholder="输入任务备注信息 (可选)" :class="cn('sm:col-span-3 h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50', form.remark ? 'text-sm font-medium' : 'text-[11px] font-normal')" />
-                </div>
+                <template v-if="!isBatch">
+                  <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                    <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">任务名称</Label>
+                    <Input v-model="form.name" placeholder="输入任务描述性名称" :class="cn('sm:col-span-3 h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50', form.name ? 'text-sm font-medium' : 'text-[11px] font-normal')" />
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                    <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">任务备注</Label>
+                    <Input v-model="form.remark" placeholder="输入任务备注信息 (可选)" :class="cn('sm:col-span-3 h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50', form.remark ? 'text-sm font-medium' : 'text-[11px] font-normal')" />
+                  </div>
+                </template>
                 <TaskTagsConfig v-model="form.tags" />
                 <!-- 执行位置与触发方式 (大屏保持原样，小屏并排展示优化) -->
                 <div class="grid grid-cols-2 sm:grid-cols-1 gap-2.5 sm:gap-5">
@@ -377,7 +519,7 @@ async function save() {
                   <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">前置指令</Label>
                   <div class="sm:col-span-3 relative"><Input v-model="form.pre_command" placeholder="执行主命令前运行的指令 (可选)" :class="cn('h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50 pr-10', form.pre_command ? 'font-mono text-sm tracking-tight font-medium' : 'text-[11px] font-normal')" /><Zap class="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground opacity-40 pointer-events-none" /></div>
                 </div>
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                <div v-if="!isBatch" class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
                   <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">核心命令</Label>
                   <div class="sm:col-span-3 relative"><Input v-model="form.command" placeholder="例如: python main.py --args" :class="cn('h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50 pr-10', form.command ? 'font-mono text-sm tracking-tight font-medium' : 'text-[11px] font-normal')" /><Terminal class="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground opacity-40 pointer-events-none" /></div>
                 </div>
@@ -385,7 +527,7 @@ async function save() {
                   <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">后置指令</Label>
                   <div class="sm:col-span-3 relative"><Input v-model="form.post_command" placeholder="主命令执行后运行的指令 (可选)" :class="cn('h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50 pr-10', form.post_command ? 'font-mono text-sm tracking-tight font-medium' : 'text-[11px] font-normal')" /><Zap class="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground opacity-40 pointer-events-none" /></div>
                 </div>
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                <div v-if="!isBatch" class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
                   <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">工作目录</Label>
                   <div class="sm:col-span-3"><DirTreeSelect v-if="selectedAgentId === 'local'" v-model="currentWorkDir" class="h-9" /><Input v-else v-model="currentWorkDir" placeholder="任务运行路径（留空取 Agent 默认值）" :class="cn('h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50', currentWorkDir ? 'font-mono text-sm tracking-tight font-medium' : 'text-[11px] font-normal')" /></div>
                 </div>
@@ -460,7 +602,7 @@ async function save() {
                 <h3 class="text-sm font-bold text-foreground/90">调度策略</h3>
               </div>
               <div class="grid gap-5 pl-3 border-l border-muted">
-                <template v-if="selectedTriggerType === TRIGGER_TYPE.CRON">
+                <template v-if="!isBatch && selectedTriggerType === TRIGGER_TYPE.CRON">
                   <TaskCronConfig v-model="form.schedule" />
                 </template>
 

@@ -157,6 +157,14 @@ watch(sortMethod, (newVal) => {
   api.settings.setSection('ui', { file_sort_method: newVal }).catch(() => {})
 })
 
+watch(selectedEnvs, (newVal) => {
+  try {
+    localStorage.setItem('run_config_global', JSON.stringify(newVal))
+  } catch (e) {
+    console.error('Failed to save run config:', e)
+  }
+}, { deep: true })
+
 async function initSortMethod() {
   try {
     const val = await api.settings.get('ui', 'file_sort_method')
@@ -403,6 +411,18 @@ async function handleFilesUpload(files: FileList, paths: string[], target: strin
 async function runScript() {
   if (!selectedFile.value) return
   const ext = selectedFile.value.split('.').pop()?.toLowerCase() || ''
+  
+  try {
+    const saved = localStorage.getItem('run_config_global')
+    if (saved) {
+      selectedEnvs.value = JSON.parse(saved)
+      showRunDialog.value = true
+      return
+    }
+  } catch (e) {
+    console.error('Failed to load saved run config:', e)
+  }
+
   const extToLang: Record<string, string> = { 'py': 'python', 'js': 'node', 'ts': 'node', 'go': 'go' }
   const inferred = extToLang[ext]
   selectedEnvs.value = []

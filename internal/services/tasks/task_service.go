@@ -6,6 +6,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services/relation"
 	"github.com/engigu/baihu-panel/internal/utils"
 )
@@ -252,6 +253,181 @@ func (ts *TaskService) BatchDeleteTasks(ids []string) int64 {
 
 	result := database.DB.Where("id IN ?", ids).Delete(&models.Task{})
 	return result.RowsAffected
+}
+
+// BatchUpdateTasks 批量更新任务配置及环境版本
+func (ts *TaskService) BatchUpdateTasks(req vo.TaskBatchUpdateReq) (int64, []string, error) {
+	var tasks []models.Task
+
+	if len(req.IDs) > 0 {
+		database.DB.Where("id IN ?", req.IDs).Find(&tasks)
+	} else if req.Filter != nil {
+		query := database.DB.Model(&models.Task{})
+		if req.Filter.Type != "" {
+			query = query.Where("type = ?", req.Filter.Type)
+		}
+
+		var matchedTasks []models.Task
+		query.Find(&matchedTasks)
+
+		for _, t := range matchedTasks {
+			// 过滤标签
+			if req.Filter.Tag != "" {
+				taskTags := relation.DataRelation.LoadTags([]string{t.ID}, constant.RelationTypeTaskTag)[t.ID]
+				hasTag := false
+				for _, tag := range taskTags {
+					if strings.EqualFold(tag, req.Filter.Tag) {
+						hasTag = true
+						break
+					}
+				}
+				if !hasTag {
+					continue
+				}
+			}
+
+			// 过滤语言版本
+			if req.Filter.HasLanguage != "" {
+				hasLang := false
+				for _, l := range t.Languages {
+					nameMatch := strings.EqualFold(l["name"], req.Filter.HasLanguage) || strings.EqualFold(l["language"], req.Filter.HasLanguage)
+					if nameMatch {
+						if req.Filter.LanguageVersion == "" || l["version"] == req.Filter.LanguageVersion {
+							hasLang = true
+							break
+						}
+					}
+				}
+				if !hasLang {
+					continue
+				}
+			}
+
+			tasks = append(tasks, t)
+		}
+	}
+
+	if len(tasks) == 0 {
+		return 0, nil, nil
+	}
+
+	var updatedIDs []string
+	fields := req.UpdateFields
+
+	for _, task := range tasks {
+		selectCols := []string{"UpdatedAt"}
+
+		// 1. 更新环境语言
+		if len(fields.Languages) > 0 {
+			if fields.LanguageUpdateMode == "overwrite" {
+				task.Languages = fields.Languages
+				selectCols = append(selectCols, "Languages")
+			} else {
+				// 精准替换模式 (replace)
+				newLangs := models.TaskLanguages{}
+				// 将要更新的语言存入 map
+				updateMap := make(map[string]string)
+				for _, l := range fields.Languages {
+					name := l["name"]
+					if name == "" {
+						name = l["language"]
+					}
+					if name != "" {
+						updateMap[strings.ToLower(name)] = l["version"]
+					}
+				}
+
+				processed := make(map[string]bool)
+				for _, existing := range task.Languages {
+					name := existing["name"]
+					if name == "" {
+						name = existing["language"]
+					}
+					lowerName := strings.ToLower(name)
+					if newVer, exists := updateMap[lowerName]; exists {
+						existing["version"] = newVer
+						processed[lowerName] = true
+					}
+					newLangs = append(newLangs, existing)
+				}
+
+				// 追加原任务没有的新语言
+				for _, l := range fields.Languages {
+					name := l["name"]
+					if name == "" {
+						name = l["language"]
+					}
+					lowerName := strings.ToLower(name)
+					if !processed[lowerName] {
+						newLangs = append(newLangs, l)
+					}
+				}
+
+				task.Languages = newLangs
+				selectCols = append(selectCols, "Languages")
+			}
+		}
+
+		// 2. 更新超时时间
+		if fields.Timeout != nil {
+			task.Timeout = *fields.Timeout
+			selectCols = append(selectCols, "Timeout")
+		}
+
+		// 3. 更新前置命令
+		if fields.PreCommand != nil {
+			task.PreCommand = models.BigText(*fields.PreCommand)
+			selectCols = append(selectCols, "PreCommand")
+		}
+
+		// 4. 更新后置命令
+		if fields.PostCommand != nil {
+			task.PostCommand = models.BigText(*fields.PostCommand)
+			selectCols = append(selectCols, "PostCommand")
+		}
+
+		// 5. 更新 AgentID
+		if fields.AgentID != nil {
+			task.AgentID = fields.AgentID
+			selectCols = append(selectCols, "AgentID")
+		}
+
+		// 6. 更新标签
+		if fields.Tags != nil {
+			relation.DataRelation.SaveTags(task.ID, constant.RelationTypeTaskTag, *fields.Tags)
+			task.Tags = *fields.Tags
+			selectCols = append(selectCols, "Tags")
+		}
+
+		// 7. 更新重试与随机延迟配置
+		if fields.RetryCount != nil {
+			task.RetryCount = *fields.RetryCount
+			selectCols = append(selectCols, "RetryCount")
+		}
+		if fields.RetryInterval != nil {
+			task.RetryInterval = *fields.RetryInterval
+			selectCols = append(selectCols, "RetryInterval")
+		}
+		if fields.RandomRange != nil {
+			task.RandomRange = *fields.RandomRange
+			selectCols = append(selectCols, "RandomRange")
+		}
+		if fields.CleanConfig != nil {
+			task.CleanConfig = *fields.CleanConfig
+			selectCols = append(selectCols, "CleanConfig")
+		}
+
+		// 8. 更新环境变量关联
+		if fields.Envs != nil {
+			relation.DataRelation.SaveRelations(task.ID, constant.RelationTypeTaskEnv, *fields.Envs)
+			task.Envs = models.BigText(*fields.Envs)
+		}
+
+		database.DB.Model(&task).Select(selectCols).Updates(&task)
+		updatedIDs = append(updatedIDs, task.ID)
+	}
+
+	return int64(len(updatedIDs)), updatedIDs, nil
 }
 
 // GetAllTags 获取所有任务标签

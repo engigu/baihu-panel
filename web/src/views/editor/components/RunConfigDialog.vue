@@ -55,7 +55,7 @@ function updateEnvVersion(index: number, version: string) {
 
 <template>
   <Dialog :open="open" @update:open="val => emit('update:open', val)">
-    <DialogContent class="max-w-md" @openAutoFocus.prevent>
+    <DialogContent class="max-w-md" @openAutoFocus.prevent @pointerDownOutside.prevent>
       <DialogHeader>
         <DialogTitle class="text-sm">运行配置</DialogTitle>
       </DialogHeader>

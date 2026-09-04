@@ -10,8 +10,11 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import DirTreeSelect from '@/components/DirTreeSelect.vue'
 import TaskLangConfig from './components/TaskLangConfig.vue'
-import { Globe, GitBranch, Shield, Zap, Download, AlertCircle, Terminal } from 'lucide-vue-next'
+import { Globe, GitBranch, Shield, Zap, Download, AlertCircle, Terminal, Search, ChevronDown, X } from 'lucide-vue-next'
+import { Badge } from '@/components/ui/badge'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { api, type Task, type RepoConfig, type Agent } from '@/api'
+import { TASK_TYPE } from '@/constants'
 import { toast } from 'vue-sonner'
 import { cn } from '@/lib/utils'
 
@@ -28,6 +31,7 @@ const props = defineProps<{
   open: boolean
   task?: Partial<Task>
   isEdit: boolean
+  isBatch?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -200,15 +204,22 @@ const isSingleFile = computed({
 
 watch(() => props.open, async (val: boolean) => {
   if (val) {
-    form.value = {
-      retry_count: props.task?.retry_count ?? 0,
-      retry_interval: props.task?.retry_interval ?? 0,
-      random_range: props.task?.random_range ?? 0,
-      timeout: props.task?.timeout ?? 30,
-      pin_type: props.task?.pin_type ?? 'none',
-      pre_command: props.task?.pre_command ?? '',
-      post_command: props.task?.post_command ?? '',
-      ...props.task
+    if (props.isBatch) {
+      form.value = {}
+      selectedLangs.value = []
+      selectedBatchRepoIds.value = []
+      repoSearchQuery.value = ''
+    } else {
+      form.value = {
+        retry_count: props.task?.retry_count ?? 0,
+        retry_interval: props.task?.retry_interval ?? 0,
+        random_range: props.task?.random_range ?? 0,
+        timeout: props.task?.timeout ?? 30,
+        pin_type: props.task?.pin_type ?? 'none',
+        pre_command: props.task?.pre_command ?? '',
+        post_command: props.task?.post_command ?? '',
+        ...props.task
+      }
     }
 
     // 解析仓库配置
@@ -264,10 +275,47 @@ watch(() => props.open, async (val: boolean) => {
   }
 })
 
+const allRepoTasks = ref<Task[]>([])
+const selectedBatchRepoIds = ref<string[]>([])
+const repoSearchQuery = ref('')
+
 async function loadAgents() {
   try {
-    allAgents.value = await api.agents.list()
+    const [agents, repoListRes] = await Promise.all([
+      api.agents.list(),
+      props.isBatch ? api.tasks.list({ type: 'repo', page: 1, page_size: 9999 }) : Promise.resolve({ data: [] })
+    ])
+    allAgents.value = agents
+    if (repoListRes && repoListRes.data) {
+      allRepoTasks.value = repoListRes.data.filter((t: any) => t.type === TASK_TYPE.REPO || t.type === 'repo')
+    }
   } catch { /* ignore */ }
+}
+
+const filteredRepoTasks = computed(() => {
+  const q = repoSearchQuery.value.toLowerCase().trim()
+  if (!q) return allRepoTasks.value
+  return allRepoTasks.value.filter(t => 
+    t.name.toLowerCase().includes(q) || 
+    (t.remark && t.remark.toLowerCase().includes(q)) ||
+    (t.tags && t.tags.toLowerCase().includes(q))
+  )
+})
+
+function toggleSelectRepo(id: string) {
+  const idx = selectedBatchRepoIds.value.indexOf(id)
+  if (idx > -1) {
+    selectedBatchRepoIds.value.splice(idx, 1)
+  } else {
+    selectedBatchRepoIds.value.push(id)
+  }
+}
+
+function removeSelectedRepo(id: string) {
+  const idx = selectedBatchRepoIds.value.indexOf(id)
+  if (idx > -1) {
+    selectedBatchRepoIds.value.splice(idx, 1)
+  }
 }
 
 async function save() {
@@ -297,14 +345,47 @@ async function save() {
     form.value.config = JSON.stringify(configToSave)
     form.value.command = `[${repoConfig.value.source_type}] ${repoConfig.value.source_url}`
     form.value.agent_id = selectedAgentId.value === 'local' ? null : selectedAgentId.value
-    if (props.isEdit && form.value.id) {
+    if (props.isBatch) {
+      const update_fields: any = {}
+      if (selectedLangs.value.length > 0) {
+        update_fields.language_update_mode = 'replace'
+        update_fields.languages = selectedLangs.value.map((l: { name: string; version: string }) => ({
+          name: l.name,
+          version: l.version
+        }))
+      }
+      if (form.value.timeout) update_fields.timeout = Number(form.value.timeout)
+      if (form.value.tags !== undefined) update_fields.tags = form.value.tags
+      if (form.value.pre_command !== undefined) update_fields.pre_command = form.value.pre_command
+      if (form.value.post_command !== undefined) update_fields.post_command = form.value.post_command
+      if (form.value.retry_count !== undefined) update_fields.retry_count = Number(form.value.retry_count)
+      if (form.value.retry_interval !== undefined) update_fields.retry_interval = Number(form.value.retry_interval)
+      if (form.value.random_range !== undefined) update_fields.random_range = Number(form.value.random_range)
+      if (form.value.clean_config !== undefined) update_fields.clean_config = form.value.clean_config
+
+      const payload: any = { update_fields }
+      if (selectedBatchRepoIds.value.length > 0) {
+        payload.ids = selectedBatchRepoIds.value
+      }
+
+      const res = await api.tasks.batchUpdate(payload)
+
+      // 如果配置了通知渠道，遍历为所有被更新的仓库任务批量保存通知绑定设置
+      const targetIds = payload.ids || res.updated_ids || []
+      if (targetIds.length > 0 && notificationConfigRef.value) {
+        for (const id of targetIds) {
+          await notificationConfigRef.value.saveConfig(id)
+        }
+      }
+      toast.success(`成功批量更新 ${res.count} 个仓库的配置`)
+    } else if (props.isEdit && form.value.id) {
       await api.tasks.update(form.value.id, form.value)
       await notificationConfigRef.value?.saveConfig(form.value.id)
-      toast.success('同步任务已更新')
+      toast.success('仓库配置已更新')
     } else {
       const task = await api.tasks.create(form.value)
       await notificationConfigRef.value?.saveConfig(task.id)
-      toast.success('同步任务已创建')
+      toast.success('仓库配置已保存')
     }
     emit('update:open', false)
     emit('saved')
@@ -323,9 +404,9 @@ async function save() {
         <DialogHeader class="px-5 sm:px-6 pr-20 pt-6 pb-2 shrink-0">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-2">
             <DialogTitle class="text-xl font-bold whitespace-nowrap">
-              {{ isEdit ? '编辑仓库同步' : '新建仓库同步' }}
+              {{ isBatch ? '批量修改仓库配置与环境' : (isEdit ? '编辑仓库同步' : '新建仓库同步') }}
             </DialogTitle>
-            <div class="flex flex-wrap items-center justify-end self-end sm:self-auto gap-2 -mr-14 sm:mr-4">
+            <div v-if="!isBatch" class="flex flex-wrap items-center justify-end self-end sm:self-auto gap-2 -mr-14 sm:mr-4">
               <Button v-if="isEdit" variant="outline" size="sm" @click="exportBaihuCommand" title="复制导出 baihu 指令" class="h-8 gap-1.5 bg-primary/5 hover:bg-primary/10 border-primary/20 hover:border-primary/40 text-primary px-3">
                 <Terminal class="w-3.5 h-3.5" />
                 <span class="text-xs">复制指令</span>
@@ -346,6 +427,65 @@ async function save() {
 
         <ScrollArea class="flex-1 min-h-0 px-6">
           <div class="space-y-8 py-4 pb-8">
+            <!-- 批量修改目标仓库 Scope 下拉+搜索多选 -->
+            <section v-if="isBatch" class="space-y-4">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="h-4 w-1 bg-primary rounded-full" />
+                <h3 class="text-sm font-bold text-foreground">选择目标仓库</h3>
+              </div>
+              <div class="grid gap-4 pl-3 border-l border-muted">
+                <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold pt-2">选择仓库</Label>
+                  <div class="sm:col-span-3 space-y-2">
+                    <Popover>
+                      <PopoverTrigger as-child>
+                        <Button variant="outline" class="w-full justify-between h-9 bg-muted/10 border-muted-foreground/15 text-xs rounded-xl">
+                          <span v-if="selectedBatchRepoIds.length === 0" class="text-muted-foreground">下拉搜索选择需要批量修改的仓库...</span>
+                          <span v-else class="text-foreground font-semibold">已选择 {{ selectedBatchRepoIds.length }} 个仓库</span>
+                          <ChevronDown class="h-4 w-4 opacity-30" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent class="p-0 w-[calc(100vw-32px)] sm:w-[480px] md:w-[540px] max-h-[480px] overflow-hidden rounded-2xl shadow-2xl border-primary/10 transition-all duration-300" align="center" :align-offset="0" :side-offset="12">
+                        <div class="px-4 py-3.5 border-b bg-muted/20 backdrop-blur-md sticky top-0 z-10">
+                          <div class="relative group">
+                            <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
+                            <Input v-model="repoSearchQuery" placeholder="输入搜索仓库名称、备注或标签..." class="pl-9 h-9 bg-background/50 border-primary/10 focus:border-primary/30 transition-all rounded-lg text-[13px]" />
+                          </div>
+                        </div>
+                        <ScrollArea class="h-[280px] px-2 py-1.5 overflow-x-hidden">
+                          <div v-if="filteredRepoTasks.length === 0" class="py-12 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+                            <Search class="h-5 w-5 opacity-20" />
+                            未找到相关仓库
+                          </div>
+                          <div v-for="r in filteredRepoTasks" :key="r.id" @click.stop="toggleSelectRepo(r.id)"
+                            class="flex items-center justify-between p-2.5 rounded-lg hover:bg-primary/5 cursor-pointer transition-all duration-200 border border-transparent hover:border-primary/10 mb-0.5 group">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                              <input type="checkbox" :checked="selectedBatchRepoIds.includes(r.id)" class="rounded text-primary pointer-events-none" />
+                              <div class="flex flex-col min-w-0">
+                                <span class="text-xs font-semibold text-foreground truncate group-hover:text-primary transition-colors">{{ r.name }}</span>
+                                <span class="text-[10px] text-muted-foreground/60 truncate">{{ r.remark || r.command || '无备注' }}</span>
+                              </div>
+                            </div>
+                            <div v-if="r.tags" class="flex items-center gap-1 shrink-0">
+                              <Badge v-for="tag in r.tags.split(',').filter(Boolean).slice(0, 2)" :key="tag" variant="outline" class="text-[9px] px-1 py-0.2">{{ tag }}</Badge>
+                            </div>
+                          </div>
+                        </ScrollArea>
+                      </PopoverContent>
+                    </Popover>
+
+                    <!-- 已选仓库 Tag 列表 -->
+                    <div v-if="selectedBatchRepoIds.length > 0" class="flex flex-wrap gap-1.5 p-2.5 rounded-xl bg-muted/10 border border-muted-foreground/10 max-h-32 overflow-y-auto custom-scrollbar">
+                      <div v-for="id in selectedBatchRepoIds" :key="id" class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-background border border-muted-foreground/15 text-[11px] font-medium">
+                        <span class="max-w-[140px] truncate">{{ allRepoTasks.find(r => r.id === id)?.name || id }}</span>
+                        <X class="h-3 w-3 text-muted-foreground hover:text-destructive cursor-pointer" @click="removeSelectedRepo(id)" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <!-- 基本信息 Section -->
             <section class="space-y-4">
               <div class="flex items-center gap-2 mb-1">
@@ -354,21 +494,23 @@ async function save() {
               </div>
 
               <div class="grid gap-4 pl-3 border-l border-muted">
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">任务名称</Label>
-                  <Input v-model="form.name" placeholder="输入同步任务名称" class="sm:col-span-3 h-9 bg-muted/30 border-muted-foreground/20 focus:bg-background transition-all" />
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">任务备注</Label>
-                  <Input v-model="form.remark" placeholder="输入同步任务备注" class="sm:col-span-3 h-9 bg-muted/30 border-muted-foreground/20 focus:bg-background transition-all" />
-                </div>
+                <template v-if="!isBatch">
+                  <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                    <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">任务名称</Label>
+                    <Input v-model="form.name" placeholder="输入同步任务名称" class="sm:col-span-3 h-9 bg-muted/30 border-muted-foreground/20 focus:bg-background transition-all" />
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                    <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">任务备注</Label>
+                    <Input v-model="form.remark" placeholder="输入同步任务备注" class="sm:col-span-3 h-9 bg-muted/30 border-muted-foreground/20 focus:bg-background transition-all" />
+                  </div>
+                </template>
 
                 <TaskTagsConfig v-model="form.tags" />
               </div>
             </section>
 
             <!-- 仓库配置 Section -->
-            <section class="space-y-4">
+            <section v-if="!isBatch" class="space-y-4">
               <div class="flex items-center gap-2 mb-1">
                 <div class="h-4 w-1 bg-primary rounded-full" />
                 <h3 class="text-sm font-bold text-foreground">核心配置</h3>

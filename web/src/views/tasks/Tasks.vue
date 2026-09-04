@@ -8,7 +8,7 @@ import Pagination from '@/components/Pagination.vue'
 import TaskDialog from './TaskDialog.vue'
 import RepoDialog from './RepoDialog.vue'
 import LogViewer from '@/views/history/LogViewer.vue'
-import { Plus, Play, Pencil, Trash2, Search, ScrollText, GitBranch, Terminal, Server, Monitor, X, Loader2, RefreshCw, Wifi, WifiOff, Zap, ZapOff, Copy, Tag, ChevronDown, Pin, PinOff, MoreHorizontal, CalendarClock, Wrench, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next'
+import { Plus, Play, Pencil, Trash2, Search, ScrollText, GitBranch, Terminal, Server, Monitor, X, Loader2, RefreshCw, Wifi, WifiOff, Zap, ZapOff, Copy, Tag, ChevronDown, Pin, PinOff, MoreHorizontal, CalendarClock, Wrench, ArrowUpDown, ArrowUp, ArrowDown, Sparkles } from 'lucide-vue-next'
 import TagInput from '@/components/TagInput.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -162,18 +162,21 @@ function clearAgentFilter() {
 }
 
 function openCreate() {
+  showBatchUpdateDialog.value = false
   editingTask.value = { name: '', remark: '', command: '', type: TASK_TYPE.NORMAL, schedule: '0 * * * * *', timeout: 30, work_dir: '', enabled: true, clean_config: '', envs: '', random_range: 0 }
   isEdit.value = false
   showTaskDialog.value = true
 }
 
 function openCreateRepo() {
+  showBatchUpdateDialog.value = false
   editingTask.value = { name: '', remark: '', type: TASK_TYPE.REPO, schedule: '0 0 0 * * *', timeout: 30, enabled: true, clean_config: '', envs: '', random_range: 0 }
   isEdit.value = false
   showRepoDialog.value = true
 }
 
 function openEdit(task: Task) {
+  showBatchUpdateDialog.value = false
   editingTask.value = { ...task }
   isEdit.value = true
   if (task.type === TASK_TYPE.REPO) {
@@ -269,6 +272,17 @@ function copyCommandText() {
 }
 
 const showBatchDeleteDialog = ref(false)
+const showBatchUpdateDialog = ref(false)
+
+function openBatchUpdate() {
+  editingTask.value = { timeout: 30 }
+  showBatchUpdateDialog.value = true
+  if (filterType.value === TASK_TYPE.REPO) {
+    showRepoDialog.value = true
+  } else {
+    showTaskDialog.value = true
+  }
+}
 
 function confirmDelete(id: string) {
   deleteTaskId.value = id
@@ -862,9 +876,27 @@ watch(() => route.query.agent_id, (newVal: any) => {
           </Button>
 
           <div class="flex items-center gap-1.5 shrink-0 ml-auto sm:ml-0 sm:gap-2">
-            <Button variant="outline" class="shrink-0 px-2 xl:px-3 h-9 shadow-sm text-destructive border-destructive/20 hover:bg-destructive/10" @click="confirmBatchDelete" title="批量删除">
-              <Trash2 class="h-4 w-4 xl:mr-2" /> <span class="hidden xl:inline">批量删除</span>
-            </Button>
+            <!-- 批量操作下拉菜单 -->
+            <DropdownMenu>
+              <DropdownMenuTrigger as-child>
+                <Button variant="outline" class="shrink-0 px-2 xl:px-3 h-9 shadow-sm gap-1">
+                  <Wrench class="h-4 w-4" />
+                  <span class="hidden xl:inline">批量操作</span>
+                  <ChevronDown class="h-3.5 w-3.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" class="w-40">
+                <DropdownMenuItem @click="openBatchUpdate" class="cursor-pointer gap-2">
+                  <Sparkles class="h-4 w-4 text-primary" />
+                  <span>批量修改配置</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem @click="confirmBatchDelete" class="cursor-pointer gap-2 text-destructive focus:text-destructive">
+                  <Trash2 class="h-4 w-4" />
+                  <span>批量删除任务</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button v-if="filterType === TASK_TYPE.NORMAL" @click="openCreate" class="shrink-0 px-2 xl:px-3 h-9 shadow-sm font-medium" title="新建任务">
               <Plus class="h-4 w-4 xl:mr-2" /> <span class="hidden xl:inline">新建任务</span>
             </Button>
@@ -1239,10 +1271,10 @@ watch(() => route.query.agent_id, (newVal: any) => {
     <Pagination :total="total" :page="currentPage" @update:page="handlePageChange" />
 
     <!-- 普通任务弹窗 -->
-    <TaskDialog v-model:open="showTaskDialog" :task="editingTask" :is-edit="isEdit" @saved="loadTasks" />
+    <TaskDialog v-model:open="showTaskDialog" :task="editingTask" :is-edit="isEdit" :is-batch="showBatchUpdateDialog" @saved="loadTasks" />
 
     <!-- 仓库同步弹窗 -->
-    <RepoDialog v-model:open="showRepoDialog" :task="editingTask" :is-edit="isEdit" @saved="loadTasks" />
+    <RepoDialog v-model:open="showRepoDialog" :task="editingTask" :is-edit="isEdit" :is-batch="showBatchUpdateDialog" @saved="loadTasks" />
 
     <LogViewer v-model:open="showLogViewer"
       title="最新日志"

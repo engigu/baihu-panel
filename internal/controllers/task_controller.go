@@ -644,6 +644,53 @@ func (tc *TaskController) deleteRepoPhysicalFiles(task *models.Task) {
 	}
 }
 
+// BatchUpdateTasks 批量更新任务配置及环境
+// @Summary 批量更新任务配置及环境
+// @Description 批量更新任务的具体字段（环境语言版本、超时时间、标签、前置/后置命令等）
+// @Tags 任务管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param req body vo.TaskBatchUpdateReq true "批量更新请求"
+// @Success 200 {object} utils.Response{data=map[string]interface{}}
+// @Router /tasks/batch-update [post]
+func (tc *TaskController) BatchUpdateTasks(c *gin.Context) {
+	var req vo.TaskBatchUpdateReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	count, updatedIDs, err := tc.taskService.BatchUpdateTasks(req)
+	if err != nil {
+		utils.ServerError(c, err.Error())
+		return
+	}
+
+	if count > 0 && len(updatedIDs) > 0 {
+		// 同步受影响的任务至调度器
+		tc.executorService.SyncRepoTasks(updatedIDs, nil)
+
+		// 广播通知 Agent 更新
+		agentIDs := make(map[string]struct{})
+		for _, id := range updatedIDs {
+			task := tc.taskService.GetTaskByID(id)
+			if task != nil && task.AgentID != nil && *task.AgentID != "" {
+				agentIDs[*task.AgentID] = struct{}{}
+			}
+		}
+		for aID := range agentIDs {
+			tc.agentWSManager.BroadcastTasks(aID)
+		}
+	}
+
+	utils.Success(c, gin.H{
+		"count":       count,
+		"updated_ids": updatedIDs,
+	})
+}
+
+
 func (tc *TaskController) BatchDeleteTasks(c *gin.Context) {
 	var req struct {
 		IDs []string `json:"ids" binding:"required"`

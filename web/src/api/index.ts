@@ -169,6 +169,19 @@ export const api = {
       return request(`/tasks/${id}${queryString ? '?' + queryString : ''}`, { method: 'DELETE' })
     },
     batchDelete: (ids: string[]) => request<{ count: number }>('/tasks/batch-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
+    batchUpdate: (data: {
+      ids?: string[]
+      filter?: { tag?: string; has_language?: string; language_version?: string; type?: string }
+      update_fields: {
+        language_update_mode?: string
+        languages?: Array<{ name?: string; language?: string; version: string }>
+        timeout?: number
+        tags?: string
+        pre_command?: string
+        post_command?: string
+        agent_id?: string
+      }
+    }) => request<{ count: number; updated_ids: string[] }>('/tasks/batch-update', { method: 'POST', body: JSON.stringify(data) }),
     batchDeleteByQuery: (params?: { name?: string, agent_id?: string, tags?: string, type?: string }) => {
       const query = new URLSearchParams()
       if (params?.name) query.append('name', params.name)
