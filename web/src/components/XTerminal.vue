@@ -203,7 +203,7 @@ function connectWebSocket() {
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(props.initialCommand + '\r\n')
           }
-        }, 150)
+        }, 400)
       }
       return
     }
