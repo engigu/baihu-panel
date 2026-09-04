@@ -329,10 +329,6 @@ func (tc *TerminalController) handleConPtyMode(conn *websocket.Conn, userID stri
 			}
 		}
 
-		if"true" == "true" {
-			println("[PTY-RECV]", string(message), "HEX:", fmt.Sprintf("%x", message))
-		}
-
 		if _, err := ptySession.Write(message); err != nil {
 			break
 		}
