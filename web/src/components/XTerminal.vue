@@ -31,6 +31,8 @@ let fitAddon: FitAddon | null = null
 let ws: WebSocket | null = null
 let isPtyMode = false
 let inputBuffer = ''
+let cmdHistory: string[] = []
+let historyIdx = -1
 
 const statusMessage = ref<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
 
@@ -115,7 +117,7 @@ function initTerminal(forceConnect = false) {
     }, 200)
   }
 
-  // 复制选中内容
+  // 监听按键事件（优先拦截 ArrowUp / ArrowDown 填充历史命令）
   terminal.attachCustomKeyEventHandler((e) => {
     if (e.ctrlKey && e.code === 'KeyC' && e.type === 'keydown') {
       const selection = terminal?.getSelection()
@@ -124,14 +126,59 @@ function initTerminal(forceConnect = false) {
         return false
       }
     }
+
+    if (e.type === 'keydown') {
+      if (e.key === 'ArrowUp') {
+        if (cmdHistory.length > 0) {
+          if (historyIdx > 0) historyIdx--
+          else historyIdx = 0
+
+          const cmd = cmdHistory[historyIdx] || ''
+          // 发送 \x15 (Ctrl+U) 清空提示符已有输入，然后补上历史命令
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send('\x15' + cmd)
+          }
+        }
+        return false // 阻止转义字符，避免在 ConPTY 下产生无效打字
+      }
+
+      if (e.key === 'ArrowDown') {
+        if (cmdHistory.length > 0) {
+          if (historyIdx < cmdHistory.length - 1) {
+            historyIdx++
+            const cmd = cmdHistory[historyIdx] || ''
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send('\x15' + cmd)
+            }
+          } else {
+            historyIdx = cmdHistory.length
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send('\x15')
+            }
+          }
+        }
+        return false
+      }
+    }
     return true
   })
 
-  // 处理用户输入：PTY 模式下全量透传输入字节，交由底层 Shell/ConPTY 原生处理
+  // 处理用户输入
   terminal.onData((data) => {
     if (!ws || ws.readyState !== WebSocket.OPEN) return
 
     if (isPtyMode) {
+      if (data === '\r') {
+        if (inputBuffer.trim() && cmdHistory[cmdHistory.length - 1] !== inputBuffer.trim()) {
+          cmdHistory.push(inputBuffer.trim())
+          historyIdx = cmdHistory.length
+        }
+        inputBuffer = ''
+      } else if (data === '\x7f' || data === '\b') {
+        if (inputBuffer.length > 0) inputBuffer = inputBuffer.slice(0, -1)
+      } else if (data >= ' ') {
+        inputBuffer += data
+      }
       ws.send(data)
       return
     }
@@ -199,6 +246,11 @@ function connectWebSocket() {
       handleResize()
       if (props.initialCommand && !initialCommandSent) {
         initialCommandSent = true
+        const initCmd = props.initialCommand.trim()
+        if (initCmd && cmdHistory[cmdHistory.length - 1] !== initCmd) {
+          cmdHistory.push(initCmd)
+          historyIdx = cmdHistory.length
+        }
         setTimeout(() => {
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(props.initialCommand + '\r\n')

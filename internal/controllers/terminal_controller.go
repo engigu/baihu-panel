@@ -3,6 +3,7 @@ package controllers
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -315,7 +316,7 @@ func (tc *TerminalController) handleConPtyMode(conn *websocket.Conn, userID stri
 			break
 		}
 
-		// 处理前端窗口 Resize 尺寸消息
+		// 调试控制台接收到的消息
 		if len(message) > 0 && message[0] == '{' {
 			var resizeMsg struct {
 				Type string `json:"type"`
@@ -326,6 +327,10 @@ func (tc *TerminalController) handleConPtyMode(conn *websocket.Conn, userID stri
 				ptySession.Resize(resizeMsg.Cols, resizeMsg.Rows)
 				continue
 			}
+		}
+
+		if"true" == "true" {
+			println("[PTY-RECV]", string(message), "HEX:", fmt.Sprintf("%x", message))
 		}
 
 		if _, err := ptySession.Write(message); err != nil {
