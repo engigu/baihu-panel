@@ -599,6 +599,7 @@ func preserve(baseDir string, paths string) func() {
 }
 
 // filterFiles performs script filtering based on whitelist, blacklist, dependence and extensions.
+// 仅针对 git 管理的文件进行过滤删除，非 git 管理的文件不予处理
 func filterFiles(cfg Config) {
 	// If no filtering is specified, do nothing.
 	if cfg.WhitelistPaths == "" && cfg.Blacklist == "" && cfg.Dependence == "" && cfg.Extensions == "" {
@@ -614,8 +615,24 @@ func filterFiles(cfg Config) {
 	dependence := splitKeywords(cfg.Dependence)
 	extensions := splitKeywords(cfg.Extensions)
 
-	// We'll collect files to delete to avoid modifying while walking if possible.
-	// But os.RemoveAll is fine.
+	// 获取 git 管理的文件列表（相对路径，如 a/b.js）
+	gitFilesMap := make(map[string]bool)
+	gitDir := filepath.Join(dest, ".git")
+	if pathExists(gitDir) {
+		cmd := exec.Command("git", "ls-files")
+		cmd.Dir = dest
+		out, err := cmd.Output()
+		if err == nil {
+			lines := strings.Split(string(out), "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line != "" {
+					// 转换为统一的正斜杠与规范路径
+					gitFilesMap[filepath.ToSlash(line)] = true
+				}
+			}
+		}
+	}
 
 	count := 0
 	filepath.Walk(dest, func(path string, info os.FileInfo, err error) error {
@@ -631,6 +648,12 @@ func filterFiles(cfg Config) {
 
 		rel, _ := filepath.Rel(dest, path)
 		rel = filepath.ToSlash(rel)
+
+		// 如果目标包含 .git 仓库，且该文件不在 git 管理列表中，则跳过（由前置/后置命令维护，不自动过滤）
+		if len(gitFilesMap) > 0 && !gitFilesMap[rel] {
+			return nil
+		}
+
 		filename := info.Name()
 
 		// 1. Check dependence: always keep
@@ -678,7 +701,7 @@ func filterFiles(cfg Config) {
 	})
 
 	if count > 0 {
-		fmt.Printf("过滤完成，共删除 %d 个不符合要求的文件\n", count)
+		fmt.Printf("过滤完成，共删除 %d 个不符合要求的 git 管理文件\n", count)
 		// Try to clean up empty directories
 		cleanEmptyDirs(dest)
 	}
