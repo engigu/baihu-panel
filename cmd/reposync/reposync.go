@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -306,7 +307,7 @@ func syncURL(cfg Config) {
 	restore := preserve(cfg.TargetPath, cfg.WhitelistPaths)
 	defer restore()
 
-	downloadFile(downloadURL, dest, cfg.AuthToken)
+	downloadFile(downloadURL, dest, cfg)
 }
 
 func syncGitFile(cfg Config, repoURL string, env []string) {
@@ -340,7 +341,7 @@ func syncGitFile(cfg Config, repoURL string, env []string) {
 	}
 
 	rawURL = buildProxyURL(rawURL, cfg.Proxy, cfg.ProxyURL)
-	downloadFile(rawURL, dest, cfg.AuthToken)
+	downloadFile(rawURL, dest, cfg)
 }
 
 func getRemoteDefaultBranch(repoURL string, env []string) string {
@@ -389,8 +390,8 @@ func buildProxyURL(url string, proxyType string, proxyURL string) string {
 	return url
 }
 
-func downloadFile(url, dest, authToken string) {
-	fmt.Printf("下载地址: %s\n", url)
+func downloadFile(rawURL string, dest string, cfg Config) {
+	fmt.Printf("下载地址: %s\n", rawURL)
 	fmt.Printf("目标路径: %s\n", dest)
 
 	parentDir := filepath.Dir(dest)
@@ -398,17 +399,29 @@ func downloadFile(url, dest, authToken string) {
 		os.MkdirAll(parentDir, 0755)
 	}
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", rawURL, nil)
 	if err != nil {
 		fmt.Printf("下载准备失败: %v\n", err)
 		os.Exit(1)
 	}
-	if authToken != "" {
-		req.Header.Set("Authorization", "token "+authToken)
+	if cfg.AuthToken != "" {
+		req.Header.Set("Authorization", "token " + cfg.AuthToken)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; reposync)")
 
 	client := &http.Client{Timeout: 300 * time.Second}
+	transport := &http.Transport{}
+	client.Transport = transport
+	// http 代理
+	if cfg.HttpProxy != "" {
+		httpProxyURL, err := url.Parse(cfg.HttpProxy)
+		if err != nil {
+			fmt.Printf("HTTP代理地址格式错误: %v\n", err)
+			os.Exit(1)
+		} else {
+			transport.Proxy = http.ProxyURL(httpProxyURL)
+		}
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Printf("下载请求失败: %v\n", err)

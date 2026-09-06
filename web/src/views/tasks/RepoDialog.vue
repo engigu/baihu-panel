@@ -58,6 +58,7 @@ const repoConfig = ref<RepoConfig>({
   single_file: false,
   proxy_url: '',
   auth_token: '',
+  http_proxy: '',
   whitelist_paths: '',
   blacklist: '',
   dependence: '',
@@ -632,6 +633,11 @@ async function save() {
                     <Input v-model="repoConfig.auth_token" type="password" placeholder="推荐使用 Token 替代密码" class="h-9 bg-muted/30 border-muted-foreground/20 pr-10 text-xs focus:bg-background transition-all" autocomplete="new-password" />
                     <Shield class="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground opacity-40" />
                   </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-medium">HTTP代理</Label>
+                  <Input v-model="repoConfig.http_proxy" placeholder="http://127.0.0.1:7890" class="sm:col-span-3 h-9 bg-muted/30 font-mono text-xs border-muted-foreground/20 focus:bg-background transition-all" autocomplete="off" />
                 </div>
               </div>
             </section>
