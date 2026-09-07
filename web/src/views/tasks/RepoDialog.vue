@@ -110,6 +110,7 @@ function exportBaihuCommand() {
   if (repoConfig.value.proxy && repoConfig.value.proxy !== 'none') parts.push(`--proxy ${repoConfig.value.proxy}`)
   if (repoConfig.value.proxy_url) parts.push(`--proxy-url "${repoConfig.value.proxy_url}"`)
   if (repoConfig.value.auth_token) parts.push(`--auth-token "${repoConfig.value.auth_token}"`)
+  if (repoConfig.value.http_proxy) parts.push(`--http-proxy "${repoConfig.value.http_proxy}"`)
   if (repoConfig.value.whitelist_paths) parts.push(`--whitelist-paths "${repoConfig.value.whitelist_paths}"`)
   if (repoConfig.value.blacklist) parts.push(`--blacklist "${repoConfig.value.blacklist}"`)
   if (repoConfig.value.dependence) parts.push(`--dependence "${repoConfig.value.dependence}"`)
@@ -235,6 +236,7 @@ watch(() => props.open, async (val: boolean) => {
       proxy: 'none',
       proxy_url: '',
       auth_token: '',
+      http_proxy: '',
       whitelist_paths: '',
       blacklist: '',
       dependence: '',

@@ -200,7 +200,12 @@ func syncGit(cfg Config) {
 	}
 
 	if cfg.HttpProxy != "" {
-		env = append(env, "http_proxy="+cfg.HttpProxy, "https_proxy="+cfg.HttpProxy)
+		env = append(env,
+			"http_proxy="+cfg.HttpProxy,
+			"https_proxy="+cfg.HttpProxy,
+			"HTTP_PROXY="+cfg.HttpProxy,
+			"HTTPS_PROXY="+cfg.HttpProxy,
+		)
 	}
 
 	repoURL := buildProxyURL(cfg.SourceURL, cfg.Proxy, cfg.ProxyURL)
@@ -409,18 +414,18 @@ func downloadFile(rawURL string, dest string, cfg Config) {
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; reposync)")
 
-	client := &http.Client{Timeout: 300 * time.Second}
-	transport := &http.Transport{}
-	client.Transport = transport
-	// http 代理
+	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if cfg.HttpProxy != "" {
 		httpProxyURL, err := url.Parse(cfg.HttpProxy)
 		if err != nil {
 			fmt.Printf("HTTP代理地址格式错误: %v\n", err)
 			os.Exit(1)
-		} else {
-			transport.Proxy = http.ProxyURL(httpProxyURL)
 		}
+		transport.Proxy = http.ProxyURL(httpProxyURL)
+	}
+	client := &http.Client{
+		Timeout:   300 * time.Second,
+		Transport: transport,
 	}
 	resp, err := client.Do(req)
 	if err != nil {
