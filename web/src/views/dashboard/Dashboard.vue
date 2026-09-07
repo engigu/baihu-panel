@@ -22,7 +22,7 @@ let themeChangeTimeout: number | null = null
 let isInitializing = true
 
 const statItems = [
-  { key: 'today_execs', label: '今日执行', icon: Play, route: '/history' },
+  { key: 'today_execs', label: '今日执行', icon: Play, route: '/history?date=today' },
   { key: 'tasks', label: '任务总数', icon: ListTodo, route: '/tasks' },
   { key: 'envs', label: '环境变量', icon: Variable, route: '/environments' },
   { key: 'logs', label: '日志总数', icon: ScrollText, route: '/history' },
