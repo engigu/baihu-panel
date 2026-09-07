@@ -31,7 +31,10 @@ func LoadSiteCache() {
 	var settings []models.Setting
 	database.DB.Where("section = ?", constant.SectionSite).Find(&settings)
 	for _, setting := range settings {
-		siteCache[setting.Key] = string(setting.Value)
+		val := string(setting.Value)
+		if val != "" {
+			siteCache[setting.Key] = val
+		}
 	}
 	siteCacheInit = true
 }
@@ -54,7 +57,7 @@ func GetSiteCache(key string) string {
 	siteCacheMu.RLock()
 	defer siteCacheMu.RUnlock()
 
-	if val, ok := siteCache[key]; ok {
+	if val, ok := siteCache[key]; ok && val != "" {
 		return val
 	}
 	if def, ok := constant.DefaultSettings[constant.SectionSite][key]; ok {

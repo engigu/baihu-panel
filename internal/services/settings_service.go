@@ -135,13 +135,13 @@ func (s *SettingsService) Get(section, key string) string {
 	}
 	var setting models.Setting
 	res := database.DB.Where(&models.Setting{Section: section, Key: key}).Limit(1).Find(&setting)
-	if res.Error != nil || res.RowsAffected == 0 {
+	val := string(setting.Value)
+	if res.Error != nil || res.RowsAffected == 0 || val == "" {
 		if def, ok := constant.DefaultSettings[section][key]; ok {
 			return def
 		}
-		return ""
 	}
-	return string(setting.Value)
+	return val
 }
 
 // Set 设置单个值
@@ -173,19 +173,28 @@ func (s *SettingsService) Delete(section, key string) error {
 
 // GetSection 获取整个 section 的设置
 func (s *SettingsService) GetSection(section string) map[string]string {
-	if section == constant.SectionSite {
-		return cache.GetSiteCacheAll()
-	}
 	result := make(map[string]string)
 	if defaults, ok := constant.DefaultSettings[section]; ok {
 		for k, v := range defaults {
 			result[k] = v
 		}
 	}
+	if section == constant.SectionSite {
+		cached := cache.GetSiteCacheAll()
+		for k, v := range cached {
+			if v != "" {
+				result[k] = v
+			}
+		}
+		return result
+	}
 	var settings []models.Setting
 	database.DB.Where("section = ?", section).Find(&settings)
 	for _, setting := range settings {
-		result[setting.Key] = string(setting.Value)
+		val := string(setting.Value)
+		if val != "" {
+			result[setting.Key] = val
+		}
 	}
 	return result
 }

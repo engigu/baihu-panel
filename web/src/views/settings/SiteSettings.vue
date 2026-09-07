@@ -58,6 +58,16 @@ async function loadSettings() {
     const res = await api.settings.getSite()
     form.value = {
       ...res,
+      page_size: res.page_size || '10',
+      cookie_days: res.cookie_days || '7',
+      system_notice_days: res.system_notice_days || '30',
+      system_notice_max_count: res.system_notice_max_count || '500',
+      push_log_days: res.push_log_days || '15',
+      push_log_max_count: res.push_log_max_count || '5000',
+      login_log_days: res.login_log_days || '30',
+      login_log_max_count: res.login_log_max_count || '1000',
+      scheduler_log_days: res.scheduler_log_days || '30',
+      scheduler_log_max_count: res.scheduler_log_max_count || '10000',
       openapi_enabled: res.openapi_enabled === true || (res as any).openapi_enabled === 'true'
     }
   } catch { }
@@ -150,12 +160,12 @@ onMounted(loadSettings)
         <Label class="text-xs font-medium text-foreground">系统常规配置</Label>
         <div class="grid grid-cols-2 gap-3">
           <div class="relative">
-            <Input v-model="form.page_size" type="number" class="h-9 pr-12 text-sm" />
-            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">条/页</span>
+            <Input v-model="form.page_size" type="number" class="h-9 pr-12 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">条/页</span>
           </div>
           <div class="relative">
-            <Input v-model="form.cookie_days" type="number" class="h-9 pr-14 text-sm" />
-            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">天过期</span>
+            <Input v-model="form.cookie_days" type="number" class="h-9 pr-14 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">天过期</span>
           </div>
         </div>
       </div>
@@ -170,12 +180,12 @@ onMounted(loadSettings)
           <Label class="text-xs font-medium text-foreground">系统通知清理</Label>
           <div class="grid grid-cols-2 gap-3">
             <div class="relative">
-              <Input v-model="form.system_notice_days" type="number" class="h-9 pr-14 text-sm" min="0" />
-              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">天清理</span>
+              <Input v-model="form.system_notice_days" type="number" class="h-9 pr-14 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">天清理</span>
             </div>
             <div class="relative">
-              <Input v-model="form.system_notice_max_count" type="number" class="h-9 pr-14 text-sm" min="0" />
-              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">条保留</span>
+              <Input v-model="form.system_notice_max_count" type="number" class="h-9 pr-14 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">条保留</span>
             </div>
           </div>
         </div>
@@ -184,12 +194,12 @@ onMounted(loadSettings)
           <Label class="text-xs font-medium text-foreground">推送日志清理</Label>
           <div class="grid grid-cols-2 gap-3">
             <div class="relative">
-              <Input v-model="form.push_log_days" type="number" class="h-9 pr-14 text-sm" min="0" />
-              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">天清理</span>
+              <Input v-model="form.push_log_days" type="number" class="h-9 pr-14 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">天清理</span>
             </div>
             <div class="relative">
-              <Input v-model="form.push_log_max_count" type="number" class="h-9 pr-14 text-sm" min="0" />
-              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">条保留</span>
+              <Input v-model="form.push_log_max_count" type="number" class="h-9 pr-14 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">条保留</span>
             </div>
           </div>
         </div>
@@ -200,12 +210,12 @@ onMounted(loadSettings)
           <Label class="text-xs font-medium text-foreground">登录日志清理</Label>
           <div class="grid grid-cols-2 gap-3">
             <div class="relative">
-              <Input v-model="form.login_log_days" type="number" class="h-9 pr-14 text-sm" min="0" />
-              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">天清理</span>
+              <Input v-model="form.login_log_days" type="number" class="h-9 pr-14 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">天清理</span>
             </div>
             <div class="relative">
-              <Input v-model="form.login_log_max_count" type="number" class="h-9 pr-14 text-sm" min="0" />
-              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">条保留</span>
+              <Input v-model="form.login_log_max_count" type="number" class="h-9 pr-14 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">条保留</span>
             </div>
           </div>
         </div>
@@ -214,12 +224,12 @@ onMounted(loadSettings)
           <Label class="text-xs font-medium text-foreground">调度日志清理</Label>
           <div class="grid grid-cols-2 gap-3">
             <div class="relative">
-              <Input v-model="form.scheduler_log_days" type="number" class="h-9 pr-14 text-sm" min="0" />
-              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">天清理</span>
+              <Input v-model="form.scheduler_log_days" type="number" class="h-9 pr-14 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">天清理</span>
             </div>
             <div class="relative">
-              <Input v-model="form.scheduler_log_max_count" type="number" class="h-9 pr-14 text-sm" min="0" />
-              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">条保留</span>
+              <Input v-model="form.scheduler_log_max_count" type="number" class="h-9 pr-14 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min="0" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">条保留</span>
             </div>
           </div>
         </div>

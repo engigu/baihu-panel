@@ -148,6 +148,12 @@ func (sc *SettingsController) GetSiteSettings(c *gin.Context) {
 		settings[constant.KeyIcon] = constant.DefaultIcon
 		sc.settingsService.Set(constant.SectionSite, constant.KeyIcon, constant.DefaultIcon)
 	}
+	if settings[constant.KeyPageSize] == "" {
+		settings[constant.KeyPageSize] = constant.DefaultSettings[constant.SectionSite][constant.KeyPageSize]
+	}
+	if settings[constant.KeyCookieDays] == "" {
+		settings[constant.KeyCookieDays] = constant.DefaultSettings[constant.SectionSite][constant.KeyCookieDays]
+	}
 
 	// 解析 JSON 格式的 OpenAPI Token
 	if tokenJson, ok := settings[constant.KeyOpenapiToken]; ok && tokenJson != "" {
@@ -242,6 +248,13 @@ func (sc *SettingsController) UpdateSiteSettings(c *gin.Context) {
 		if b, err := json.Marshal(tokenConfig); err == nil {
 			openapiTokenJson = string(b)
 		}
+	}
+
+	if req.PageSize == "" {
+		req.PageSize = constant.DefaultSettings[constant.SectionSite][constant.KeyPageSize]
+	}
+	if req.CookieDays == "" {
+		req.CookieDays = constant.DefaultSettings[constant.SectionSite][constant.KeyCookieDays]
 	}
 
 	values := map[string]string{
