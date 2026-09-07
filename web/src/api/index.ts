@@ -242,13 +242,14 @@ export const api = {
     delete: (id: string) => request<void>(`/tags/${id}`, { method: 'DELETE' })
   },
   logs: {
-    list: (params?: { page?: number; page_size?: number; task_id?: string; task_name?: string; status?: string }) => {
+    list: (params?: { page?: number; page_size?: number; task_id?: string; task_name?: string; status?: string; date?: string }) => {
       const query = new URLSearchParams()
       if (params?.page) query.set('page', String(params.page))
       if (params?.page_size) query.set('page_size', String(params.page_size))
       if (params?.task_id) query.set('task_id', params.task_id)
       if (params?.task_name) query.set('task_name', params.task_name)
       if (params?.status) query.set('status', params.status)
+      if (params?.date) query.set('date', params.date)
       return request<LogListResponse>(`/logs?${query}`)
     },
     get: (id: string) => request<LogDetail>(`/logs/${id}`),

@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"time"
+
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
@@ -17,7 +19,7 @@ func NewLogController() *LogController {
 
 // GetLogs 获取任务日志列表
 // @Summary 获取任务日志列表
-// @Description 分页获取任务日志列表，支持按任务 ID、任务名称、状态筛选
+// @Description 分页获取任务日志列表，支持按任务 ID、任务名称、状态、日期筛选
 // @Tags 日志管理
 // @Accept json
 // @Produce json
@@ -25,6 +27,7 @@ func NewLogController() *LogController {
 // @Param task_id query string false "任务 ID"
 // @Param task_name query string false "任务名称"
 // @Param status query string false "状态"
+// @Param date query string false "日期 (today 或 YYYY-MM-DD)"
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
 // @Success 200 {object} utils.Response{data=utils.PaginationData{data=[]vo.TaskLogVO}}
@@ -34,6 +37,7 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 	taskID := c.DefaultQuery("task_id", "")
 	taskName := c.DefaultQuery("task_name", "")
 	status := c.DefaultQuery("status", "")
+	date := c.DefaultQuery("date", "")
 
 	var logs []models.TaskLog
 	var total int64
@@ -44,6 +48,18 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 	}
 	if status != "" {
 		query = query.Where("status = ?", status)
+	}
+	if date == "today" {
+		now := time.Now()
+		startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		endOfDay := startOfDay.Add(24 * time.Hour)
+		query = query.Where("created_at >= ? AND created_at < ?", startOfDay, endOfDay)
+	} else if date != "" {
+		if t, err := time.ParseInLocation("2006-01-02", date, time.Local); err == nil {
+			startOfDay := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+			endOfDay := startOfDay.Add(24 * time.Hour)
+			query = query.Where("created_at >= ? AND created_at < ?", startOfDay, endOfDay)
+		}
 	}
 
 	// 按任务名称过滤
