@@ -27,6 +27,7 @@ const selectedLog = ref<TaskLog | null>(null)
 const filterKeyword = ref('')
 const filterTaskId = ref<string | undefined>(undefined)
 const filterStatus = ref<string | undefined>(undefined)
+const filterDate = ref<string | undefined>(undefined)
 const currentPage = ref(1)
 const total = ref(0)
 
@@ -115,7 +116,7 @@ const decompressedOutput = computed(() => {
 async function loadLogs() {
   isRefreshing.value = true
   try {
-    const params: { page: number; page_size: number; task_id?: string; task_name?: string; status?: string } = {
+    const params: { page: number; page_size: number; task_id?: string; task_name?: string; status?: string; date?: string } = {
       page: currentPage.value,
       page_size: pageSize.value
     }
@@ -127,6 +128,9 @@ async function loadLogs() {
     }
     if (filterStatus.value && filterStatus.value !== 'all') {
       params.status = filterStatus.value
+    }
+    if (filterDate.value && filterDate.value !== 'all') {
+      params.date = filterDate.value
     }
     const response = await api.logs.list(params)
     logs.value = response.data
@@ -147,6 +151,11 @@ function handleSearch() {
 }
 
 function handleStatusChange() {
+  currentPage.value = 1
+  loadLogs()
+}
+
+function handleDateChange() {
   currentPage.value = 1
   loadLogs()
 }
@@ -408,6 +417,10 @@ onMounted(() => {
   if (statusParam) {
     filterStatus.value = String(statusParam)
   }
+  const dateParam = route.query.date
+  if (dateParam) {
+    filterDate.value = String(dateParam)
+  }
   loadLogs()
 })
 
@@ -415,6 +428,7 @@ onMounted(() => {
 watch(() => route.query, (newQuery) => {
   filterTaskId.value = newQuery.task_id ? String(newQuery.task_id) : undefined
   filterStatus.value = newQuery.status ? String(newQuery.status) : undefined
+  filterDate.value = newQuery.date ? String(newQuery.date) : undefined
   currentPage.value = 1
   loadLogs()
 }, { deep: true })
@@ -432,6 +446,17 @@ watch(() => route.query, (newQuery) => {
           <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input v-model="filterKeyword" placeholder="搜索任务..." class="h-9 pl-9 w-full sm:w-40 md:w-56 text-sm"
             @input="handleSearch" />
+        </div>
+        <div class="relative flex-1 sm:flex-none">
+          <Select v-model="filterDate" @update:model-value="handleDateChange">
+            <SelectTrigger class="h-9 w-full sm:w-28 text-sm">
+              <SelectValue placeholder="时间范围" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部时间</SelectItem>
+              <SelectItem value="today">今日</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div class="relative flex-1 sm:flex-none">
           <Select v-model="filterStatus" @update:model-value="handleStatusChange">
