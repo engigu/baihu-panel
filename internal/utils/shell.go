@@ -20,7 +20,7 @@ var (
 func GetShell() (shell string, args []string) {
 	shellOnce.Do(func() {
 		if windows.IsWindows() {
-			if path, err := exec.LookPath("pwsh"); err == nil {
+			if path, ok := windows.FindPwsh(); ok {
 				defaultShell = path
 				defaultArgs = []string{}
 				return

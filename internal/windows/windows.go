@@ -2,19 +2,68 @@ package windows
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/logger"
 )
 
+// FindPwsh 尝试查找系统中的 pwsh.exe。
+// 优先在 PATH 中查找；若找不到，则自动扫描 Windows 上常用的 PowerShell 7 默认安装目录，
+// 并在成功找到后将其所在目录动态追加至当前进程的 PATH 环境变量中，以确保后续调用顺利。
+func FindPwsh() (string, bool) {
+	if !IsWindows() {
+		return "", false
+	}
+	if path, err := exec.LookPath("pwsh"); err == nil {
+		return path, true
+	}
+
+	candidates := []string{
+		`C:\Program Files\PowerShell\7\pwsh.exe`,
+		`C:\Program Files (x86)\PowerShell\7\pwsh.exe`,
+		`C:\Program Files\PowerShell\7-preview\pwsh.exe`,
+	}
+
+	if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
+		candidates = append(candidates,
+			filepath.Join(userProfile, `scoop\apps\powershell\current\pwsh.exe`),
+			filepath.Join(userProfile, `scoop\shims\pwsh.exe`),
+			filepath.Join(userProfile, `.mise\shims\pwsh.exe`),
+		)
+	}
+
+	if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
+		candidates = append(candidates,
+			filepath.Join(localAppData, `Microsoft\WindowsApps\pwsh.exe`),
+		)
+	}
+
+	for _, cand := range candidates {
+		if fi, err := os.Stat(cand); err == nil && !fi.IsDir() {
+			dir := filepath.Dir(cand)
+			pathEnv := os.Getenv("PATH")
+			if pathEnv != "" {
+				_ = os.Setenv("PATH", dir+";"+pathEnv)
+			} else {
+				_ = os.Setenv("PATH", dir)
+			}
+			return cand, true
+		}
+	}
+
+	return "", false
+}
+
 // VerifyPwsh checks if pwsh.exe is installed on Windows.
 // If it is not found, it calls logger.Fatalf and terminates the application.
 func VerifyPwsh() {
 	if IsWindows() {
-		if _, err := exec.LookPath("pwsh"); err != nil {
-			logger.Fatalf("Windows 系统必须依赖 PowerShell 7+ (pwsh.exe)，但在系统环境变量 PATH 中未找到，请先进行安装。")
+		if _, ok := FindPwsh(); !ok {
+			logger.Fatalf("Windows 系统必须依赖 PowerShell 7+ (pwsh.exe)，但在系统环境变量 PATH 及常用路径中均未找到，请先进行安装。")
 		}
 	}
 }
