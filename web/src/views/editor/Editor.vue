@@ -716,7 +716,7 @@ onUnmounted(() => {
                 <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded shrink-0" title="重新运行" @click="restartTerminalExecution">
                   <RotateCcw class="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded shrink-0" title="清空控制台" @click="terminalRef?.initTerminal(true)">
+                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded shrink-0" title="清空控制台" @click="terminalRef?.clear()">
                   <Eraser class="h-3.5 w-3.5" />
                 </Button>
                 <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded shrink-0" :title="isTerminalMaximized ? '还原高度' : '最大化控制台'" @click="isTerminalMaximized = !isTerminalMaximized">

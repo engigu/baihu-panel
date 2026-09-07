@@ -258,11 +258,19 @@ function handleResize() {
   }
 }
 
+function clear() {
+  if (terminal) {
+    terminal.clear()
+  }
+  inputBuffer = ''
+}
+
 // 暴露方法给父组件
 defineExpose({
   reconnect,
   dispose,
-  initTerminal
+  initTerminal,
+  clear
 })
 
 onMounted(() => {
