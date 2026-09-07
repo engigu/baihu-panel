@@ -697,16 +697,16 @@ onUnmounted(() => {
             <div class="flex items-center justify-between px-3 py-1.5 bg-[#252526] border-b border-[#333] select-none shrink-0 gap-2">
               <div class="flex items-center gap-1.5 text-xs text-gray-300 min-w-0 flex-1 overflow-hidden">
                 <TerminalIcon class="h-3.5 w-3.5 text-primary shrink-0" />
-                <span class="font-medium tracking-wide uppercase text-[11px] text-gray-400 hidden xs:inline shrink-0">Terminal</span>
-                <span class="text-gray-600 hidden xs:inline shrink-0">|</span>
-                <span class="text-gray-300 font-mono text-[11px] truncate max-w-[100px] xs:max-w-[160px] sm:max-w-md shrink-0">
+                <span class="font-medium tracking-wide uppercase text-[11px] text-gray-400 hidden md:inline shrink-0">Terminal</span>
+                <span class="text-gray-600 hidden md:inline shrink-0">|</span>
+                <span class="text-gray-300 font-mono text-[11px] truncate flex-1 min-w-0" :title="selectedFile || undefined">
                   {{ selectedFile ? selectedFile.split('/').pop() : '执行面板' }}
                 </span>
-                <span v-if="terminalStatus" class="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-black/40 shrink-0 truncate max-w-[100px] sm:max-w-none"
+                <span v-if="terminalStatus" class="inline-flex items-center gap-1 text-[11px] px-1 sm:px-1.5 py-0.5 rounded sm:bg-black/40 shrink-0"
                   :class="terminalStatus.type === 'error' ? 'text-red-400' : terminalStatus.type === 'success' ? 'text-green-400' : 'text-blue-400'"
                   :title="terminalStatus.text">
                   <span class="shrink-0">●</span>
-                  <span class="truncate">{{ terminalStatus.text }}</span>
+                  <span class="hidden sm:inline truncate max-w-[120px] md:max-w-none">{{ terminalStatus.text }}</span>
                 </span>
               </div>
               <div class="flex items-center gap-0.5 sm:gap-1 shrink-0">
