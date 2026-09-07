@@ -694,34 +694,36 @@ onUnmounted(() => {
             class="absolute bottom-0 left-0 right-0 z-20 flex flex-col bg-[#1e1e1e] border-t border-[#333] shadow-2xl transition-all"
             :class="isTerminalMaximized ? 'h-full' : 'h-[45%] min-h-[220px] max-h-[80%]'"
           >
-            <div class="flex items-center justify-between px-3 py-1.5 bg-[#252526] border-b border-[#333] select-none shrink-0">
-              <div class="flex items-center gap-2 text-xs text-gray-300">
-                <TerminalIcon class="h-3.5 w-3.5 text-primary" />
-                <span class="font-medium tracking-wide uppercase text-[11px] text-gray-400">Terminal</span>
-                <span class="text-gray-600">|</span>
-                <span class="text-gray-300 font-mono text-[11px] truncate max-w-[280px] sm:max-w-md">
+            <div class="flex items-center justify-between px-3 py-1.5 bg-[#252526] border-b border-[#333] select-none shrink-0 gap-2">
+              <div class="flex items-center gap-1.5 text-xs text-gray-300 min-w-0 flex-1 overflow-hidden">
+                <TerminalIcon class="h-3.5 w-3.5 text-primary shrink-0" />
+                <span class="font-medium tracking-wide uppercase text-[11px] text-gray-400 hidden xs:inline shrink-0">Terminal</span>
+                <span class="text-gray-600 hidden xs:inline shrink-0">|</span>
+                <span class="text-gray-300 font-mono text-[11px] truncate max-w-[100px] xs:max-w-[160px] sm:max-w-md shrink-0">
                   {{ selectedFile ? selectedFile.split('/').pop() : '执行面板' }}
                 </span>
-                <span v-if="terminalStatus" class="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.2 rounded bg-black/40"
-                  :class="terminalStatus.type === 'error' ? 'text-red-400' : terminalStatus.type === 'success' ? 'text-green-400' : 'text-blue-400'">
-                  ● {{ terminalStatus.text }}
+                <span v-if="terminalStatus" class="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-black/40 shrink-0 truncate max-w-[100px] sm:max-w-none"
+                  :class="terminalStatus.type === 'error' ? 'text-red-400' : terminalStatus.type === 'success' ? 'text-green-400' : 'text-blue-400'"
+                  :title="terminalStatus.text">
+                  <span class="shrink-0">●</span>
+                  <span class="truncate">{{ terminalStatus.text }}</span>
                 </span>
               </div>
-              <div class="flex items-center gap-1">
-                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded" title="配置运行环境" @click="showRunDialog = true">
+              <div class="flex items-center gap-0.5 sm:gap-1 shrink-0">
+                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded shrink-0" title="配置运行环境" @click="showRunDialog = true">
                   <SlidersHorizontal class="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded" title="重新运行" @click="restartTerminalExecution">
+                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded shrink-0" title="重新运行" @click="restartTerminalExecution">
                   <RotateCcw class="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded" title="清空控制台" @click="terminalRef?.initTerminal(true)">
+                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded shrink-0" title="清空控制台" @click="terminalRef?.initTerminal(true)">
                   <Eraser class="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded" :title="isTerminalMaximized ? '还原高度' : '最大化控制台'" @click="isTerminalMaximized = !isTerminalMaximized">
+                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded shrink-0" :title="isTerminalMaximized ? '还原高度' : '最大化控制台'" @click="isTerminalMaximized = !isTerminalMaximized">
                   <Minimize2 v-if="isTerminalMaximized" class="h-3.5 w-3.5" />
                   <Maximize2 v-else class="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded" title="关闭控制台" @click="closeTerminalPanel">
+                <Button variant="ghost" size="icon" class="h-6 w-6 text-gray-400 hover:text-white hover:bg-[#333] rounded shrink-0" title="关闭控制台" @click="closeTerminalPanel">
                   <X class="h-3.5 w-3.5" />
                 </Button>
               </div>

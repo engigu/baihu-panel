@@ -490,12 +490,12 @@ watch(() => route.query, (newQuery) => {
         :class="selectedLog ? 'hidden lg:flex' : 'flex'">
         <!-- 小屏表头 -->
         <div
-          class="flex sm:hidden items-center gap-2 px-3 h-[28px] border-b bg-muted/20 text-xs text-muted-foreground font-medium">
-          <span class="w-14 shrink-0 pl-1">序号</span>
-          <span class="w-8 shrink-0 text-center">类型</span>
+          class="flex sm:hidden items-center gap-1.5 px-3 h-[28px] border-b bg-muted/20 text-xs text-muted-foreground font-medium">
+          <span class="w-10 shrink-0 pl-1">序号</span>
+          <span class="w-6 shrink-0 text-center">类型</span>
           <span class="flex-1 min-w-0">任务名称</span>
-          <span class="w-16 text-right shrink-0">耗时</span>
-          <span class="w-8 text-center shrink-0"></span>
+          <span class="w-14 text-right shrink-0">耗时</span>
+          <span class="w-7 text-center shrink-0"></span>
         </div>
         <!-- 大屏表头 -->
         <div
@@ -518,17 +518,17 @@ watch(() => route.query, (newQuery) => {
             selectedLog?.id === log.id && 'bg-accent/50'
           ]" @click="selectLog(log)">
             <!-- 小屏行 -->
-            <div class="flex sm:hidden items-center gap-2 px-3 py-2">
+            <div class="flex sm:hidden items-center gap-1.5 px-3 py-2">
               <StatusDot :state="log.status" />
-              <span class="w-14 shrink-0 text-muted-foreground text-[10px] tabular-nums">#{{ total - (currentPage - 1) * pageSize - index }}</span>
-              <span class="w-8 shrink-0 flex justify-center" :title="getTaskTypeTitle(log.task_type || 'task')">
+              <span class="w-10 shrink-0 text-muted-foreground text-[10px] tabular-nums truncate">#{{ total - (currentPage - 1) * pageSize - index }}</span>
+              <span class="w-6 shrink-0 flex justify-center" :title="getTaskTypeTitle(log.task_type || 'task')">
                 <GitBranch v-if="log.task_type === TASK_TYPE.REPO" class="h-3.5 w-3.5 text-primary" />
                 <Terminal v-else class="h-3.5 w-3.5 text-primary" />
               </span>
               <span class="flex-1 min-w-0 font-medium truncate text-xs">{{ log.task_name }}</span>
-              <span class="w-16 text-right shrink-0 text-muted-foreground text-xs whitespace-nowrap">{{ formatDuration(log.duration)
+              <span class="w-14 text-right shrink-0 text-muted-foreground text-xs whitespace-nowrap">{{ formatDuration(log.duration)
                 }}</span>
-              <span class="w-8 shrink-0 flex justify-center opacity-100">
+              <span class="w-7 shrink-0 flex justify-center opacity-100">
                 <Button variant="ghost" size="icon"
                   class="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
                   @click.stop="confirmDeleteLog(log.id)" title="删除该日志">
