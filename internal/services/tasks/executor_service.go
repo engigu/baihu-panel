@@ -1279,6 +1279,9 @@ func BuildRepoCommand(task *models.Task) (string, string) {
 	if config.AuthToken != "" {
 		args = append(args, "--auth-token", config.AuthToken)
 	}
+	if config.HttpProxy != "" {
+		args = append(args, "--http-proxy", config.HttpProxy)
+	}
 	if config.WhitelistPaths != "" {
 		args = append(args, "--whitelist-paths", config.WhitelistPaths)
 	}

@@ -98,6 +98,9 @@ export function parseBaihuCommand(command: string): ParsedRepoResult | null {
       case '--auth-token':
         repoConfig.auth_token = value
         break
+      case '--http-proxy':
+        repoConfig.http_proxy = value
+        break
       case '--whitelist-paths':
         repoConfig.whitelist_paths = value
         break

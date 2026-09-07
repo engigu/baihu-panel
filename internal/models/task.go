@@ -52,6 +52,7 @@ type RepoConfig struct {
 	Proxy          string `json:"proxy"`           // 代理类型: none, ghproxy, mirror, custom
 	ProxyURL       string `json:"proxy_url"`       // 自定义代理地址
 	AuthToken      string `json:"auth_token"`      // 认证 Token
+	HttpProxy      string `json:"http_proxy"`      // HTTP 代理
 	WhitelistPaths string `json:"whitelist_paths"` // 同步时保留的路径及脚本筛选白名单关键词，逗号或竖线分割
 	Blacklist      string `json:"blacklist"`       // 脚本筛选黑名单关键词，竖线分割
 	Dependence     string `json:"dependence"`      // 脚本依赖文件关键词，竖线分割

@@ -550,6 +550,7 @@ export interface RepoConfig {
   proxy: string
   proxy_url: string
   auth_token: string
+  http_proxy: string
   whitelist_paths?: string
   blacklist?: string
   dependence?: string
