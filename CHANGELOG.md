@@ -44,12 +44,40 @@ chmod +x baihu-linux-amd64
 
 #### 🪟 Windows 平台
 
-**1. 使用安装包安装（推荐）**
+**方式一：使用 GUI 安装包安装（推荐）**
 
-直接运行附件中的 `BaihuPanel-Setup-v1.1.29-windows-amd64.exe` 完成安装，程序将自动完成域名绑定与快捷方式创建。通过桌面图标或任务栏右下角托盘点击即可直接打开 `http://baihu.local:38052`。
+直接运行附件中的安装程序 `BaihuPanel-Setup-v1.1.29-windows-amd64.exe` 完成安装，程序将自动完成桌面快捷方式创建、开机自启配置与 `127.0.0.1 baihu.local` 域名绑定。安装完成后通过桌面图标或任务栏右下角托盘图标即可直接打开 `http://baihu.local:38052`。
+
+---
+
+**方式二：二进制单文件运行（免安装/便携版）**
+
+**1. 安装前置依赖**
+
+* **安装 `mise`**（用于统一依赖和运行时环境管理）：
+
+  在 PowerShell 中运行以下命令使用 `winget` 安装：
+  ```powershell
+  winget install jdx.mise
+  ```
+
+* **安装 `pwsh`**（PowerShell 7.6+，用于执行后台任务）：
+
+  白虎面板在 Windows 下运行任务和工具链强依赖 PowerShell 7+。请参考 [微软官方 PowerShell 安装文档](https://learn.microsoft.com/zh-cn/powershell/scripting/install/install-powershell-on-windows?view=powershell-7.6) 安装，或通过 `winget` 快捷安装：
+  ```powershell
+  winget install Microsoft.PowerShell
+  ```
+
+**2. 运行面板**
+
+解压下载好的 `.zip` 压缩包（如 `baihu-windows-amd64.zip`），进入解压目录并在 PowerShell 中运行：
+
+```powershell
+.\baihu.exe server
+```
 
 ---
 
 **访问面板：**
-* 启动后访问：`http://baihu.local:38052` 或 `http://localhost:8052`
+* 启动后访问：`http://baihu.local:38052` 或 `http://localhost:38052` (或单文件默认端口 `http://localhost:8052`)
 * **默认账号**：用户名 `admin`，密码见面板首次启动时的控制台日志。
