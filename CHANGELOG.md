@@ -44,14 +44,6 @@ chmod +x baihu-linux-amd64
 
 #### 🪟 Windows 平台
 
-**方式一：使用 GUI 安装包安装（推荐）**
-
-直接运行附件中的安装程序 `BaihuPanel-Setup-v1.1.29-windows-amd64.exe` 完成安装，程序将自动完成桌面快捷方式创建、开机自启配置与 `127.0.0.1 baihu.local` 域名绑定。安装完成后通过桌面图标或任务栏右下角托盘图标即可直接打开 `http://baihu.local:38052`。
-
----
-
-**方式二：二进制单文件运行（免安装/便携版）**
-
 **1. 安装前置依赖**
 
 * **安装 `mise`**（用于统一依赖和运行时环境管理）：
@@ -70,11 +62,17 @@ chmod +x baihu-linux-amd64
 
 **2. 运行面板**
 
-解压下载好的 `.zip` 压缩包（如 `baihu-windows-amd64.zip`），进入解压目录并在 PowerShell 中运行：
+* **方式一：使用 GUI 安装包安装（推荐）**
 
-```powershell
-.\baihu.exe server
-```
+  直接运行附件中的安装程序 `BaihuPanel-Setup-v1.1.29-windows-amd64.exe` 完成安装，程序将自动完成桌面快捷方式创建、开机自启配置与 `127.0.0.1 baihu.local` 域名绑定。安装完成后通过桌面图标或任务栏右下角托盘图标即可直接打开 `http://baihu.local:38052`。
+
+* **方式二：二进制单文件运行（免安装/便携版）**
+
+  解压下载好的 `.zip` 压缩包（如 `baihu-windows-amd64.zip`），进入解压目录并在 PowerShell 中运行：
+
+  ```powershell
+  .\baihu.exe server
+  ```
 
 ---
 
