@@ -15,7 +15,7 @@ func HasConPTYSupport() bool {
 }
 
 // NewConPTYSession 非 Windows 平台存根
-func NewConPTYSession(cmdStr string, cols, rows uint16, env []string, dir string) (*ConPTYSession, error) {
+func NewConPTYSession(exePath string, argsSlice []string, cols, rows uint16, env []string, dir string) (*ConPTYSession, error) {
 	return nil, errors.New("ConPTY 仅在 Windows 平台上支持")
 }
 

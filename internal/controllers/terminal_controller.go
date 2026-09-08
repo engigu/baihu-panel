@@ -89,7 +89,8 @@ func (tc *TerminalController) HandleWebSocket(c *gin.Context) {
 		userID = "1" // 兜底
 	}
 	if windows.IsWindows() {
-		if windows.HasConPTYSupport() {
+		hasConPTY := windows.HasConPTYSupport()
+		if hasConPTY {
 			tc.handleConPtyMode(conn, userID)
 		} else {
 			tc.handlePipeMode(conn, userID)
@@ -251,9 +252,14 @@ func (tc *TerminalController) handleConPtyMode(conn *websocket.Conn, userID stri
 
 	env := tc.buildTerminalEnv(userID, "TERM=xterm-256color")
 
-	cmdStr := "pwsh.exe -NoLogo"
+	pwshPath, ok := windows.FindPwsh()
+	if !ok {
+		pwshPath = "pwsh.exe"
+	}
 
-	ptySession, err := windows.NewConPTYSession(cmdStr, 80, 24, env, workDir)
+	pwshArgs := []string{"-NoLogo", "-NoProfile", "-NoExit"}
+
+	ptySession, err := windows.NewConPTYSession(pwshPath, pwshArgs, 80, 24, env, workDir)
 	if err != nil {
 		// ConPTY 初始化失败时优雅降级回 Pipe 模式
 		tc.handlePipeMode(conn, userID)
@@ -315,7 +321,6 @@ func (tc *TerminalController) handleConPtyMode(conn *websocket.Conn, userID stri
 			break
 		}
 
-		// 调试控制台接收到的消息
 		if len(message) > 0 && message[0] == '{' {
 			var resizeMsg struct {
 				Type string `json:"type"`
