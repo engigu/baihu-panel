@@ -360,15 +360,23 @@ func startPanelService() {
 		configPath = absConfigPath
 	}
 
-	// 使用 ini 包安全且精准地读取 [server] 块内的端口
+	// 使用 ini 包安全且精准地读取 [server] 块内的端口、Host 和 url_prefix
 	port := defaultPort
+	hostStr := "baihu.local"
+	urlPrefix := ""
 	if cfg, err := ini.Load(configPath); err == nil {
 		if pVal, err := cfg.Section("server").Key("port").Int(); err == nil && pVal > 0 {
 			port = pVal
 		}
+		if hVal := cfg.Section("server").Key("host").String(); hVal != "" && hVal != "0.0.0.0" {
+			hostStr = hVal
+		}
+		if prefixVal := cfg.Section("server").Key("url_prefix").String(); prefixVal != "" {
+			urlPrefix = prefixVal
+		}
 	}
 
-	panelUrl = fmt.Sprintf("http://localhost:%d", port)
+	panelUrl = fmt.Sprintf("http://%s:%d%s", hostStr, port, urlPrefix)
 
 	args := []string{"server", "--config", configPath}
 	cmd := exec.Command(baihuExe, args...)

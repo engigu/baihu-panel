@@ -58,3 +58,61 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\data"
+
+[Code]
+// 清理 hosts 中所有的 baihu.local 相关行（完全幂等）
+procedure RemoveHostsEntry();
+var
+  HostsPath: string;
+  Lines, NewLines: TArrayOfString;
+  I, NewCount: Integer;
+  LineTrimmed: string;
+begin
+  HostsPath := ExpandConstant('{sys}\drivers\etc\hosts');
+
+  if FileExists(HostsPath) and LoadStringsFromFile(HostsPath, Lines) then
+  begin
+    NewCount := 0;
+    SetArrayLength(NewLines, GetArrayLength(Lines));
+    for I := 0 to GetArrayLength(Lines) - 1 do
+    begin
+      LineTrimmed := Trim(Lines[I]);
+      // 只要包含 baihu.local 则清除，避免残留重复或失效配置
+      if Pos('baihu.local', LineTrimmed) = 0 then
+      begin
+        NewLines[NewCount] := Lines[I];
+        Inc(NewCount);
+      end;
+    end;
+    SetArrayLength(NewLines, NewCount);
+    SaveStringsToFile(HostsPath, NewLines, False);
+  end;
+end;
+
+// 确保在安装完成时添加唯一且标准的 127.0.0.1 baihu.local
+procedure AddHostsEntry();
+var
+  HostsPath: string;
+begin
+  HostsPath := ExpandConstant('{sys}\drivers\etc\hosts');
+  // 先执行一次清理，确保绝对唯一且不重复
+  RemoveHostsEntry();
+  // 写入唯一的标准映射
+  SaveStringToFile(HostsPath, #13#10 + '127.0.0.1 baihu.local' + #13#10, True);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+  begin
+    AddHostsEntry();
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    RemoveHostsEntry();
+  end;
+end;
