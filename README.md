@@ -38,7 +38,7 @@
 **2026.02.10** - 重构任务调度系统，完善并发控制，优化文件树交互体验，支持任务执行实时日志流  
 **2026.02.06** - 整理 Docker 目录结构，增加 Debian 13 (Trixie) 镜像支持  
 
-[查看完整更新日志](./CHANGELOG.md)
+[查看完整更新日志](https://engigu.github.io/baihu-panel/guide/changelog.html)
 
 ## 项目来由
 
