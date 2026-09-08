@@ -288,6 +288,8 @@ func (tc *TerminalController) handleConPtyMode(conn *websocket.Conn, userID stri
 				writeMessage(buf[:n])
 			}
 			if err != nil {
+				// 当底层 ConPTY 伪终端退出/中断时，主动关闭 WebSocket 连接通知前端
+				conn.Close()
 				break
 			}
 		}

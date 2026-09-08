@@ -18,6 +18,7 @@ var (
 	user32           = syscall.NewLazyDLL("user32.dll")
 	kernel32         = syscall.NewLazyDLL("kernel32.dll")
 	shell32          = syscall.NewLazyDLL("shell32.dll")
+	uxtheme          = syscall.NewLazyDLL("uxtheme.dll")
 	registerClassEx  = user32.NewProc("RegisterClassExW")
 	createWindowEx   = user32.NewProc("CreateWindowExW")
 	defWindowProc    = user32.NewProc("DefWindowProcW")
@@ -34,6 +35,11 @@ var (
 	translateMessage = user32.NewProc("TranslateMessage")
 	dispatchMessage  = user32.NewProc("DispatchMessageW")
 	createMutex      = kernel32.NewProc("CreateMutexW")
+	setDefaultMenuItem = user32.NewProc("SetMenuDefaultItem")
+
+	// 序数导入 Windows 10 1903+ / Win11 原生深色沉浸式主题 API
+	setPreferredAppMode = uxtheme.NewProc("#135")
+	flushMenuThemes     = uxtheme.NewProc("#136")
 )
 
 type wndClassEx struct {
@@ -126,6 +132,14 @@ func main() {
 	}
 	mutexHandle = syscall.Handle(ret)
 	defer syscall.CloseHandle(mutexHandle)
+
+	// 开启 Windows 10 1903+ / Win11 原生沉浸式深色菜单主题渲染 (AppModeAllowDark = 2)
+	if setPreferredAppMode.Find() == nil {
+		setPreferredAppMode.Call(2)
+		if flushMenuThemes.Find() == nil {
+			flushMenuThemes.Call()
+		}
+	}
 
 	// 启动面板服务
 	startPanelService()
@@ -221,10 +235,13 @@ func setupTrayIcon() {
 }
 
 func wndProc(hwnd syscall.Handle, msg uint32, wparam, lparam uintptr) uintptr {
+	const wmLbuttondblclk = 0x0203
 	switch msg {
 	case wmTrayIcon:
 		if lparam == wmRbuttonup {
 			showPopupMenu()
+		} else if lparam == wmLbuttondblclk {
+			openBrowser(panelUrl)
 		}
 	case wmCommand:
 		id := uint32(wparam & 0xFFFF)
@@ -242,25 +259,28 @@ func showPopupMenu() {
 	hmenuRet, _, _ := createPopupMenu.Call()
 	hmenu = syscall.Handle(hmenuRet)
 
-	openStr, _ := syscall.UTF16PtrFromString("🌐 打开面板")
-	statusStrText := "🔴 状态：已停止"
-	statusFlags := uint32(mfString | 0x00000001) // mfGrayed = 0x00000001
+	openStr, _ := syscall.UTF16PtrFromString("打开控制台面板")
+	statusStrText := "服务状态：已停止"
 	if isServiceRunning() {
-		statusStrText = "🟢 状态：运行中"
+		statusStrText = "服务状态：运行中"
 	}
 	statusStr, _ := syscall.UTF16PtrFromString(statusStrText)
-	restartStr, _ := syscall.UTF16PtrFromString("🔄 重启服务")
-	configStr, _ := syscall.UTF16PtrFromString("⚙️ 打开配置文件")
-	logStr, _ := syscall.UTF16PtrFromString("📄 查看运行日志")
-	autoStr, _ := syscall.UTF16PtrFromString("📌 开机自启")
-	exitStr, _ := syscall.UTF16PtrFromString("🚪 退出")
+	restartStr, _ := syscall.UTF16PtrFromString("重启服务")
+	configStr, _ := syscall.UTF16PtrFromString("配置文件 (config.ini)")
+	logStr, _ := syscall.UTF16PtrFromString("运行日志 (server.log)")
+	autoStr, _ := syscall.UTF16PtrFromString("开机自动启动")
+	exitStr, _ := syscall.UTF16PtrFromString("退出")
 
+	// 1. 核心操作：打开面板（加粗设为默认双击项）
 	appendMenu.Call(uintptr(hmenu), mfString, 1, uintptr(unsafe.Pointer(openStr)))
+	setDefaultMenuItem.Call(uintptr(hmenu), 1, 0) // 1 是 ID，0 代表 byPosition = False
+
 	appendMenu.Call(uintptr(hmenu), mfSeparator, 0, 0)
-	appendMenu.Call(uintptr(hmenu), uintptr(statusFlags), 2, uintptr(unsafe.Pointer(statusStr)))
+
+	// 2. 服务状态与管理
+	// 运行状态作为信息项展示（置灰不可选）
+	appendMenu.Call(uintptr(hmenu), uintptr(mfString|0x00000001), 2, uintptr(unsafe.Pointer(statusStr)))
 	appendMenu.Call(uintptr(hmenu), mfString, 3, uintptr(unsafe.Pointer(restartStr)))
-	appendMenu.Call(uintptr(hmenu), mfString, 6, uintptr(unsafe.Pointer(configStr)))
-	appendMenu.Call(uintptr(hmenu), mfString, 7, uintptr(unsafe.Pointer(logStr)))
 
 	autoFlags := uint32(mfString)
 	if isAutoStartEnabled() {
@@ -271,6 +291,14 @@ func showPopupMenu() {
 	appendMenu.Call(uintptr(hmenu), uintptr(autoFlags), 4, uintptr(unsafe.Pointer(autoStr)))
 
 	appendMenu.Call(uintptr(hmenu), mfSeparator, 0, 0)
+
+	// 3. 配置与日志
+	appendMenu.Call(uintptr(hmenu), mfString, 6, uintptr(unsafe.Pointer(configStr)))
+	appendMenu.Call(uintptr(hmenu), mfString, 7, uintptr(unsafe.Pointer(logStr)))
+
+	appendMenu.Call(uintptr(hmenu), mfSeparator, 0, 0)
+
+	// 4. 退出
 	appendMenu.Call(uintptr(hmenu), mfString, 5, uintptr(unsafe.Pointer(exitStr)))
 
 	var pt point

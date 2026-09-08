@@ -55,8 +55,10 @@ function initTerminal(forceConnect = false) {
   }
   terminalRef.value.innerHTML = ''
 
-  // 确保旧的 WebSocket 完全关闭
+  // 确保旧的 WebSocket 完全关闭，并清除其 onclose 监听，防止误覆盖状态
   if (ws) {
+    ws.onclose = null
+    ws.onerror = null
     if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
       ws.close()
     }
@@ -155,9 +157,13 @@ function initTerminal(forceConnect = false) {
 }
 
 function connectWebSocket() {
-  // 如果已有连接，先关闭
-  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-    ws.close()
+  // 如果已有连接，先关闭并移除回调
+  if (ws) {
+    ws.onclose = null
+    ws.onerror = null
+    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+      ws.close()
+    }
     ws = null
   }
 
@@ -174,6 +180,9 @@ function connectWebSocket() {
   }
 
   ws.onopen = () => {
+    if (terminal) {
+      terminal.options.disableStdin = false
+    }
     statusMessage.value = { text: '已连接到终端', type: 'success' }
     emit('connected')
     terminal?.focus()
@@ -209,6 +218,9 @@ function connectWebSocket() {
   }
 
   ws.onclose = () => {
+    if (terminal) {
+      terminal.options.disableStdin = true
+    }
     statusMessage.value = { text: '连接已断开', type: 'error' }
     emit('disconnected')
   }
