@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        arch: [amd64, arm64]
         base_type: [debian]
         include:
           - base_type: debian
@@ -32,6 +33,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        if: matrix.arch == 'arm64'
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -52,9 +57,9 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=raw,value=latest-amd64${{ matrix.tag_suffix }},enable={{is_default_branch}}
-            type=ref,event=branch,suffix=-amd64${{ matrix.tag_suffix }}
-            type=sha,prefix={{branch}}-,suffix=-amd64${{ matrix.tag_suffix }}
+            type=raw,value=latest-${{ matrix.arch }}${{ matrix.tag_suffix }},enable={{is_default_branch}}
+            type=ref,event=branch,suffix=-${{ matrix.arch }}${{ matrix.tag_suffix }}
+            type=sha,prefix={{branch}}-,suffix=-${{ matrix.arch }}${{ matrix.tag_suffix }}
 
       - name: Get build time
         id: build_time
@@ -65,7 +70,7 @@ jobs:
         with:
           context: .
           file: ./docker/Dockerfile
-          platforms: linux/amd64
+          platforms: linux/${{ matrix.arch }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -73,12 +78,12 @@ jobs:
             VERSION=${{ github.ref_name }}
             BUILD_TIME=${{ steps.build_time.outputs.time }}
             BASE_TAG=${{ matrix.base_tag }}
-          cache-from: type=gha,scope=linux-amd64-${{ matrix.base_type }}
-          cache-to: type=gha,scope=linux-amd64-${{ matrix.base_type }},mode=max
+          cache-from: type=gha,scope=linux-${{ matrix.arch }}-${{ matrix.base_type }}
+          cache-to: type=gha,scope=linux-${{ matrix.arch }}-${{ matrix.base_type }},mode=max
           provenance: false
 
       - name: Trigger Watchtower CD Update
-        if: github.ref == 'refs/heads/main' && matrix.base_type == 'debian'
+        if: github.ref == 'refs/heads/main' && matrix.base_type == 'debian' && matrix.arch == 'amd64'
         continue-on-error: true
         env:
           DEPLOY_CMD: ${{ secrets.WATCHTOWER_WEBHOOK_URL }}
