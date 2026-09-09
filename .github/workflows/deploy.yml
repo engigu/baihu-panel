@@ -125,9 +125,7 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
+            type=raw,value=br-${{ github.ref_name }}
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
