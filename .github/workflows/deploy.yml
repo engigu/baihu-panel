@@ -56,24 +56,20 @@ jobs:
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
           flavor: |
             latest=false
-          tags: |
-            type=raw,value=latest-${{ matrix.arch }}${{ matrix.tag_suffix }},enable={{is_default_branch}}
-            type=ref,event=branch,suffix=-${{ matrix.arch }}${{ matrix.tag_suffix }}
-            type=sha,prefix={{branch}}-,suffix=-${{ matrix.arch }}${{ matrix.tag_suffix }}
 
       - name: Get build time
         id: build_time
         run: echo "time=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
 
-      - name: Build and push
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile
           platforms: linux/${{ matrix.arch }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
             VERSION=${{ github.ref_name }}
             BUILD_TIME=${{ steps.build_time.outputs.time }}
@@ -82,8 +78,69 @@ jobs:
           cache-to: type=gha,scope=linux-${{ matrix.arch }}-${{ matrix.base_type }},mode=max
           provenance: false
 
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-linux-${{ matrix.arch }}-${{ matrix.base_type }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-linux-*-debian
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+
       - name: Trigger Watchtower CD Update
-        if: github.ref == 'refs/heads/main' && matrix.base_type == 'debian' && matrix.arch == 'amd64'
+        if: github.ref == 'refs/heads/main'
         continue-on-error: true
         env:
           DEPLOY_CMD: ${{ secrets.WATCHTOWER_WEBHOOK_URL }}
