@@ -548,7 +548,7 @@ func (es *ExecutorService) AddCronTask(task *models.Task) error {
 		return nil
 	}
 	// 在加入调度器前，预先加载好环境信息
-	task.RuntimeEnvs, task.RuntimeSecrets = es.loadEnvVars(task.ID, string(task.Envs))
+	task.RuntimeEnvs, task.RuntimeSecrets = es.loadEnvVars(task, task.ID, string(task.Envs))
 
 	return es.cronManager.AddTask(task)
 }
@@ -660,7 +660,7 @@ func (es *ExecutorService) CreateExecutionRequest(task *models.Task, triggerType
 	}
 
 	// 1. 加载环境变量和机密
-	envs, secrets := es.loadEnvVars(task.ID, string(task.Envs))
+	envs, secrets := es.loadEnvVars(task, task.ID, string(task.Envs))
 	if len(extraEnvs) > 0 {
 		envs = append(envs, extraEnvs...)
 	}
@@ -1179,7 +1179,7 @@ func (es *ExecutorService) HandleAgentResult(result *models.AgentTaskResult) err
 	var secrets []string
 	task := es.taskService.GetTaskByID(result.TaskID)
 	if task != nil {
-		_, secrets = es.loadEnvVars(task.ID, string(task.Envs))
+		_, secrets = es.loadEnvVars(task, task.ID, string(task.Envs))
 
 		// 如果是仓库同步任务，补充 AuthToken
 		if task.Type == constant.TaskTypeRepo {
@@ -1325,23 +1325,28 @@ func BuildRepoCommand(task *models.Task) (string, string) {
 }
 
 // loadEnvVars 加载环境变量和掩码信息，支持全局注入及重名合并
-func (es *ExecutorService) loadEnvVars(taskID string, envIDs string) ([]string, []string) {
-	// 1. 检查是否开启了注入全部环境变量
-	if taskID != "" && es.taskService != nil {
-		task := es.taskService.GetTaskByID(taskID)
-		if task != nil && task.Config != "" {
-			var config models.TaskConfig
-			if err := json.Unmarshal([]byte(task.Config), &config); err == nil {
-				if config.AllEnvs {
-					if es.envService != nil {
-						return es.envService.GetAllEnvVarsAndSecrets()
-					}
+func (es *ExecutorService) loadEnvVars(task *models.Task, taskID string, envIDs string) ([]string, []string) {
+	// 1. 如果未直接传入 task，且 taskID 不为空，则防守性向数据库查询 Task
+	if task == nil && taskID != "" && es.taskService != nil {
+		task = es.taskService.GetTaskByID(taskID)
+	}
+
+	// 2. 检查是否开启了注入全部环境变量
+	if task != nil && task.Config != "" {
+		var config models.TaskConfig
+		if err := json.Unmarshal([]byte(task.Config), &config); err == nil {
+			if config.AllEnvs {
+				if es.envService != nil {
+					return es.envService.GetAllEnvVarsAndSecrets()
 				}
 			}
 		}
 	}
 
-	// 2. 否则按 ID 列表进行加载（支持合并逻辑在 envService 中处理）
+	// 3. 否则按 ID 列表进行加载（支持合并逻辑在 envService 中处理）
+	if task != nil && envIDs == "" {
+		envIDs = string(task.Envs)
+	}
 	if envIDs == "" {
 		return nil, nil
 	}
@@ -1363,7 +1368,7 @@ func (es *ExecutorService) refreshExecutionRequestEnvs(req *executor.ExecutionRe
 	currentEnvs := req.Envs
 
 	// 2. 从数据库加载最新的环境变量设置
-	envs, secrets := es.loadEnvVars(task.ID, string(task.Envs))
+	envs, secrets := es.loadEnvVars(task, task.ID, string(task.Envs))
 	req.Envs = envs
 	req.Secrets = secrets
 

@@ -46,7 +46,7 @@ func SendInternalRequest(method, relPath string, payload interface{}) ([]byte, i
 	}
 	req.Header.Set("X-Internal-Token", secret)
 
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("网络连接失败，请确保白虎面板常驻后台服务正在运行中: %v", err)
