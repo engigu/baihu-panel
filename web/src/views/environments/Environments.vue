@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
@@ -27,6 +28,7 @@ function formatDate(dateStr?: string) {
   }
 }
 
+const route = useRoute()
 const { pageSize } = useSiteSettings()
 
 const envVars = ref<EnvVar[]>([])
@@ -140,6 +142,14 @@ function isNotifyEnv(name: string) {
 }
 
 onMounted(() => {
+  const keyword = route.query.keyword || route.query.name
+  if (keyword) {
+    filterName.value = String(keyword)
+  }
+  const tag = route.query.tag
+  if (tag) {
+    filterTags.value = String(tag)
+  }
   if (activeTab.value === ENV_TYPE.SECRET) {
     checkSecretStatus()
   }

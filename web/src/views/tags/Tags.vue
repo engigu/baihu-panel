@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Pagination from '@/components/Pagination.vue'
-import { Plus, Pencil, Trash2, Search, Tag, X, RefreshCw, Layers, Terminal, Variable } from 'lucide-vue-next'
-import { api, type TagItem } from '@/api'
+import { Plus, Pencil, Trash2, Search, Tag, X, RefreshCw, Layers, Terminal, Variable, GitBranch, ExternalLink } from 'lucide-vue-next'
+import { api, type TagItem, type TagResourceItem } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -140,6 +141,52 @@ async function deleteTag() {
   }
 }
 
+// 关联资源弹窗状态与操作
+const router = useRouter()
+const showResourcesDialog = ref(false)
+const resourcesLoading = ref(false)
+const selectedTagForResources = ref<TagItem | null>(null)
+const resourceList = ref<TagResourceItem[]>([])
+const resourceFilter = ref('')
+
+const filteredResources = computed(() => {
+  if (!resourceFilter.value.trim()) return resourceList.value
+  const kw = resourceFilter.value.trim().toLowerCase()
+  return resourceList.value.filter(item => 
+    item.name.toLowerCase().includes(kw) ||
+    item.remark?.toLowerCase().includes(kw) ||
+    item.extra?.toLowerCase().includes(kw) ||
+    item.type_name?.toLowerCase().includes(kw)
+  )
+})
+
+async function openResourcesDialog(tag: TagItem) {
+  selectedTagForResources.value = tag
+  resourceFilter.value = ''
+  resourceList.value = []
+  showResourcesDialog.value = true
+  resourcesLoading.value = true
+  try {
+    const res = await api.tags.getResources(tag.id)
+    resourceList.value = res.resources || []
+  } catch (err: any) {
+    toast.error('获取关联资源列表失败: ' + err.message)
+  } finally {
+    resourcesLoading.value = false
+  }
+}
+
+function navigateToResource(item: TagResourceItem) {
+  showResourcesDialog.value = false
+  if (item.type === 'task') {
+    router.push({ path: '/tasks', query: { keyword: item.name, type: 'task' } })
+  } else if (item.type === 'repo') {
+    router.push({ path: '/tasks', query: { keyword: item.name, type: 'repo' } })
+  } else if (item.type === 'env') {
+    router.push({ path: '/environments', query: { keyword: item.name } })
+  }
+}
+
 onMounted(() => {
   loadTags()
 })
@@ -215,7 +262,7 @@ onMounted(() => {
           <span class="w-12 shrink-0 pl-1">序号</span>
           <span class="w-64 shrink-0 pl-1">标签名称</span>
           <span class="w-32 shrink-0">类型</span>
-          <span class="w-24 shrink-0 text-center">关联资源数</span>
+          <span class="w-28 shrink-0 text-center">关联资源</span>
           <span class="flex-1 min-w-0">创建时间</span>
           <span class="w-24 shrink-0 text-right pr-2">操作</span>
         </div>
@@ -247,22 +294,40 @@ onMounted(() => {
             </div>
 
             <!-- Type -->
-            <div class="w-32 shrink-0 flex items-center pl-4">
-              <component
-                :is="tag.type === 'task_tag' ? Terminal : Variable"
-                class="h-4 w-4 shrink-0"
-                :class="tag.type === 'task_tag' ? 'text-primary' : 'text-amber-500 dark:text-amber-400'"
-                :title="tag.type === 'task_tag' ? '任务标签' : '环境变量'"
-              />
+            <div class="w-32 shrink-0 flex items-center">
+              <span
+                class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium"
+                :class="tag.type === 'task_tag'
+                  ? 'bg-primary/10 text-primary border border-primary/20'
+                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'"
+              >
+                <component
+                  :is="tag.type === 'task_tag' ? Terminal : Variable"
+                  class="h-3 w-3 shrink-0"
+                />
+                <span>{{ tag.type === 'task_tag' ? '任务标签' : '环境变量' }}</span>
+              </span>
             </div>
 
             <!-- Association Count -->
-            <div class="w-24 shrink-0 text-center">
-              <span
-                class="font-mono text-xs font-semibold px-2 py-0.5 rounded-full"
-                :class="tag.association_count > 0 ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted text-muted-foreground'"
+            <div class="w-28 shrink-0 text-center">
+              <button
+                v-if="tag.association_count > 0"
+                type="button"
+                class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium transition-all duration-150 group cursor-pointer border select-none bg-primary/10 text-primary border-primary/25 hover:bg-primary hover:text-primary-foreground hover:border-primary hover:shadow-xs active:scale-95"
+                :title="`点击查看关联的 ${tag.association_count} 个资源`"
+                @click="openResourcesDialog(tag)"
               >
-                {{ tag.association_count }}
+                <span class="font-mono font-semibold">{{ tag.association_count }}</span>
+                <span class="text-[11px] opacity-80">项</span>
+                <ExternalLink class="h-3 w-3 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+              </button>
+              <span
+                v-else
+                class="inline-flex items-center justify-center font-mono text-xs px-2.5 py-0.5 rounded-full text-muted-foreground/40 bg-muted/20 border border-transparent select-none cursor-default"
+                title="暂无关联资源"
+              >
+                0 项
               </span>
             </div>
 
@@ -303,23 +368,40 @@ onMounted(() => {
               <span class="font-bold text-sm truncate">{{ tag.name }}</span>
             </div>
             <div class="flex items-center">
-              <component
-                :is="tag.type === 'task_tag' ? Terminal : Variable"
-                class="h-3.5 w-3.5 shrink-0"
-                :class="tag.type === 'task_tag' ? 'text-primary' : 'text-amber-500 dark:text-amber-400'"
-                :title="tag.type === 'task_tag' ? '任务标签' : '环境变量'"
-              />
+              <span
+                class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium"
+                :class="tag.type === 'task_tag'
+                  ? 'bg-primary/10 text-primary border border-primary/20'
+                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'"
+              >
+                <component
+                  :is="tag.type === 'task_tag' ? Terminal : Variable"
+                  class="h-3 w-3 shrink-0"
+                />
+                <span>{{ tag.type === 'task_tag' ? '任务标签' : '环境变量' }}</span>
+              </span>
             </div>
           </div>
 
           <div class="flex items-center justify-between text-xs text-muted-foreground mt-1">
-            <div class="flex items-center gap-1">
+            <div class="flex items-center gap-1.5">
               <span>关联资源:</span>
-              <span
-                class="font-mono font-bold px-1.5 py-0.2 rounded bg-primary/10 text-primary"
-                :class="{ 'bg-muted text-muted-foreground': tag.association_count === 0 }"
+              <button
+                v-if="tag.association_count > 0"
+                type="button"
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/25 hover:bg-primary hover:text-primary-foreground transition-all cursor-pointer select-none group"
+                :title="`点击查看关联的 ${tag.association_count} 个资源`"
+                @click="openResourcesDialog(tag)"
               >
-                {{ tag.association_count }}
+                <span class="font-mono font-bold">{{ tag.association_count }}</span>
+                <span class="text-[10px] opacity-80">项</span>
+                <ExternalLink class="h-2.5 w-2.5 opacity-60 group-hover:opacity-100 transition-all" />
+              </button>
+              <span
+                v-else
+                class="inline-flex items-center font-mono text-xs px-2 py-0.5 rounded-full text-muted-foreground/40 bg-muted/20 select-none"
+              >
+                0 项
               </span>
             </div>
             <div>{{ formatDate(tag.created_at) }}</div>
@@ -405,6 +487,142 @@ onMounted(() => {
         <DialogFooter class="gap-2 sm:gap-0">
           <Button variant="outline" size="sm" @click="showDeleteConfirm = false" class="h-9">取消</Button>
           <Button variant="destructive" size="sm" @click="deleteTag" class="h-9">确认删除</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Resources Detail Dialog -->
+    <Dialog v-model:open="showResourcesDialog">
+      <DialogContent class="sm:max-w-[680px] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <!-- Header -->
+        <DialogHeader class="p-5 pb-4 border-b border-border/40">
+          <div class="flex items-center justify-between gap-3">
+            <DialogTitle class="flex items-center gap-2.5 text-base sm:text-lg font-bold">
+              <div class="p-1.5 rounded-md bg-primary/10 text-primary">
+                <Tag class="h-4 w-4" />
+              </div>
+              <span class="truncate">关联资源列表 - {{ selectedTagForResources?.name }}</span>
+            </DialogTitle>
+          </div>
+          <DialogDescription class="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+            <span>标签类型：{{ selectedTagForResources?.type === 'task_tag' ? '任务标签' : '环境变量' }}</span>
+            <span>·</span>
+            <span>共关联 <strong class="text-foreground font-mono">{{ resourceList.length }}</strong> 项资源</span>
+          </DialogDescription>
+        </DialogHeader>
+
+        <!-- Search Bar -->
+        <div v-if="resourceList.length > 0 || resourceFilter" class="px-5 py-3 border-b border-border/40 bg-muted/20">
+          <div class="relative">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              v-model="resourceFilter"
+              placeholder="搜索关联资源的名称、命令、备注..."
+              class="h-8 pl-8 text-xs bg-background"
+            />
+            <button
+              v-if="resourceFilter"
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+              @click="resourceFilter = ''"
+            >
+              <X class="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Resources List -->
+        <div class="flex-1 overflow-y-auto p-5 space-y-2.5 min-h-[160px] max-h-[50vh]">
+          <div v-if="resourcesLoading" class="py-12 flex flex-col items-center justify-center gap-3 text-muted-foreground text-xs">
+            <RefreshCw class="h-5 w-5 animate-spin text-primary" />
+            <span>正在加载关联资源...</span>
+          </div>
+          
+          <div v-else-if="filteredResources.length === 0" class="py-12 text-center text-muted-foreground text-xs">
+            <div class="inline-flex p-3 rounded-full bg-muted/50 mb-2">
+              <Tag class="h-6 w-6 text-muted-foreground/50" />
+            </div>
+            <p>{{ resourceFilter ? '没有找到匹配的关联资源' : '该标签暂未关联任何资源' }}</p>
+          </div>
+
+          <div
+            v-else
+            v-for="item in filteredResources"
+            :key="item.id"
+            class="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border border-border/60 hover:border-primary/30 hover:bg-muted/30 transition-all text-xs"
+          >
+            <!-- Left Info -->
+            <div class="flex items-start gap-2.5 min-w-0 flex-1">
+              <!-- Type Icon -->
+              <div class="mt-0.5 shrink-0">
+                <component
+                  :is="item.type === 'repo' ? GitBranch : (item.type === 'env' ? Variable : Terminal)"
+                  class="h-4 w-4"
+                  :class="item.type === 'repo' ? 'text-emerald-500' : (item.type === 'env' ? 'text-amber-500' : 'text-primary')"
+                />
+              </div>
+
+              <div class="min-w-0 flex-1 space-y-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <!-- Name -->
+                  <span class="font-semibold text-foreground text-sm truncate max-w-[280px]" :title="item.name">
+                    {{ item.name }}
+                  </span>
+
+                  <!-- Type Badge -->
+                  <span
+                    class="px-1.5 py-0.5 text-[10px] rounded font-medium shrink-0"
+                    :class="item.type === 'repo'
+                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                      : (item.type === 'env'
+                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                        : 'bg-primary/10 text-primary border border-primary/20')"
+                  >
+                    {{ item.type_name }}
+                  </span>
+
+                  <!-- Status Dot/Badge -->
+                  <span
+                    v-if="item.status !== undefined"
+                    class="inline-flex items-center gap-1 text-[10px] font-medium"
+                    :class="item.status === 1 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'"
+                  >
+                    <span class="h-1.5 w-1.5 rounded-full" :class="item.status === 1 ? 'bg-emerald-500' : 'bg-muted-foreground/50'" />
+                    {{ item.status === 1 ? '已启用' : '已禁用' }}
+                  </span>
+                </div>
+
+                <!-- Command / Extra / Remark -->
+                <div v-if="item.extra || item.remark" class="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
+                  <div v-if="item.extra" class="font-mono bg-muted/50 px-2 py-0.5 rounded text-foreground/80 truncate max-w-full" :title="item.extra">
+                    {{ item.extra }}
+                  </div>
+                  <div v-if="item.remark" class="text-muted-foreground truncate" :title="item.remark">
+                    备注: {{ item.remark }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Action -->
+            <div class="flex items-center justify-end shrink-0 pl-2">
+              <Button
+                variant="outline"
+                size="sm"
+                class="h-7 text-xs gap-1.5 border-primary/20 hover:bg-primary hover:text-primary-foreground transition-all cursor-pointer"
+                @click="navigateToResource(item)"
+              >
+                <span>前往查看</span>
+                <ExternalLink class="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <DialogFooter class="p-3 px-5 border-t border-border/40 bg-muted/10">
+          <Button variant="outline" size="sm" @click="showResourcesDialog = false" class="h-8 text-xs cursor-pointer">
+            关闭
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -113,3 +113,22 @@ func (tc *TagController) DeleteTag(c *gin.Context) {
 	}
 	utils.SuccessMsg(c, "删除成功")
 }
+
+// GetTagResources 获取指定标签关联的实际资源列表
+// @Summary 获取标签关联资源
+// @Description 获取指定标签关联的任务、仓库或环境变量列表
+// @Tags 标签管理
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "标签ID"
+// @Success 200 {object} utils.Response{data=services.TagResourcesResponse}
+// @Router /tags/{id}/resources [get]
+func (tc *TagController) GetTagResources(c *gin.Context) {
+	id := c.Param("id")
+	resources, err := tc.tagService.GetTagResources(id)
+	if err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	utils.Success(c, resources)
+}

@@ -364,6 +364,7 @@ func registerTagRoutes(g *gin.RouterGroup, c *Controllers) {
 		tags.POST("", c.Tag.CreateTag)
 		tags.PUT("/:id", c.Tag.UpdateTag)
 		tags.DELETE("/:id", c.Tag.DeleteTag)
+		tags.GET("/:id/resources", c.Tag.GetTagResources)
 	}
 }
 

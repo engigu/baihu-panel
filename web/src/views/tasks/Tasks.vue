@@ -610,7 +610,7 @@ async function loadViewsFromSettings() {
     const val = res['task_views']
     if (val) {
       taskViews.value = JSON.parse(val)
-      if (!route.query.agent_id) {
+      if (!route.query.agent_id && !route.query.keyword && !route.query.name && !route.query.tag && !route.query.type) {
         const defaultView = taskViews.value.find((v: any) => v.isDefault)
         if (defaultView) {
           applyViewWithoutSearch(defaultView)
@@ -713,10 +713,22 @@ onMounted(async () => {
   // 先加载 agents，再处理 URL 参数
   await loadAgents()
 
-  // 从 URL 参数读取 agent_id
+  // 从 URL 参数读取
   const agentIdParam = route.query.agent_id
   if (agentIdParam) {
     filterAgentId.value = String(agentIdParam)
+  }
+  const keywordParam = route.query.keyword || route.query.name
+  if (keywordParam) {
+    filterName.value = String(keywordParam)
+  }
+  const typeParam = route.query.type
+  if (typeParam && (typeParam === TASK_TYPE.NORMAL || typeParam === TASK_TYPE.REPO)) {
+    filterType.value = String(typeParam)
+  }
+  const tagParam = route.query.tag
+  if (tagParam) {
+    filterTags.value = String(tagParam)
   }
 
   // 先加载视图配置，若有默认视图且无 URL 显式参数则在此阶段应用

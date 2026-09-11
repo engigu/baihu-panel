@@ -239,7 +239,8 @@ export const api = {
     },
     create: (data: { name: string; type: string }) => request<TagItem>('/tags', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: { name: string }) => request<void>(`/tags/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    delete: (id: string) => request<void>(`/tags/${id}`, { method: 'DELETE' })
+    delete: (id: string) => request<void>(`/tags/${id}`, { method: 'DELETE' }),
+    getResources: (id: string) => request<TagResourcesResponse>(`/tags/${id}/resources`)
   },
   logs: {
     list: (params?: { page?: number; page_size?: number; task_id?: string; task_name?: string; status?: string; date?: string }) => {
@@ -890,6 +891,24 @@ export interface TagItem {
 export interface TagListResponse {
   data: TagItem[]
   total: number
+}
+
+export interface TagResourceItem {
+  id: string
+  type: 'task' | 'repo' | 'env'
+  type_name: string
+  name: string
+  extra: string
+  remark: string
+  status: number
+  created_at: string
+}
+
+export interface TagResourcesResponse {
+  tag_id: string
+  tag_name: string
+  tag_type: string
+  resources: TagResourceItem[]
 }
 
 
