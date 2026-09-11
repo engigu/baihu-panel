@@ -20,11 +20,19 @@ const tagsList = computed(() => {
 })
 
 function addTag(passedTag?: string) {
-  const val = (passedTag || tagInput.value).trim()
+  const val = (passedTag ?? tagInput.value ?? '').trim()
   if (!val) return
+  const newItems = val.split(/[,，]/).map(t => t.trim()).filter(Boolean)
+  if (newItems.length === 0) return
   const currentTags = [...tagsList.value]
-  if (!currentTags.includes(val)) {
-    currentTags.push(val)
+  let changed = false
+  for (const item of newItems) {
+    if (!currentTags.includes(item)) {
+      currentTags.push(item)
+      changed = true
+    }
+  }
+  if (changed) {
     emit('update:modelValue', currentTags.join(','))
   }
   tagInput.value = ''
