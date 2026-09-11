@@ -29,7 +29,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: 'web/package-lock.json'
 
@@ -47,11 +47,11 @@ jobs:
         env:
           VERSION: ${{ github.ref_name }}
         run: |
-          chmod +x docker/build-go.sh
+          chmod +x build/build-go.sh
           # 1. 产出供 Docker 极速装配的双架构二进制与全平台 Agent
-          ./docker/build-go.sh ci-artifacts dist-assets
+          ./build/build-go.sh ci-artifacts dist-assets
           # 2. 产出供 GitHub Release 发布的内嵌 web 归档包与 Windows 编译物
-          ./docker/build-go.sh release-artifacts .
+          ./build/build-go.sh release-artifacts .
 
       - name: Upload Windows Binaries
         uses: actions/upload-artifact@v4
@@ -235,8 +235,6 @@ jobs:
           outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
             BASE_TAG=${{ matrix.base_tag }}
-          cache-from: type=gha,scope=linux-${{ matrix.arch }}-${{ matrix.base_type }}
-          cache-to: type=gha,scope=linux-${{ matrix.arch }}-${{ matrix.base_type }},mode=max
           provenance: false
 
       - name: Export digest

@@ -60,8 +60,8 @@ COPY --from=frontend-builder /app/web/dist ./internal/static/dist
 RUN go run github.com/swaggo/swag/cmd/swag@latest init -g main.go -o ./openapi_docs
 
 # Build Go binary
-RUN chmod +x docker/build-go.sh && \
-    ./docker/build-go.sh server "${TARGETOS}" "${TARGETARCH}" /app/baihu
+RUN chmod +x build/build-go.sh && \
+    ./build/build-go.sh server "${TARGETOS}" "${TARGETARCH}" /app/baihu
 
 # ================================
 # Stage 3: Build Agent (all platforms)
@@ -80,11 +80,11 @@ RUN go env -w GOPROXY=https://goproxy.cn,direct && go mod download
 # Copy source needed for agent
 COPY internal/ ./internal/
 COPY agent/ ./agent/
-COPY docker/build-go.sh ./docker/build-go.sh
+COPY build/build-go.sh ./build/build-go.sh
 
 # Build agent for all platforms and package as tar.gz
-RUN chmod +x docker/build-go.sh && \
-    ./docker/build-go.sh agents /opt/agent
+RUN chmod +x build/build-go.sh && \
+    ./build/build-go.sh agents /opt/agent
 
 # ================================
 # Stage 4: Runtime Base (公共运行时底座)

@@ -24,7 +24,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: 'web/package-lock.json'
 
@@ -45,8 +45,8 @@ jobs:
         env:
           VERSION: ${{ github.ref_name }}
         run: |
-          chmod +x docker/build-go.sh
-          ./docker/build-go.sh ci-artifacts dist-assets
+          chmod +x build/build-go.sh
+          ./build/build-go.sh ci-artifacts dist-assets
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -122,8 +122,6 @@ jobs:
           outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
             BASE_TAG=${{ matrix.base_tag }}
-          cache-from: type=gha,scope=linux-${{ matrix.arch }}-${{ matrix.base_type }}
-          cache-to: type=gha,scope=linux-${{ matrix.arch }}-${{ matrix.base_type }},mode=max
           provenance: false
 
       - name: Export digest

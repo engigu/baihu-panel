@@ -71,8 +71,8 @@ RUN swag init -g main.go -o ./openapi_docs
 # Build Go binary using cache mounts for faster builds
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    chmod +x docker/build-go.sh && \
-    ./docker/build-go.sh server "${TARGETOS}" "${TARGETARCH}" /app/baihu
+    chmod +x build/build-go.sh && \
+    ./build/build-go.sh server "${TARGETOS}" "${TARGETARCH}" /app/baihu
 
 # ================================
 # Stage 3: Build Agent (all platforms)
@@ -92,13 +92,13 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # Copy source needed for agent
 COPY internal/ ./internal/
 COPY agent/ ./agent/
-COPY docker/build-go.sh ./docker/build-go.sh
+COPY build/build-go.sh ./build/build-go.sh
 
 # Build agent for all platforms and package as tar.gz
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    chmod +x docker/build-go.sh && \
-    ./docker/build-go.sh agents /opt/agent
+    chmod +x build/build-go.sh && \
+    ./build/build-go.sh agents /opt/agent
 # ================================
 # Stage 4: Runtime Base (公共运行时底座 - 单一真理源)
 # ================================
