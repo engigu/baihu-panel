@@ -125,10 +125,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     wait $pid1 && wait $pid2 && wait $pid3 && wait $pid4 && wait $pid5 && \
     echo "Agent build completed for all platforms"
 # ================================
-# Stage 4: Final image
+# Stage 4: Runtime Base (公共运行时底座 - 单一真理源)
 # ================================
 ARG BASE_TAG
-FROM ghcr.io/engigu/baihu:${BASE_TAG}
+FROM ghcr.io/engigu/baihu:${BASE_TAG} AS runtime-base
 
 ENV TZ=Asia/Shanghai
 ENV LANG=C.UTF-8
@@ -137,35 +137,13 @@ ENV MISE_DATA_DIR=/app/envs/mise
 ENV MISE_CONFIG_DIR=/app/envs/mise
 ENV PATH="/app/envs/mise/shims:/app/envs/mise/bin:$PATH"
 
-# # 安装必要系统工具 + Node + Python
-# RUN sed -i 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list.d/debian.sources \
-#     && sed -i 's@security.debian.org@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list.d/debian.sources \
-#     && echo "${TZ}" > /etc/timezone \
-#     && ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime \
-#     && apt-get update \
-#     && apt-get install -y --no-install-recommends \
-#          tzdata git gcc curl wget vim nodejs htop npm python3 python3-venv python3-pip \
-#     && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
-# Copy Go binary
-COPY --from=backend-builder /app/baihu .
-
-# Copy frontend assets to /www/baihu (No embed in Docker)
-COPY --from=frontend-builder /app/web/dist /www/baihu
-
 # Copy configs and entrypoint
-COPY --from=backend-builder /app/configs ./configs
-COPY --from=backend-builder /app/example ./example
+COPY configs ./configs
+COPY example ./example
 COPY builtin/ /www/builtin
 COPY docker/docker-entrypoint.sh .
-
-
-
-# Copy agent binaries to /opt/agent
-COPY --from=agent-builder /opt/agent /opt/agent
-
 COPY docker/mise-hook.sh /etc/profile.d/mise-hook.sh
 
 RUN chmod +x docker-entrypoint.sh \
@@ -178,3 +156,32 @@ ENV MISE_TRUSTED_CONFIG_PATHS=/app/data/scripts
 EXPOSE 8052
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
+
+# ================================
+# Stage 5: CI Assembly (专供 CI 极速装配 Target: ci)
+# ================================
+FROM runtime-base AS ci
+
+# Copy Go binary (预编译好的目标架构主二进制)
+COPY baihu .
+
+# Copy frontend assets to /www/baihu
+COPY web/dist /www/baihu
+
+# Copy agent binaries to /opt/agent
+COPY data/agent /opt/agent
+
+# ================================
+# Stage 6: Full Release (本地全量构建默认末尾阶段，保持原有自包含编译)
+# ================================
+FROM runtime-base AS full
+
+# Copy Go binary
+COPY --from=backend-builder /app/baihu .
+
+# Copy frontend assets to /www/baihu (No embed in Docker)
+COPY --from=frontend-builder /app/web/dist /www/baihu
+
+# Copy agent binaries to /opt/agent
+COPY --from=agent-builder /opt/agent /opt/agent
+

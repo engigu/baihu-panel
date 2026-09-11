@@ -14,8 +14,79 @@ env:
   IMAGE_NAME: baihu
 
 jobs:
+  build-artifacts:
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'web/package-lock.json'
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build Web
+        run: |
+          cd web
+          npm ci
+          npm run build
+          cd ..
+
+      - name: Build Binaries and Agents
+        run: |
+          VERSION=${{ github.ref_name }}
+          BUILD_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
+          LDFLAGS="-s -w -X 'github.com/engigu/baihu-panel/internal/constant.Version=$VERSION' -X 'github.com/engigu/baihu-panel/internal/constant.BuildTime=$BUILD_TIME'"
+          AGENT_LDFLAGS="-s -w -X 'main.Version=$VERSION' -X 'main.BuildTime=$BUILD_TIME'"
+
+          mkdir -p dist-assets/bin/linux-amd64 dist-assets/bin/linux-arm64
+          mkdir -p dist-assets/agent
+          echo "$VERSION" > dist-assets/agent/version.txt
+
+          # 1. 并发交叉编译各平台服务端二进制 (linux-amd64 和 linux-arm64)
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist-assets/bin/linux-amd64/baihu . & pid_app1=$!
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="$LDFLAGS" -o dist-assets/bin/linux-arm64/baihu . & pid_app2=$!
+
+          # 2. 并发交叉编译全平台客户端 Agent
+          cd agent
+          build_agent() {
+              local os=$1; local arch=$2; local suffix=$3
+              local tmpdir="build-$os-$arch"
+              mkdir -p "$tmpdir" && cp config.example.ini "$tmpdir/"
+              CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="$AGENT_LDFLAGS" -o "$tmpdir/baihu-agent$suffix" .
+              tar -czvf "../dist-assets/agent/baihu-agent-$os-$arch.tar.gz" -C "$tmpdir" "baihu-agent$suffix" config.example.ini
+              rm -rf "$tmpdir"
+          }
+          build_agent linux amd64 "" & pid_a1=$!
+          build_agent linux arm64 "" & pid_a2=$!
+          build_agent android arm64 "" & pid_a3=$!
+          build_agent darwin amd64 "" & pid_a4=$!
+          build_agent darwin arm64 "" & pid_a5=$!
+
+          wait $pid_app1 $pid_app2 $pid_a1 $pid_a2 $pid_a3 $pid_a4 $pid_a5
+          cd ..
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            web/dist
+            dist-assets
+          retention-days: 1
+
   build:
     if: github.event.repository.fork == false
+    needs: build-artifacts
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     strategy:
       matrix:
@@ -33,6 +104,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Prepare build context
+        run: |
+          cp dist-assets/bin/linux-${{ matrix.arch }}/baihu ./baihu
+          chmod +x ./baihu
+          mkdir -p data/agent
+          cp -r dist-assets/agent/* data/agent/
+          rm -rf dist-assets
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -53,22 +137,17 @@ jobs:
           flavor: |
             latest=false
 
-      - name: Get build time
-        id: build_time
-        run: echo "time=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
-
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile
+          target: ci
           platforms: linux/${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
-            VERSION=${{ github.ref_name }}
-            BUILD_TIME=${{ steps.build_time.outputs.time }}
             BASE_TAG=${{ matrix.base_tag }}
           cache-from: type=gha,scope=linux-${{ matrix.arch }}-${{ matrix.base_type }}
           cache-to: type=gha,scope=linux-${{ matrix.arch }}-${{ matrix.base_type }},mode=max
@@ -89,7 +168,7 @@ jobs:
           retention-days: 1
 
   merge:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     needs: build
     permissions:
       contents: read
