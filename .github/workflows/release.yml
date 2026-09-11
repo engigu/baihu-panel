@@ -4,14 +4,16 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: baihu
 
 jobs:
-  build-binaries:
-    runs-on: macos-latest
+  build-artifacts:
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: write
     steps:
@@ -22,14 +24,21 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'web/package-lock.json'
 
       - name: Build Web
-        run: make build-web
+        run: |
+          cd web
+          npm ci
+          npm run build
+          cd ..
 
       - name: Generate Swagger
         run: make swag
@@ -39,6 +48,9 @@ jobs:
           VERSION: ${{ github.ref_name }}
         run: |
           chmod +x docker/build-go.sh
+          # 1. 产出供 Docker 极速装配的双架构二进制与全平台 Agent
+          ./docker/build-go.sh ci-artifacts dist-assets
+          # 2. 产出供 GitHub Release 发布的内嵌 web 归档包与 Windows 编译物
           ./docker/build-go.sh release-artifacts .
 
       - name: Upload Windows Binaries
@@ -48,6 +60,8 @@ jobs:
           path: |
             bin/baihu.exe
             bin/baihu-tray.exe
+          retention-days: 1
+
       - name: Upload Release Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -60,10 +74,21 @@ jobs:
             baihu-windows-amd64.zip
             data/agent/baihu-agent-*.tar.gz
             data/agent/baihu-agent-*.zip
+          retention-days: 1
+
+      - name: Upload Docker Build Context
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-artifacts
+          path: |
+            web/dist
+            dist-assets
+          retention-days: 1
 
   build-installer:
+    if: github.event.repository.fork == false
     runs-on: windows-latest
-    needs: build-binaries
+    needs: build-artifacts
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -85,10 +110,12 @@ jobs:
         with:
           name: windows-setup-exe
           path: bin/BaihuPanel-Setup-*.exe
+          retention-days: 1
 
   publish-release:
+    if: github.event.repository.fork == false
     runs-on: ubuntu-latest
-    needs: [build-binaries, build-installer]
+    needs: [build-artifacts, build-installer]
     permissions:
       contents: write
     steps:
@@ -135,46 +162,26 @@ jobs:
             data/agent/baihu-agent-*.zip
 
   build:
-    runs-on: ubuntu-latest
+    if: github.event.repository.fork == false
+    needs: build-artifacts
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     strategy:
       matrix:
+        arch: [amd64, arm64]
         base_type: [debian, debian13, minimal]
-        platform:
-          - linux/amd64
-          - linux/arm64
         include:
           - base_type: debian
-            platform: linux/amd64
             base_tag: base
             tag_suffix: ""
-          - base_type: debian
-            platform: linux/arm64
-            base_tag: base
-            tag_suffix: ""
-#           - base_type: alpine
-#             platform: linux/amd64
-#             base_tag: base-alpine
-#             tag_suffix: "-alpine"
-#           - base_type: alpine
-#             platform: linux/arm64
-#             base_tag: base-alpine
-#             tag_suffix: "-alpine"
+            dockerfile: ./docker/Dockerfile
           - base_type: debian13
-            platform: linux/amd64
             base_tag: base-debian13
             tag_suffix: "-debian13"
-          - base_type: debian13
-            platform: linux/arm64
-            base_tag: base-debian13
-            tag_suffix: "-debian13"
+            dockerfile: ./docker/Dockerfile
           - base_type: minimal
-            platform: linux/amd64
             base_tag: base-minimal
             tag_suffix: "-minimal"
-          - base_type: minimal
-            platform: linux/arm64
-            base_tag: base-minimal
-            tag_suffix: "-minimal"
+            dockerfile: ./docker/Dockerfile.minimal
 
     permissions:
       contents: read
@@ -184,14 +191,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set platform pair
-        id: platform
-        run: |
-          platform=${{ matrix.platform }}
-          echo "pair=${platform//\//-}-${{ matrix.base_type }}" >> $GITHUB_OUTPUT
+      - name: Download Docker Build Context
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-artifacts
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+      - name: Prepare build context
+        run: |
+          cp dist-assets/bin/linux-${{ matrix.arch }}/baihu ./baihu
+          chmod +x ./baihu
+          mkdir -p data/agent
+          cp -r dist-assets/agent/* data/agent/
+          rm -rf dist-assets
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -209,26 +220,23 @@ jobs:
         with:
           images: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
-
-      - name: Get build time
-        id: build_time
-        run: echo "time=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+          flavor: |
+            latest=false
 
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ${{ matrix.base_type == 'minimal' && './docker/Dockerfile.minimal' || './docker/Dockerfile' }}
-          platforms: ${{ matrix.platform }}
-          build-args: |
-            VERSION=${{ github.ref_name }}
-            BUILD_TIME=${{ steps.build_time.outputs.time }}
-            BASE_TAG=${{ matrix.base_tag }}
+          file: ${{ matrix.dockerfile }}
+          target: ci
+          platforms: linux/${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=${{ steps.platform.outputs.pair }}
-          cache-to: type=gha,scope=${{ steps.platform.outputs.pair }},mode=max
+          build-args: |
+            BASE_TAG=${{ matrix.base_tag }}
+          cache-from: type=gha,scope=linux-${{ matrix.arch }}-${{ matrix.base_type }}
+          cache-to: type=gha,scope=linux-${{ matrix.arch }}-${{ matrix.base_type }},mode=max
           provenance: false
 
       - name: Export digest
@@ -238,31 +246,29 @@ jobs:
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ steps.platform.outputs.pair }}
+          name: digests-linux-${{ matrix.arch }}-${{ matrix.base_type }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
 
   merge:
-    runs-on: ubuntu-latest
-    needs: [build, build-binaries]
+    runs-on: ubuntu-24.04-arm
+    needs: [build, build-artifacts]
     strategy:
       matrix:
         base_type: [debian, debian13, minimal]
         include:
           - base_type: debian
             tag_suffix: ""
-#           - base_type: alpine
-#             tag_suffix: "-alpine"
           - base_type: debian13
             tag_suffix: "-debian13"
           - base_type: minimal
             tag_suffix: "-minimal"
 
     permissions:
-      contents: write
+      contents: read
       packages: write
 
     steps:
@@ -270,10 +276,10 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download digests
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
-          pattern: digests-*-${{ matrix.base_type }}
+          pattern: digests-linux-*-${{ matrix.base_type }}
           merge-multiple: true
 
       - name: Set up Docker Buildx
@@ -307,4 +313,3 @@ jobs:
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
-

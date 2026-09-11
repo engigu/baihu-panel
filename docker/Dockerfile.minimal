@@ -87,9 +87,10 @@ RUN chmod +x docker/build-go.sh && \
     ./docker/build-go.sh agents /opt/agent
 
 # ================================
-# Stage 4: Final image
+# Stage 4: Runtime Base (公共运行时底座)
 # ================================
-FROM ghcr.io/engigu/baihu:${BASE_TAG}
+ARG BASE_TAG
+FROM ghcr.io/engigu/baihu:${BASE_TAG} AS runtime-base
 
 ENV TZ=Asia/Shanghai
 ENV LANG=C.UTF-8
@@ -100,21 +101,11 @@ ENV PATH="/app/envs/mise/shims:/app/envs/mise/bin:$PATH"
 
 WORKDIR /app
 
-# Copy Go binary
-COPY --from=backend-builder /app/baihu .
-
-# Copy frontend assets
-COPY --from=frontend-builder /app/web/dist /www/baihu
-
 # Copy configs and entrypoint
-COPY --from=backend-builder /app/configs ./configs
-COPY --from=backend-builder /app/example ./example
+COPY configs ./configs
+COPY example ./example
 COPY builtin/ /www/builtin
 COPY docker/docker-entrypoint.minimal.sh ./docker-entrypoint.sh
-
-# Copy agent binaries
-COPY --from=agent-builder /opt/agent /opt/agent
-
 COPY docker/mise-hook.sh /etc/profile.d/mise-hook.sh
 
 RUN chmod +x docker-entrypoint.sh \
@@ -127,3 +118,31 @@ ENV MISE_TRUSTED_CONFIG_PATHS=/app/data/scripts
 EXPOSE 8052
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
+
+# ================================
+# Stage 5: CI Assembly (专供 CI/Release 极速装配 Target: ci)
+# ================================
+FROM runtime-base AS ci
+
+# Copy Go binary (预编译好的目标架构主二进制)
+COPY baihu .
+
+# Copy frontend assets to /www/baihu
+COPY web/dist /www/baihu
+
+# Copy agent binaries to /opt/agent
+COPY data/agent /opt/agent
+
+# ================================
+# Stage 6: Full Release (本地全量构建默认末尾阶段，保持原有自包含编译)
+# ================================
+FROM runtime-base AS full
+
+# Copy Go binary
+COPY --from=backend-builder /app/baihu .
+
+# Copy frontend assets to /www/baihu
+COPY --from=frontend-builder /app/web/dist /www/baihu
+
+# Copy agent binaries to /opt/agent
+COPY --from=agent-builder /opt/agent /opt/agent
