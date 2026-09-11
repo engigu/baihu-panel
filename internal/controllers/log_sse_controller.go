@@ -3,6 +3,7 @@ package controllers
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
@@ -113,6 +114,8 @@ func (lc *LogSSEController) StreamLog(c *gin.Context) {
 					duration = finalLog.Duration
 					if finalLog.EndTime != nil {
 						endTimeStr = finalLog.EndTime.Time().Format("2006-01-02 15:04:05")
+					} else {
+						endTimeStr = time.Now().Format("2006-01-02 15:04:05")
 					}
 					exitCode = finalLog.ExitCode
 				}

@@ -64,7 +64,7 @@ func (s *TaskLogService) SaveTaskLog(taskLog *models.TaskLog) error {
 		var count int64
 		database.DB.Model(&models.TaskLog{}).Where("id = ?", taskLog.ID).Count(&count)
 		if count > 0 {
-			err = database.DB.Model(taskLog).Where("id = ?", taskLog.ID).Updates(taskLog).Error
+			err = database.DB.Model(taskLog).Where("id = ?", taskLog.ID).Select("Status", "Duration", "ExitCode", "StartTime", "EndTime", "Output", "Error", "AgentID").Updates(taskLog).Error
 		} else {
 			err = database.DB.Create(taskLog).Error
 		}

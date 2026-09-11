@@ -240,23 +240,21 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 		return
 	}
 
-	// 无论本地还是远程，都在此处处理日志压缩和落库
+	// 1. 优先提取并压缩实时日志（此时先不关闭 SSE 通道，保持连接）
 	tl := GetActiveLog(req.LogID)
 	var output string
 	if tl != nil {
-		// 压缩并清理实时日志
 		var err error
-		output, err = tl.CompressAndCleanup()
+		output, err = tl.Compress()
 		if err != nil {
 			logger.Errorf("[Executor] 压缩任务 #%s 日志失败: %v", task.ID, err)
 			output = "[System Error] 日志处理失败: " + err.Error()
 		}
 	} else {
-		// 如果 TinyLog 已经丢失，尝试从 result.Output 中恢复一次（主要针对本地任务）
 		output, _ = utils.CompressToBase64(result.Output)
 	}
 
-	// 构造待保存的日志模型
+	// 2. 构造待保存的完整日志模型（包含压缩日志 output、最终状态、耗时和结束时间）
 	startTime := models.LocalTime(result.StartTime)
 	endTime := models.LocalTime(result.EndTime)
 
@@ -279,13 +277,18 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 		taskLog.AgentID = &agentID
 	}
 
+	// 3. 处理任务完成并完整落盘（包含 Status、Duration、EndTime、Output 一次性写入）
+	h.es.taskLogService.ProcessTaskCompletion(taskLog)
+
+	// 4. 数据库落盘彻底就绪后，安全关闭 TinyLog 并通知 SSE 订阅者（此时 SSE 查库必定拿到最终数据）
+	if tl != nil {
+		tl.Close()
+	}
+
 	// 移除运行记录
 	if req.Metadata.GoID != 0 {
 		h.es.RemoveRunningGo(task.ID, req.Metadata.GoID)
 	}
-
-	// 处理任务完成（更新统计、清理旧日志等）
-	h.es.taskLogService.ProcessTaskCompletion(taskLog)
 
 	// 更新内存缓冲
 	h.es.UpdateResult(*result)
@@ -293,7 +296,6 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 	// ======= 重试逻辑 =======
 	h.es.HandleTaskRetry(task, req, result.Success, result.Status, result.ExitCode)
 
-	// ======= 通知触发 =======
 	// ======= 通知触发 =======
 	go func() {
 		var eventType string
@@ -316,6 +318,7 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 					"task_name":  task.Name,
 					"status":     result.Status,
 					"start_time": result.StartTime.Format("2006-01-02 15:04:05"),
+					"end_time":   result.EndTime.Format("2006-01-02 15:04:05"),
 					"duration":   result.Duration,
 					"output":     result.Output,
 					"error":      result.Error,
@@ -337,12 +340,12 @@ func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, er
 		h.es.RemoveRunningGo(taskID, req.Metadata.GoID)
 	}
 
-	// 构造错误日志
+	// 构造错误日志并压缩（先不关闭 SSE 通道）
 	tl := GetActiveLog(req.LogID)
 	var output string
 	if tl != nil {
 		tl.Write([]byte(fmt.Sprintf("\n[System Error] %v", err)))
-		output, _ = tl.CompressAndCleanup()
+		output, _ = tl.Compress()
 	} else {
 		output, _ = utils.CompressToBase64(fmt.Sprintf("任务执行失败: %v", err))
 	}
@@ -370,6 +373,11 @@ func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, er
 
 	h.es.taskLogService.ProcessTaskCompletion(taskLog)
 
+	// 数据库落盘彻底就绪后，安全关闭 TinyLog
+	if tl != nil {
+		tl.Close()
+	}
+
 	// 更新内存缓冲
 	h.es.UpdateResult(executor.ExecutionResult{
 		TaskID:    req.TaskID,
@@ -396,6 +404,8 @@ func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, er
 				"log_id":    req.LogID,
 				"task_id":   taskID,
 				"task_name": taskName,
+				"status":    constant.TaskStatusFailed,
+				"end_time":  now.Time().Format("2006-01-02 15:04:05"),
 				"error":     err.Error(),
 				"output":    output,
 			},

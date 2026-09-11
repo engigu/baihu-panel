@@ -66,6 +66,7 @@ type TinyLog struct {
 	subscribers []chan []byte
 	remainder   []byte   // Leftover bytes from previous write (partial lines)
 	masks       []string // Secrets to mask
+	fileClosed  bool
 	closed      bool
 }
 
@@ -93,7 +94,7 @@ func (l *TinyLog) Write(p []byte) (n int, err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if l.closed {
+	if l.closed || l.fileClosed {
 		return 0, os.ErrClosed
 	}
 
@@ -183,6 +184,12 @@ func (l *TinyLog) Subscribe() chan []byte {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	if l.closed {
+		ch := make(chan []byte)
+		close(ch)
+		return ch
+	}
+
 	ch := make(chan []byte, 100) // Buffer to handle bursts
 	l.subscribers = append(l.subscribers, ch)
 	return ch
@@ -201,12 +208,12 @@ func (l *TinyLog) Unsubscribe(ch chan []byte) {
 	}
 }
 
-// Close 完成写入，关闭文件并注销实例
-func (l *TinyLog) Close() error {
+// flushAndCloseFile 刷新缓冲区并将底层临时文件关闭，为后续读取做准备（不关闭订阅者管道）
+func (l *TinyLog) flushAndCloseFile() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if l.closed {
+	if l.fileClosed {
 		return nil
 	}
 
@@ -231,22 +238,15 @@ func (l *TinyLog) Close() error {
 		return err
 	}
 
-	// 关闭所有订阅者通道
-	for _, ch := range l.subscribers {
-		close(ch)
-	}
-	l.subscribers = nil
-
-	l.closed = true
-	globalTinyLogManager.Unregister(l.LogID)
+	l.fileClosed = true
 	return l.file.Close()
 }
 
-// CompressAndCleanup 读取临时文件，进行压缩处理，返回结果并删除临时文件
-func (l *TinyLog) CompressAndCleanup() (string, error) {
-	// Ensure closed
-	if !l.closed {
-		l.Close()
+// Compress 读取临时文件进行压缩处理并返回 output，同时清理临时文件。
+// 注意：此方法仅处理日志落盘与压缩，不会关闭订阅者通道，需在外部落库完成后调用 Close() 真正断开连接。
+func (l *TinyLog) Compress() (string, error) {
+	if err := l.flushAndCloseFile(); err != nil {
+		return "", err
 	}
 
 	// 打开临时文件进行读取
@@ -318,6 +318,38 @@ func (l *TinyLog) CompressAndCleanup() (string, error) {
 	}
 
 	return "zstd:" + buf.String(), nil
+}
+
+// Close 完成写入，关闭订阅者通道并从全局管理器注销实例
+func (l *TinyLog) Close() error {
+	// 确保底层文件先刷新并关闭
+	if err := l.flushAndCloseFile(); err != nil {
+		logger.Errorf("[TinyLog] 关闭日志文件失败: %v", err)
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.closed {
+		return nil
+	}
+
+	// 关闭所有订阅者通道
+	for _, ch := range l.subscribers {
+		close(ch)
+	}
+	l.subscribers = nil
+
+	l.closed = true
+	globalTinyLogManager.Unregister(l.LogID)
+	return nil
+}
+
+// CompressAndCleanup 读取临时文件，进行压缩处理，返回结果并删除临时文件（兼容旧调用）
+func (l *TinyLog) CompressAndCleanup() (string, error) {
+	output, err := l.Compress()
+	_ = l.Close()
+	return output, err
 }
 
 // ReadLastLines 返回日志的最后 n 行

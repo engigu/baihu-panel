@@ -101,6 +101,9 @@ function cleanupLogSocket() {
     clearInterval(logFlushInterval)
     logFlushInterval = null
   }
+  if (logBuffer.length > 0) {
+    wsContent.value += logBuffer.join('')
+  }
   logBuffer = []
 }
 
