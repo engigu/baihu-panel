@@ -9,3 +9,6 @@ docs/* linguist-documentation=true
 
 # SQL 统计为 SQL
 *.sql linguist-language=SQL
+
+# Shell 脚本强制 LF
+*.sh text eol=lf

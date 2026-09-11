@@ -34,29 +34,12 @@ jobs:
       - name: Generate Swagger
         run: make swag
 
-      - name: Build Binaries
+      - name: Build Binaries and Agents
+        env:
+          VERSION: ${{ github.ref_name }}
         run: |
-          VERSION=${{ github.ref_name }}
-          BUILD_TIME=$(TZ='Asia/Shanghai' date '+%Y/%m/%d %H:%M:%S')
-          LDFLAGS="-s -w -X 'github.com/engigu/baihu-panel/internal/constant.Version=$VERSION' -X 'github.com/engigu/baihu-panel/internal/constant.BuildTime=$BUILD_TIME'"
-          
-          # Prepare static assets for embedding
-          rm -rf internal/static/dist
-          cp -r web/dist internal/static/dist
-          
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags web -ldflags="$LDFLAGS" -o baihu-linux-amd64 main.go
-          tar -czvf baihu-linux-amd64.tar.gz baihu-linux-amd64
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags web -ldflags="$LDFLAGS" -o baihu-linux-arm64 main.go
-          tar -czvf baihu-linux-arm64.tar.gz baihu-linux-arm64
-          CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -tags web -ldflags="$LDFLAGS" -o baihu-android-arm64 main.go
-          tar -czvf baihu-android-arm64.tar.gz baihu-android-arm64
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -tags web -ldflags="$LDFLAGS" -o baihu-linux-armv7 main.go
-          tar -czvf baihu-linux-armv7.tar.gz baihu-linux-armv7
-          mkdir -p bin
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags web -ldflags="$LDFLAGS" -o bin/baihu.exe main.go
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -H=windowsgui" -o bin/baihu-tray.exe ./cmd/tray
-          cp bin/baihu.exe baihu-windows-amd64.exe
-          zip -q -r baihu-windows-amd64.zip baihu-windows-amd64.exe
+          chmod +x docker/build-go.sh
+          ./docker/build-go.sh release-artifacts .
 
       - name: Upload Windows Binaries
         uses: actions/upload-artifact@v4
@@ -65,38 +48,6 @@ jobs:
           path: |
             bin/baihu.exe
             bin/baihu-tray.exe
-
-      - name: Build Agent Binaries
-        run: |
-          VERSION=${{ github.ref_name }}
-          BUILD_TIME=$(TZ='Asia/Shanghai' date '+%Y/%m/%d %H:%M:%S')
-          AGENT_LDFLAGS="-s -w -X 'main.Version=$VERSION' -X 'main.BuildTime=$BUILD_TIME'"
-          mkdir -p data/agent
-          echo "$VERSION" > data/agent/version.txt
-          
-          # Linux AMD64
-          cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$AGENT_LDFLAGS" -o ../data/agent/baihu-agent-linux-amd64 . && cd ..
-          cd data/agent && cp ../../agent/config.example.ini . && tar -czvf baihu-agent-linux-amd64.tar.gz baihu-agent-linux-amd64 config.example.ini && rm baihu-agent-linux-amd64 && cd ../..
-          
-          # Linux ARM64
-          cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="$AGENT_LDFLAGS" -o ../data/agent/baihu-agent-linux-arm64 . && cd ..
-          cd data/agent && tar -czvf baihu-agent-linux-arm64.tar.gz baihu-agent-linux-arm64 config.example.ini && rm baihu-agent-linux-arm64 && cd ../..
-          
-          # Windows AMD64
-          cd agent && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$AGENT_LDFLAGS" -o ../data/agent/baihu-agent-windows-amd64.exe . && cd ..
-          cd data/agent && zip baihu-agent-windows-amd64.zip baihu-agent-windows-amd64.exe config.example.ini && rm baihu-agent-windows-amd64.exe && cd ../..
-          
-          # Darwin AMD64
-          cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="$AGENT_LDFLAGS" -o ../data/agent/baihu-agent-darwin-amd64 . && cd ..
-          cd data/agent && tar -czvf baihu-agent-darwin-amd64.tar.gz baihu-agent-darwin-amd64 config.example.ini && rm baihu-agent-darwin-amd64 && cd ../..
-          
-          # Darwin ARM64
-          cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$AGENT_LDFLAGS" -o ../data/agent/baihu-agent-darwin-arm64 . && cd ..
-          cd data/agent && tar -czvf baihu-agent-darwin-arm64.tar.gz baihu-agent-darwin-arm64 config.example.ini && rm baihu-agent-darwin-arm64 && cd ../..
-          
-          # Android ARM64
-          cd agent && CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -ldflags="$AGENT_LDFLAGS" -o ../data/agent/baihu-agent-android-arm64 . && cd ..
-          cd data/agent && tar -czvf baihu-agent-android-arm64.tar.gz baihu-agent-android-arm64 config.example.ini && rm baihu-agent-android-arm64 && cd ../..
       - name: Upload Release Artifacts
         uses: actions/upload-artifact@v4
         with:

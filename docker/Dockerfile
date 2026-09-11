@@ -71,17 +71,13 @@ RUN swag init -g main.go -o ./openapi_docs
 # Build Go binary using cache mounts for faster builds
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    VERSION_VAL=$(cat /build-info/version.txt) && \
-    BUILD_TIME_VAL=$(cat /build-info/build_time.txt) && \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -ldflags="-s -w -X github.com/engigu/baihu-panel/internal/constant.Version=${VERSION_VAL} -X 'github.com/engigu/baihu-panel/internal/constant.BuildTime=${BUILD_TIME_VAL}'" \
-    -o baihu .
+    chmod +x docker/build-go.sh && \
+    ./docker/build-go.sh server "${TARGETOS}" "${TARGETARCH}" /app/baihu
 
 # ================================
 # Stage 3: Build Agent (all platforms)
 # ================================
 FROM --platform=$BUILDPLATFORM golang:1.26 AS agent-builder
-
 
 WORKDIR /app
 
@@ -96,34 +92,13 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # Copy source needed for agent
 COPY internal/ ./internal/
 COPY agent/ ./agent/
+COPY docker/build-go.sh ./docker/build-go.sh
 
 # Build agent for all platforms and package as tar.gz
-WORKDIR /app/agent
-
-# Build agent with parallel-aware logic or just cache mount
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    VERSION_VAL=$(cat /build-info/version.txt) && \
-    BUILD_TIME_VAL=$(cat /build-info/build_time.txt) && \
-    LDFLAGS="-s -w -X 'main.Version=${VERSION_VAL}' -X 'main.BuildTime=${BUILD_TIME_VAL}'" && \
-    mkdir -p /opt/agent && \
-    echo "${VERSION_VAL}" > /opt/agent/version.txt && \
-    # Helper to build and compress
-    build_agent() { \
-        local os=$1; local arch=$2; local suffix=$3; \
-        local tmpdir="build-$os-$arch"; \
-        mkdir -p $tmpdir && cp config.example.ini $tmpdir/ && \
-        CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="${LDFLAGS}" -o $tmpdir/baihu-agent$suffix . && \
-        (cd $tmpdir && tar -czvf /opt/agent/baihu-agent-$os-$arch.tar.gz baihu-agent$suffix config.example.ini) && \
-        rm -rf $tmpdir; \
-    } ; \
-    build_agent linux amd64 "" & pid1=$!; \
-    build_agent linux arm64 "" & pid2=$!; \
-    build_agent android arm64 "" & pid3=$!; \
-    build_agent darwin amd64 "" & pid4=$!; \
-    build_agent darwin arm64 "" & pid5=$!; \
-    wait $pid1 && wait $pid2 && wait $pid3 && wait $pid4 && wait $pid5 && \
-    echo "Agent build completed for all platforms"
+    chmod +x docker/build-go.sh && \
+    ./docker/build-go.sh agents /opt/agent
 # ================================
 # Stage 4: Runtime Base (公共运行时底座 - 单一真理源)
 # ================================
