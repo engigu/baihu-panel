@@ -3,7 +3,6 @@ package webui
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/engigu/baihu-panel/cmd/clibase"
 	"github.com/engigu/baihu-panel/internal/services"
@@ -64,31 +63,17 @@ func runList(args []string) {
 		activeWebUI = "default"
 	}
 
-	fmt.Println(strings.Repeat("=", 100))
-	fmt.Printf("%s | %s | %s | %s | %s\n",
-		clibase.VisualFormat("名称", 20),
-		clibase.VisualFormat("版本", 12),
-		clibase.VisualFormat("作者", 15),
-		clibase.VisualFormat("状态", 10),
-		clibase.VisualFormat("描述", 30),
-	)
-	fmt.Println(strings.Repeat("-", 100))
-	
+	table := clibase.NewTable("名称", "版本", "作者", "状态", "描述")
+
 	for _, w := range list {
 		status := "-"
 		if w.Name == activeWebUI {
 			status = "使用中"
 		}
-		
-		fmt.Printf("%s | %s | %s | %s | %s\n",
-			clibase.VisualFormat(w.Name, 20),
-			clibase.VisualFormat(w.Version, 12),
-			clibase.VisualFormat(w.Author, 15),
-			clibase.VisualFormat(status, 10),
-			clibase.VisualFormat(w.Description, 30),
-		)
+
+		table.AddRow(w.Name, w.Version, w.Author, status, w.Description)
 	}
-	fmt.Println(strings.Repeat("=", 100))
+	table.Render()
 }
 
 func runSet(args []string) {

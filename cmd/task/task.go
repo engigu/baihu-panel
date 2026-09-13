@@ -136,15 +136,7 @@ func runList(args []string) {
 	var tasks []models.Task
 	query.Order("created_at DESC").Limit(*sizePtr).Offset(offset).Find(&tasks)
 
-	fmt.Println(strings.Repeat("=", 90))
-	fmt.Printf("%s | %s | %s | %s | %s\n",
-		clibase.VisualFormat("任务ID", 20),
-		clibase.VisualFormat("任务名称", 28),
-		clibase.VisualFormat("Cron规则", 18),
-		clibase.VisualFormat("类型", 6),
-		clibase.VisualFormat("状态", 6),
-	)
-	fmt.Println(strings.Repeat("-", 90))
+	table := clibase.NewTable("任务ID", "任务名称", "Cron规则", "类型", "状态")
 	for _, t := range tasks {
 		cron := t.Schedule
 		if cron == "" {
@@ -154,15 +146,9 @@ func runList(args []string) {
 		if !utils.DerefBool(t.Enabled, true) {
 			status = "禁用"
 		}
-		fmt.Printf("%s | %s | %s | %s | %s\n",
-			clibase.VisualFormat(t.ID, 20),
-			clibase.VisualFormat(t.Name, 28),
-			clibase.VisualFormat(cron, 18),
-			clibase.VisualFormat(t.Type, 6),
-			clibase.VisualFormat(status, 6),
-		)
+		table.AddRow(t.ID, t.Name, cron, t.Type, status)
 	}
-	fmt.Println(strings.Repeat("=", 90))
+	table.Render()
 	totalPages := (total + int64(*sizePtr) - 1) / int64(*sizePtr)
 	if totalPages == 0 {
 		totalPages = 1
@@ -362,15 +348,13 @@ func runHistory(args []string) {
 	var logs []models.TaskLog
 	database.DB.Where("task_id = ?", taskID).Order("created_at DESC").Limit(*limitPtr).Find(&logs)
 
-	fmt.Println("====================================================================================================")
 	fmt.Printf("任务流水: %s (ID: %s) 的近期执行记录 (最多展示 %d 条)\n", taskName, taskID, *limitPtr)
-	fmt.Println("----------------------------------------------------------------------------------------------------")
-	fmt.Printf("%-20s | %-8s | %-6s | %-12s | %-20s\n", "日志ID", "状态", "退出码", "耗时", "开始时间")
-	fmt.Println("----------------------------------------------------------------------------------------------------")
 
 	if len(logs) == 0 {
 		fmt.Println("未查询到任何历史执行记录。")
 	} else {
+		table := clibase.NewTable("日志ID", "状态", "退出码", "耗时", "开始时间").
+			SetAlign(2, clibase.AlignRight)
 		for _, l := range logs {
 			statusText := "运行中"
 			switch l.Status {
@@ -390,9 +374,9 @@ func runHistory(args []string) {
 			}
 			durationStr := fmt.Sprintf("%d ms", l.Duration)
 
-			fmt.Printf("%-20s | %-8s | %-6d | %-12s | %-20s\n", l.ID, statusText, l.ExitCode, durationStr, startStr)
+			table.AddRow(l.ID, statusText, fmt.Sprintf("%d", l.ExitCode), durationStr, startStr)
 		}
+		table.Render()
 	}
-	fmt.Println("====================================================================================================")
 	fmt.Printf("提示: 结合命令 'baihu task status %s <日志ID>' 查看特定历史日志内容。\n", taskID)
 }

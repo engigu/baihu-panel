@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/engigu/baihu-panel/internal/bootstrap"
 	"github.com/engigu/baihu-panel/internal/services"
@@ -45,45 +44,9 @@ func PrintSubCommandUsage(title, usageStr, exampleStr string, fs *flag.FlagSet) 
 	}
 }
 
-// VisualFormat 根据字符的视觉显示列宽（中文字符/宽字符计为2列，ASCII计为1列），
-// 将字符串进行精确等宽填充或安全截断追加 ".."，确保混合字符输出下控制台表格严丝合缝强制对齐。
+// VisualFormat 根据字符的视觉显示列宽（基于 go-runewidth，支持中文字符、Emoji、宽字符），
+// 将字符串进行精确等宽填充或安全截断追加 ".."，确保终端表格强制对齐。
 func VisualFormat(s string, targetVisualWidth int) string {
-	w := 0
-	var sb strings.Builder
-	runes := []rune(s)
-
-	// 先计算总视觉宽度
-	totalW := 0
-	for _, r := range runes {
-		if r > 127 {
-			totalW += 2
-		} else {
-			totalW += 1
-		}
-	}
-
-	if totalW <= targetVisualWidth {
-		return s + strings.Repeat(" ", targetVisualWidth-totalW)
-	}
-
-	// 如果总宽度超出，进行精准截断并追加 ".."
-	maxContentW := targetVisualWidth - 2
-	for _, r := range runes {
-		rw := 1
-		if r > 127 {
-			rw = 2
-		}
-		if w+rw > maxContentW {
-			break
-		}
-		sb.WriteRune(r)
-		w += rw
-	}
-
-	res := sb.String() + ".."
-	// 补齐末尾可能相差的1个空格列宽
-	if w+2 < targetVisualWidth {
-		res += strings.Repeat(" ", targetVisualWidth-(w+2))
-	}
-	return res
+	return FormatCell(s, targetVisualWidth, AlignLeft)
 }
+
