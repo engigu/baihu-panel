@@ -31,6 +31,68 @@ get_file_size() {
     ls -lh "$1" 2>/dev/null | awk '{print $5}' || echo ""
 }
 
+# 毫秒级时间戳获取（跨平台兼容 Linux / Git Bash / macOS）
+get_timestamp_ms() {
+    local ns
+    ns=$(date +%s%N 2>/dev/null)
+    if [[ "${ns}" =~ ^[0-9]{19}$ ]]; then
+        echo "${ns:0:13}"
+    else
+        echo "$(( $(date +%s) * 1000 ))"
+    fi
+}
+
+# 智能换算耗时单位（<1s 显示 ms；<1m 显示带1位小数的 s；>=1m 换算为 XmYs；>=1h 换算为 XhYmZs）
+format_duration() {
+    local start_ms=$1
+    local end_ms="${2:-$(get_timestamp_ms)}"
+    local ms=$(( end_ms - start_ms ))
+
+    if [ -z "${ms}" ] || [ "${ms}" -le 0 ]; then
+        echo "0s"
+        return
+    fi
+
+    if [ "${ms}" -lt 1000 ]; then
+        echo "${ms}ms"
+        return
+    fi
+
+    local sec=$(( ms / 1000 ))
+    local remain_ms=$(( (ms % 1000) / 100 ))
+
+    if [ "${sec}" -lt 60 ]; then
+        if [ "${remain_ms}" -gt 0 ]; then
+            echo "${sec}.${remain_ms}s"
+        else
+            echo "${sec}s"
+        fi
+        return
+    fi
+
+    local min=$(( sec / 60 ))
+    local rem_sec=$(( sec % 60 ))
+
+    if [ "${min}" -lt 60 ]; then
+        if [ "${rem_sec}" -gt 0 ]; then
+            echo "${min}m${rem_sec}s"
+        else
+            echo "${min}m"
+        fi
+        return
+    fi
+
+    local hour=$(( min / 60 ))
+    local rem_min=$(( min % 60 ))
+    if [ "${rem_sec}" -gt 0 ]; then
+        echo "${hour}h${rem_min}m${rem_sec}s"
+    elif [ "${rem_min}" -gt 0 ]; then
+        echo "${hour}h${rem_min}m"
+    else
+        echo "${hour}h"
+    fi
+}
+
 # ============================================================
 # 基础路径与版本解析
 # ============================================================
@@ -84,7 +146,7 @@ build_server() {
     build_cmd+=(-ldflags="${LDFLAGS}" -o "${output_path}" .)
 
     local start_time
-    start_time=$(date +%s)
+    start_time=$(get_timestamp_ms)
 
     if [ -n "${arm_version}" ]; then
         CGO_ENABLED=0 GOOS="${target_os}" GOARCH="${target_arch}" GOARM="${arm_version}" "${build_cmd[@]}"
@@ -92,11 +154,12 @@ build_server() {
         CGO_ENABLED=0 GOOS="${target_os}" GOARCH="${target_arch}" "${build_cmd[@]}"
     fi
 
-    local duration=$(( $(date +%s) - start_time ))
+    local duration
+    duration=$(format_duration "${start_time}")
     local fsize
     fsize=$(get_file_size "${output_path}")
 
-    log_success "服务端编译完成 -> ${output_path} (大小: ${fsize:-未知}, 耗时: ${duration}s)"
+    log_success "服务端编译完成 -> ${output_path} (大小: ${fsize:-未知}, 耗时: ${duration})"
 }
 
 # ============================================================
@@ -114,12 +177,17 @@ build_tray() {
     log_info "检查依赖模块缓存 (go mod download)..."
     go mod download
 
+    local start_time
+    start_time=$(get_timestamp_ms)
+
     CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
         go build -ldflags="-s -w -H=windowsgui" -o "${output_path}" ./cmd/tray
 
+    local duration
+    duration=$(format_duration "${start_time}")
     local fsize
     fsize=$(get_file_size "${output_path}")
-    log_success "Windows 托盘程序编译完成 -> ${output_path} (大小: ${fsize:-未知})"
+    log_success "Windows 托盘程序编译完成 -> ${output_path} (大小: ${fsize:-未知}, 耗时: ${duration})"
 }
 
 # ============================================================
@@ -128,6 +196,9 @@ build_tray() {
 build_agents() {
     local output_dir="${1:-./data/agent}"
     local include_windows="${2:-false}"
+
+    local start_time
+    start_time=$(get_timestamp_ms)
 
     mkdir -p "${output_dir}"
     output_dir="$(cd "${output_dir}" && pwd)"
@@ -154,6 +225,9 @@ build_agents() {
             flags+=(-trimpath)
         fi
 
+        local start_time
+        start_time=$(get_timestamp_ms)
+
         log_info "正在编译 Agent [${os}/${arch}]..."
         CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" \
             go build "${flags[@]}" -ldflags="${AGENT_LDFLAGS}" -o "${tmpdir}/baihu-agent${suffix}" .
@@ -170,9 +244,11 @@ build_agents() {
         fi
         rm -rf "${tmpdir}"
 
+        local duration
+        duration=$(format_duration "${start_time}")
         local fsize
         fsize=$(get_file_size "${target_archive}")
-        log_success "Agent 包生成完毕 -> $(basename "${target_archive}") (大小: ${fsize:-未知})"
+        log_success "Agent 包生成完毕 -> $(basename "${target_archive}") (大小: ${fsize:-未知}, 耗时: ${duration})"
     }
 
     _compile_single_agent linux amd64 "" false
@@ -186,7 +262,9 @@ build_agents() {
     fi
 
     cd "${ROOT_DIR}"
-    log_success "所有 Agent 编译与打包流程执行完毕！"
+    local total_duration
+    total_duration=$(format_duration "${start_time}")
+    log_success "所有 Agent 编译与打包流程执行完毕！(总耗时: ${total_duration})"
 }
 
 # ============================================================
@@ -194,6 +272,8 @@ build_agents() {
 # ============================================================
 build_ci_artifacts() {
     local base_output="${1:-dist-assets}"
+    local start_time
+    start_time=$(get_timestamp_ms)
 
     log_step "启动 CI 极速制品装配流程"
     log_info "基础输出目录 : ${base_output}"
@@ -213,7 +293,9 @@ build_ci_artifacts() {
 
     log_step "CI 制品装配完毕，产物清单概览:"
     find "${base_output}" -type f -exec ls -lh {} + | awk '{print "   " $9 " (" $5 ")"}'
-    log_success "CI 所有必需产物已全部准备就绪！"
+    local duration
+    duration=$(format_duration "${start_time}")
+    log_success "CI 所有必需产物已全部准备就绪！(总耗时: ${duration})"
 }
 
 # ============================================================
@@ -221,6 +303,8 @@ build_ci_artifacts() {
 # ============================================================
 build_release_artifacts() {
     local base_output="${1:-.}"
+    local start_time
+    start_time=$(get_timestamp_ms)
 
     log_step "启动 Release 全平台发布包构建流程"
     log_info "基础输出目录 : ${base_output}"
@@ -246,6 +330,9 @@ build_release_artifacts() {
         local bin_name="baihu-${os}-${arch}${ext}"
 
         log_step "编译带 WebUI 内嵌的服务端: ${bin_name}"
+        local start_time
+        start_time=$(get_timestamp_ms)
+
         local build_cmd=(go build -tags web)
         if [ "${os}" = "android" ] || [ -n "${arm_val}" ]; then
             build_cmd+=(-trimpath)
@@ -270,9 +357,11 @@ build_release_artifacts() {
         fi
         rm -f "${bin_name}"
 
+        local duration
+        duration=$(format_duration "${start_time}")
         local fsize
         fsize=$(get_file_size "${archive_path}")
-        log_success "发布包生成完毕 -> $(basename "${archive_path}") (大小: ${fsize:-未知})"
+        log_success "发布包生成完毕 -> $(basename "${archive_path}") (大小: ${fsize:-未知}, 耗时: ${duration})"
     }
 
     _compile_and_pack_server linux amd64 "" "" false
@@ -283,6 +372,8 @@ build_release_artifacts() {
     # Windows 主程序与托盘程序
     log_step "编译 Windows 主服务二进制与托盘辅助程序"
     mkdir -p "${base_output}/bin"
+    local win_start_time
+    win_start_time=$(get_timestamp_ms)
     CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
         go build -tags web -ldflags="${LDFLAGS}" -o "${base_output}/bin/baihu.exe" main.go
 
@@ -291,14 +382,18 @@ build_release_artifacts() {
     cp "${base_output}/bin/baihu.exe" "baihu-windows-amd64.exe"
     zip -q -r "${base_output}/baihu-windows-amd64.zip" "baihu-windows-amd64.exe"
     rm -f "baihu-windows-amd64.exe"
+    local win_duration
+    win_duration=$(format_duration "${win_start_time}")
     local win_size
     win_size=$(get_file_size "${base_output}/baihu-windows-amd64.zip")
-    log_success "Windows 发布包生成完毕 -> baihu-windows-amd64.zip (大小: ${win_size:-未知})"
+    log_success "Windows 发布包生成完毕 -> baihu-windows-amd64.zip (大小: ${win_size:-未知}, 耗时: ${win_duration})"
 
     # 编译全平台 Agent（包括 Windows）
     build_agents "${base_output}/data/agent" true
 
-    log_step "Release 发布包构建完毕！"
+    local total_duration
+    total_duration=$(format_duration "${start_time}")
+    log_step "Release 发布包构建完毕！(总耗时: ${total_duration})"
 }
 
 # ============================================================
