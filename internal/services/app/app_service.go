@@ -21,6 +21,7 @@ type AppDTO struct {
 	Version         string           `json:"version,omitempty"`
 	Author          string           `json:"author,omitempty"`
 	Category        string           `json:"category,omitempty"`
+	LastCommit      string           `json:"last_commit,omitempty"`
 	Description     string           `json:"description,omitempty"`
 	Icon            string           `json:"icon,omitempty"`
 	Homepage        string           `json:"homepage,omitempty"`
@@ -117,6 +118,7 @@ func (s *AppService) buildAppDTOFromTask(task *models.Task, taskCount int) *AppD
 		dto.Version = appCfg.Version
 		dto.Author = appCfg.Author
 		dto.Category = appCfg.Category
+		dto.LastCommit = appCfg.LastCommit
 		dto.Description = appCfg.Description
 		dto.Icon = appCfg.Icon
 		dto.Homepage = appCfg.Homepage
@@ -173,14 +175,20 @@ func CleanAppTaskAndData(masterTask *models.Task, cleanData bool, out io.Writer)
 	relation.DataRelation.CleanRelations(masterTask.ID, constant.RelationTypeTaskEnv)
 	database.DB.Unscoped().Where("id = ?", masterTask.ID).Delete(&models.Task{})
 
-	// 3. 清理磁盘本地代码与数据文件夹 (data/scripts/apps/:manifestID)
+	// 3. 清理磁盘本地代码与数据文件夹 (data/scripts/apps/{author}-{id})
 	manifestID := masterTask.GetManifestID()
+	author := masterTask.GetAppAuthor()
 	if cleanData && manifestID != "" {
 		absScriptsDir := utils.ResolveAbsScriptsDir()
-		appDir := filepath.Join(absScriptsDir, "apps", manifestID)
-		if _, err := os.Stat(appDir); err == nil {
-			log(">> 正在清理应用数据目录: %s", appDir)
-			_ = os.RemoveAll(appDir)
+		appDir := masterTask.WorkDir
+		if appDir == "" || !strings.Contains(appDir, filepath.Join(absScriptsDir, "apps")) {
+			appDir = GetAppDir(absScriptsDir, author, manifestID)
+		}
+		if appDir != "" && strings.Contains(appDir, filepath.Join(absScriptsDir, "apps")) {
+			if _, err := os.Stat(appDir); err == nil {
+				log(">> 正在清理应用数据目录: %s", appDir)
+				_ = os.RemoveAll(appDir)
+			}
 		}
 	}
 

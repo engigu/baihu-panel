@@ -371,24 +371,26 @@ func (ac *AppController) RemoveApp(c *gin.Context) {
 
 // GetMarketplace 获取应用市场列表
 func (ac *AppController) GetMarketplace(c *gin.Context) {
-	// 2. 从官方远程源拉取应用市场索引（4级容灾加速矩阵）
-	// 第1级: jsDelivr 全球顶级 CDN (国内秒开加速)
-	// 第2级: GitHub Pages 官方 CDN 节点
-	// 第3级: 国内 GitHub 镜像代理加速 (ghproxy / ghp.ci)
-	// 第4级: GitHub Raw 原生直连兜底
+	// 2. 从官方远程源拉取应用市场索引（实时性优先 + 容灾加速矩阵）
+	// 第1级: GitHub Pages 官方节点 (实时更新)
+	// 第2级: 国内 GitHub 镜像代理加速 (ghproxy / ghp.ci)
+	// 第3级: GitHub Raw 原生直连
+	// 第4级: jsDelivr 备用 CDN
 	remoteCandidates := []string{
-		"https://cdn.jsdelivr.net/gh/engigu/baihu-appstore@main/apps.json",
 		"https://engigu.github.io/baihu-appstore/apps.json",
 		"https://ghproxy.net/https://raw.githubusercontent.com/engigu/baihu-appstore/main/apps.json",
 		"https://ghp.ci/https://raw.githubusercontent.com/engigu/baihu-appstore/main/apps.json",
 		"https://raw.githubusercontent.com/engigu/baihu-appstore/main/apps.json",
+		"https://cdn.jsdelivr.net/gh/engigu/baihu-appstore@main/apps.json",
 	}
 
 	client := &http.Client{Timeout: 8 * time.Second}
 	var resp *http.Response
 	var err error
+	nowTs := time.Now().Unix()
 	for _, targetURL := range remoteCandidates {
-		resp, err = client.Get(targetURL)
+		fetchURL := fmt.Sprintf("%s?t=%d", targetURL, nowTs)
+		resp, err = client.Get(fetchURL)
 		if err == nil && resp.StatusCode == http.StatusOK {
 			break
 		}

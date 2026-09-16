@@ -17,6 +17,20 @@ import TaskNotificationConfig from '@/views/tasks/components/TaskNotificationCon
 import TaskAdvancedConfig from '@/views/tasks/components/TaskAdvancedConfig.vue'
 import TaskCronConfig from '@/views/tasks/components/TaskCronConfig.vue'
 
+function formatDate(dateStr?: string) {
+  if (!dateStr) return ''
+  try {
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return dateStr
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  } catch {
+    return dateStr
+  }
+}
+
 const demoMode = ref(false)
 onMounted(async () => {
   try {
@@ -54,7 +68,7 @@ const envForm = ref<Record<string, any>>({})
 const showSecrets = ref<Record<string, boolean>>({})
 
 // 高级选项
-const showAdvanced = ref(false)
+const showAdvanced = ref(true)
 const forceSetup = ref(false)
 const skipSetup = ref(false)
 const skipSync = ref(false)
@@ -512,6 +526,9 @@ async function executeDeploy() {
               <span class="truncate">{{ targetApp ? (mode === 'edit_task' ? `编辑应用调度配置：${targetApp.name}` : (isInstalled ? `配置 / 重新部署：${targetApp.name}` : `部署应用：${targetApp.name}`)) : '导入应用 (Apply Manifest)' }}</span>
               <Badge v-if="targetApp?.version" variant="secondary" class="text-[10px] font-mono shrink-0">
                 v{{ targetApp.version }}
+              </Badge>
+              <Badge v-if="targetApp?.last_commit" variant="outline" class="text-[9px] font-mono shrink-0 text-muted-foreground/80" :title="`仓库最近更新时间: ${targetApp.last_commit}`">
+                更新于 {{ formatDate(targetApp.last_commit) }}
               </Badge>
             </DialogTitle>
             <DialogDescription class="text-xs text-muted-foreground truncate">

@@ -113,6 +113,7 @@ type AppTaskConfig struct {
 	Version         string            `json:"version,omitempty"`
 	Author          string            `json:"author,omitempty"`
 	Category        string            `json:"category,omitempty"`
+	LastCommit      string            `json:"last_commit,omitempty"`
 	Description     string            `json:"description,omitempty"`
 	Icon            string            `json:"icon,omitempty"`
 	Homepage        string            `json:"homepage,omitempty"`
@@ -269,6 +270,14 @@ func (t *Task) GetAppConfig() *AppTaskConfig {
 func (t *Task) GetManifestID() string {
 	if appCfg := t.GetAppConfig(); appCfg != nil {
 		return appCfg.ID
+	}
+	return ""
+}
+
+// GetAppAuthor 快捷从 UnifiedConfig 获取声明式 App 的 Author
+func (t *Task) GetAppAuthor() string {
+	if appCfg := t.GetAppConfig(); appCfg != nil {
+		return appCfg.Author
 	}
 	return ""
 }

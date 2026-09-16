@@ -4,6 +4,26 @@ import (
 	"testing"
 )
 
+func TestGetAppDirName(t *testing.T) {
+	tests := []struct {
+		author   string
+		id       string
+		expected string
+	}{
+		{"RayWangQvQ", "bilibili-tool-pro", "RayWangQvQ-bilibili-tool-pro"},
+		{"6dylan6", "jdpro", "6dylan6-jdpro"},
+		{"RayWangQvQ", "RayWangQvQ-bilibili-tool-pro", "RayWangQvQ-bilibili-tool-pro"},
+		{"", "jdpro", "jdpro"},
+	}
+
+	for _, tt := range tests {
+		got := GetAppDirName(tt.author, tt.id)
+		if got != tt.expected {
+			t.Errorf("GetAppDirName(%q, %q) = %q; want %q", tt.author, tt.id, got, tt.expected)
+		}
+	}
+}
+
 func TestParseManifest(t *testing.T) {
 	yamlContent := `
 spec_version: "v1"

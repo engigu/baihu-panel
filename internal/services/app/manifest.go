@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -29,6 +30,7 @@ type AppManifest struct {
 	Version     string            `json:"version" yaml:"version"`                                 // 语义化版本号 (如 2.1.0)
 	Author      string            `json:"author,omitempty" yaml:"author,omitempty"`               // 作者或维护者 (如 RayWangQvQ)
 	Category    string            `json:"category,omitempty" yaml:"category,omitempty"`           // 所属分类 (如 福利签到)
+	LastCommit  string            `json:"last_commit,omitempty" yaml:"last_commit,omitempty"`     // 仓库最近 Commit 提交时间 (如 2026-09-16T11:14:00Z)
 	Template    interface{}       `json:"template,omitempty" yaml:"template,omitempty"`           // 模板宏变量声明池 (支持 map 或 list)
 	Description string            `json:"description,omitempty" yaml:"description,omitempty"`     // 应用功能描述
 	Icon        string            `json:"icon,omitempty" yaml:"icon,omitempty"`                   // 应用图标 URL
@@ -817,6 +819,7 @@ func (m *AppManifest) ExtractMetadata() map[string]interface{} {
 		"version":         m.Version,
 		"author":          m.Author,
 		"category":        m.Category,
+		"last_commit":     m.LastCommit,
 		"description":     m.Description,
 		"icon":            m.Icon,
 		"homepage":        m.Homepage,
@@ -828,4 +831,39 @@ func (m *AppManifest) ExtractMetadata() map[string]interface{} {
 		"scenarios_count": len(m.Scenarios),
 		"scenarios":       scenariosSummary,
 	}
+}
+
+// GetAppDirName 根据 yml 的 author 和 manifestID 计算出统一的应用存储目录名: {author}-{manifestID}
+func GetAppDirName(author, manifestID string) string {
+	cleanID := strings.TrimSpace(manifestID)
+	cleanAuthor := strings.TrimSpace(author)
+
+	if cleanAuthor != "" && cleanID != "" {
+		prefix := cleanAuthor + "-"
+		if strings.HasPrefix(cleanID, prefix) {
+			return cleanID
+		}
+		return fmt.Sprintf("%s-%s", cleanAuthor, cleanID)
+	}
+
+	if cleanID != "" {
+		return cleanID
+	}
+	return "unknown-app"
+}
+
+// GetAppDir 根据绝对 scripts 目录路径、author 和 manifestID 计算出应用根目录的绝对路径
+func GetAppDir(absScriptsDir, author, manifestID string) string {
+	dirName := GetAppDirName(author, manifestID)
+	return filepath.Clean(filepath.Join(absScriptsDir, "apps", dirName))
+}
+
+// GetAppDir 在 AppManifest 上的便捷成员函数
+func (m *AppManifest) GetAppDir(absScriptsDir string) string {
+	return GetAppDir(absScriptsDir, m.Author, m.ID)
+}
+
+// GetAppDirName 在 AppManifest 上的便捷成员函数
+func (m *AppManifest) GetAppDirName() string {
+	return GetAppDirName(m.Author, m.ID)
 }

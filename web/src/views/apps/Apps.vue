@@ -16,12 +16,27 @@ import {
   Download,
   Eye,
   Github,
-  ExternalLink
+  ExternalLink,
+  Clock
 } from 'lucide-vue-next'
 import { api, type MarketplaceApp } from '@/api'
 import ApplyDialog from './ApplyDialog.vue'
 import { toast } from 'vue-sonner'
 import { useRouter } from 'vue-router'
+
+function formatDate(dateStr?: string) {
+  if (!dateStr) return ''
+  try {
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return dateStr
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  } catch {
+    return dateStr
+  }
+}
 
 const router = useRouter()
 const searchQuery = ref('')
@@ -195,19 +210,6 @@ function handleApplySuccess() {
             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loadingMarketplace }" />
           </Button>
 
-          <!-- 官方 GitHub 仓库按钮 -->
-          <a
-            href="https://github.com/engigu/baihu-appstore"
-            target="_blank"
-            class="inline-flex flex-1 sm:flex-none"
-            title="前往 baihu-appstore 官方 GitHub 开源仓库"
-          >
-            <Button variant="outline" size="sm" class="h-9 px-3 text-xs w-full justify-center shadow-sm font-medium gap-1">
-              <Github class="h-3.5 w-3.5 shrink-0" />
-              <span>应用仓库</span>
-              <ExternalLink class="h-3 w-3 opacity-60 shrink-0 ml-0.5" />
-            </Button>
-          </a>
 
           <!-- 导入应用 (小屏下 flex-1 铺满) -->
           <Button size="sm" class="h-9 px-3 text-xs flex-1 sm:flex-none justify-center shadow-sm font-medium gap-1" @click="openCustomApply">
@@ -298,6 +300,9 @@ function handleApplySuccess() {
                 <span class="truncate">{{ app.author || '社区贡献者' }}</span>
               </div>
               <div class="flex items-center gap-2.5 font-mono text-[10px] sm:text-[11px] opacity-75 shrink-0">
+                <span v-if="app.last_commit" class="flex items-center gap-1 text-muted-foreground/80" :title="`仓库最近更新时间: ${app.last_commit}`">
+                  <Clock class="w-3 h-3 opacity-60" /> {{ formatDate(app.last_commit) }}
+                </span>
                 <span v-if="statsData.downloads && statsData.downloads[app.id]" class="flex items-center gap-1 text-emerald-500 font-medium" title="累计部署次数">
                   <Download class="w-3 h-3" /> {{ statsData.downloads[app.id] }}
                 </span>

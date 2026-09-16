@@ -147,7 +147,21 @@ function handleTypeChange(clearSource = true) {
     filterSourceId.value = ''
   }
   currentPage.value = 1
-  loadTasks()
+
+  const currentQueryType = (route.query.type as string) || ''
+  const targetType = (filterType.value === TASK_TYPE.NORMAL || !filterType.value) ? '' : filterType.value
+
+  if (currentQueryType !== targetType) {
+    const query = { ...route.query }
+    if (targetType) {
+      query.type = targetType
+    } else {
+      delete query.type
+    }
+    router.replace({ query })
+  } else {
+    loadTasks()
+  }
 }
 
 function toggleSort(field: string) {

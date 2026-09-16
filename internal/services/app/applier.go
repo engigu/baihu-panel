@@ -143,7 +143,7 @@ func (a *AppApplier) Apply(manifest *AppManifest, rawYAML []byte, opts ApplyOpti
 // --------------------------------------------------------------------------
 func (a *AppApplier) prepareAppDir(manifest *AppManifest, log LogFunc) (string, error) {
 	absScriptsDir := utils.ResolveAbsScriptsDir()
-	appDir := filepath.Clean(filepath.Join(absScriptsDir, "apps", manifest.ID))
+	appDir := manifest.GetAppDir(absScriptsDir)
 	if err := os.MkdirAll(appDir, 0755); err != nil {
 		return "", fmt.Errorf("创建应用根目录失败 (%s): %w", appDir, err)
 	}
@@ -168,6 +168,13 @@ func (a *AppApplier) syncSources(manifest *AppManifest, appDir string, skipSync 
 			targetSubPath = src.ID
 		}
 		targetAbsDir := filepath.Join(appDir, targetSubPath)
+		gitDir := filepath.Join(targetAbsDir, ".git")
+		if fi, err := os.Stat(targetAbsDir); err == nil && fi.IsDir() {
+			if _, gitErr := os.Stat(gitDir); os.IsNotExist(gitErr) {
+				// 目标目录存在但丢失了 .git，属于上一次失败留下的脏目录，自动清理以便重新 clean clone
+				_ = os.RemoveAll(targetAbsDir)
+			}
+		}
 		_ = os.MkdirAll(targetAbsDir, 0755)
 
 		// 映射组装 reposync 命令行参数
@@ -175,6 +182,7 @@ func (a *AppApplier) syncSources(manifest *AppManifest, appDir string, skipSync 
 			"--source-type", src.SourceType,
 			"--source-url", src.SourceURL,
 			"--target-path", targetAbsDir,
+			"--repo-name", ".",
 		}
 		if src.Branch != "" {
 			syncArgs = append(syncArgs, "--branch", src.Branch)
@@ -728,6 +736,7 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 		Version:         manifest.Version,
 		Author:          manifest.Author,
 		Category:        manifest.Category,
+		LastCommit:      manifest.LastCommit,
 		Description:     manifest.Description,
 		Icon:            manifest.Icon,
 		Homepage:        manifest.Homepage,

@@ -570,6 +570,7 @@ export interface MarketplaceApp {
   version: string
   author?: string
   category?: string
+  last_commit?: string
   description?: string
   icon?: string
   homepage?: string
