@@ -14,7 +14,9 @@ import {
   ArrowRight,
   User,
   Download,
-  Eye
+  Eye,
+  Github,
+  ExternalLink
 } from 'lucide-vue-next'
 import { api, type MarketplaceApp } from '@/api'
 import ApplyDialog from './ApplyDialog.vue'
@@ -141,6 +143,17 @@ function handleApplySuccess() {
           <span>浏览并一键部署官方声明式应用</span>
           <span class="hidden sm:inline text-border">|</span>
           <span class="text-[11px] text-emerald-500 font-medium">100% 开源免费</span>
+          <span class="hidden sm:inline text-border">|</span>
+          <a
+            href="https://github.com/engigu/baihu-appstore"
+            target="_blank"
+            class="text-[11px] text-muted-foreground/90 hover:text-primary transition-colors inline-flex items-center gap-1 font-mono hover:underline"
+            title="访问 engigu/baihu-appstore GitHub 开源仓库"
+          >
+            <Github class="w-3 h-3 text-foreground shrink-0" />
+            <span>engigu/baihu-appstore</span>
+            <ExternalLink class="w-2.5 h-2.5 opacity-60 shrink-0" />
+          </a>
           <span v-if="statsData.pv?.marketplace || statsData.downloads?.global" class="hidden sm:inline text-border">|</span>
           <span v-if="statsData.pv?.marketplace" class="text-[11px] text-muted-foreground/90 flex items-center gap-1" title="应用市场累计浏览次数">
             <Eye class="w-3 h-3 text-primary/80" /> {{ statsData.pv.marketplace }} 浏览
@@ -151,7 +164,7 @@ function handleApplySuccess() {
         </p>
       </div>
 
-      <!-- 右侧控制栏：搜索框 + 刷新 + 导入 + 已装应用 -->
+      <!-- 右侧控制栏：搜索框 + 刷新 + 官方仓库 + 导入 + 已装应用 -->
       <div class="flex items-center flex-wrap gap-2 w-full md:w-auto md:ml-auto md:justify-end">
         <!-- 搜索框 -->
         <div class="relative w-full sm:w-[200px] group text-sm">
@@ -181,6 +194,20 @@ function handleApplySuccess() {
           >
             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loadingMarketplace }" />
           </Button>
+
+          <!-- 官方 GitHub 仓库按钮 -->
+          <a
+            href="https://github.com/engigu/baihu-appstore"
+            target="_blank"
+            class="inline-flex flex-1 sm:flex-none"
+            title="前往 baihu-appstore 官方 GitHub 开源仓库"
+          >
+            <Button variant="outline" size="sm" class="h-9 px-3 text-xs w-full justify-center shadow-sm font-medium gap-1">
+              <Github class="h-3.5 w-3.5 shrink-0" />
+              <span>应用仓库</span>
+              <ExternalLink class="h-3 w-3 opacity-60 shrink-0 ml-0.5" />
+            </Button>
+          </a>
 
           <!-- 导入应用 (小屏下 flex-1 铺满) -->
           <Button size="sm" class="h-9 px-3 text-xs flex-1 sm:flex-none justify-center shadow-sm font-medium gap-1" @click="openCustomApply">
