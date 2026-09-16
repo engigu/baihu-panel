@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -30,6 +30,14 @@ import { api, type AppDetailResponse, type Task } from '@/api'
 import { getCronDescription } from '@/utils/cron'
 import { toast } from 'vue-sonner'
 
+const demoMode = ref(false)
+onMounted(async () => {
+  try {
+    const publicSite = await api.settings.getPublicSite()
+    demoMode.value = publicSite.demo_mode || false
+  } catch {}
+})
+
 const props = defineProps<{
   open: boolean
   appId: string
@@ -57,7 +65,6 @@ const runningTaskId = ref<string | null>(null)
 
 // 卸载状态
 const showUninstallConfirm = ref(false)
-const cleanDataOnUninstall = ref(true)
 const uninstalling = ref(false)
 
 // 环境变量表单状态
@@ -98,6 +105,10 @@ async function loadAppDetail(id: string) {
 
 // 切换场景
 async function handleSwitchScenario(scId: any) {
+  if (demoMode.value) {
+    toast.error('演示模式下禁止切换应用场景')
+    return
+  }
   if (!appData.value || switchingScenario.value || !scId) return
   const scenarioStr = String(scId)
   if (scenarioStr === appData.value.app.current_scenario) return
@@ -130,6 +141,10 @@ async function handleRunTask(task: Task) {
 
 // 启停单个受控任务
 async function handleToggleTask(task: Task, enabled: boolean) {
+  if (demoMode.value) {
+    toast.error('演示模式下禁止修改任务状态')
+    return
+  }
   try {
     await api.tasks.update(task.id, { enabled })
     task.enabled = enabled
@@ -141,6 +156,10 @@ async function handleToggleTask(task: Task, enabled: boolean) {
 
 // 触发重新预编译自愈
 async function handleRebuild() {
+  if (demoMode.value) {
+    toast.error('演示模式下禁止重新构建应用')
+    return
+  }
   if (!appData.value || rebuilding.value) return
   rebuilding.value = true
   rebuildLog.value = ''
@@ -160,6 +179,10 @@ async function handleRebuild() {
 
 // 卸载应用
 async function handleUninstall() {
+  if (demoMode.value) {
+    toast.error('演示模式下禁止卸载应用')
+    return
+  }
   if (!appData.value || uninstalling.value) return
   uninstalling.value = true
   try {
@@ -215,6 +238,12 @@ async function handleUninstall() {
 
       <!-- 中间内容区 -->
       <div v-if="appData" class="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        <!-- 演示模式提示 Banner -->
+        <div v-if="demoMode" class="p-3 rounded-xl bg-destructive/10 text-destructive text-xs font-medium flex items-center gap-2">
+          <AlertTriangle class="w-4 h-4 shrink-0" />
+          <span>演示模式限制：当前系统开启演示模式，已限制场景切换、重编译自愈及卸载应用等高危变更操作。</span>
+        </div>
+
         <!-- 顶部场景总控卡片 -->
         <div class="p-3.5 rounded-xl border border-primary/20 bg-primary/5 flex flex-col gap-2.5">
           <div class="flex items-center justify-between gap-3">
@@ -231,7 +260,7 @@ async function handleUninstall() {
             <div v-if="appData.manifest?.scenarios && appData.manifest.scenarios.length > 1" class="w-48 shrink-0">
               <Select
                 :model-value="appData.app.current_scenario"
-                :disabled="switchingScenario"
+                :disabled="switchingScenario || demoMode"
                 @update:model-value="handleSwitchScenario($event)"
               >
                 <SelectTrigger class="h-8 text-xs font-semibold bg-background border-primary/30 text-primary shadow-xs">
@@ -310,6 +339,7 @@ async function handleUninstall() {
                 <div class="flex items-center gap-2 shrink-0">
                   <Switch
                     :checked="Boolean(task.enabled)"
+                    :disabled="demoMode"
                     @update:checked="handleToggleTask(task, $event)"
                   />
                   <Button
@@ -351,7 +381,7 @@ async function handleUninstall() {
                   size="sm"
                   variant="outline"
                   class="shrink-0 text-xs h-7 px-2.5"
-                  :disabled="rebuilding"
+                  :disabled="rebuilding || demoMode"
                   @click="handleRebuild"
                 >
                   <Loader2 v-if="rebuilding" class="w-3 h-3 mr-1 animate-spin" />
@@ -390,6 +420,7 @@ async function handleUninstall() {
                   size="sm"
                   variant="destructive"
                   class="text-xs h-7 px-3 font-semibold"
+                  :disabled="demoMode"
                   @click="showUninstallConfirm = true"
                 >
                   <Trash2 class="w-3.5 h-3.5 mr-1" />

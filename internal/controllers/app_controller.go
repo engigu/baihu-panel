@@ -130,6 +130,22 @@ func (ac *AppController) ApplyApp(c *gin.Context) {
 
 	isStream := c.Query("stream") == "true" || strings.Contains(c.GetHeader("Accept"), "text/event-stream")
 
+	// 演示模式拦截
+	if constant.DemoMode {
+		if isStream {
+			c.Header("Content-Type", "text/event-stream; charset=utf-8")
+			c.Header("Cache-Control", "no-cache")
+			c.Header("Connection", "keep-alive")
+			c.Header("X-Accel-Buffering", "no")
+			c.Writer.Flush()
+			fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", "演示模式下禁止安装或部署应用")
+			c.Writer.Flush()
+			return
+		}
+		utils.BadRequest(c, "演示模式下禁止安装或部署应用")
+		return
+	}
+
 	var buf bytes.Buffer
 	var multiLogWriter io.Writer = &buf
 
@@ -233,6 +249,11 @@ func (ac *AppController) ApplyApp(c *gin.Context) {
 
 // SwitchScenario 切换已安装应用的使用场景
 func (ac *AppController) SwitchScenario(c *gin.Context) {
+	if constant.DemoMode {
+		utils.BadRequest(c, "演示模式下禁止切换应用场景")
+		return
+	}
+
 	id := c.Param("id")
 	if id == "" {
 		utils.BadRequest(c, "应用 ID 不能为空")
@@ -267,6 +288,11 @@ func (ac *AppController) SwitchScenario(c *gin.Context) {
 
 // RebuildApp 强制重新预编译/安装依赖（自愈修复）
 func (ac *AppController) RebuildApp(c *gin.Context) {
+	if constant.DemoMode {
+		utils.BadRequest(c, "演示模式下禁止重新构建应用")
+		return
+	}
+
 	id := c.Param("id")
 	if id == "" {
 		utils.BadRequest(c, "应用 ID 不能为空")
@@ -318,6 +344,11 @@ func (ac *AppController) RebuildApp(c *gin.Context) {
 
 // RemoveApp 卸载已安装应用
 func (ac *AppController) RemoveApp(c *gin.Context) {
+	if constant.DemoMode {
+		utils.BadRequest(c, "演示模式下禁止卸载应用")
+		return
+	}
+
 	taskID := c.Param("id")
 	if taskID == "" {
 		utils.BadRequest(c, "应用 TaskID 不能为空")

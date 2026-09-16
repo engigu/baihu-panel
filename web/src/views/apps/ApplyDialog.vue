@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,14 @@ import { toast } from 'vue-sonner'
 import TaskNotificationConfig from '@/views/tasks/components/TaskNotificationConfig.vue'
 import TaskAdvancedConfig from '@/views/tasks/components/TaskAdvancedConfig.vue'
 import TaskCronConfig from '@/views/tasks/components/TaskCronConfig.vue'
+
+const demoMode = ref(false)
+onMounted(async () => {
+  try {
+    const publicSite = await api.settings.getPublicSite()
+    demoMode.value = publicSite.demo_mode || false
+  } catch {}
+})
 
 const props = withDefaults(
   defineProps<{
@@ -249,6 +257,10 @@ const showOverwriteConfirm = ref(false)
 const overwriteAppName = ref('')
 
 async function startDeployProcess() {
+  if (demoMode.value) {
+    toast.error('演示模式下禁止安装或部署应用')
+    return
+  }
   if (!form.value.schedule || !form.value.schedule.trim()) {
     toast.error('请填写定时规则 (Cron表达式)')
     return
@@ -331,6 +343,10 @@ function confirmOverwriteDeploy() {
 }
 
 async function executeDeploy() {
+  if (demoMode.value) {
+    toast.error('演示模式下禁止安装或部署应用')
+    return
+  }
   deploying.value = true
   deployLog.value = '>> 正在建立实时日志连接...\n'
   deployError.value = ''
@@ -504,6 +520,12 @@ async function executeDeploy() {
           </div>
         </div>
       </DialogHeader>
+
+      <!-- 演示模式提示 Banner -->
+      <div v-if="demoMode" class="mx-5 mt-3 flex items-center gap-2 p-3 rounded-md bg-destructive/10 text-destructive text-xs font-medium">
+        <AlertTriangle class="w-4 h-4 shrink-0" />
+        <span>演示模式限制：当前系统开启演示模式，禁止安装、部署或修改应用配置。</span>
+      </div>
 
       <!-- 中间可滚动表单区 -->
       <div class="flex-1 overflow-y-auto px-6 py-4 space-y-6">
@@ -911,7 +933,7 @@ async function executeDeploy() {
             {{ deploySuccess ? '完成' : '取消' }}
           </Button>
 
-          <Button size="sm" :disabled="deploying" @click="startDeployProcess">
+          <Button size="sm" :disabled="deploying || demoMode" @click="startDeployProcess">
             <Loader2 v-if="deploying" class="w-3.5 h-3.5 mr-1.5 animate-spin" />
             <Sparkles v-else class="w-3.5 h-3.5 mr-1.5" />
             {{ deploying ? (mode === 'edit_task' ? '正在保存...' : '正在部署中...') : (mode === 'edit_task' ? '保存配置' : (deploySuccess ? '重新部署' : (isInstalled ? '重新部署应用' : '开始部署应用'))) }}
