@@ -151,7 +151,7 @@ function handleApplySuccess() {
             title="访问 engigu/baihu-appstore GitHub 开源仓库"
           >
             <Github class="w-3 h-3 text-foreground shrink-0" />
-            <span>engigu/baihu-appstore</span>
+            <span>官方应用源</span>
             <ExternalLink class="w-2.5 h-2.5 opacity-60 shrink-0" />
           </a>
           <span v-if="statsData.pv?.marketplace || statsData.downloads?.global" class="hidden sm:inline text-border">|</span>
