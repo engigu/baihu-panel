@@ -7,6 +7,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
+	"github.com/engigu/baihu-panel/internal/services/app"
 	"github.com/engigu/baihu-panel/internal/services/relation"
 	"github.com/engigu/baihu-panel/internal/utils"
 )
@@ -239,12 +240,20 @@ func (ts *TaskService) UpdateTask(id string, p *TaskParam) *models.Task {
 }
 
 func (ts *TaskService) DeleteTask(id string) bool {
+	var targetTask models.Task
+	if err := database.DB.Where("id = ?", id).Limit(1).Find(&targetTask).Error; err == nil && targetTask.ID != "" {
+		if targetTask.Type == constant.TaskTypeApp {
+			_ = app.CleanAppTaskAndData(&targetTask, true, nil)
+			return true
+		}
+	}
+
 	// 同时删除关联的通知推送设置
 	database.DB.Where("type = ? AND data_id = ?", constant.BindingTypeTask, id).Delete(&models.NotifyBinding{})
 	relation.DataRelation.CleanRelations(id, constant.RelationTypeTaskTag)
 	relation.DataRelation.CleanRelations(id, constant.RelationTypeTaskEnv)
 
-	result := database.DB.Where("id = ?", id).Delete(&models.Task{})
+	result := database.DB.Unscoped().Where("id = ?", id).Delete(&models.Task{})
 	return result.RowsAffected > 0
 }
 

@@ -137,8 +137,58 @@ func (s *AppService) buildAppDTOFromTask(task *models.Task, taskCount int) *AppD
 	return dto
 }
 
-// RemoveApp 卸载已安装应用：物理清理 baihu_tasks 表中的 source_id 子任务以及 type = 'app' 的主应用任务
-func (s *AppService) RemoveApp(id string, cleanData bool, out io.Writer) error {
+// CleanAppTaskAndData 物理清理应用主任务、关联受控子任务及本地磁盘代码目录
+func CleanAppTaskAndData(masterTask *models.Task, cleanData bool, out io.Writer) error {
+	if masterTask == nil || masterTask.Type != constant.TaskTypeApp {
+		return nil
+	}
+
+	log := func(format string, args ...interface{}) {
+		if out == nil {
+			return
+		}
+		msg := fmt.Sprintf(format, args...)
+		if !strings.HasSuffix(msg, "\n") {
+			msg += "\n"
+		}
+		out.Write([]byte(msg))
+	}
+
+
+	// 1. 清理所有受控子任务 (source_id = masterTask.ID)
+	var childTasks []models.Task
+	if err := database.DB.Where("source_id = ? AND type = ?", masterTask.ID, constant.TaskTypeNormal).Find(&childTasks).Error; err == nil {
+		for _, t := range childTasks {
+			log("  - 清理受控子任务: %s (%s)", t.Name, t.ID)
+			database.DB.Where("type = ? AND data_id = ?", constant.BindingTypeTask, t.ID).Delete(&models.NotifyBinding{})
+			relation.DataRelation.CleanRelations(t.ID, constant.RelationTypeTaskTag)
+			relation.DataRelation.CleanRelations(t.ID, constant.RelationTypeTaskEnv)
+			database.DB.Unscoped().Where("id = ?", t.ID).Delete(&models.Task{})
+		}
+	}
+
+	// 2. 清理主应用任务关联关系与主记录
+	database.DB.Where("type = ? AND data_id = ?", constant.BindingTypeTask, masterTask.ID).Delete(&models.NotifyBinding{})
+	relation.DataRelation.CleanRelations(masterTask.ID, constant.RelationTypeTaskTag)
+	relation.DataRelation.CleanRelations(masterTask.ID, constant.RelationTypeTaskEnv)
+	database.DB.Unscoped().Where("id = ?", masterTask.ID).Delete(&models.Task{})
+
+	// 3. 清理磁盘本地代码与数据文件夹 (data/scripts/apps/:manifestID)
+	manifestID := masterTask.GetManifestID()
+	if cleanData && manifestID != "" {
+		absScriptsDir := utils.ResolveAbsScriptsDir()
+		appDir := filepath.Join(absScriptsDir, "apps", manifestID)
+		if _, err := os.Stat(appDir); err == nil {
+			log(">> 正在清理应用数据目录: %s", appDir)
+			_ = os.RemoveAll(appDir)
+		}
+	}
+
+	return nil
+}
+
+// RemoveApp 卸载已安装应用：根据应用 TaskID 物理清理主应用记录、关联受控子任务及本地代码目录
+func (s *AppService) RemoveApp(taskID string, cleanData bool, out io.Writer) error {
 	if out == nil {
 		out = os.Stdout
 	}
@@ -150,42 +200,20 @@ func (s *AppService) RemoveApp(id string, cleanData bool, out io.Writer) error {
 		out.Write([]byte(msg))
 	}
 
-	log(">> 正在卸载应用 [%s]...", id)
+	log(">> 正在卸载应用 [%s]...", taskID)
 
-	// 1. 先查找主应用任务实体 (id = id 或 source_id = 'app:'+id 或 id 匹配)
+	// 1. 使用 taskID 查找主应用任务实体
 	var masterTask models.Task
-	masterID := id
-	if err := database.DB.Where("(id = ? OR source_id = ?) AND type = ?", id, "app:"+id, constant.TaskTypeApp).Limit(1).Find(&masterTask).Error; err == nil && masterTask.ID != "" {
-		masterID = masterTask.ID
+	if err := database.DB.Where("id = ? AND type = ?", taskID, constant.TaskTypeApp).First(&masterTask).Error; err != nil {
+		return fmt.Errorf("未找到应用记录: %s", taskID)
 	}
 
-	// 2. 删除所属受控子任务 (source_id 等于 masterID 或 id 或 'app:'+id)
-	var childTasks []models.Task
-	if err := database.DB.Where("source_id IN ? AND type = ?", []string{masterID, id, "app:" + id}, constant.TaskTypeNormal).Find(&childTasks).Error; err == nil {
-		for _, t := range childTasks {
-			log("  - 清理受控子任务: %s", t.Name)
-			relation.DataRelation.CleanRelations(t.ID, constant.RelationTypeTaskTag)
-			relation.DataRelation.CleanRelations(t.ID, constant.RelationTypeTaskEnv)
-			database.DB.Unscoped().Where("id = ?", t.ID).Delete(&models.Task{})
-		}
+	// 2. 调用公共逻辑执行清理
+	if err := CleanAppTaskAndData(&masterTask, cleanData, out); err != nil {
+		return err
 	}
 
-	// 3. 删除主应用任务记录 (type = 'app')
-	relation.DataRelation.CleanRelations(masterID, constant.RelationTypeTaskTag)
-	relation.DataRelation.CleanRelations(masterID, constant.RelationTypeTaskEnv)
-	database.DB.Unscoped().Where("(id = ? OR source_id = ?) AND type = ?", masterID, "app:"+id, constant.TaskTypeApp).Delete(&models.Task{})
-
-	// 3. 清理磁盘文件
-	if cleanData {
-		absScriptsDir := utils.ResolveAbsScriptsDir()
-		appDir := filepath.Join(absScriptsDir, "apps", id)
-		if _, err := os.Stat(appDir); err == nil {
-			log(">> 正在清理应用数据目录: %s", appDir)
-			_ = os.RemoveAll(appDir)
-		}
-	}
-
-	log(">> ✓ 应用 [%s] 卸载与关联任务清理完成！", id)
+	log(">> ✓ 应用 [%s] 卸载与关联任务清理完成！", taskID)
 	return nil
 }
 

@@ -265,6 +265,14 @@ func (t *Task) GetAppConfig() *AppTaskConfig {
 	return cfg.App
 }
 
+// GetManifestID 快捷从 UnifiedConfig 获取声明式 App 的 Manifest ID
+func (t *Task) GetManifestID() string {
+	if appCfg := t.GetAppConfig(); appCfg != nil {
+		return appCfg.ID
+	}
+	return ""
+}
+
 // TaskLog 代表任务执行的日志记录
 type TaskLog struct {
 	ID        string     `json:"id" gorm:"primaryKey;size:20"`

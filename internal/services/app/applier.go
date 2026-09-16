@@ -43,7 +43,7 @@ type ApplyOptions struct {
 // ApplyResult 应用执行结果
 type ApplyResult struct {
 	ID             string   `json:"id"`
-	AppID          string   `json:"app_id"`
+	ManifestID     string   `json:"manifest_id"`
 	AppName        string   `json:"app_name"`
 	Version        string   `json:"version"`
 	ActiveScenario string   `json:"active_scenario"`
@@ -125,7 +125,7 @@ func (a *AppApplier) Apply(manifest *AppManifest, rawYAML []byte, opts ApplyOpti
 
 	return &ApplyResult{
 		ID:             masterTask.ID,
-		AppID:          manifest.ID,
+		ManifestID:     manifest.ID,
 		AppName:        manifest.Name,
 		Version:        manifest.Version,
 		ActiveScenario: activeScenarioID,
@@ -511,9 +511,8 @@ func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, mast
 
 		taskLangs := t.GetParsedLanguages()
 
-		appSourceID := "app:" + manifest.ID
 		var existingTask models.Task
-		tx := database.DB.Where("(source_id = ? OR source_id = ?) AND type = ? AND name = ?", masterTaskID, appSourceID, constant.TaskTypeNormal, t.Name).Limit(1).Find(&existingTask)
+		tx := database.DB.Where("source_id = ? AND type = ? AND name = ?", masterTaskID, constant.TaskTypeNormal, t.Name).Limit(1).Find(&existingTask)
 		if tx.RowsAffected > 0 {
 			existingTask.Name = t.Name
 			existingTask.Command = models.BigText(cmdStr)

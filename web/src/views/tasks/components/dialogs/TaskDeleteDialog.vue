@@ -4,6 +4,7 @@ import BaihuDialog from '@/components/ui/BaihuDialog.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { AlertTriangle } from 'lucide-vue-next'
 import type { Task } from '@/api'
 import { TASK_TYPE } from '@/constants'
 
@@ -29,11 +30,22 @@ function handleDeleteSingle() {
 </script>
 
 <template>
-  <!-- 单个任务删除 -->
-  <BaihuDialog :open="openDelete" title="确认删除任务" @update:open="$emit('update:openDelete', $event)">
-    <div class="text-sm text-muted-foreground leading-relaxed py-2">
-      确定要删除任务 <b class="text-foreground">{{ targetTask?.name }}</b> 吗？
-      <p class="mt-2 text-destructive font-medium">⚠️ 此操作无法撤销。</p>
+  <!-- 单个任务/应用删除 -->
+  <BaihuDialog :open="openDelete" :title="targetTask?.type === TASK_TYPE.APP ? '确认卸载应用' : '确认删除任务'" @update:open="$emit('update:openDelete', $event)">
+    <div class="space-y-3 py-1">
+      <div class="text-xs text-muted-foreground leading-relaxed">
+        确定要{{ targetTask?.type === TASK_TYPE.APP ? '卸载应用' : '删除任务' }} <b class="text-foreground font-semibold">{{ targetTask?.name }}</b> 吗？
+      </div>
+
+      <div v-if="targetTask?.type === TASK_TYPE.APP" class="p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-start gap-2 text-xs text-destructive">
+        <AlertTriangle class="w-4 h-4 shrink-0 mt-0.5" />
+        <div class="leading-relaxed">
+          卸载应用将彻底删除<b>本地代码文件夹</b>以及<b>所有关联的受控任务与配置</b>，该操作无法撤销。
+        </div>
+      </div>
+      <div v-else class="text-xs text-destructive font-medium">
+        ⚠️ 此操作无法撤销。
+      </div>
     </div>
     <template #footer>
       <div class="flex items-center justify-between w-full gap-4">
@@ -45,7 +57,9 @@ function handleDeleteSingle() {
         </div>
         <div class="flex justify-end gap-2 ml-auto">
           <Button variant="ghost" size="sm" @click="$emit('update:openDelete', false)">取消</Button>
-          <Button variant="destructive" size="sm" @click="handleDeleteSingle">确定删除</Button>
+          <Button variant="destructive" size="sm" @click="handleDeleteSingle">
+            {{ targetTask?.type === TASK_TYPE.APP ? '确认彻底卸载' : '确定删除' }}
+          </Button>
         </div>
       </div>
     </template>

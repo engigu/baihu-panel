@@ -163,7 +163,7 @@ async function handleUninstall() {
   if (!appData.value || uninstalling.value) return
   uninstalling.value = true
   try {
-    await api.apps.remove(appData.value.app.id, cleanDataOnUninstall.value)
+    await api.apps.remove(appData.value.app.id, true)
     toast.success('应用已成功卸载！')
     showUninstallConfirm.value = false
     emit('update:open', false)
@@ -397,19 +397,21 @@ async function handleUninstall() {
                 </Button>
               </div>
 
-              <div v-else class="space-y-2 p-2.5 rounded-lg border border-destructive/20 bg-background/50">
-                <label class="flex items-center gap-2 cursor-pointer text-xs">
-                  <input type="checkbox" v-model="cleanDataOnUninstall" class="rounded text-destructive" />
-                  <span>同时清除下载的应用源码与关联数据</span>
-                </label>
-                <div class="flex items-center gap-2 justify-end">
+              <div v-else class="space-y-3 p-3 rounded-lg border border-destructive/20 bg-destructive/5">
+                <div class="flex items-start gap-2 text-xs text-destructive">
+                  <AlertTriangle class="w-4 h-4 shrink-0 mt-0.5" />
+                  <div class="leading-relaxed font-medium">
+                    卸载应用将彻底删除<b>本地代码文件夹</b>以及<b>所有关联的受控任务与配置</b>，该操作无法撤销。
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 justify-end pt-1">
                   <Button size="sm" variant="ghost" class="text-xs h-7" @click="showUninstallConfirm = false">
                     取消
                   </Button>
                   <Button
                     size="sm"
                     variant="destructive"
-                    class="text-xs h-7"
+                    class="text-xs h-7 font-medium"
                     :disabled="uninstalling"
                     @click="handleUninstall"
                   >

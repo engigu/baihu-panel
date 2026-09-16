@@ -286,12 +286,18 @@ function confirmBatchDelete() {
 
 async function deleteTask(deleteFiles: boolean) {
   if (!deleteTaskId.value) return
+  const targetTask = tasks.value.find(t => t.id === deleteTaskId.value)
   try {
-    await api.tasks.delete(deleteTaskId.value, { delete_files: deleteFiles })
-    toast.success('任务已删除')
+    if (targetTask && targetTask.type === TASK_TYPE.APP) {
+      await api.apps.remove(targetTask.id, true)
+      toast.success('应用及其本地文件夹与关联任务已成功卸载')
+    } else {
+      await api.tasks.delete(deleteTaskId.value, { delete_files: deleteFiles })
+      toast.success('任务已删除')
+    }
     loadTasks()
-  } catch {
-    toast.error('删除失败')
+  } catch (err: any) {
+    toast.error('操作失败: ' + (err.message || '未知错误'))
   }
   showDeleteDialog.value = false
   deleteTaskId.value = null

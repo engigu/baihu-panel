@@ -98,6 +98,11 @@ const (
 	EventAppLogAdded  = "app_log_added"
 	EventBackupRestored = "backup_restored"
 
+	// AppStore 统计与遥测 URL 常量
+	AppStoreStatsBaseURL  = "https://baihu-appstore-stats.qwapi.eu.org"
+	AppStoreStatsPVURL    = AppStoreStatsBaseURL + "/pv?app=marketplace"
+	AppStoreStatsCountURL = AppStoreStatsBaseURL + "/count?app="
+
 	// WebSocket 消息类型
 	WSTypeHeartbeat     = "heartbeat"
 	WSTypeHeartbeatAck  = "heartbeat_ack"

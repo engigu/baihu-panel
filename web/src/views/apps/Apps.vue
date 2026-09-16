@@ -12,7 +12,9 @@ import {
   Sparkles,
   Loader2,
   ArrowRight,
-  User
+  User,
+  Download,
+  Eye
 } from 'lucide-vue-next'
 import { api, type MarketplaceApp } from '@/api'
 import ApplyDialog from './ApplyDialog.vue'
@@ -27,6 +29,13 @@ const imageErrorMap = ref<Record<string, boolean>>({})
 const loadingMarketplace = ref(false)
 const marketplaceApps = ref<MarketplaceApp[]>([])
 
+// 统计热度数据
+interface MarketStats {
+  downloads: Record<string, number>
+  pv: Record<string, number>
+}
+const statsData = ref<MarketStats>({ downloads: {}, pv: {} })
+
 // 弹窗
 const showApplyDialog = ref(false)
 const selectedMarketApp = ref<MarketplaceApp | null>(null)
@@ -34,7 +43,7 @@ const selectedMarketApp = ref<MarketplaceApp | null>(null)
 const isSearchReadonly = ref(true)
 
 onMounted(async () => {
-  await fetchMarketplace()
+  await Promise.all([fetchMarketplace(), fetchMarketStats()])
 })
 
 function handleImgError(id: string) {
@@ -42,8 +51,21 @@ function handleImgError(id: string) {
 }
 
 async function refreshMarketplace() {
-  await fetchMarketplace()
+  await Promise.all([fetchMarketplace(), fetchMarketStats()])
   toast.success('应用市场数据已刷新')
+}
+
+// 获取热度统计数据
+async function fetchMarketStats() {
+  try {
+    const res = await fetch('https://baihu-appstore-stats.qwapi.eu.org/stats')
+    if (res.ok) {
+      const data = await res.json()
+      statsData.value = data
+    }
+  } catch (e) {
+    // 忽略统计获取异常
+  }
 }
 
 // 获取应用市场
@@ -119,9 +141,12 @@ function handleApplySuccess() {
           <span>浏览并一键部署官方声明式应用</span>
           <span class="hidden sm:inline text-border">|</span>
           <span class="text-[11px] text-emerald-500 font-medium">100% 开源免费</span>
-          <span class="hidden sm:inline text-border">|</span>
-          <span class="text-[11px] text-muted-foreground/80" title="应用市场通过匿名统计汇总应用热度（不收集任何个人敏感信息/Cookie）">
-            包含匿名安装/浏览热度统计
+          <span v-if="statsData.pv?.marketplace || statsData.downloads?.global" class="hidden sm:inline text-border">|</span>
+          <span v-if="statsData.pv?.marketplace" class="text-[11px] text-muted-foreground/90 flex items-center gap-1" title="应用市场累计浏览次数">
+            <Eye class="w-3 h-3 text-primary/80" /> {{ statsData.pv.marketplace }} 浏览
+          </span>
+          <span v-if="statsData.downloads?.global" class="text-[11px] text-muted-foreground/90 flex items-center gap-1" title="所有应用累计下载安装总数">
+            <Download class="w-3 h-3 text-emerald-500/80" /> {{ statsData.downloads.global }} 安装
           </span>
         </p>
       </div>
@@ -245,9 +270,12 @@ function handleApplySuccess() {
                 <User class="w-3.5 h-3.5 opacity-60 shrink-0" />
                 <span class="truncate">{{ app.author || '社区贡献者' }}</span>
               </div>
-              <span class="font-mono text-[10px] sm:text-[11px] opacity-70 shrink-0">
-                {{ app.tasks_count || 1 }} 个任务
-              </span>
+              <div class="flex items-center gap-2.5 font-mono text-[10px] sm:text-[11px] opacity-75 shrink-0">
+                <span v-if="statsData.downloads && statsData.downloads[app.id]" class="flex items-center gap-1 text-emerald-500 font-medium" title="累计部署次数">
+                  <Download class="w-3 h-3" /> {{ statsData.downloads[app.id] }}
+                </span>
+                <span>{{ app.tasks_count || 1 }} 个任务</span>
+              </div>
             </div>
           </div>
 

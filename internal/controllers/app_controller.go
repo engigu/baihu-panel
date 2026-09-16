@@ -318,16 +318,16 @@ func (ac *AppController) RebuildApp(c *gin.Context) {
 
 // RemoveApp 卸载已安装应用
 func (ac *AppController) RemoveApp(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		utils.BadRequest(c, "应用 ID 不能为空")
+	taskID := c.Param("id")
+	if taskID == "" {
+		utils.BadRequest(c, "应用 TaskID 不能为空")
 		return
 	}
 
-	cleanData := c.Query("clean_data") == "true" || c.Query("clean_data") == "1"
+	cleanData := c.Query("clean_data") != "false" && c.Query("clean_data") != "0"
 
 	var buf bytes.Buffer
-	err := ac.appService.RemoveApp(id, cleanData, &buf)
+	err := ac.appService.RemoveApp(taskID, cleanData, &buf)
 	if err != nil {
 		utils.BadRequest(c, "卸载失败: "+err.Error())
 		return
@@ -379,10 +379,7 @@ func (ac *AppController) GetMarketplace(c *gin.Context) {
 						}
 					}
 					// 后台异步上报应用市场浏览 PV +1 (防阻塞)
-					go func() {
-						client := &http.Client{Timeout: 5 * time.Second}
-						_, _ = client.Get("https://baihu-appstore-stats.qwapi.eu.org/pv?app=marketplace")
-					}()
+					reportMarketplacePVTelemetry()
 					utils.Success(c, gin.H{
 						"source": "remote",
 						"apps":   appList,
@@ -399,22 +396,24 @@ func (ac *AppController) GetMarketplace(c *gin.Context) {
 	})
 }
 
+// reportMarketplacePVTelemetry 异步上报应用市场浏览 PV (+1)
+func reportMarketplacePVTelemetry() {
+	go func() {
+		client := &http.Client{Timeout: 5 * time.Second}
+		_, _ = client.Get(constant.AppStoreStatsPVURL)
+	}()
+}
+
 // reportAppDownloadTelemetry 异步上报应用下载量 (+1)
 func reportAppDownloadTelemetry(optEnable *bool, res *app.ApplyResult) {
 	enableTelemetry := optEnable != nil && *optEnable
-	if !enableTelemetry || res == nil {
+	if !enableTelemetry || res == nil || res.ManifestID == "" {
 		return
 	}
 
-	appID := res.AppID
-	if appID == "" {
-		appID = strings.TrimPrefix(res.ID, "app:")
-	}
-
-	if appID != "" {
-		go func(aid string) {
-			client := &http.Client{Timeout: 5 * time.Second}
-			_, _ = client.Get("https://baihu-appstore-stats.qwapi.eu.org/count?app=" + aid)
-		}(appID)
-	}
+	manifestID := res.ManifestID
+	go func(mID string) {
+		client := &http.Client{Timeout: 5 * time.Second}
+		_, _ = client.Get(constant.AppStoreStatsCountURL + mID)
+	}(manifestID)
 }
