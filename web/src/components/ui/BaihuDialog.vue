@@ -37,7 +37,7 @@ const emit = defineEmits<{
 }>()
 
 const sizeClasses = {
-  sm: 'sm:max-w-[425px]',
+  sm: 'sm:max-w-[420px]',
   md: 'sm:max-w-[600px]',
   lg: 'sm:max-w-[800px]',
   xl: 'sm:max-w-[1000px]',
@@ -89,13 +89,13 @@ const sizeClasses = {
       </div>
 
       <!-- 内容区域 (保持整洁简洁) -->
-      <div class="p-4 sm:p-6">
+      <div class="p-4 sm:p-5">
         <div class="animate-in fade-in slide-in-from-bottom-1 duration-400">
           <slot />
         </div>
 
         <!-- 底部插槽 -->
-        <div v-if="$slots.footer" class="mt-8 flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2">
+        <div v-if="$slots.footer" class="mt-5 flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2">
           <slot name="footer" />
         </div>
       </div>

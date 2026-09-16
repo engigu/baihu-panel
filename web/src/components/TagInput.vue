@@ -99,6 +99,12 @@ function onEnter(e: KeyboardEvent) {
   emit('enter', val)
 }
 
+function onBlur() {
+  setTimeout(() => {
+    open.value = false
+  }, 200)
+}
+
 function handleClickOutside(e: MouseEvent) {
   if (containerRef.value && !containerRef.value.contains(e.target as Node)) {
     if (open.value) {
@@ -128,19 +134,23 @@ onUnmounted(() => {
       <Input 
         :model-value="props.modelValue" 
         :placeholder="placeholder" 
+        type="search"
+        autocomplete="off"
+        name="filter_tags_input"
         :class="[icon ? 'pl-9' : 'pl-3', $attrs.class]"
         class="cursor-pointer"
         @update:model-value="onUpdateValue"
         @keydown.enter="onEnter"
         @click="open = true"
         @focus="open = true"
+        @blur="onBlur"
       />
     </div>
 
     <!-- 模拟下拉列表 -->
     <div 
       v-if="open" 
-      class="absolute z-[100] top-full left-0 mt-1 w-full min-w-[200px] bg-popover text-popover-foreground rounded-md border shadow-xl p-1 animate-in fade-in zoom-in-95 duration-100"
+      class="absolute z-30 top-full left-0 mt-1 w-full min-w-[200px] bg-popover text-popover-foreground rounded-md border shadow-xl p-1 animate-in fade-in zoom-in-95 duration-100"
     >
       <div v-if="loading" class="flex items-center justify-center py-4">
         <Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />

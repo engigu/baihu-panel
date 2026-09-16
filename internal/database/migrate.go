@@ -3,6 +3,7 @@ package database
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"reflect"
 	"strings"
 
@@ -141,6 +142,8 @@ func postMigrations() error {
 	migrateTaskTags()
 	// 迁移任务绑定的环境变量到通用的数据关联表中
 	migrateTaskEnvs()
+	// 自动将旧的 config 升级转移到统一的 unified_config 字段中
+	migrateUnifiedTaskConfig()
 	return nil
 }
 
@@ -299,6 +302,105 @@ func markTaskTagsMigrated() {
 			ID:      xid.New().String(),
 			Section: constant.SectionSystem,
 			Key:     constant.KeyTaskTagsMigrated,
+			Value:   models.BigText("true"),
+		})
+	}
+}
+
+// migrateUnifiedTaskConfig 自动从旧的 config 升级转化为新的 unified_config 模型结构
+func migrateUnifiedTaskConfig() {
+	if DB.Migrator().HasTable(&models.Setting{}) {
+		var setting models.Setting
+		res := DB.Where(&models.Setting{Section: constant.SectionSystem, Key: constant.KeyUnifiedTaskConfigMigrated}).Limit(1).Find(&setting)
+		if res.RowsAffected > 0 && string(setting.Value) == "true" {
+			return
+		}
+	}
+
+	logger.Infof("[Database] 正在自动升级 TaskConfig 为 unified_config 数据格式...")
+
+	type TaskMigration struct {
+		ID     string
+		Type   string
+		Config models.BigText
+	}
+	var tasks []TaskMigration
+	DB.Table((&models.Task{}).TableName()).Select("id, type, config").Where("config IS NOT NULL AND config != ? AND config != ?", "", "{}").Find(&tasks)
+
+	count := 0
+	for _, t := range tasks {
+		rawCfg := string(t.Config)
+		if rawCfg == "" || rawCfg == "{}" {
+			continue
+		}
+
+		var rawMap map[string]interface{}
+		if err := json.Unmarshal([]byte(rawCfg), &rawMap); err != nil {
+			continue
+		}
+
+		unified := models.UnifiedTaskConfig{
+			Common: &models.CommonConfig{},
+		}
+
+		// 提取公共策略变量 (兼容 $task_concurrency / $task_all_envs)
+		if val, exists := rawMap["$task_concurrency"]; exists {
+			if num, ok := val.(float64); ok {
+				unified.Common.Concurrency = int(num)
+			}
+		} else if val, exists := rawMap["task_concurrency"]; exists {
+			if num, ok := val.(float64); ok {
+				unified.Common.Concurrency = int(num)
+			}
+		}
+
+		if val, exists := rawMap["$task_all_envs"]; exists {
+			if b, ok := val.(bool); ok {
+				unified.Common.AllEnvs = b
+			}
+		} else if val, exists := rawMap["task_all_envs"]; exists {
+			if b, ok := val.(bool); ok {
+				unified.Common.AllEnvs = b
+			}
+		}
+
+		// 根据任务类型转换 repo 或 app 配置
+		if t.Type == constant.TaskTypeRepo {
+			var repoCfg models.RepoConfig
+			if err := json.Unmarshal([]byte(rawCfg), &repoCfg); err == nil {
+				unified.Repo = &repoCfg
+			}
+		} else if t.Type == constant.TaskTypeApp {
+			var appCfg models.AppTaskConfig
+			if err := json.Unmarshal([]byte(rawCfg), &appCfg); err == nil {
+				unified.App = &appCfg
+			}
+		}
+
+		unifiedJSON := unified.ToJSON()
+		if unifiedJSON != "" && unifiedJSON != "{}" {
+			DB.Model(&models.Task{}).Where("id = ?", t.ID).Update("unified_config", models.BigText(unifiedJSON))
+			count++
+		}
+	}
+
+	logger.Infof("[Database] 成功将 %d 个任务的 Config 迁移升级至 unified_config 字段", count)
+	markUnifiedTaskConfigMigrated()
+}
+
+func markUnifiedTaskConfigMigrated() {
+	if !DB.Migrator().HasTable(&models.Setting{}) {
+		return
+	}
+	var setting models.Setting
+	res := DB.Where(&models.Setting{Section: constant.SectionSystem, Key: constant.KeyUnifiedTaskConfigMigrated}).Limit(1).Find(&setting)
+	if res.RowsAffected > 0 {
+		DB.Model(&setting).Update("value", models.BigText("true"))
+	} else {
+		DB.Create(&models.Setting{
+			ID:      xid.New().String(),
+			Section: constant.SectionSystem,
+			Key:     constant.KeyUnifiedTaskConfigMigrated,
 			Value:   models.BigText("true"),
 		})
 	}

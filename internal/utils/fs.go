@@ -134,3 +134,11 @@ func IsBinaryFile(filePath string) (bool, error) {
 	return false, nil
 }
 
+// GetBaihuExecutable 统一获取白虎面板主程序/CLI的可执行文件绝对路径
+func GetBaihuExecutable() string {
+	if exe, err := os.Executable(); err == nil && exe != "" {
+		return exe
+	}
+	return "baihu"
+}
+

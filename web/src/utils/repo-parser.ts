@@ -192,7 +192,9 @@ export function parseQlCommand(command: string): ParsedRepoResult | null {
  */
 export function generateBaihuCommand(task: Task): string {
   try {
-    const config = JSON.parse(task.config) as RepoConfig
+    const rawUnified = task.unified_config || '{}'
+    const unified = JSON.parse(rawUnified)
+    const config = (unified.repo || {}) as RepoConfig
     const args: string[] = ['baihu', 'reposync']
 
     args.push('--source-type', config.source_type || 'git')

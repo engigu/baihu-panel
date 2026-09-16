@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/models"
@@ -408,10 +407,7 @@ func (c *DependencyController) GetDepInstallCommand(ctx *gin.Context) {
 		return
 	}
 
-	execPath, err := os.Executable()
-	if err != nil {
-		execPath = "baihu" // 兜底
-	}
+	execPath := utils.GetBaihuExecutable()
 
 	// 构造命令，比如: "F:\workspace\baihu-panel\baihu.exe" depinstall <log_id>
 	cmdStr := fmt.Sprintf("%q depinstall %s", execPath, logID)

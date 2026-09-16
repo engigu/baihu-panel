@@ -32,6 +32,18 @@ var Commands = []CommandSpec{
 		},
 	},
 	{
+		Name:        "app",
+		Description: "白虎声明式应用的解析、安装部署、场景切换与生命周期管理",
+		SubCommands: map[string]string{
+			"apply":  "解析并应用本地或远程 app.yaml",
+			"list":   "查看已安装的应用列表",
+			"info":   "查看指定应用的详细信息",
+			"switch": "一键切换应用的运行场景预设",
+			"remove": "卸载应用并清理受控任务",
+		},
+		Flags: []string{"--scenario", "--skip-setup", "--skip-sync", "--clean-data"},
+	},
+	{
 		Name:        "reposync",
 		Description: "同步远程 Git 仓库或文件到本地目录",
 		Flags: []string{

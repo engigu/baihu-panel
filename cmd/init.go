@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/engigu/baihu-panel/cmd/app"
 	"github.com/engigu/baihu-panel/cmd/builtininstall"
 	"github.com/engigu/baihu-panel/cmd/completion"
 	"github.com/engigu/baihu-panel/cmd/depinstall"
@@ -21,6 +22,7 @@ func InitHandlers() {
 	}, false)
 
 	// 注册普通 CLI 工具子命令
+	RegisterHandler("app", app.Run)
 	RegisterHandler("builtininstall", builtininstall.Run)
 	RegisterHandler("completion", completion.Run)
 	RegisterHandler("depinstall", depinstall.Run)

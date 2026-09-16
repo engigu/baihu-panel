@@ -41,32 +41,94 @@ type CleanConfig struct {
 	Keep int    `json:"keep"` // 保留天数或条数
 }
 
-// RepoConfig 仓库同步配置
-type RepoConfig struct {
-	SourceType     string `json:"source_type"`     // url 或 git
-	SourceURL      string `json:"source_url"`      // 源地址
-	TargetPath     string `json:"target_path"`     // 目标路径
-	Branch         string `json:"branch"`          // Git 分支
-	SparsePath     string `json:"sparse_path"`     // 稀疏检出路径（仅拉取指定目录或文件）
-	SingleFile     bool   `json:"single_file"`     // 单文件模式（直接下载文件而非 sparse-checkout）
-	Proxy          string `json:"proxy"`           // 代理类型: none, ghproxy, mirror, custom
-	ProxyURL       string `json:"proxy_url"`       // 自定义代理地址
-	AuthToken      string `json:"auth_token"`      // 认证 Token
-	HttpProxy      string `json:"http_proxy"`      // HTTP 代理
-	WhitelistPaths string `json:"whitelist_paths"` // 同步时保留的路径及脚本筛选白名单关键词，逗号或竖线分割
-	Blacklist      string `json:"blacklist"`       // 脚本筛选黑名单关键词，竖线分割
-	Dependence     string `json:"dependence"`      // 脚本依赖文件关键词，竖线分割
-	Extensions     string `json:"extensions"`      // 脚本文件后缀关键词，竖线分割
-	AutoAddCron    bool   `json:"auto_add_cron"`   // 自动解析脚本注释添加定时任务
-	CommentToTask  string `json:"commenttotask"`   // 兼容 QL 格式任务脚本注释解析
-	RepoSource     string `json:"repo_source"`     // 仓库来源，如果是选择了这个 ql 导入的仓库，= ql
-	RepoDirName    string `json:"repo_dir_name"`   // 自定义仓库目录名
+// CommonConfig 通用运行策略
+type CommonConfig struct {
+	Concurrency int  `json:"task_concurrency"` // 0: disable concurrency, 1: enable concurrency
+	AllEnvs     bool `json:"task_all_envs"`    // 开启则注入全部环境变量
 }
 
-// TaskConfig  任务配置  RepoConfig+TaskConfig=task.config
-type TaskConfig struct {
-	Concurrency int  `json:"$task_concurrency"` // 0: disable concurrency, 1: enable concurrency
-	AllEnvs     bool `json:"$task_all_envs"`    // 开启则注入全部环境变量
+// UnifiedTaskConfig 统一配置结构体，包含 common, repo, app 分区 map/struct 映射
+type UnifiedTaskConfig struct {
+	Common *CommonConfig  `json:"common,omitempty"`
+	Repo   *RepoConfig    `json:"repo,omitempty"`
+	App    *AppTaskConfig `json:"app,omitempty"`
+}
+
+// ToJSON 将 UnifiedTaskConfig 序列化为 JSON 字符串
+func (c UnifiedTaskConfig) ToJSON() string {
+	b, _ := json.Marshal(c)
+	return string(b)
+}
+
+// ParseUnifiedTaskConfig 解析 JSON 配置到 UnifiedTaskConfig 实体
+func ParseUnifiedTaskConfig(raw string) UnifiedTaskConfig {
+	var cfg UnifiedTaskConfig
+	if raw != "" {
+		_ = json.Unmarshal([]byte(raw), &cfg)
+	}
+	return cfg
+}
+
+// GetCommon 快捷获取 Common 配置
+func (c UnifiedTaskConfig) GetCommon() *CommonConfig {
+	return c.Common
+}
+
+// GetRepo 快捷获取 Repo 配置
+func (c UnifiedTaskConfig) GetRepo() *RepoConfig {
+	return c.Repo
+}
+
+// GetApp 快捷获取 App 配置
+func (c UnifiedTaskConfig) GetApp() *AppTaskConfig {
+	return c.App
+}
+
+// RepoConfig 仓库同步配置
+type RepoConfig struct {
+	SourceType     string `json:"source_type,omitempty"`
+	SourceURL      string `json:"source_url,omitempty"`
+	TargetPath     string `json:"target_path,omitempty"`
+	Branch         string `json:"branch,omitempty"`
+	SparsePath     string `json:"sparse_path,omitempty"`
+	SingleFile     bool   `json:"single_file,omitempty"`
+	Proxy          string `json:"proxy,omitempty"`
+	ProxyURL       string `json:"proxy_url,omitempty"`
+	AuthToken      string `json:"auth_token,omitempty"`
+	HttpProxy      string `json:"http_proxy,omitempty"`
+	WhitelistPaths string `json:"whitelist_paths,omitempty"`
+	Blacklist      string `json:"blacklist,omitempty"`
+	Dependence     string `json:"dependence,omitempty"`
+	Extensions     string `json:"extensions,omitempty"`
+	AutoAddCron    bool   `json:"auto_add_cron,omitempty"`
+	CommentToTask  string `json:"commenttotask,omitempty"`
+	RepoSource     string `json:"repo_source,omitempty"`
+	RepoDirName    string `json:"repo_dir_name,omitempty"`
+}
+
+// AppTaskConfig 应用任务配置
+type AppTaskConfig struct {
+	ID              string            `json:"id,omitempty"`
+	Name            string            `json:"name,omitempty"`
+	Version         string            `json:"version,omitempty"`
+	Author          string            `json:"author,omitempty"`
+	Category        string            `json:"category,omitempty"`
+	Description     string            `json:"description,omitempty"`
+	Icon            string            `json:"icon,omitempty"`
+	Homepage        string            `json:"homepage,omitempty"`
+	ManifestPath    string            `json:"manifest_path,omitempty"`
+	ManifestRaw     string            `json:"manifest_raw,omitempty"`
+	CurrentScenario string            `json:"current_scenario,omitempty"`
+	Status          string            `json:"status,omitempty"`
+	EnvValues       map[string]string `json:"env_values,omitempty"`
+	BuildOpts       *AppBuildOpts     `json:"build_opts,omitempty"`
+}
+
+// AppBuildOpts 高级构建与部署控制选项
+type AppBuildOpts struct {
+	ForceSetup bool `json:"force_setup"` // 强制重新编译
+	SkipSetup  bool `json:"skip_setup"`  // 跳过环境与依赖安装
+	SkipSync   bool `json:"skip_sync"`   // 跳过代码源同步
 }
 
 // Task 代表一个计划任务
@@ -81,7 +143,8 @@ type Task struct {
 	Tags           string        `json:"tags" gorm:"-"`                              // 标签，逗号分隔
 	Type           string        `json:"type" gorm:"size:20;default:'task'"`         // 任务类型: constant.TaskTypeNormal, constant.TaskTypeRepo
 	TriggerType    string        `json:"trigger_type" gorm:"size:25;default:'cron'"` // 触发类型: constant.TriggerTypeCron, constant.TriggerTypeBaihuStartup
-	Config         BigText       `json:"config"`                                     // 配置 JSON（仓库同步配置等）
+	Config         BigText       `json:"config"`                                     // 旧配置 JSON（保留不删）
+	UnifiedConfig  BigText       `json:"unified_config"`                             // 升级后的统一 JSON 配置 {'common':{}, 'repo':{}, 'app':{}}
 	Schedule       string        `json:"schedule" gorm:"size:100"`                   // cron 表达式
 	Timeout        int           `json:"timeout" gorm:"default:30"`                  // 超时时间（分钟），默认30分钟
 	WorkDir        string        `json:"work_dir" gorm:"size:255;default:''"`        // 工作目录，为空则使用 scripts 目录
@@ -98,7 +161,7 @@ type Task struct {
 	RuntimeSecrets []string      `json:"-" gorm:"-"` // 运行时安全机密（非持久化）
 	LastRun        *LocalTime    `json:"last_run"`
 	NextRun        *LocalTime    `json:"next_run"`
-	SourceID       string        `json:"source_id" gorm:"size:255;index"`   // 脚本资源唯一标识（路径 sanitized）
+	SourceID       string        `json:"source_id" gorm:"size:255;index"`   // 脚本资源唯一标识（路径 sanitized / app:yml_id）
 	RepoTaskID     string        `json:"repo_task_id" gorm:"size:20;index"` // 所属的仓库任务 ID
 	CreatedAt      LocalTime     `json:"created_at"`
 	UpdatedAt      LocalTime     `json:"updated_at"`
@@ -174,6 +237,32 @@ func (t *Task) GetSchedule() string {
 
 func (t *Task) GetRandomRange() int {
 	return t.RandomRange
+}
+
+// GetUnifiedConfig 获取并解析当前 Task 的 UnifiedTaskConfig 配置结构
+func (t *Task) GetUnifiedConfig() UnifiedTaskConfig {
+	if t == nil || string(t.UnifiedConfig) == "" {
+		return UnifiedTaskConfig{}
+	}
+	return ParseUnifiedTaskConfig(string(t.UnifiedConfig))
+}
+
+// GetCommonConfig 快捷获取当前 Task 的 CommonConfig 配置
+func (t *Task) GetCommonConfig() *CommonConfig {
+	cfg := t.GetUnifiedConfig()
+	return cfg.Common
+}
+
+// GetRepoConfig 快捷获取当前 Task 的 RepoConfig 配置
+func (t *Task) GetRepoConfig() *RepoConfig {
+	cfg := t.GetUnifiedConfig()
+	return cfg.Repo
+}
+
+// GetAppConfig 快捷获取当前 Task 的 AppTaskConfig 配置
+func (t *Task) GetAppConfig() *AppTaskConfig {
+	cfg := t.GetUnifiedConfig()
+	return cfg.App
 }
 
 // TaskLog 代表任务执行的日志记录

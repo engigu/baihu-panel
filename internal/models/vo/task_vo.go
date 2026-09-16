@@ -15,7 +15,7 @@ type TaskCreateReq struct {
 	PostCommand   string               `json:"post_command" example:"echo 'post'"`
 	Tags          string               `json:"tags" example:"test,dev"`
 	Type          string               `json:"type" example:"repo"` // 可以是 common, repo 等
-	Config        string               `json:"config" swaggertype:"string" example:"{\"source_url\":\"https://github.com/abc/repo\",\"branch\":\"main\"}"`
+	UnifiedConfig string               `json:"unified_config" swaggertype:"string"`
 	Schedule      string               `json:"schedule" example:"0 0 * * *"`
 	Timeout       int                  `json:"timeout" example:"3600"`
 	WorkDir       string               `json:"work_dir" example:"/tmp"`
@@ -30,6 +30,25 @@ type TaskCreateReq struct {
 	PinType       string               `json:"pin_type" example:"time"`
 }
 
+func (r *TaskCreateReq) GetUnifiedConfig() models.UnifiedTaskConfig {
+	if r == nil {
+		return models.UnifiedTaskConfig{}
+	}
+	return models.ParseUnifiedTaskConfig(r.UnifiedConfig)
+}
+
+func (r *TaskCreateReq) GetCommonConfig() *models.CommonConfig {
+	return r.GetUnifiedConfig().GetCommon()
+}
+
+func (r *TaskCreateReq) GetRepoConfig() *models.RepoConfig {
+	return r.GetUnifiedConfig().GetRepo()
+}
+
+func (r *TaskCreateReq) GetAppConfig() *models.AppTaskConfig {
+	return r.GetUnifiedConfig().GetApp()
+}
+
 // TaskUpdateReq 任务更新请求
 type TaskUpdateReq struct {
 	Name          string               `json:"name" example:"测试任务"`
@@ -39,7 +58,7 @@ type TaskUpdateReq struct {
 	PostCommand   string               `json:"post_command" example:"echo 'post'"`
 	Tags          string               `json:"tags" example:"test,dev"`
 	Type          string               `json:"type" example:"repo"`
-	Config        string               `json:"config" swaggertype:"string" example:"{\"source_url\":\"https://github.com/abc/repo\",\"branch\":\"main\"}"`
+	UnifiedConfig string               `json:"unified_config" swaggertype:"string"`
 	Schedule      string               `json:"schedule" example:"0 0 * * *"`
 	Timeout       int                  `json:"timeout" example:"3600"`
 	WorkDir       string               `json:"work_dir" example:"/tmp"`
@@ -55,10 +74,29 @@ type TaskUpdateReq struct {
 	PinType       string               `json:"pin_type" example:"time"`
 }
 
+func (r *TaskUpdateReq) GetUnifiedConfig() models.UnifiedTaskConfig {
+	if r == nil {
+		return models.UnifiedTaskConfig{}
+	}
+	return models.ParseUnifiedTaskConfig(r.UnifiedConfig)
+}
+
+func (r *TaskUpdateReq) GetCommonConfig() *models.CommonConfig {
+	return r.GetUnifiedConfig().GetCommon()
+}
+
+func (r *TaskUpdateReq) GetRepoConfig() *models.RepoConfig {
+	return r.GetUnifiedConfig().GetRepo()
+}
+
+func (r *TaskUpdateReq) GetAppConfig() *models.AppTaskConfig {
+	return r.GetUnifiedConfig().GetApp()
+}
+
 // TaskBatchUpdateFields 批量更新的具体字段内容
 type TaskBatchUpdateFields struct {
 	LanguageUpdateMode string               `json:"language_update_mode"` // "replace" (替换对应语言版本) 或 "overwrite" (完全重置)
-	Languages          models.TaskLanguages `json:"languages"`
+	Languages          models.TaskLanguages `json:"languages,omitempty"`
 	Timeout            *int                 `json:"timeout,omitempty"`
 	Tags               *string              `json:"tags,omitempty"`
 	PreCommand         *string              `json:"pre_command,omitempty"`
@@ -97,7 +135,7 @@ type TaskVO struct {
 	Tags          string               `json:"tags"`
 	Type          string               `json:"type"`
 	TriggerType   string               `json:"trigger_type"`
-	Config        string               `json:"config"`
+	UnifiedConfig string               `json:"unified_config"`
 	Schedule      string               `json:"schedule"`
 	Timeout       int                  `json:"timeout"`
 	WorkDir       string               `json:"work_dir"`
@@ -106,6 +144,7 @@ type TaskVO struct {
 	Languages     models.TaskLanguages `json:"languages"`
 	AgentID       *string              `json:"agent_id"`
 	RepoTaskID    string               `json:"repo_task_id"`
+	SourceID      string               `json:"source_id"`
 	Enabled       bool                 `json:"enabled"`
 	RetryCount    int                  `json:"retry_count"`
 	RetryInterval int                  `json:"retry_interval"`
@@ -133,7 +172,7 @@ func ToTaskVO(task *models.Task) *TaskVO {
 		Tags:          task.Tags,
 		Type:          task.Type,
 		TriggerType:   task.TriggerType,
-		Config:        string(task.Config),
+		UnifiedConfig: string(task.UnifiedConfig),
 		Schedule:      task.Schedule,
 		Timeout:       task.Timeout,
 		WorkDir:       task.WorkDir,
@@ -142,6 +181,7 @@ func ToTaskVO(task *models.Task) *TaskVO {
 		Languages:     task.Languages,
 		AgentID:       task.AgentID,
 		RepoTaskID:    task.RepoTaskID,
+		SourceID:      task.SourceID,
 		Enabled:       utils.DerefBool(task.Enabled, true),
 		RetryCount:    task.RetryCount,
 		RetryInterval: task.RetryInterval,

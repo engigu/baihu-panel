@@ -1,7 +1,6 @@
 package repo
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -38,10 +37,11 @@ func ParseRepoScriptsAndAddCron(taskID string, logWriter io.Writer, forceComment
 		return nil, nil
 	}
 
-	var repoCfg models.RepoConfig
-	if err := json.Unmarshal([]byte(repoTask.Config), &repoCfg); err != nil {
+	repoCfgPtr := repoTask.GetRepoConfig()
+	if repoCfgPtr == nil {
 		return nil, nil
 	}
+	repoCfg := *repoCfgPtr
 
 	// 如果命令行强制开启，则覆盖配置
 	if forceCommentToTask {
@@ -185,7 +185,13 @@ func ParseRepoScriptsAndAddCron(taskID string, logWriter io.Writer, forceComment
 
 // upsertRepoTask 处理来自仓库的任务的创建或更新
 func upsertRepoTask(parentTask *models.Task, sourceID, name, command, cron, workDir, tag string) (string, bool) {
-	defaultTaskConfig := `{"$task_all_envs":true,"$task_concurrency":0}`
+	defaultUnifiedConfig := models.UnifiedTaskConfig{
+		Common: &models.CommonConfig{
+			Concurrency: 0,
+			AllEnvs:     true,
+		},
+	}.ToJSON()
+
 	var existing models.Task
 	tx := database.DB.Where("source_id = ? AND repo_task_id = ?", sourceID, parentTask.ID).Limit(1).Find(&existing)
 
@@ -198,9 +204,9 @@ func upsertRepoTask(parentTask *models.Task, sourceID, name, command, cron, work
 		existing.SourceID = sourceID
 		existing.RepoTaskID = parentTask.ID
 		existing.WorkDir = workDir
-		// 如果原配置为空或者是 {}，则应用默认配置
-		if string(existing.Config) == "" || string(existing.Config) == "{}" {
-			existing.Config = models.BigText(defaultTaskConfig)
+		// 如果原 UnifiedConfig 为空或者是 {}，则应用默认配置
+		if string(existing.UnifiedConfig) == "" || string(existing.UnifiedConfig) == "{}" {
+			existing.UnifiedConfig = models.BigText(defaultUnifiedConfig)
 		}
 		// 默认开启按条数清理30条
 		if existing.CleanConfig == "" {
@@ -208,26 +214,26 @@ func upsertRepoTask(parentTask *models.Task, sourceID, name, command, cron, work
 		}
 		// 显式白名单模式：只更新脚本核心相关的字段，其他所有字段（如 Enabled, Pin, Remark 等）均不触碰
 		database.DB.Model(&existing).
-			Select("Name", "Command", "Schedule", "WorkDir", "Languages").
+			Select("Name", "Command", "Schedule", "WorkDir", "Languages", "UnifiedConfig").
 			Updates(&existing)
 		return existing.ID, false
 	} else {
 		// 创建新任务
 		newTask := &models.Task{
-			Name:        name,
-			Command:     models.BigText(command),
-			Schedule:    normalizeCron(cron),
-			Type:        "task",
-			TriggerType: constant.TriggerTypeCron,
-			Tags:        tag,
-			Languages:   parentTask.Languages,
-			Timeout:     parentTask.Timeout,
-			Config:      models.BigText(defaultTaskConfig),
-			Enabled:     utils.BoolPtr(true),
-			WorkDir:     workDir,
-			SourceID:    sourceID,
-			RepoTaskID:  parentTask.ID,
-			CleanConfig: `{"type":"count","keep":30}`,
+			Name:          name,
+			Command:       models.BigText(command),
+			Schedule:      normalizeCron(cron),
+			Type:          "task",
+			TriggerType:   constant.TriggerTypeCron,
+			Tags:          tag,
+			Languages:     parentTask.Languages,
+			Timeout:       parentTask.Timeout,
+			UnifiedConfig: models.BigText(defaultUnifiedConfig),
+			Enabled:       utils.BoolPtr(true),
+			WorkDir:       workDir,
+			SourceID:      sourceID,
+			RepoTaskID:    parentTask.ID,
+			CleanConfig:   `{"type":"count","keep":30}`,
 		}
 		newTask.ID = utils.GenerateID()
 		database.DB.Create(newTask)

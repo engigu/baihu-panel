@@ -197,8 +197,8 @@ func ExecuteWithHooks(ctx context.Context, req Request, stdout, stderr io.Writer
 		workDir, _ = os.Getwd()
 	}
 
-	// 设置环境变量（始终继承系统环境变量）
-	cmd.Env = os.Environ()
+	// 设置环境变量（始终继承系统环境变量与 Baihu 运行时专属变量）
+	cmd.Env = append(os.Environ(), utils.BuildRuntimeProcessEnv()...)
 	if len(req.Envs) > 0 {
 		cmd.Env = append(cmd.Env, req.Envs...)
 	}

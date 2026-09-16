@@ -67,15 +67,15 @@ const concurrencyEnabled = ref(false)
 
 // 解析初始并发配置
 function parseConcurrencyConfig() {
-  let configStr = form.value.config
+  const configStr = form.value.unified_config
   if (!configStr) {
     concurrencyEnabled.value = true // 默认开启
     return
   }
   try {
     const parsed = JSON.parse(configStr)
-    if (parsed && typeof parsed === 'object') {
-      const val = parsed['$task_concurrency']
+    if (parsed && typeof parsed === 'object' && parsed.common) {
+      const val = parsed.common.task_concurrency
       if (typeof val === 'number') {
         concurrencyEnabled.value = val === 1
       } else {
@@ -91,16 +91,18 @@ function parseConcurrencyConfig() {
 function updateConcurrencyConfig(enabled: boolean) {
   concurrencyEnabled.value = enabled
   let config: Record<string, any> = {}
-  if (form.value.config) {
+  const rawStr = form.value.unified_config
+  if (rawStr) {
     try {
-      const parsed = JSON.parse(form.value.config)
+      const parsed = JSON.parse(rawStr)
       if (parsed && typeof parsed === 'object') {
         config = parsed
       }
     } catch { }
   }
-  config['$task_concurrency'] = enabled ? 1 : 0
-  form.value.config = JSON.stringify(config)
+  config.common = config.common || {}
+  config.common.task_concurrency = enabled ? 1 : 0
+  form.value.unified_config = JSON.stringify(config)
 }
 
 // 初始化解析

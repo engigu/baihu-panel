@@ -546,7 +546,7 @@ onMounted(async () => {
                 placeholder="在此粘贴 requirements.txt 或 package.json 文本..." />
             </div>
             <div class="flex items-center gap-2">
-              <Checkbox id="importDb" v-model:checked="importDb" />
+              <Checkbox id="importDb" v-model="importDb" />
               <Label for="importDb" class="text-xs font-medium cursor-pointer select-none">
                 将解析出的包导入至面板列表中进行可视化生命周期维护
               </Label>
@@ -601,7 +601,7 @@ onMounted(async () => {
           </AlertDialogHeader>
           <AlertDialogFooter class="flex-col sm:flex-row gap-3">
             <div class="flex items-center gap-2 mr-auto mb-2 sm:mb-0">
-              <Checkbox id="force" v-model:checked="isForce" />
+              <Checkbox id="force" v-model="isForce" />
               <Label for="force" class="text-sm font-medium text-red-500 cursor-pointer select-none">
                 强制删除 (卸载失败时仍移除记录)
               </Label>

@@ -42,7 +42,9 @@ export const TASK_STATUS_TEXT: Record<string, string> = {
 
 // 任务类型
 export const TASK_TYPE = {
+  ALL: 'all',
   NORMAL: 'task',
+  APP: 'app',
   REPO: 'repo',
 } as const
 

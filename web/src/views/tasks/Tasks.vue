@@ -1,114 +1,104 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
-import { Button } from '@/components/ui/button'
-import BaihuDialog from '@/components/ui/BaihuDialog.vue'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import Pagination from '@/components/Pagination.vue'
 import TaskDialog from './TaskDialog.vue'
 import RepoDialog from './RepoDialog.vue'
+import ApplyDialog from '@/views/apps/ApplyDialog.vue'
 import LogViewer from '@/views/history/LogViewer.vue'
-import { Plus, Play, Pencil, Trash2, Search, ScrollText, GitBranch, Terminal, Server, Monitor, X, Loader2, RefreshCw, Wifi, WifiOff, Zap, ZapOff, Copy, Tag, ChevronDown, Pin, PinOff, MoreHorizontal, CalendarClock, Wrench, ArrowUpDown, ArrowUp, ArrowDown, Sparkles } from 'lucide-vue-next'
-import TagInput from '@/components/TagInput.vue'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import XTerminal from '@/components/XTerminal.vue'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu'
-import StatusDot from '@/components/StatusDot.vue'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
+import TaskHeader from './components/TaskHeader.vue'
+import TaskList from './components/TaskList.vue'
+import TaskDeleteDialog from './components/dialogs/TaskDeleteDialog.vue'
+import TaskExportDialog from './components/dialogs/TaskExportDialog.vue'
+import { X } from 'lucide-vue-next'
 import { api, type Agent, type Task, type TaskLog } from '@/api'
 import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
 import { useEventBus } from '@/composables/useEventBus'
 import { useRouter, useRoute } from 'vue-router'
-import { TASK_TYPE, AGENT_STATUS, TRIGGER_TYPE, TASK_STATUS } from '@/constants'
-import TextOverflow from '@/components/TextOverflow.vue'
-import { getCronDescription } from '@/utils/cron'
+import { TASK_TYPE, TASK_STATUS } from '@/constants'
 import { generateBaihuCommand } from '@/utils/repo-parser'
-import { copyToClipboard } from '@/utils/clipboard'
+import { decompressFromBase64 } from '@/utils/decompress'
 
+export interface TaskView {
+  name: string
+  query: Record<string, any>
+  isDefault?: boolean
+}
 
 const router = useRouter()
 const route = useRoute()
 const { pageSize } = useSiteSettings()
 
+// 核心列表与 Agent 数据
 const tasks = ref<Task[]>([])
 const agents = ref<Agent[]>([])
-const showTaskDialog = ref(false)
-const showRepoDialog = ref(false)
-const editingTask = ref<Partial<Task>>({})
-const isEdit = ref(false)
+const loading = ref(false)
+const currentPage = ref(1)
+const total = ref(0)
 
+// 排序与筛选
 const sortBy = ref('created_at')
 const order = ref('desc')
-
-function toggleSort(field: string) {
-  if (sortBy.value === field) {
-    order.value = order.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    sortBy.value = field
-    order.value = 'desc'
-  }
-  currentPage.value = 1
-  loadTasks()
-}
-
-function handleSortChange(val: string) {
-  const parts = val.split(':')
-  sortBy.value = parts[0] || 'created_at'
-  order.value = parts[1] || 'desc'
-  currentPage.value = 1
-  loadTasks()
-}
-
-const showDeleteDialog = ref(false)
-const deleteTaskId = ref<string | null>(null)
-const deleteFiles = ref(false)
-
 const filterName = ref('')
 const filterTags = ref('')
 const filterType = ref<string>(TASK_TYPE.NORMAL)
+const filterSourceId = ref('')
 const filterAgentId = ref<string | null>(null)
-const currentPage = ref(1)
-const total = ref(0)
-const loading = ref(false)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
-// 创建 agent 映射表
+// 自定义视图列表
+const taskViews = ref<TaskView[]>([])
+
+// 弹窗状态
+const showTaskDialog = ref(false)
+const showRepoDialog = ref(false)
+const showApplyDialog = ref(false)
+const showDeleteDialog = ref(false)
+const showBatchDeleteDialog = ref(false)
+const showBatchUpdateDialog = ref(false)
+const showExportDialog = ref(false)
+const showTerminalDialog = ref(false)
+const showLogViewer = ref(false)
+
+const editingTask = ref<Partial<Task>>({})
+const editingMarketApp = ref<any>(null)
+const isEdit = ref(false)
+const deleteTaskId = ref<string | null>(null)
+const exportCommandText = ref('')
+const terminalCmd = ref('')
+const executingTaskId = ref<string | null>(null)
+const isStopping = ref(false)
+
+// 日志 SSE 变量
+const selectedLog = ref<TaskLog | null>(null)
+const logContent = ref('')
+const logEmptyTitle = ref<string | undefined>(undefined)
+const logEmptyDesc = ref<string | undefined>(undefined)
+let logSource: EventSource | null = null
+let durationTimer: ReturnType<typeof setInterval> | null = null
+let logBuffer: string[] = []
+let logFlushInterval: ReturnType<typeof setInterval> | null = null
+
+// Agent 映射表
 const agentMap = computed(() => {
   const map: Record<string, Agent> = {}
   agents.value.forEach((a: Agent) => { map[a.id] = a })
   return map
 })
 
-// 当前筛选 of Agent 名称
 const filterAgentName = computed(() => {
   if (!filterAgentId.value) return ''
   const agent = agentMap.value[filterAgentId.value]
   return agent ? agent.name : `Agent #${filterAgentId.value}`
 })
 
-// 获取任务执行位置名称
-function getExecutorName(task: Task): string {
-  if (!task.agent_id) return '本地'
-  const agent = agentMap.value[task.agent_id]
-  return agent ? agent.name : `Agent #${task.agent_id}`
-}
-
-// 获取任务执行位置状态
-function getExecutorStatus(task: Task): 'local' | 'online' | 'offline' {
-  if (!task.agent_id) return 'local'
-  const agent = agentMap.value[task.agent_id]
-  return agent?.status === AGENT_STATUS.ONLINE ? 'online' : 'offline'
-}
+const displayLogContent = computed(() => {
+  if (!logContent.value) return ''
+  return decompressFromBase64(logContent.value)
+})
 
 async function loadTasks() {
   loading.value = true
@@ -119,15 +109,23 @@ async function loadTasks() {
       name: filterName.value || undefined,
       tags: filterTags.value || undefined,
       type: filterType.value === 'all' ? undefined : filterType.value,
+      source_id: filterSourceId.value || undefined,
       agent_id: filterAgentId.value || undefined,
       sort_by: sortBy.value || undefined,
       order: order.value || undefined
     })
     tasks.value = res.data
     total.value = res.total
-  } catch { toast.error('加载任务失败') } finally {
+  } catch {
+    toast.error('加载任务失败')
+  } finally {
     loading.value = false
   }
+}
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  loadTasks()
 }
 
 async function loadAgents() {
@@ -144,13 +142,22 @@ function handleSearch() {
   }, 300)
 }
 
-function handleTypeChange() {
+function handleTypeChange(clearSource = true) {
+  if (clearSource) {
+    filterSourceId.value = ''
+  }
   currentPage.value = 1
   loadTasks()
 }
 
-function handlePageChange(page: number) {
-  currentPage.value = page
+function toggleSort(field: string) {
+  if (sortBy.value === field) {
+    order.value = order.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortBy.value = field
+    order.value = 'desc'
+  }
+  currentPage.value = 1
   loadTasks()
 }
 
@@ -186,6 +193,55 @@ function openEdit(task: Task) {
   }
 }
 
+const editingAppTask = ref<Task | null>(null)
+
+watch(showApplyDialog, (val) => {
+  if (!val) {
+    editingAppTask.value = null
+    editingMarketApp.value = null
+  }
+})
+
+function openEditApp(task: Task) {
+  editingAppTask.value = task
+  const cfg = getAppConfig(task)
+  editingMarketApp.value = {
+    id: task.id,
+    name: task.name,
+    version: cfg.version || '1.0.0',
+    description: task.remark,
+    manifest_path: cfg.manifest_path,
+    manifest_url: cfg.manifest_url,
+    manifest_raw: cfg.manifest_raw,
+    scenarios: cfg.scenarios || [],
+    env_schema: cfg.env_schema || [],
+    build_opts: cfg.build_opts || null,
+    env_values: cfg.env_values || {},
+    current_scenario: cfg.current_scenario || ''
+  }
+  showApplyDialog.value = true
+}
+
+function getAppConfig(task: any) {
+  if (!task || !task.unified_config) return {}
+  try {
+    const unified = JSON.parse(task.unified_config)
+    return unified.app || {}
+  } catch { return {} }
+}
+
+function uninstallApp(task: Task) {
+  confirmDelete(task.id)
+}
+
+function filterByApp(sourceId: string) {
+  filterSourceId.value = sourceId
+  filterType.value = 'all'
+  filterTags.value = ''
+  filterName.value = ''
+  handleTypeChange(false)
+}
+
 function duplicateTask(task: Task) {
   const newTask = { ...task }
   delete (newTask as any).id
@@ -201,54 +257,6 @@ function duplicateTask(task: Task) {
   }
 }
 
-function getLangBadgeClass(name: string) {
-  const n = name.toLowerCase()
-  const colors: Record<string, string> = {
-    python: 'bg-amber-500/10 text-amber-500 border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20',
-    py: 'bg-amber-500/10 text-amber-500 border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20',
-    
-    node: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
-    nodejs: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
-    
-    go: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20',
-    golang: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20',
-    
-    rust: 'bg-orange-500/10 text-orange-500 border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20',
-    cargo: 'bg-orange-500/10 text-orange-500 border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20',
-    
-    php: 'bg-violet-500/10 text-violet-500 border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20',
-    
-    ruby: 'bg-red-500/10 text-red-500 border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',
-    
-    bun: 'bg-pink-500/10 text-pink-500 border-pink-500/20 dark:bg-pink-500/10 dark:text-pink-400 dark:border-pink-500/20',
-    
-    deno: 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20 dark:bg-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/20',
-    
-    java: 'bg-amber-600/10 text-amber-600 border-amber-600/20 dark:bg-amber-600/10 dark:text-amber-500 dark:border-amber-600/20',
-    
-    dotnet: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20',
-    
-    lua: 'bg-blue-500/10 text-blue-500 border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20',
-    
-    dart: 'bg-sky-500/10 text-sky-500 border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20',
-    flutter: 'bg-sky-500/10 text-sky-500 border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20'
-  }
-  return colors[n] || 'bg-slate-500/10 text-slate-500 border-slate-500/20 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20'
-}
-
-function getShortLangName(name: string): string {
-  const n = name.toLowerCase()
-  const mapping: Record<string, string> = {
-    python: 'py',
-    nodejs: 'node',
-    golang: 'go'
-  }
-  return mapping[n] || n
-}
-
-const showExportDialog = ref(false)
-const exportCommandText = ref('')
-
 function openExportDialog(task: Task) {
   const cmd = generateBaihuCommand(task)
   if (!cmd) {
@@ -261,38 +269,32 @@ function openExportDialog(task: Task) {
 
 function copyCommandText() {
   if (!exportCommandText.value) return
-  copyToClipboard(exportCommandText.value).then((success) => {
-    if (success) {
-      toast.success('同步指令已复制到剪贴板')
-      showExportDialog.value = false
-    } else {
-      toast.error('复制失败，请手动选择复制')
-    }
-  })
-}
-
-const showBatchDeleteDialog = ref(false)
-const showBatchUpdateDialog = ref(false)
-
-function openBatchUpdate() {
-  editingTask.value = { timeout: 30 }
-  showBatchUpdateDialog.value = true
-  if (filterType.value === TASK_TYPE.REPO) {
-    showRepoDialog.value = true
-  } else {
-    showTaskDialog.value = true
-  }
+  navigator.clipboard.writeText(exportCommandText.value)
+    .then(() => toast.success('指令已复制到剪贴板'))
+    .catch(() => toast.error('复制失败'))
 }
 
 function confirmDelete(id: string) {
   deleteTaskId.value = id
-  deleteFiles.value = false
   showDeleteDialog.value = true
 }
 
 function confirmBatchDelete() {
   if (total.value === 0) return
   showBatchDeleteDialog.value = true
+}
+
+async function deleteTask(deleteFiles: boolean) {
+  if (!deleteTaskId.value) return
+  try {
+    await api.tasks.delete(deleteTaskId.value, { delete_files: deleteFiles })
+    toast.success('任务已删除')
+    loadTasks()
+  } catch {
+    toast.error('删除失败')
+  }
+  showDeleteDialog.value = false
+  deleteTaskId.value = null
 }
 
 async function batchDeleteTasks() {
@@ -311,20 +313,6 @@ async function batchDeleteTasks() {
   showBatchDeleteDialog.value = false
 }
 
-async function deleteTask() {
-  if (!deleteTaskId.value) return
-  try {
-    await api.tasks.delete(deleteTaskId.value, { delete_files: deleteFiles.value })
-    toast.success('任务已删除')
-    loadTasks()
-  } catch { toast.error('删除失败') } 
-  showDeleteDialog.value = false
-  deleteTaskId.value = null
-}
-
-const executingTaskId = ref<string | null>(null)
-const isStopping = ref(false)
-
 async function runTask(id: string) {
   if (executingTaskId.value) return
   executingTaskId.value = id
@@ -332,7 +320,6 @@ async function runTask(id: string) {
     const res = await api.tasks.execute(id)
     toast.success('执行指令已发送')
     if (res.log_id) {
-      // 开启日志查看器
       viewLogs(id, res.log_id)
     }
   } catch (error: any) {
@@ -342,69 +329,158 @@ async function runTask(id: string) {
   }
 }
 
-async function handleStopTask() {
-  if (!selectedLog.value || isStopping.value) return
-  
-  isStopping.value = true
-  try {
-    await api.tasks.stop(selectedLog.value.id)
-    toast.success('停止指令已发送')
-  } catch (error: any) {
-    toast.error(error.message || '停止失败')
-    // 出错时也尝试刷新，因为后端可能已经自动修正了“僵尸”状态
-    loadTasks()
-  } finally {
-    isStopping.value = false
-  }
-}
-
 async function toggleTask(task: Task, enabled: boolean) {
   try {
     await api.tasks.update(task.id, { ...task, enabled })
     toast.success(enabled ? '任务已启用' : '任务已禁用')
     loadTasks()
-  } catch { toast.error('操作失败') }
+  } catch {
+    toast.error('操作失败')
+  }
 }
 
 async function togglePin(task: Task) {
   const newType = task.pin_type === 'top' ? 'none' : 'top'
   try {
     await api.tasks.update(task.id, { ...task, pin_type: newType })
-    toast.success(newType === 'top' ? '任务已置顶' : '已取消置顶')
+    toast.success(newType === 'top' ? '已置顶任务' : '已取消置顶')
     loadTasks()
-  } catch { toast.error('置顶操作失败') }
+  } catch {
+    toast.error('操作失败')
+  }
 }
 
-const showLogViewer = ref(false)
-const selectedLog = ref<TaskLog | null>(null)
-const logContent = ref('')
-const logEmptyTitle = ref<string | undefined>(undefined)
-const logEmptyDesc = ref<string | undefined>(undefined)
-let logSource: EventSource | null = null
-let durationTimer: ReturnType<typeof setInterval> | null = null
-let logBuffer: string[] = []
-let logFlushInterval: ReturnType<typeof setInterval> | null = null
+async function handleTaskDepInstall(task: Task) {
+  try {
+    const res = await api.logs.list({ task_id: task.id, page: 1, page_size: 1 })
+    if (res.data && res.data.length > 0) {
+      const latestLog = res.data[0]
+      if (latestLog) {
+        const cmdRes = await api.deps.getInstallSuggestCmd(latestLog.id)
+        if (cmdRes && cmdRes.command) {
+          terminalCmd.value = cmdRes.command
+          showTerminalDialog.value = true
+        }
+      } else {
+        toast.error('未找到该任务的运行日志，无法分析依赖')
+      }
+    } else {
+      toast.error('该任务尚未运行，无日志可分析')
+    }
+  } catch (err: any) {
+    toast.error(err.message || '获取依赖安装命令失败')
+  }
+}
 
+function openBatchUpdate() {
+  editingTask.value = { timeout: 30 }
+  showBatchUpdateDialog.value = true
+  if (filterType.value === TASK_TYPE.REPO) {
+    showRepoDialog.value = true
+  } else {
+    showTaskDialog.value = true
+  }
+}
+
+// 视图管理
+async function loadViewsFromSettings() {
+  try {
+    const res = await api.settings.getSection('task_qviews')
+    const val = res['task_views']
+    if (val) {
+      taskViews.value = JSON.parse(val)
+      if (!route.query.agent_id && !route.query.keyword && !route.query.name && !route.query.tag && !route.query.type) {
+        const defaultView = taskViews.value.find((v: any) => v.isDefault)
+        if (defaultView) {
+          applyViewWithoutSearch(defaultView)
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load views', e)
+  }
+}
+
+async function saveView(name: string) {
+  const newView = {
+    name,
+    query: {
+      name: filterName.value,
+      tags: filterTags.value,
+      agent_id: filterAgentId.value,
+      type: filterType.value,
+      sort_by: sortBy.value,
+      order: order.value
+    },
+    isDefault: false
+  }
+  const updatedViews = [...taskViews.value, newView]
+  try {
+    await api.settings.setSection('task_qviews', {
+      'task_views': JSON.stringify(updatedViews)
+    })
+    taskViews.value = updatedViews
+    toast.success('视图已保存')
+  } catch (e) {
+    toast.error('保存失败')
+  }
+}
+
+async function deleteView(index: number) {
+  const updatedViews = taskViews.value.filter((_: any, i: number) => i !== index)
+  try {
+    await api.settings.setSection('task_qviews', {
+      'task_views': JSON.stringify(updatedViews)
+    })
+    taskViews.value = updatedViews
+    toast.success('视图已删除')
+  } catch (e) {
+    toast.error('删除失败')
+  }
+}
+
+async function toggleDefaultView(index: number) {
+  if (!taskViews.value[index]) return
+  const isCurrentlyDefault = !!taskViews.value[index]?.isDefault
+  const updatedViews = taskViews.value.map((v, i) => ({
+    ...v,
+    isDefault: i === index ? !isCurrentlyDefault : false
+  }))
+  try {
+    await api.settings.setSection('task_qviews', {
+      'task_views': JSON.stringify(updatedViews)
+    })
+    taskViews.value = updatedViews
+    toast.success(!isCurrentlyDefault ? '已设为默认视图' : '已取消默认视图')
+  } catch (e) {
+    toast.error('设置失败')
+  }
+}
+
+function applyViewWithoutSearch(view: any) {
+  filterName.value = view.query.name || ''
+  filterTags.value = view.query.tags || ''
+  filterAgentId.value = view.query.agent_id || null
+  filterType.value = view.query.type || TASK_TYPE.NORMAL
+  sortBy.value = view.query.sort_by || 'created_at'
+  order.value = view.query.order || 'desc'
+}
+
+function applyView(view: any) {
+  applyViewWithoutSearch(view)
+  handleSearch()
+}
+
+// 日志模块
 function cleanupLogSocket() {
-  if (logSource) {
-    logSource.close()
-    logSource = null
-  }
-  if (logFlushInterval) {
-    clearInterval(logFlushInterval)
-    logFlushInterval = null
-  }
-  if (logBuffer.length > 0) {
-    logContent.value += logBuffer.join('')
-  }
+  if (logSource) { logSource.close(); logSource = null }
+  if (logFlushInterval) { clearInterval(logFlushInterval); logFlushInterval = null }
+  if (logBuffer.length > 0) { logContent.value += logBuffer.join('') }
   logBuffer = []
 }
 
 function cleanupDurationTimer() {
-  if (durationTimer) {
-    clearInterval(durationTimer)
-    durationTimer = null
-  }
+  if (durationTimer) { clearInterval(durationTimer); durationTimer = null }
 }
 
 watch(showLogViewer, (val) => {
@@ -420,13 +496,6 @@ onUnmounted(() => {
   cleanupDurationTimer()
 })
 
-import { decompressFromBase64 } from '@/utils/decompress'
-
-const displayLogContent = computed(() => {
-  if (!logContent.value) return ''
-  return decompressFromBase64(logContent.value)
-})
-
 async function viewLogs(taskId: string, logId?: string) {
   try {
     let latestLog: TaskLog | null = null
@@ -440,7 +509,7 @@ async function viewLogs(taskId: string, logId?: string) {
         status: TASK_STATUS.RUNNING,
         duration: 0,
         start_time: new Date().toISOString(),
-        end_time: '-',
+        end_time: '-'
       } as TaskLog
     } else {
       const res = await api.logs.list({ task_id: taskId, page: 1, page_size: 1 })
@@ -450,7 +519,6 @@ async function viewLogs(taskId: string, logId?: string) {
     }
 
     if (!latestLog) {
-      // 如果没有日志，构造一个基础的任务信息对象用于展示弹窗
       const task = tasks.value.find(t => t.id === taskId)
       selectedLog.value = {
         id: '',
@@ -460,7 +528,7 @@ async function viewLogs(taskId: string, logId?: string) {
         status: 'UNEXECUTED',
         duration: 0,
         start_time: '-',
-        end_time: '-',
+        end_time: '-'
       } as TaskLog
       logContent.value = ''
       logEmptyTitle.value = '该任务暂无执行记录'
@@ -485,7 +553,6 @@ async function viewLogs(taskId: string, logId?: string) {
       return
     }
 
-    // Connect SSE to load log content for running tasks
     logContent.value = 'raw:'
     cleanupLogSocket()
     const protocol = window.location.protocol
@@ -504,11 +571,7 @@ async function viewLogs(taskId: string, logId?: string) {
       } catch {
         text = event.data
       }
-
-      if (text) {
-        logBuffer.push(text)
-      }
-
+      if (text) logBuffer.push(text)
       if (!logFlushInterval) {
         logFlushInterval = setInterval(() => {
           if (logBuffer.length > 0) {
@@ -517,8 +580,6 @@ async function viewLogs(taskId: string, logId?: string) {
           }
         }, 150)
       }
-
-      // 如果接收到 finish 结构帧，流即状态：直接利用帧内的真实元数据闭环
       if (parsed && parsed.type === 'finish') {
         cleanupDurationTimer()
         cleanupLogSocket()
@@ -533,10 +594,8 @@ async function viewLogs(taskId: string, logId?: string) {
         loadTasks()
       }
     }
-    logSource.onerror = async (e) => {
-      console.log('[LogSSE] Connection closed/finished', e)
+    logSource.onerror = async () => {
       cleanupLogSocket()
-      // 连接断开兜底：若已结束则停止计时
       try {
         const detail = await api.logs.get(latestLog.id)
         if (detail && detail.status !== TASK_STATUS.RUNNING && selectedLog.value) {
@@ -552,7 +611,6 @@ async function viewLogs(taskId: string, logId?: string) {
       } catch {}
     }
 
-    // 优化：本地定时更新耗时，不再发请求轮询状态，状态变更依赖 EventBus 推送
     cleanupDurationTimer()
     const updateLogStatus = () => {
       if (selectedLog.value && selectedLog.value.status === TASK_STATUS.RUNNING) {
@@ -574,186 +632,47 @@ async function viewLogs(taskId: string, logId?: string) {
   }
 }
 
-const showTerminalDialog = ref(false)
-const terminalCmd = ref('')
-
-async function handleTaskDepInstall(task: Task) {
+async function handleStopTask() {
+  if (!selectedLog.value || isStopping.value) return
+  isStopping.value = true
   try {
-    const res = await api.logs.list({ task_id: task.id, page: 1, page_size: 1 })
-    if (res.data && res.data.length > 0) {
-      const latestLog = res.data[0]
-      if (latestLog) {
-        const cmdRes = await api.deps.getInstallSuggestCmd(latestLog.id)
-        if (cmdRes && cmdRes.command) {
-          terminalCmd.value = cmdRes.command
-          showTerminalDialog.value = true
-        }
-      } else {
-        toast.error('未找到该任务的运行日志，无法分析依赖')
-      }
-    } else {
-      toast.error('该任务尚未运行，无日志可分析')
-    }
-  } catch (err: any) {
-    toast.error(err.message || '获取依赖安装命令失败')
-  }
-}
-
-// 视图管理
-const taskViews = ref<any[]>([])
-const newViewName = ref('')
-const isSavingView = ref(false)
-
-async function loadViewsFromSettings() {
-  try {
-    const res = await api.settings.getSection('task_qviews')
-    const val = res['task_views']
-    if (val) {
-      taskViews.value = JSON.parse(val)
-      if (!route.query.agent_id && !route.query.keyword && !route.query.name && !route.query.tag && !route.query.type) {
-        const defaultView = taskViews.value.find((v: any) => v.isDefault)
-        if (defaultView) {
-          applyViewWithoutSearch(defaultView)
-        }
-      }
-    }
-  } catch (e) {
-    console.error('Failed to load views', e)
-  }
-}
-
-async function saveView() {
-  if (!newViewName.value.trim()) {
-    toast.error('请输入视图名称')
-    return
-  }
-  
-  const newView = {
-    name: newViewName.value.trim(),
-    query: {
-      name: filterName.value,
-      tags: filterTags.value,
-      agent_id: filterAgentId.value,
-      type: filterType.value,
-      sort_by: sortBy.value,
-      order: order.value
-    },
-    isDefault: false
-  }
-  
-  const updatedViews = [...taskViews.value, newView]
-  isSavingView.value = true
-  try {
-    await api.settings.setSection('task_qviews', {
-      'task_views': JSON.stringify(updatedViews)
-    })
-    taskViews.value = updatedViews
-    newViewName.value = ''
-    toast.success('视图已保存')
-  } catch (e) {
-    toast.error('保存失败')
+    await api.tasks.stop(selectedLog.value.id)
+    toast.success('停止指令已发送')
+  } catch (error: any) {
+    toast.error(error.message || '停止失败')
+    loadTasks()
   } finally {
-    isSavingView.value = false
+    isStopping.value = false
   }
-}
-
-function applyViewWithoutSearch(view: any) {
-  filterName.value = view.query.name || ''
-  filterTags.value = view.query.tags || ''
-  filterAgentId.value = view.query.agent_id || null
-  filterType.value = view.query.type || TASK_TYPE.NORMAL
-  sortBy.value = view.query.sort_by || 'created_at'
-  order.value = view.query.order || 'desc'
-}
-
-function applyView(view: any) {
-  applyViewWithoutSearch(view)
-  handleSearch()
-}
-
-async function deleteView(index: number) {
-  const updatedViews = taskViews.value.filter((_, i) => i !== index)
-  try {
-    await api.settings.setSection('task_qviews', {
-      'task_views': JSON.stringify(updatedViews)
-    })
-    taskViews.value = updatedViews
-    toast.success('视图已删除')
-  } catch (e) {
-    toast.error('删除失败')
-  }
-}
-
-async function toggleDefaultView(index: number) {
-  const isCurrentlyDefault = !!taskViews.value[index].isDefault
-  const updatedViews = taskViews.value.map((v, i) => ({
-    ...v,
-    isDefault: i === index ? !isCurrentlyDefault : false
-  }))
-  try {
-    await api.settings.setSection('task_qviews', {
-      'task_views': JSON.stringify(updatedViews)
-    })
-    taskViews.value = updatedViews
-    if (!isCurrentlyDefault) {
-      toast.success('已设为默认视图')
-    } else {
-      toast.success('已取消默认视图')
-    }
-  } catch (e) {
-    toast.error('设置失败')
-  }
-}
-
-function getTaskTypeTitle(type: string) {
-  return type === TASK_TYPE.REPO ? '仓库同步' : '普通任务'
 }
 
 onMounted(async () => {
-  // 先加载 agents，再处理 URL 参数
   await loadAgents()
-
-  // 从 URL 参数读取
   const agentIdParam = route.query.agent_id
-  if (agentIdParam) {
-    filterAgentId.value = String(agentIdParam)
-  }
+  if (agentIdParam) filterAgentId.value = String(agentIdParam)
   const keywordParam = route.query.keyword || route.query.name
-  if (keywordParam) {
-    filterName.value = String(keywordParam)
-  }
+  if (keywordParam) filterName.value = String(keywordParam)
   const typeParam = route.query.type
-  if (typeParam && (typeParam === TASK_TYPE.NORMAL || typeParam === TASK_TYPE.REPO)) {
+  if (typeParam && (typeParam === TASK_TYPE.NORMAL || typeParam === TASK_TYPE.REPO || typeParam === TASK_TYPE.APP || String(typeParam).startsWith('app:'))) {
     filterType.value = String(typeParam)
   }
   const tagParam = route.query.tag
-  if (tagParam) {
-    filterTags.value = String(tagParam)
-  }
+  if (tagParam) filterTags.value = String(tagParam)
 
-  // 先加载视图配置，若有默认视图且无 URL 显式参数则在此阶段应用
   await loadViewsFromSettings()
-
   loadTasks()
 })
 
-// 订阅任务状态实时更新
 useEventBus(['task_running', 'task_queued', 'task_success', 'task_failed', 'task_timeout', 'task_cancelled'], (payload) => {
   const task = tasks.value.find(t => t.id === payload.task_id)
-  if (task) {
-    task.running_status = payload.status
-  }
-  
-  // 同步更新打开的日志弹窗状态（按 log_id 或 task_id 匹配）
+  if (task) task.running_status = payload.status
   if (selectedLog.value && (selectedLog.value.id === payload.log_id || selectedLog.value.task_id === payload.task_id)) {
-    // 替换为全新的响应式对象以触发所有子组件更新
     selectedLog.value = {
       ...selectedLog.value,
       status: payload.status,
       duration: payload.duration !== undefined ? payload.duration : selectedLog.value.duration,
       end_time: payload.end_time !== undefined ? payload.end_time : selectedLog.value.end_time
     }
-    
     if (payload.status !== TASK_STATUS.RUNNING) {
       cleanupDurationTimer()
       cleanupLogSocket()
@@ -762,9 +681,18 @@ useEventBus(['task_running', 'task_queued', 'task_success', 'task_failed', 'task
   }
 })
 
-// 监听路由参数变化
 watch(() => route.query.agent_id, (newVal: any) => {
   filterAgentId.value = newVal ? String(newVal) : null
+  currentPage.value = 1
+  loadTasks()
+})
+
+watch(() => route.query.type, (newVal: any) => {
+  if (newVal && (newVal === TASK_TYPE.NORMAL || newVal === TASK_TYPE.REPO || newVal === TASK_TYPE.APP || String(newVal).startsWith('app:'))) {
+    filterType.value = String(newVal)
+  } else if (!newVal) {
+    filterType.value = TASK_TYPE.NORMAL
+  }
   currentPage.value = 1
   loadTasks()
 })
@@ -772,515 +700,54 @@ watch(() => route.query.agent_id, (newVal: any) => {
 
 <template>
   <div class="space-y-6">
-    <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-      <div class="flex flex-col shrink-0">
-        <Popover>
-          <PopoverTrigger as-child>
-            <div class="flex items-center gap-2 cursor-pointer group w-fit">
-              <h2 class="text-xl sm:text-2xl font-bold tracking-tight">{{ filterType === TASK_TYPE.REPO ? '仓库同步' : '定时任务' }}</h2>
-              <div class="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted/50 group-hover:bg-primary/10 transition-colors border border-transparent group-hover:border-primary/20">
-                <span class="text-[10px] font-bold text-muted-foreground group-hover:text-primary uppercase tracking-wider">视图</span>
-                <ChevronDown class="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
-              </div>
-            </div>
-          </PopoverTrigger>
-          <PopoverContent class="w-64 p-3 shadow-xl border-muted-foreground/10" align="start" :side-offset="8" @open-autofocus="(e: Event) => e.preventDefault()">
-            <div class="space-y-4">
-              <div>
-                <div class="flex items-center justify-between mb-2 px-1">
-                  <h4 class="text-sm font-semibold">我的视图</h4>
-                </div>
-                <div v-if="taskViews.length === 0" class="text-xs text-muted-foreground px-1 py-4 text-center border-2 border-dashed rounded-md bg-muted/20">
-                  暂无保存的视图
-                </div>
-                <div class="space-y-1.5 max-h-[220px] overflow-y-auto custom-scrollbar">
-                  <div v-for="(view, index) in taskViews" :key="index" 
-                    class="flex items-center justify-between pl-2 pr-1 py-1.5 rounded-lg border transition-all cursor-pointer"
-                    :class="view.isDefault 
-                      ? 'bg-primary/5 text-primary border-primary/30' 
-                      : 'bg-muted/10 border-muted-foreground/10 hover:bg-muted/30'"
-                    @click="applyView(view)">
-                    <div class="flex items-center gap-1.5 min-w-0 flex-1">
-                      <button type="button" 
-                        class="p-0.5 rounded-md transition-colors shrink-0 focus:outline-none"
-                        :class="view.isDefault ? 'text-primary' : 'text-muted-foreground/40 hover:text-primary hover:bg-primary/10'"
-                        :title="view.isDefault ? '取消默认视图' : '设为默认视图'"
-                        @click.stop="toggleDefaultView(index)">
-                        <Pin class="h-3.5 w-3.5" :class="{ 'fill-primary rotate-45': view.isDefault }" />
-                      </button>
-                      <span class="text-xs font-medium truncate max-w-[130px]" :class="{ 'font-semibold': view.isDefault }">{{ view.name }}</span>
-                    </div>
-                    <div class="flex items-center gap-0.5">
-                      <button type="button" 
-                        class="p-1 rounded-md text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive transition-colors focus:outline-none"
-                        @click.stop="deleteView(index)">
-                        <X class="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="pt-3 border-t space-y-2.5">
-                <h4 class="text-xs font-semibold px-1 text-foreground/70 uppercase tracking-wider">保存当前过滤为新视图</h4>
-                <div class="flex gap-2">
-                  <Input v-model="newViewName" placeholder="视图名称..." class="h-9 text-xs bg-muted/30 focus:bg-background" @keydown.enter="saveView" />
-                  <Button size="sm" class="h-9 px-3" @click="saveView" :disabled="isSavingView">
-                    <Plus v-if="!isSavingView" class="h-4 w-4" />
-                    <Loader2 v-else class="h-4 w-4 animate-spin" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
-        <p class="text-muted-foreground text-xs mt-0.5 ml-0.5">管理和调度自动化执行任务</p>
-      </div>
+    <!-- 顶部工具栏与过滤器子组件 -->
+    <TaskHeader
+      v-model:filter-name="filterName"
+      v-model:filter-tags="filterTags"
+      v-model:filter-type="filterType"
+      :filter-agent-id="filterAgentId"
+      :filter-agent-name="filterAgentName"
+      :task-views="taskViews"
+      :loading="loading"
+      @search="handleSearch"
+      @type-change="handleTypeChange"
+      @refresh="loadTasks"
+      @clear-agent-filter="clearAgentFilter"
+      @open-batch-update="openBatchUpdate"
+      @confirm-batch-delete="confirmBatchDelete"
+      @open-create-task="openCreate"
+      @open-create-repo="openCreateRepo"
+      @apply-view="applyView"
+      @toggle-default-view="toggleDefaultView"
+      @delete-view="deleteView"
+      @save-view="saveView"
+    />
 
-      <div class="flex flex-row items-center flex-wrap gap-2 w-full xl:w-auto xl:ml-auto xl:justify-end">
-        <!-- 搜索与标签 -->
-        <div class="flex flex-row items-center gap-2 w-full sm:flex-1 xl:flex-none xl:w-auto text-sm">
-          <div class="relative flex-1 xl:flex-none xl:w-[240px] group">
-            <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-            <Input v-model="filterName" placeholder="搜索任务..." class="h-9 pl-9 w-full bg-muted/20 border-muted-foreground/10 focus:bg-background text-sm"
-              @input="handleSearch" />
-          </div>
-          <TagInput v-model="filterTags" placeholder="搜索标签..." :icon="Tag" multiple
-            class="h-9 flex-1 xl:flex-none xl:w-[180px] bg-muted/20 border-muted-foreground/10 focus:bg-background text-sm"
-            @enter="handleSearch" @update:modelValue="handleSearch" />
-        </div>
-
-        <div class="flex items-center gap-1.5 w-full sm:gap-2 sm:w-auto sm:justify-end">
-          <!-- 移动端类型与排序切换 -->
-          <div class="xl:hidden flex items-center gap-1.5 flex-1 min-w-0">
-             <Select v-model="filterType" @update:model-value="(_v: any) => handleTypeChange()">
-               <SelectTrigger class="h-9 w-full text-xs sm:text-sm bg-muted/20 border-muted-foreground/10 min-w-0">
-                 <SelectValue />
-               </SelectTrigger>
-               <SelectContent>
-                 <SelectItem :value="TASK_TYPE.NORMAL">定时任务</SelectItem>
-                 <SelectItem :value="TASK_TYPE.REPO">仓库同步</SelectItem>
-               </SelectContent>
-             </Select>
-             <Select :model-value="`${sortBy}:${order}`" @update:model-value="(val: any) => handleSortChange(val)">
-               <SelectTrigger class="h-9 w-full text-xs sm:text-sm bg-muted/20 border-muted-foreground/10 min-w-0">
-                 <SelectValue placeholder="排序规则" />
-               </SelectTrigger>
-               <SelectContent>
-                 <SelectItem value="created_at:desc">创建时间 (最晚优先)</SelectItem>
-                 <SelectItem value="created_at:asc">创建时间 (最早优先)</SelectItem>
-                 <SelectItem value="name:asc">名称 (A-Z)</SelectItem>
-                 <SelectItem value="name:desc">名称 (Z-A)</SelectItem>
-                 <SelectItem value="next_run:asc">下次执行 (先-后)</SelectItem>
-                 <SelectItem value="next_run:desc">下次执行 (后-先)</SelectItem>
-                 <SelectItem value="enabled:desc">状态 (启用优先)</SelectItem>
-                 <SelectItem value="enabled:asc">状态 (禁用优先)</SelectItem>
-               </SelectContent>
-             </Select>
-          </div>
-
-          <div v-if="filterAgentId"
-            class="hidden xl:flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-sm shrink-0">
-            <Server class="h-3.5 w-3.5" />
-            <span>{{ filterAgentName }}</span>
-            <X class="h-3.5 w-3.5 cursor-pointer hover:text-destructive" @click="clearAgentFilter" />
-          </div>
-
-          <Button variant="outline" size="icon" class="h-9 w-9 shrink-0" @click="loadTasks" :disabled="loading" title="刷新">
-            <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loading }" />
-          </Button>
-
-          <div class="flex items-center gap-1.5 shrink-0 ml-auto sm:ml-0 sm:gap-2">
-            <!-- 批量操作下拉菜单 -->
-            <DropdownMenu>
-              <DropdownMenuTrigger as-child>
-                <Button variant="outline" class="shrink-0 px-2 xl:px-3 h-9 shadow-sm gap-1">
-                  <Wrench class="h-4 w-4" />
-                  <span class="hidden xl:inline">批量操作</span>
-                  <ChevronDown class="h-3.5 w-3.5 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" class="w-40">
-                <DropdownMenuItem @click="openBatchUpdate" class="cursor-pointer gap-2">
-                  <Sparkles class="h-4 w-4 text-primary" />
-                  <span>批量修改配置</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem @click="confirmBatchDelete" class="cursor-pointer gap-2 text-destructive focus:text-destructive">
-                  <Trash2 class="h-4 w-4" />
-                  <span>批量删除任务</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button v-if="filterType === TASK_TYPE.NORMAL" @click="openCreate" class="shrink-0 px-2 xl:px-3 h-9 shadow-sm font-medium" title="新建任务">
-              <Plus class="h-4 w-4 xl:mr-2" /> <span class="hidden xl:inline">新建任务</span>
-            </Button>
-            <Button v-else-if="filterType === TASK_TYPE.REPO" @click="openCreateRepo" class="shrink-0 px-2 xl:px-3 h-9 shadow-sm font-medium" title="同步仓库">
-              <GitBranch class="h-4 w-4 xl:mr-2" /> <span class="hidden xl:inline">同步仓库</span>
-            </Button>
-
-            <!-- 桌面端类型切换 -->
-            <Tabs :model-value="filterType" @update:model-value="(v: string | number) => { filterType = String(v); handleTypeChange() }" class="shrink-0 hidden xl:block">
-               <TabsList class="h-9 p-0.5 bg-muted/20 border border-border/40 rounded-lg">
-                  <TabsTrigger :value="TASK_TYPE.NORMAL" class="px-3 h-8 text-xs gap-1.5 font-medium transition-all">
-                     <CalendarClock class="w-3.5 h-3.5 opacity-70" />
-                     <span>任务</span>
-                  </TabsTrigger>
-                  <TabsTrigger :value="TASK_TYPE.REPO" class="px-3 h-8 text-xs gap-1.5 font-medium transition-all">
-                     <GitBranch class="w-3.5 h-3.5 opacity-70" />
-                     <span>仓库</span>
-                  </TabsTrigger>
-               </TabsList>
-            </Tabs>
-          </div>
-        </div>
-        <!-- 移动端/平板 agent 过滤标签 -->
-        <div v-if="filterAgentId"
-          class="flex xl:hidden items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-sm w-fit mt-1">
-          <Server class="h-3.5 w-3.5" />
-          <span>{{ filterAgentName }}</span>
-          <X class="h-3.5 w-3.5 cursor-pointer hover:text-destructive" @click="clearAgentFilter" />
-        </div>
-      </div>
-    </div>
-
-    <div class="rounded-lg border bg-card overflow-hidden">
-      <!-- ========== 1. 大屏布局 (Large >= 1280px) ========== -->
-      <div class="hidden xl:block">
-        <!-- 表头 -->
-        <div class="flex items-center gap-4 px-4 py-1.5 border-b bg-muted/20 text-xs text-muted-foreground font-medium">
-          <span class="w-12 shrink-0 pl-1">序号</span>
-          <span class="w-8 shrink-0 text-center">类型</span>
-          <span class="w-56 shrink-0 flex items-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors" @click="toggleSort('name')">
-            名称
-            <ArrowUpDown v-if="sortBy !== 'name'" class="h-3 w-3 opacity-40 shrink-0" />
-            <ArrowUp v-else-if="order === 'asc'" class="h-3 w-3 text-primary shrink-0" />
-            <ArrowDown v-else class="h-3 w-3 text-primary shrink-0" />
-          </span>
-          <span class="w-32 shrink-0">执行位置</span>
-          <span class="flex-1 min-w-0 flex items-center gap-1.5 line-clamp-1">
-            <GitBranch v-if="filterType === TASK_TYPE.REPO" class="h-3.5 w-3.5 opacity-50" />
-            <Terminal v-else class="h-3.5 w-3.5 opacity-50" />
-            {{ filterType === TASK_TYPE.REPO ? '仓库地址' : '命令内容' }}
-          </span>
-          <span class="w-28 shrink-0">{{ filterType === TASK_TYPE.REPO ? '同步周期' : '定时规则' }}</span>
-          <span class="w-40 shrink-0 flex items-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors" @click="toggleSort('next_run')">
-            执行时间
-            <ArrowUpDown v-if="sortBy !== 'next_run'" class="h-3 w-3 opacity-40 shrink-0" />
-            <ArrowUp v-else-if="order === 'asc'" class="h-3 w-3 text-primary shrink-0" />
-            <ArrowDown v-else class="h-3 w-3 text-primary shrink-0" />
-          </span>
-          <span class="w-14 shrink-0 text-center flex items-center justify-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors" @click="toggleSort('enabled')">
-            状态
-            <ArrowUpDown v-if="sortBy !== 'enabled'" class="h-3 w-3 opacity-40 shrink-0" />
-            <ArrowUp v-else-if="order === 'asc'" class="h-3 w-3 text-primary shrink-0" />
-            <ArrowDown v-else class="h-3 w-3 text-primary shrink-0" />
-          </span>
-          <span class="w-24 shrink-0 text-center">操作</span>
-        </div>
-        <!-- 列表 -->
-        <div class="divide-y text-sm">
-          <div v-for="(task, index) in tasks" :key="`large-${task.id}`"
-            class="flex items-center gap-2 px-4 py-1.5 hover:bg-muted/30 transition-colors">
-            <StatusDot 
-              :state="task.running_status === 'running' ? 'running' : (task.running_status === 'queued' || task.running_status === 'pending' ? 'pending' : 'none')"
-              :title="task.running_status === 'running' ? '运行中' : (task.running_status === 'queued' || task.running_status === 'pending' ? '排队中' : '')" 
-            />
-            <div class="w-12 shrink-0 text-muted-foreground tabular-nums text-[11px]">#{{ total - (currentPage - 1) * pageSize - index }}</div>
-            <span class="w-8 shrink-0 flex justify-center" :title="getTaskTypeTitle(task.type || 'task')">
-              <div class="relative">
-                <GitBranch v-if="task.type === TASK_TYPE.REPO" class="h-4 w-4 text-primary" />
-                <Terminal v-else class="h-4 w-4 text-primary" />
-              </div>
-            </span>
-            <div class="w-56 shrink-0 flex flex-col justify-center gap-0.5 overflow-hidden">
-              <div class="flex items-center gap-1.5 overflow-hidden">
-                <span class="font-medium truncate cursor-help flex-1 min-w-0" :title="task.name">{{ task.name }}</span>
-                <span v-for="lang in task.languages" :key="lang.name"
-                  class="shrink-0 inline-flex items-center rounded px-1 py-px text-[9px] font-mono border transition-all hover:opacity-90 leading-none ml-auto"
-                  :class="getLangBadgeClass(lang.name)"
-                  :title="lang.name + (lang.version ? '@' + lang.version : '')">
-                  {{ getShortLangName(lang.name) }}{{ lang.version ? ':' + lang.version : '' }}
-                </span>
-                <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
-              </div>
-              <div v-if="task.tags" class="flex items-center gap-1 overflow-hidden">
-                <span v-for="tag in task.tags.split(',').filter(Boolean).slice(0, 3)" :key="tag"
-                  class="truncate text-[10px] leading-none px-1 py-0.5 bg-secondary text-secondary-foreground rounded border">{{ tag }}</span>
-              </div>
-            </div>
-            <span class="w-32 shrink-0 flex items-center gap-1 text-xs" :title="getExecutorName(task)">
-              <Monitor v-if="!task.agent_id" class="h-3 w-3 text-muted-foreground" />
-              <template v-else>
-                <Wifi v-if="getExecutorStatus(task) === 'online'" class="h-3 w-3 text-green-500" />
-                <WifiOff v-else class="h-3 w-3 text-muted-foreground" />
-              </template>
-              <span class="truncate">{{ getExecutorName(task) }}</span>
-            </span>
-            <code class="flex-1 min-w-0 text-muted-foreground truncate text-xs bg-muted/40 px-2 py-1 rounded">
-              <TextOverflow :text="task.command" :title="task.type === TASK_TYPE.REPO ? '仓库地址' : '执行命令'" class="truncate" />
-            </code>
-            <div class="w-28 shrink-0 flex flex-col items-start justify-center gap-1 overflow-hidden">
-              <span v-if="task.trigger_type === TRIGGER_TYPE.BAIHU_STARTUP" class="text-[10px] leading-tight bg-blue-500/10 text-blue-500 px-2 py-1 rounded-md">服务启动时</span>
-              <code v-else-if="task.schedule" class="text-muted-foreground text-xs bg-muted/40 px-1.5 py-0.5 rounded truncate font-mono tabular-nums">{{ task.schedule }}</code>
-            </div>
-            <div class="w-40 shrink-0 flex flex-col justify-center gap-0.5 text-[11px] text-muted-foreground tabular-nums">
-              <span class="truncate">上: {{ task.last_run || '-' }}</span>
-              <span class="truncate">下: {{ task.next_run || '-' }}</span>
-            </div>
-            <span class="w-14 flex justify-center shrink-0 cursor-pointer group" @click="toggleTask(task, !task.enabled)">
-              <div v-if="task.enabled" class="h-6 w-6 rounded-md bg-green-500/10 flex items-center justify-center group-hover:bg-green-500/20">
-                <Zap class="h-3.5 w-3.5 text-green-500 fill-green-500" />
-              </div>
-              <div v-else class="h-6 w-6 rounded-md bg-muted flex items-center justify-center group-hover:bg-muted/80">
-                <ZapOff class="h-3.5 w-3.5 text-muted-foreground" />
-              </div>
-            </span>
-            <span class="w-24 shrink-0 flex justify-center">
-              <Button variant="ghost" size="icon" class="h-6 w-6" @click="runTask(task.id)" :disabled="executingTaskId === task.id">
-                <Loader2 v-if="executingTaskId === task.id" class="h-3 w-3 animate-spin" />
-                <Play v-else class="h-3 w-3" />
-              </Button>
-              <Button variant="ghost" size="icon" class="h-6 w-6" @click="viewLogs(task.id)"><ScrollText class="h-3 w-3" /></Button>
-              <Button variant="ghost" size="icon" class="h-6 w-6" @click="openEdit(task)"><Pencil class="h-3 w-3" /></Button>
-              
-              <DropdownMenu>
-                <DropdownMenuTrigger as-child>
-                  <Button variant="ghost" size="icon" class="h-6 w-6"><MoreHorizontal class="h-3 w-3" /></Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" class="w-32">
-                  <DropdownMenuItem @click="togglePin(task)">
-                    <Pin v-if="task.pin_type !== 'top'" class="h-3.5 w-3.5 mr-2" />
-                    <PinOff v-else class="h-3.5 w-3.5 mr-2 text-primary" />
-                    <span>{{ task.pin_type === 'top' ? '取消置顶' : '置顶任务' }}</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem @click="handleTaskDepInstall(task)">
-                    <Wrench class="h-3.5 w-3.5 mr-2 text-amber-500" />
-                    <span>补全依赖</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem @click="duplicateTask(task)">
-                    <Copy class="h-3.5 w-3.5 mr-2" />
-                    <span>复制任务</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem v-if="task.type === TASK_TYPE.REPO" @click="openExportDialog(task)">
-                    <Terminal class="h-3.5 w-3.5 mr-2" />
-                    <span>导出指令</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem class="text-destructive focus:text-destructive" @click="confirmDelete(task.id)">
-                    <Trash2 class="h-3.5 w-3.5 mr-2" />
-                    <span>删除任务</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <!-- ========== 2. 中屏布局 (Medium 640px - 1280px) ========== -->
-      <div class="hidden sm:block xl:hidden">
-        <div class="flex items-center gap-4 px-4 py-1.5 border-b bg-muted/20 text-xs text-muted-foreground font-medium">
-          <span class="w-12 shrink-0 pl-1">序号</span>
-          <span class="w-48 shrink-0 flex items-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors" @click="toggleSort('name')">
-            任务信息
-            <ArrowUpDown v-if="sortBy !== 'name'" class="h-3 w-3 opacity-40 shrink-0" />
-            <ArrowUp v-else-if="order === 'asc'" class="h-3 w-3 text-primary shrink-0" />
-            <ArrowDown v-else class="h-3 w-3 text-primary shrink-0" />
-          </span>
-          <span class="flex-1 min-w-0">
-            {{ filterType === TASK_TYPE.REPO ? '仓库地址' : '命令内容' }}
-          </span>
-          <span class="w-14 shrink-0 text-center flex items-center justify-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors" @click="toggleSort('enabled')">
-            状态
-            <ArrowUpDown v-if="sortBy !== 'enabled'" class="h-3 w-3 opacity-40 shrink-0" />
-            <ArrowUp v-else-if="order === 'asc'" class="h-3 w-3 text-primary shrink-0" />
-            <ArrowDown v-else class="h-3 w-3 text-primary shrink-0" />
-          </span>
-          <span class="w-24 shrink-0 text-center">操作</span>
-        </div>
-        <!-- 列表 -->
-        <div class="divide-y text-sm">
-          <div v-for="(task, index) in tasks" :key="`medium-${task.id}`"
-            class="flex items-center gap-2 px-4 py-2.5 hover:bg-muted/30 transition-colors">
-            <div v-if="task.running_status === 'running'" class="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)] shrink-0" />
-            <div v-else-if="task.running_status === 'queued' || task.running_status === 'pending'" class="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse shrink-0" />
-            <div v-else class="h-1 w-1 rounded-full bg-muted-foreground/20 shrink-0" />
-            <div class="w-12 shrink-0 text-muted-foreground tabular-nums text-[10px]">#{{ total - (currentPage - 1) * pageSize - index }}</div>
-            <div class="w-48 shrink-0 flex items-center gap-2 overflow-hidden">
-              <span class="shrink-0" :title="getTaskTypeTitle(task.type || 'task')">
-                <div class="relative">
-                  <GitBranch v-if="task.type === TASK_TYPE.REPO" class="h-3.5 w-3.5 text-primary" />
-                  <Terminal v-else class="h-3.5 w-3.5 text-primary" />
-                </div>
-              </span>
-              <div class="flex flex-col min-w-0 flex-1">
-                <div class="flex items-center gap-1.5 overflow-hidden">
-                  <span class="font-medium truncate flex-1 min-w-0">{{ task.name }}</span>
-                  <span v-for="lang in task.languages" :key="lang.name"
-                    class="shrink-0 inline-flex items-center rounded px-1 py-px text-[9px] font-mono border transition-all hover:opacity-90 leading-none ml-auto"
-                    :class="getLangBadgeClass(lang.name)"
-                    :title="lang.name + (lang.version ? '@' + lang.version : '')">
-                    {{ getShortLangName(lang.name) }}{{ lang.version ? ':' + lang.version : '' }}
-                  </span>
-                  <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
-                </div>
-                <span v-if="task.schedule" class="text-[10px] text-muted-foreground font-mono truncate mt-0.5">{{ task.schedule }}</span>
-              </div>
-            </div>
-            <code class="flex-1 min-w-0 text-[11px] text-muted-foreground bg-muted/20 px-2 py-1 rounded truncate">
-              {{ task.command }}
-            </code>
-            <span class="w-14 flex justify-center shrink-0 cursor-pointer group" @click="toggleTask(task, !task.enabled)">
-              <div v-if="task.enabled" class="h-6 w-6 rounded-md bg-green-500/5 flex items-center justify-center">
-                <Zap class="h-3.5 w-3.5 text-green-500" />
-              </div>
-              <div v-else class="h-6 w-6 rounded-md bg-muted flex items-center justify-center">
-                <ZapOff class="h-3.5 w-3.5 text-muted-foreground" />
-              </div>
-            </span>
-            <div class="w-24 shrink-0 flex justify-center">
-              <Button variant="ghost" size="icon" class="h-6 w-6" @click="runTask(task.id)" :disabled="executingTaskId === task.id">
-                <Loader2 v-if="executingTaskId === task.id" class="h-3 w-3 animate-spin" />
-                <Play v-else class="h-3 w-3" />
-              </Button>
-              <Button variant="ghost" size="icon" class="h-6 w-6" @click="viewLogs(task.id)"><ScrollText class="h-3 w-3" /></Button>
-              <Button variant="ghost" size="icon" class="h-6 w-6" @click="openEdit(task)"><Pencil class="h-3 w-3" /></Button>
-              
-              <DropdownMenu>
-                <DropdownMenuTrigger as-child>
-                  <Button variant="ghost" size="icon" class="h-6 w-6"><MoreHorizontal class="h-3 w-3" /></Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" class="w-32">
-                  <DropdownMenuItem @click="togglePin(task)">
-                    <Pin v-if="task.pin_type !== 'top'" class="h-3.5 w-3.5 mr-2" />
-                    <PinOff v-else class="h-3.5 w-3.5 mr-2 text-primary" />
-                    <span>{{ task.pin_type === 'top' ? '取消置顶' : '置顶任务' }}</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem @click="handleTaskDepInstall(task)">
-                    <Wrench class="h-3.5 w-3.5 mr-2 text-amber-500" />
-                    <span>补全依赖</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem @click="duplicateTask(task)">
-                    <Copy class="h-3.5 w-3.5 mr-2" />
-                    <span>复制任务</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem v-if="task.type === TASK_TYPE.REPO" @click="openExportDialog(task)">
-                    <Terminal class="h-3.5 w-3.5 mr-2" />
-                    <span>导出指令</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem class="text-destructive focus:text-destructive" @click="confirmDelete(task.id)">
-                    <Trash2 class="h-3.5 w-3.5 mr-2" />
-                    <span>删除任务</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ========== 3. 小屏布局 (Small < 640px) ========== -->
-      <div class="divide-y sm:hidden">
-        <div v-if="tasks.length === 0" class="text-sm text-muted-foreground text-center py-8">暂无任务</div>
-        <div v-for="(task, index) in tasks" :key="`small-${task.id}`" class="p-3 hover:bg-muted/50 transition-colors">
-          <div class="flex items-start justify-between mb-3 border-b border-border/40 pb-2">
-            <div class="flex items-center gap-2 flex-1 min-w-0 pr-2">
-              <div v-if="task.running_status === 'running'" class="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)] shrink-0" />
-              <div v-else-if="task.running_status === 'queued' || task.running_status === 'pending'" class="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse shrink-0" />
-              <div v-else class="h-1 w-1 rounded-full bg-muted-foreground/20 shrink-0" />
-              <span class="text-[10px] text-muted-foreground tabular-nums flex-shrink-0">#{{ total - (currentPage - 1) * pageSize - index }}</span>
-              <span class="shrink-0">
-                <div class="relative">
-                  <GitBranch v-if="task.type === TASK_TYPE.REPO" class="h-3.5 w-3.5 text-primary" />
-                  <Terminal v-else class="h-3.5 w-3.5 text-primary" />
-                </div>
-              </span>
-              <div class="flex items-center gap-1.5 min-w-0 flex-1">
-                <span class="font-bold text-sm truncate">{{ task.name }}</span>
-                <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
-              </div>
-            </div>
-            <span @click="toggleTask(task, !task.enabled)" class="cursor-pointer">
-              <div v-if="task.enabled" class="h-6 w-6 rounded-md bg-green-500/10 flex items-center justify-center"><Zap class="h-3.5 w-3.5 text-green-500 fill-green-500" /></div>
-              <div v-else class="h-6 w-6 rounded-md bg-muted flex items-center justify-center"><ZapOff class="h-3.5 w-3.5 text-muted-foreground" /></div>
-            </span>
-          </div>
-          <div class="space-y-1.5 text-xs text-muted-foreground mb-3 px-1">
-            <div v-if="task.languages && task.languages.length > 0" class="flex items-center gap-3">
-              <span class="w-10 shrink-0 font-medium opacity-70">环境:</span>
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <span v-for="lang in task.languages" :key="lang.name"
-                  class="inline-flex items-center rounded px-1 py-px text-[9px] font-mono border leading-none"
-                  :class="getLangBadgeClass(lang.name)">
-                  {{ getShortLangName(lang.name) }}{{ lang.version ? ':' + lang.version : '' }}
-                </span>
-              </div>
-            </div>
-            <div class="flex items-center gap-3">
-              <span class="w-10 shrink-0 font-medium opacity-70">{{ task.type === TASK_TYPE.REPO ? '周期:' : '定时:' }}</span>
-              <span v-if="task.trigger_type === TRIGGER_TYPE.BAIHU_STARTUP" class="text-[10px] leading-tight bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded font-medium">服务启动时</span>
-              <div v-else-if="task.schedule" class="flex items-center gap-1.5 flex-1 min-w-0">
-                <span class="text-xs text-foreground bg-muted/40 px-1.5 py-0.5 rounded shrink-0">{{ task.schedule }}</span>
-                <div class="flex items-center gap-1 text-[10px] text-muted-foreground/60 min-w-0 flex-1">
-                  <Zap class="h-2.5 w-2.5 fill-current opacity-50 shrink-0" />
-                  <TextOverflow :text="getCronDescription(task.schedule)" class="truncate" />
-                </div>
-              </div>
-            </div>
-            <div class="flex items-start gap-3">
-              <span class="w-10 shrink-0 font-medium mt-0.5 opacity-70">{{ task.type === TASK_TYPE.REPO ? '地址:' : '命令:' }}</span>
-              <div class="flex-1 min-w-0 overflow-hidden text-foreground"><TextOverflow :text="task.command" class="truncate opacity-80" /></div>
-            </div>
-            <div v-if="task.remark" class="flex items-start gap-3">
-              <span class="w-10 shrink-0 font-medium mt-0.5 opacity-70">备注:</span>
-              <span class="flex-1 text-[11px] truncate">{{ task.remark }}</span>
-            </div>
-          </div>
-          <div class="grid grid-cols-4 items-center pt-2 mt-2 border-t border-border/40 -mx-1">
-            <Button variant="ghost" class="h-9 px-0 text-xs gap-1.5 hover:bg-primary/5 rounded-none" @click="runTask(task.id)" :disabled="executingTaskId === task.id">
-              <Loader2 v-if="executingTaskId === task.id" class="h-3.5 w-3.5 animate-spin" />
-              <Play v-else class="h-3.5 w-3.5" />{{ task.type === TASK_TYPE.REPO ? '同步' : '执行' }}
-            </Button>
-            <Button variant="ghost" class="h-9 px-0 text-xs gap-1.5 hover:bg-primary/5 rounded-none border-l border-border/10" @click="viewLogs(task.id)">
-              <ScrollText class="h-3.5 w-3.5" />日志
-            </Button>
-            <Button variant="ghost" class="h-9 px-0 text-xs gap-1.5 hover:bg-primary/5 rounded-none border-l border-border/10" @click="openEdit(task)">
-              <Pencil class="h-3.5 w-3.5" />编辑
-            </Button>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger as-child>
-                <Button variant="ghost" class="h-9 px-0 text-xs gap-1.5 hover:bg-primary/5 rounded-none border-l border-border/10 w-full">
-                  <MoreHorizontal class="h-3.5 w-3.5" />更多
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" class="w-40">
-                <DropdownMenuItem @click="togglePin(task)">
-                  <Pin v-if="task.pin_type !== 'top'" class="h-4 w-4 mr-2" />
-                  <PinOff v-else class="h-4 w-4 mr-2 text-primary" />
-                  <span>{{ task.pin_type === 'top' ? '取消置顶' : '置顶任务' }}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem @click="duplicateTask(task)">
-                  <Copy class="h-4 w-4 mr-2" />
-                  <span>复制任务</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem v-if="task.type === TASK_TYPE.REPO" @click="openExportDialog(task)">
-                  <Terminal class="h-4 w-4 mr-2" />
-                  <span>导出指令</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem class="text-destructive focus:text-destructive" @click="confirmDelete(task.id)">
-                  <Trash2 class="h-4 w-4 mr-2" />
-                  <span>删除任务</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- 列表主体容器 -->
+    <TaskList
+      :tasks="tasks"
+      :total="total"
+      :current-page="currentPage"
+      :page-size="pageSize"
+      :filter-type="filterType"
+      :sort-by="sortBy"
+      :order="order"
+      :executing-task-id="executingTaskId"
+      :agent-map="agentMap"
+      @toggle-sort="toggleSort"
+      @run-task="runTask"
+      @view-logs="viewLogs"
+      @open-edit-task="openEdit"
+      @open-edit-app="openEditApp"
+      @uninstall-app="uninstallApp"
+      @filter-by-app="filterByApp"
+      @toggle-task="toggleTask"
+      @toggle-pin="togglePin"
+      @dep-install="handleTaskDepInstall"
+      @duplicate-task="duplicateTask"
+      @open-export-dialog="openExportDialog"
+      @confirm-delete="confirmDelete"
+    />
 
     <!-- 分页 -->
     <Pagination :total="total" :page="currentPage" @update:page="handlePageChange" />
@@ -1291,6 +758,7 @@ watch(() => route.query.agent_id, (newVal: any) => {
     <!-- 仓库同步弹窗 -->
     <RepoDialog v-model:open="showRepoDialog" :task="editingTask" :is-edit="isEdit" :is-batch="showBatchUpdateDialog" @saved="loadTasks" />
 
+    <!-- 日志弹窗 -->
     <LogViewer v-model:open="showLogViewer"
       title="最新日志"
       variant="full"
@@ -1301,65 +769,21 @@ watch(() => route.query.agent_id, (newVal: any) => {
       :empty-description="logEmptyDesc"
       @stop="handleStopTask" />
 
-
-    <!-- 删除确认 (批量) -->
-    <BaihuDialog v-model:open="showBatchDeleteDialog" title="确认批量删除">
-      <div class="text-sm text-muted-foreground leading-relaxed">
-        将会删除当前所有过滤条件下匹配的 <b class="text-foreground text-lg px-1">{{ total }}</b> 个任务。
-        <p class="mt-2 text-destructive font-medium">⚠️ 操作不可撤销，请谨慎操作。</p>
-      </div>
-      <template #footer>
-        <Button variant="ghost" @click="showBatchDeleteDialog = false">取消</Button>
-        <Button variant="destructive" class="shadow-lg shadow-destructive/20" @click="batchDeleteTasks">确认批量删除</Button>
-      </template>
-    </BaihuDialog>
-
-    <!-- 删除确认 (单个) -->
-    <BaihuDialog v-model:open="showDeleteDialog" title="确认删除任务">
-      <div class="text-sm text-muted-foreground leading-relaxed py-2">
-        确定要删除任务 <b class="text-foreground">{{ tasks.find(t => t.id === deleteTaskId)?.name }}</b> 吗？
-        <p class="mt-2 text-destructive font-medium">⚠️ 此操作无法撤销。</p>
-      </div>
-      <template #footer>
-        <div class="flex items-center justify-between w-full gap-4">
-          <div v-if="tasks.find(t => t.id === deleteTaskId)?.type === TASK_TYPE.REPO" 
-            class="flex items-center gap-2 mr-auto">
-            <Checkbox id="delete-files" v-model="deleteFiles" />
-            <Label for="delete-files" class="text-sm font-medium text-destructive cursor-pointer select-none">
-              同时物理删除仓库文件夹
-            </Label>
-          </div>
-          <div class="flex justify-end gap-2 ml-auto">
-            <Button variant="ghost" size="sm" @click="showDeleteDialog = false">取消</Button>
-            <Button variant="destructive" size="sm" @click="deleteTask">确定删除</Button>
-          </div>
-        </div>
-      </template>
-    </BaihuDialog>
+    <!-- 删除确认 (单个 & 批量) -->
+    <TaskDeleteDialog
+      v-model:open-delete="showDeleteDialog"
+      v-model:open-batch-delete="showBatchDeleteDialog"
+      :target-task="tasks.find(t => t.id === deleteTaskId)"
+      @confirm-delete="deleteTask"
+      @confirm-batch-delete="batchDeleteTasks"
+    />
 
     <!-- 导出指令弹窗 -->
-    <BaihuDialog v-model:open="showExportDialog" title="导出同步指令">
-      <div class="space-y-4 py-2">
-        <div class="text-xs text-muted-foreground leading-relaxed">
-          您可以复制并分享此指令，在其他部署了白虎面板的系统上导入该仓库同步任务：
-        </div>
-        <div class="relative">
-          <textarea
-            readonly
-            :value="exportCommandText"
-            rows="6"
-            class="w-full p-4 font-mono text-[11px] leading-normal bg-muted/50 border border-muted-foreground/10 rounded-lg resize-none select-all focus:outline-none focus:ring-1 focus:ring-primary shadow-inner"
-          />
-        </div>
-      </div>
-      <template #footer>
-        <Button variant="ghost" size="sm" @click="showExportDialog = false">关闭</Button>
-        <Button size="sm" class="gap-1.5 shadow-md shadow-primary/20 font-medium" @click="copyCommandText">
-          <Copy class="h-3.5 w-3.5" />
-          <span>一键复制</span>
-        </Button>
-      </template>
-    </BaihuDialog>
+    <TaskExportDialog
+      v-model:open="showExportDialog"
+      :command-text="exportCommandText"
+      @copy="copyCommandText"
+    />
 
     <!-- 依赖补全终端 -->
     <Dialog v-model:open="showTerminalDialog">
@@ -1375,5 +799,14 @@ watch(() => route.query.agent_id, (newVal: any) => {
         </div>
       </DialogContent>
     </Dialog>
+
+    <!-- 应用重新配置与编辑弹窗 -->
+    <ApplyDialog
+      v-model:open="showApplyDialog"
+      :target-app="editingMarketApp"
+      :task="editingAppTask"
+      mode="edit_task"
+      @success="loadTasks"
+    />
   </div>
 </template>

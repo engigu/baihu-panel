@@ -122,21 +122,11 @@ watch(() => props.open, async (val: boolean) => {
     // 配置清理会在 TaskAdvancedConfig 中自动处理
     // 解析任务配置
     try {
-      // 确保 config 是有效的 JSON 对象字符串
-      let configStr = props.task?.config
-      // 如果是 null/undefined 或者空字符串，初始化为 '{}'
-      if (!configStr) {
-        configStr = '{}'
-      }
-
+      const configStr = props.task?.unified_config || '{}'
       const parsed = JSON.parse(configStr)
-      // 确保解析结果是对象
-      if (parsed && typeof parsed === 'object') {
-
-        // 解析全部环境变量配置
-        allEnvsEnabled.value = !!parsed['$task_all_envs']
-        // 解析注释解析配置
-        commentToTaskEnabled.value = !!parsed['$task_comment_to_task']
+      if (parsed && typeof parsed === 'object' && parsed.common) {
+        allEnvsEnabled.value = !!parsed.common.task_all_envs
+        commentToTaskEnabled.value = !!parsed.common.task_comment_to_task
       } else {
         allEnvsEnabled.value = false
         commentToTaskEnabled.value = false
@@ -278,28 +268,23 @@ async function save() {
       version: l.version
     }))
 
-    // 保存配置 - 确保 concurrency 字段被正确保存
+    // 保存配置
     let config: Record<string, any> = {}
-
-    // 如果 form.value.config 存在，先解析它以保留其他配置
-    if (form.value.config) {
+    const configStr = props.task?.unified_config || form.value.unified_config
+    if (configStr) {
       try {
-        const parsed = JSON.parse(form.value.config)
+        const parsed = JSON.parse(configStr)
         if (parsed && typeof parsed === 'object') {
           config = parsed
         }
-      } catch {
-        config = {}
-      }
+      } catch {}
     }
 
-    // 更新注入全部环境变量字段
-    config['$task_all_envs'] = !!allEnvsEnabled.value
-    // 更新注释解析字段
-    config['$task_comment_to_task'] = !!commentToTaskEnabled.value
+    config.common = config.common || {}
+    config.common.task_all_envs = !!allEnvsEnabled.value
+    config.common.task_comment_to_task = !!commentToTaskEnabled.value
 
-    // 重新序列化配置
-    form.value.config = JSON.stringify(config)
+    form.value.unified_config = JSON.stringify(config)
 
     // 保存当前选择的执行位置对应的工作目录
     form.value.work_dir = selectedAgentId.value === 'local'
@@ -364,7 +349,7 @@ async function save() {
 
 <template>
   <Dialog :open="open" @update:open="emit('update:open', $event)">
-    <DialogContent class="max-w-[95vw] sm:max-w-[600px] xl:max-w-[850px] p-0 overflow-hidden border-none bg-background shadow-2xl transition-all duration-300" style="text-rendering: optimizeLegibility;" @openAutoFocus.prevent @pointerDownOutside.prevent>
+    <DialogContent class="max-w-[95vw] sm:max-w-[600px] xl:max-w-[850px] p-0 overflow-hidden border-none bg-background shadow-2xl transition-all duration-300" style="text-rendering: optimizeLegibility;" @openAutoFocus.prevent @pointerDownOutside.prevent @interactOutside.prevent>
       <div class="flex flex-col max-h-[85vh]">
         <DialogHeader class="px-6 pr-12 pt-6 pb-2 shrink-0 border-b border-muted/50">
           <DialogTitle class="text-xl font-bold py-2">

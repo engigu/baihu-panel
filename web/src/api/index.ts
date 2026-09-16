@@ -148,7 +148,7 @@ export const api = {
       request<void>('/auth/otp/disable', { method: 'POST', body: JSON.stringify(data) })
   },
   tasks: {
-    list: (params?: { page?: number; page_size?: number; name?: string; agent_id?: string; tags?: string; type?: string; sort_by?: string; order?: string }) => {
+    list: (params?: { page?: number; page_size?: number; name?: string; agent_id?: string; tags?: string; type?: string; source_id?: string; sort_by?: string; order?: string }) => {
       const query = new URLSearchParams()
       if (params?.page) query.set('page', String(params.page))
       if (params?.page_size) query.set('page_size', String(params.page_size))
@@ -156,6 +156,7 @@ export const api = {
       if (params?.tags) query.set('tags', params.tags)
       if (params?.agent_id) query.set('agent_id', params.agent_id)
       if (params?.type) query.set('type', params.type)
+      if (params?.source_id) query.set('source_id', params.source_id)
       if (params?.sort_by) query.set('sort_by', params.sort_by)
       if (params?.order) query.set('order', params.order)
       return request<TaskListResponse>(`/tasks?${query}`)
@@ -492,7 +493,117 @@ export const api = {
   },
   system: {
     export: (data: { task_ids?: string[], env_ids?: string[] }) => request<any>('/system/export', { method: 'POST', body: JSON.stringify(data) })
+  },
+  apps: {
+    list: () => request<AppItem[]>('/apps'),
+    get: (id: string) => request<AppDetailResponse>(`/apps/${id}`),
+    apply: (data: ApplyAppPayload) => request<{ result: any; log: string }>('/apps/apply', { method: 'POST', body: JSON.stringify(data) }),
+    switchScenario: (id: string, scenario_id: string) => request<{ id: string; scenario_id: string; log: string }>(`/apps/${id}/switch`, { method: 'POST', body: JSON.stringify({ scenario_id }) }),
+    rebuild: (id: string) => request<{ result: any; log: string }>(`/apps/${id}/rebuild`, { method: 'POST' }),
+    remove: (id: string, cleanData?: boolean) => request<{ log: string }>(`/apps/${id}${cleanData ? '?clean_data=true' : ''}`, { method: 'DELETE' }),
+    marketplace: () => request<{ source: string; apps: MarketplaceApp[] }>('/apps/store')
   }
+}
+
+export interface AppItem {
+  id: string
+  name: string
+  version: string
+  author: string
+  category: string
+  description: string
+  icon: string
+  homepage: string
+  manifest_path: string
+  manifest_raw?: string
+  current_scenario: string
+  status: string
+  task_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AppEnvItemSchema {
+  key: string
+  label: string
+  type: string
+  required?: boolean
+  default?: any
+  tag?: string
+  description?: string
+  placeholder?: string
+  options?: Array<{ label: string; value: string }>
+}
+
+export interface AppScenarioSchema {
+  id: string
+  name: string
+  description?: string
+  default?: boolean
+  tasks?: Record<string, { enabled?: boolean; cron?: string }>
+}
+
+export interface AppManifestSchema {
+  spec_version: string
+  id: string
+  name: string
+  version: string
+  author?: string
+  category?: string
+  description?: string
+  icon?: string
+  homepage?: string
+  env_schema?: AppEnvItemSchema[]
+  scenarios?: AppScenarioSchema[]
+  tasks?: Array<{ id: string; name: string; command: string; default_cron: string; enabled: boolean }>
+}
+
+export interface AppDetailResponse {
+  app: AppItem
+  manifest?: AppManifestSchema
+  tasks: Task[]
+}
+
+export interface MarketplaceApp {
+  id: string
+  name: string
+  version: string
+  author?: string
+  category?: string
+  description?: string
+  icon?: string
+  homepage?: string
+  tasks_count: number
+  scenarios_count: number
+  tasks?: Array<{ id: string; name: string; cron?: string; command?: string; enabled?: boolean }>
+  env_schema?: AppEnvItemSchema[]
+  scenarios?: AppScenarioSchema[]
+  manifest_url?: string
+  manifest_path?: string
+  manifest_raw?: string
+  is_installed?: boolean
+  build_opts?: { force_setup?: boolean; skip_setup?: boolean; skip_sync?: boolean } | null
+  current_scenario?: string
+  env_values?: Record<string, string>
+}
+
+export interface ApplyAppPayload {
+  path_or_url?: string
+  raw_yaml?: string
+  scenario_id?: string
+  env_values?: Record<string, string>
+  skip_setup?: boolean
+  skip_sync?: boolean
+  force_setup?: boolean
+  schedule?: string
+  random_range?: number
+  timeout?: number
+  retry_count?: number
+  retry_interval?: number
+  clean_config?: string
+  config?: string
+  unified_config?: string
+  enable_telemetry?: boolean
 }
 
 export interface WebUI {
@@ -521,7 +632,7 @@ export interface Task {
   tags: string
   type: string
   trigger_type: string
-  config: string
+  unified_config?: string
   schedule: string
   timeout: number
   work_dir: string
@@ -538,6 +649,7 @@ export interface Task {
   next_run: string
   running_status?: string
   repo_task_id?: string
+  source_id?: string
   created_at?: string
   updated_at?: string
 }

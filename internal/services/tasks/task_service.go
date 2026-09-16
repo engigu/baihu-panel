@@ -20,7 +20,7 @@ type TaskParam struct {
 	PostCommand   string
 	Tags          string
 	Type          string
-	Config        string
+	UnifiedConfig string
 	Schedule      string
 	Timeout       int
 	WorkDir       string
@@ -76,7 +76,7 @@ func (ts *TaskService) CreateTask(p *TaskParam) *models.Task {
 		Tags:          p.Tags,
 		Type:          p.Type,
 		TriggerType:   p.TriggerType,
-		Config:        models.BigText(p.Config),
+		UnifiedConfig: models.BigText(p.UnifiedConfig),
 		Schedule:      p.Schedule,
 		Timeout:       p.Timeout,
 		WorkDir:       p.WorkDir,
@@ -112,7 +112,7 @@ func (ts *TaskService) GetTasks() []models.Task {
 }
 
 // GetTasksWithPagination 分页获取任务列表
-func (ts *TaskService) GetTasksWithPagination(page, pageSize int, name string, agentID *string, tags string, taskType string, sortBy string, order string) ([]models.Task, int64) {
+func (ts *TaskService) GetTasksWithPagination(page, pageSize int, name string, agentID *string, tags string, taskType string, sourceID string, sortBy string, order string) ([]models.Task, int64) {
 	var tasks []models.Task
 	var total int64
 
@@ -148,6 +148,9 @@ func (ts *TaskService) GetTasksWithPagination(page, pageSize int, name string, a
 		}
 	}
 
+	if sourceID != "" {
+		query = query.Where("source_id = ?", sourceID)
+	}
 	if taskType != "" && taskType != "all" {
 		query = query.Where("type = ?", taskType)
 	}
@@ -205,7 +208,7 @@ func (ts *TaskService) UpdateTask(id string, p *TaskParam) *models.Task {
 	task.Enabled = &p.Enabled
 	task.AgentID = p.AgentID
 	task.Languages = p.Languages
-	task.Config = models.BigText(p.Config)
+	task.UnifiedConfig = models.BigText(p.UnifiedConfig)
 	task.RetryCount = p.RetryCount
 	task.RetryInterval = p.RetryInterval
 	task.RandomRange = p.RandomRange
@@ -223,7 +226,7 @@ func (ts *TaskService) UpdateTask(id string, p *TaskParam) *models.Task {
 		"Name", "Remark", "Command", "Tags", "Schedule", "Timeout", "WorkDir",
 		"CleanConfig", "Enabled", "AgentID", "Languages",
 		"RetryCount", "RetryInterval", "RandomRange", "Type",
-		"TriggerType", "Config", "SourceID", "PinType",
+		"TriggerType", "UnifiedConfig", "SourceID", "PinType",
 		"PreCommand", "PostCommand",
 	).Updates(&task)
 

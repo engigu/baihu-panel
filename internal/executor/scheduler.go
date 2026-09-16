@@ -82,8 +82,9 @@ type ExecutionRequest struct {
 
 // ExecutionMetadata 执行额外元数据
 type ExecutionMetadata struct {
-	GoID       int64 // 关联的 goroutine ID
-	RetryIndex int   // 当前重试索引
+	GoID         int64  // 关联的 goroutine ID
+	RetryIndex   int    // 当前重试索引
+	TempFilePath string // 临时文件路径 (执行完成后由调度器自动清理)
 }
 
 // ExecutionResult 执行结果（标准接口）
@@ -410,6 +411,9 @@ func (s *Scheduler) executeTask(req *ExecutionRequest) (*ExecutionResult, error)
 	defer func() {
 		if r := recover(); r != nil {
 			s.logger.Errorf("[Scheduler] 任务 %s 执行过程中发生 Panic: %v", req.TaskID, r)
+		}
+		if req != nil && req.Metadata.TempFilePath != "" {
+			_ = os.Remove(req.Metadata.TempFilePath)
 		}
 	}()
 	start := time.Now()

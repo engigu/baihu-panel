@@ -4,6 +4,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/controllers"
 	"github.com/engigu/baihu-panel/internal/services"
+	"github.com/engigu/baihu-panel/internal/services/app"
 	"github.com/engigu/baihu-panel/internal/services/tasks"
 )
 
@@ -72,6 +73,7 @@ func RegisterControllers() *Controllers {
 		Interconnect: controllers.NewInterconnectController(interconnectService),
 		Data:         controllers.NewDataController(taskController, envController),
 		Tag:          controllers.NewTagController(services.NewTagService()),
+		App:          controllers.NewAppController(app.DefaultAppService),
 	}
 }
 

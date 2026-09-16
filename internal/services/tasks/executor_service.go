@@ -18,6 +18,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/utils"
+	"github.com/engigu/baihu-panel/internal/windows"
 
 	"gorm.io/gorm"
 )
@@ -689,22 +690,32 @@ func (es *ExecutorService) CreateExecutionRequest(task *models.Task, triggerType
 
 	useMise := task.UseMise()
 
-	// 特殊处理仓库同步任务
+	// 特殊处理仓库同步任务与应用部署任务
+	var tempFilePath string
 	if task.Type == constant.TaskTypeRepo {
 		repoCmd, repoWorkDir := es.BuildRepoCommand(task)
 		if repoCmd != "" {
 			command = repoCmd
 			workDir = repoWorkDir
 			useMise = false // 仓库同步不使用 mise
-			// 仓库任务的前置/后置命令由 reposync 内部处理，此处清空
 			preCommand = ""
 			postCommand = ""
 
-			// 补充仓库特有的 AuthToken 到脱敏列表
-			var repoCfg models.RepoConfig
-			if err := json.Unmarshal([]byte(task.Config), &repoCfg); err == nil && repoCfg.AuthToken != "" {
+			if repoCfg := task.GetRepoConfig(); repoCfg != nil && repoCfg.AuthToken != "" {
 				secrets = append(secrets, repoCfg.AuthToken)
 			}
+		}
+	} else if task.Type == constant.TaskTypeApp {
+		appCmd, appWorkDir, tmpFile := es.BuildAppCommand(task)
+		if appCmd != "" {
+			command = appCmd
+			if appWorkDir != "" {
+				workDir = appWorkDir
+			}
+			tempFilePath = tmpFile
+			useMise = false
+			preCommand = ""
+			postCommand = ""
 		}
 	}
 
@@ -727,6 +738,9 @@ func (es *ExecutorService) CreateExecutionRequest(task *models.Task, triggerType
 		Timeout:       task.Timeout,
 		Languages:     []map[string]string(task.Languages),
 		UseMise:       useMise,
+		Metadata: executor.ExecutionMetadata{
+			TempFilePath: tempFilePath,
+		},
 	}
 }
 
@@ -956,7 +970,7 @@ func (es *ExecutorService) CleanupRunningTasks() error {
 // CheckConcurrency 检查任务并发限制（只读检查）
 func (es *ExecutorService) CheckConcurrency(taskID string) error {
 	var task models.Task
-	res := database.DB.Select("config, running_go").Where("id = ?", taskID).Limit(1).Find(&task)
+	res := database.DB.Select("unified_config, running_go").Where("id = ?", taskID).Limit(1).Find(&task)
 	if res.Error != nil || res.RowsAffected == 0 {
 		if res.Error != nil {
 			return res.Error
@@ -968,12 +982,12 @@ func (es *ExecutorService) CheckConcurrency(taskID string) error {
 		_ = json.Unmarshal([]byte(string(task.RunningGo)), &goids)
 	}
 
-	var config models.TaskConfig
-	if string(task.Config) != "" {
-		_ = json.Unmarshal([]byte(string(task.Config)), &config)
+	var concurrency int
+	if common := task.GetCommonConfig(); common != nil {
+		concurrency = common.Concurrency
 	}
 
-	if config.Concurrency == 0 && len(goids) > 0 {
+	if concurrency == 0 && len(goids) > 0 {
 		// 检查目标 Agent 是否开启了排队机制
 		var isAgentQueueing bool
 		if task.AgentID != nil && *task.AgentID != "" {
@@ -1009,13 +1023,13 @@ func (es *ExecutorService) AddRunningGo(taskID string) (int64, error) {
 			}
 
 			// 解析配置以获取并发设置
-			var config models.TaskConfig
-			if task.Config != "" {
-				_ = json.Unmarshal([]byte(task.Config), &config)
+			var concurrency int
+			if common := task.GetCommonConfig(); common != nil {
+				concurrency = common.Concurrency
 			}
 
 			// 如果并发为0(禁用)且已有执行中的任务，返回错误
-			if config.Concurrency == 0 && len(goids) > 0 {
+			if concurrency == 0 && len(goids) > 0 {
 				// 检查目标 Agent 是否开启了排队机制
 				var isAgentQueueing bool
 				if task.AgentID != nil && *task.AgentID != "" {
@@ -1193,8 +1207,7 @@ func (es *ExecutorService) HandleAgentResult(result *models.AgentTaskResult) err
 
 		// 如果是仓库同步任务，补充 AuthToken
 		if task.Type == constant.TaskTypeRepo {
-			var repoCfg models.RepoConfig
-			if err := json.Unmarshal([]byte(task.Config), &repoCfg); err == nil && repoCfg.AuthToken != "" {
+			if repoCfg := task.GetRepoConfig(); repoCfg != nil && repoCfg.AuthToken != "" {
 				secrets = append(secrets, repoCfg.AuthToken)
 			}
 		}
@@ -1236,10 +1249,11 @@ func (es *ExecutorService) BuildRepoCommand(task *models.Task) (string, string) 
 
 // BuildRepoCommand 构建仓库同步任务的命令（独立函数，方便 AgentService 调用）
 func BuildRepoCommand(task *models.Task) (string, string) {
-	var config models.RepoConfig
-	if err := json.Unmarshal([]byte(task.Config), &config); err != nil {
+	repoCfg := task.GetRepoConfig()
+	if repoCfg == nil {
 		return "", ""
 	}
+	config := *repoCfg
 
 	targetPath := config.TargetPath
 	if targetPath == "" {
@@ -1249,10 +1263,7 @@ func BuildRepoCommand(task *models.Task) (string, string) {
 	}
 	absTargetPath, _ := filepath.Abs(targetPath)
 
-	exePath, err := os.Executable()
-	if err != nil {
-		exePath = "baihu" // Fallback if executable path can't be found
-	}
+	exePath := utils.GetBaihuExecutable()
 
 	// 尽量使用代号 $SCRIPTS_DIR$ 替代绝对路径，增加可读性和可移植性
 	scriptsDir, _ := filepath.Abs(constant.ScriptsWorkDir)
@@ -1334,6 +1345,61 @@ func BuildRepoCommand(task *models.Task) (string, string) {
 	return buildRepoCommandEnvPrefix() + cmdStr, filepath.Dir(exePath)
 }
 
+// BuildAppCommand 构建应用部署与全量初始化的命令行
+func (es *ExecutorService) BuildAppCommand(task *models.Task) (string, string, string) {
+	return BuildAppCommand(task)
+}
+
+// BuildAppCommand 构建应用部署与全量初始化的命令行
+func BuildAppCommand(task *models.Task) (string, string, string) {
+	appCfg := task.GetAppConfig()
+	if appCfg == nil || appCfg.ManifestRaw == "" {
+		return "", "", ""
+	}
+
+	// 执行 app 调度时使用临时文件保存 ManifestRaw，然后使用临时 yml 执行
+	tempDir := filepath.Join(os.TempDir(), "baihu-apps")
+	_ = os.MkdirAll(tempDir, 0755)
+	tempYmlPath := filepath.Join(tempDir, fmt.Sprintf("%s.yml", task.ID))
+	if err := os.WriteFile(tempYmlPath, []byte(appCfg.ManifestRaw), 0644); err != nil {
+		return "", "", ""
+	}
+
+	exePath := utils.GetBaihuExecutable()
+
+	args := []string{
+		"app",
+		"apply",
+		tempYmlPath,
+	}
+
+	if appCfg.CurrentScenario != "" {
+		args = append(args, "--scenario", appCfg.CurrentScenario)
+	}
+	if appCfg.BuildOpts != nil {
+		if appCfg.BuildOpts.ForceSetup {
+			args = append(args, "--force-setup")
+		}
+		if appCfg.BuildOpts.SkipSetup {
+			args = append(args, "--skip-setup")
+		}
+		if appCfg.BuildOpts.SkipSync {
+			args = append(args, "--skip-sync")
+		}
+	}
+
+	quotedArgs := make([]string, len(args))
+	for i, arg := range args {
+		quotedArgs[i] = utils.QuotePath(arg)
+	}
+
+	cmdStr := utils.QuotePath(exePath) + " " + strings.Join(quotedArgs, " ")
+	if windows.IsWindows() {
+		cmdStr = "& " + cmdStr
+	}
+	return cmdStr, filepath.Dir(exePath), tempYmlPath
+}
+
 // loadEnvVars 加载环境变量和掩码信息，支持全局注入及重名合并
 func (es *ExecutorService) loadEnvVars(task *models.Task, taskID string, envIDs string) ([]string, []string) {
 	// 1. 如果未直接传入 task，且 taskID 不为空，则防守性向数据库查询 Task
@@ -1342,13 +1408,10 @@ func (es *ExecutorService) loadEnvVars(task *models.Task, taskID string, envIDs 
 	}
 
 	// 2. 检查是否开启了注入全部环境变量
-	if task != nil && task.Config != "" {
-		var config models.TaskConfig
-		if err := json.Unmarshal([]byte(task.Config), &config); err == nil {
-			if config.AllEnvs {
-				if es.envService != nil {
-					return es.envService.GetAllEnvVarsAndSecrets()
-				}
+	if task != nil {
+		if common := task.GetCommonConfig(); common != nil && common.AllEnvs {
+			if es.envService != nil {
+				return es.envService.GetAllEnvVarsAndSecrets()
 			}
 		}
 	}

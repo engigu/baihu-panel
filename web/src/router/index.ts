@@ -45,6 +45,7 @@ const router = createRouter({
       children: [
         { path: '', name: 'dashboard', component: () => import('@/views/dashboard/Dashboard.vue') },
         { path: 'tasks', name: 'tasks', component: () => import('@/views/tasks/Tasks.vue') },
+        { path: 'apps', name: 'apps', component: () => import('@/views/apps/Apps.vue') },
         { path: 'editor', name: 'editor', component: () => import('@/views/editor/Editor.vue') },
         { path: 'environments', name: 'environments', component: () => import('@/views/environments/Environments.vue') },
         { path: 'tags', name: 'tags', component: () => import('@/views/tags/Tags.vue') },

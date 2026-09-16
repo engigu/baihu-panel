@@ -100,13 +100,13 @@ func FixPathEnv(env []string) []string {
 	for i, e := range env {
 		if strings.HasPrefix(strings.ToUpper(e), "PATH=") {
 			parts := strings.SplitN(e, "=", 2)
-			env[i] = parts[0] + "=C:\\Windows\\system32;C:\\Windows;" + parts[1]
+			env[i] = parts[0] + "=" + parts[1] + ";C:\\Windows\\system32;C:\\Windows"
 			pathFound = true
 			break
 		}
 	}
 	if !pathFound {
-		env = append(env, "PATH=C:\\Windows\\system32;C:\\Windows")
+		env = append(env, "PATH="+os.Getenv("PATH")+";C:\\Windows\\system32;C:\\Windows")
 	}
 	return env
 }

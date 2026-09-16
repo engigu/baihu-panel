@@ -3,7 +3,6 @@ package services
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -342,13 +341,8 @@ func (s *AgentService) GetTasks(agentID string) []models.AgentTask {
 
 		// 检查全量注入模式
 		allEnvs := false
-		if task.Config != "" {
-			var config models.TaskConfig
-			if err := json.Unmarshal([]byte(task.Config), &config); err == nil {
-				if config.AllEnvs {
-					allEnvs = true
-				}
-			}
+		if common := task.GetCommonConfig(); common != nil && common.AllEnvs {
+			allEnvs = true
 		}
 
 		var secrets []string

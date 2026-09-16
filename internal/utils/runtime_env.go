@@ -20,6 +20,10 @@ func BuildRuntimeProcessEnv() []string {
 	}
 	envs = append(envs, formatEnvVar("BH_CONFIG_PATH", configPath))
 
+	if rootDir := constant.ResolveAppRootDir(); strings.TrimSpace(rootDir) != "" {
+		envs = append(envs, formatEnvVar("BH_ROOT_DIR", rootDir))
+	}
+
 	if scriptsDir := ResolveAbsScriptsDir(); strings.TrimSpace(scriptsDir) != "" {
 		envs = append(envs, formatEnvVar("BH_SCRIPTS_DIR", scriptsDir))
 	}
@@ -85,16 +89,18 @@ func ShellEnvAssignment(key, value string) string {
 // ResolveAbsScriptsDir 解析 Baihu 运行时脚本目录的绝对路径。
 func ResolveAbsScriptsDir() string {
 	if scriptsDir := os.Getenv("BH_SCRIPTS_DIR"); scriptsDir != "" {
-		if filepath.IsAbs(scriptsDir) {
+		if !strings.Contains(scriptsDir, "go-build") && !strings.Contains(scriptsDir, "Temp") {
+			if absScriptsDir, err := filepath.Abs(scriptsDir); err == nil {
+				return filepath.Clean(absScriptsDir)
+			}
 			return filepath.Clean(scriptsDir)
 		}
-		if absScriptsDir, err := filepath.Abs(scriptsDir); err == nil {
-			return absScriptsDir
-		}
-		return filepath.Clean(scriptsDir)
 	}
 
-	return constant.ScriptsWorkDir
+	if abs, err := filepath.Abs(constant.ScriptsWorkDir); err == nil {
+		return filepath.Clean(abs)
+	}
+	return filepath.Clean(constant.ScriptsWorkDir)
 }
 
 func appendEnvIfSet(envs *[]string, key, value string) {

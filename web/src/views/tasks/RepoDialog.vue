@@ -247,11 +247,12 @@ watch(() => props.open, async (val: boolean) => {
       repo_source: '',
       repo_dir_name: ''
     }
-    const configStr = props.task?.config
+    const configStr = props.task?.unified_config
     if (configStr) {
       try {
         const parsed = JSON.parse(configStr)
-        repoConfig.value = { ...defaultConfig, ...parsed }
+        const repoSection = parsed.repo
+        repoConfig.value = { ...defaultConfig, ...repoSection }
       } catch {
         repoConfig.value = defaultConfig
       }
@@ -330,12 +331,14 @@ async function save() {
   }
 
   try {
-    let existingConfig = {}
-    if (form.value.config) {
-      try { existingConfig = JSON.parse(form.value.config) } catch {}
+    let existingConfig: any = {}
+    const rawStr = form.value.unified_config
+    if (rawStr) {
+      try { existingConfig = JSON.parse(rawStr) } catch {}
     }
-    const configToSave: any = {
-      ...existingConfig,
+    
+    existingConfig.repo = {
+      ...existingConfig.repo,
       ...repoConfig.value
     }
 
@@ -345,7 +348,7 @@ async function save() {
       version: l.version
     }))
 
-    form.value.config = JSON.stringify(configToSave)
+    form.value.unified_config = JSON.stringify(existingConfig)
     form.value.command = `[${repoConfig.value.source_type}] ${repoConfig.value.source_url}`
     form.value.agent_id = selectedAgentId.value === 'local' ? null : selectedAgentId.value
     if (props.isBatch) {
@@ -402,7 +405,7 @@ async function save() {
 
 <template>
   <Dialog :open="open" @update:open="emit('update:open', $event)">
-    <DialogContent class="max-w-[95vw] sm:max-w-[700px] xl:max-w-[950px] p-0 overflow-hidden border-none bg-background shadow-2xl transition-all duration-300" style="text-rendering: optimizeLegibility;" @openAutoFocus.prevent @pointerDownOutside.prevent>
+    <DialogContent class="max-w-[95vw] sm:max-w-[700px] xl:max-w-[950px] p-0 overflow-hidden border-none bg-background shadow-2xl transition-all duration-300" style="text-rendering: optimizeLegibility;" @openAutoFocus.prevent @pointerDownOutside.prevent @interactOutside.prevent>
       <div class="flex flex-col max-h-[85vh]">
         <DialogHeader class="px-5 sm:px-6 pr-20 pt-6 pb-2 shrink-0">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-2">

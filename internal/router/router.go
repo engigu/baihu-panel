@@ -35,6 +35,7 @@ type Controllers struct {
 	Interconnect *controllers.InterconnectController
 	Data         *controllers.DataController
 	Tag          *controllers.TagController
+	App          *controllers.AppController
 }
 
 func Setup(c *Controllers) *gin.Engine {

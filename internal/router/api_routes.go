@@ -83,6 +83,7 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 			registerInterconnectRoutes(adminOnly, c)
 			registerSystemRoutes(adminOnly, c)
 			registerTagRoutes(adminOnly, c)
+			registerAppRoutes(adminOnly, c)
 		}
 	}
 
@@ -365,6 +366,19 @@ func registerTagRoutes(g *gin.RouterGroup, c *Controllers) {
 		tags.PUT("/:id", c.Tag.UpdateTag)
 		tags.DELETE("/:id", c.Tag.DeleteTag)
 		tags.GET("/:id/resources", c.Tag.GetTagResources)
+	}
+}
+
+func registerAppRoutes(g *gin.RouterGroup, c *Controllers) {
+	apps := g.Group("/apps")
+	{
+		apps.GET("", c.App.GetApps)
+		apps.GET("/store", c.App.GetMarketplace)
+		apps.GET("/:id", c.App.GetApp)
+		apps.POST("/apply", c.App.ApplyApp)
+		apps.POST("/:id/switch", c.App.SwitchScenario)
+		apps.POST("/:id/rebuild", c.App.RebuildApp)
+		apps.DELETE("/:id", c.App.RemoveApp)
 	}
 }
 

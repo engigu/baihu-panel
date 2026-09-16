@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"strings"
 
@@ -140,14 +139,8 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 
 	var sourceID string
 	// 如果是仓库同步任务，根据 URL 生成 SourceID 用于去重
-	if req.Type == constant.TaskTypeRepo && req.Config != "" {
-		var repoCfg struct {
-			SourceURL   string `json:"source_url"`
-			Branch      string `json:"branch"`
-			RepoDirName string `json:"repo_dir_name"`
-			TargetPath  string `json:"target_path"`
-		}
-		if err := json.Unmarshal([]byte(req.Config), &repoCfg); err == nil && repoCfg.SourceURL != "" {
+	if req.Type == constant.TaskTypeRepo {
+		if repoCfg := req.GetRepoConfig(); repoCfg != nil && repoCfg.SourceURL != "" {
 			if repoCfg.RepoDirName != "" {
 				if !isValidDirName(repoCfg.RepoDirName) {
 					utils.BadRequest(c, "自定义目录名只能包含字母、数字、下划线、短划线和点，不能只有点，且不能包含路径逻辑")
@@ -188,7 +181,7 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		PostCommand:   req.PostCommand,
 		Tags:          req.Tags,
 		Type:          req.Type,
-		Config:        req.Config,
+		UnifiedConfig: req.UnifiedConfig,
 		Schedule:      req.Schedule,
 		Timeout:       req.Timeout,
 		WorkDir:       workDir,
@@ -253,7 +246,7 @@ func (tc *TaskController) BulkSaveTask(c *gin.Context) {
 			PostCommand:   req.PostCommand,
 			Tags:          req.Tags,
 			Type:          req.Type,
-			Config:        req.Config,
+			UnifiedConfig: req.UnifiedConfig,
 			Schedule:      req.Schedule,
 			Timeout:       req.Timeout,
 			WorkDir:       req.WorkDir,
@@ -331,6 +324,7 @@ func (tc *TaskController) GetTasks(c *gin.Context) {
 
 	tags := c.DefaultQuery("tags", "")
 	taskType := c.DefaultQuery("type", "")
+	sourceID := c.DefaultQuery("source_id", "")
 
 	var agentID *string
 	if agentIDStr != "" {
@@ -340,7 +334,7 @@ func (tc *TaskController) GetTasks(c *gin.Context) {
 	sortBy := c.DefaultQuery("sort_by", "")
 	order := c.DefaultQuery("order", "")
 
-	tasks, total := tc.taskService.GetTasksWithPagination(p.Page, p.PageSize, name, agentID, tags, taskType, sortBy, order)
+	tasks, total := tc.taskService.GetTasksWithPagination(p.Page, p.PageSize, name, agentID, tags, taskType, sourceID, sortBy, order)
 	utils.PaginatedResponse(c, vo.ToTaskVOListFromModels(tasks), total, p)
 }
 
@@ -418,14 +412,8 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 	}
 
 	var sourceID string
-	if req.Type == constant.TaskTypeRepo && req.Config != "" {
-		var repoCfg struct {
-			SourceURL   string `json:"source_url"`
-			Branch      string `json:"branch"`
-			RepoDirName string `json:"repo_dir_name"`
-			TargetPath  string `json:"target_path"`
-		}
-		if err := json.Unmarshal([]byte(req.Config), &repoCfg); err == nil && repoCfg.SourceURL != "" {
+	if req.Type == constant.TaskTypeRepo {
+		if repoCfg := req.GetRepoConfig(); repoCfg != nil && repoCfg.SourceURL != "" {
 			if repoCfg.RepoDirName != "" {
 				if !isValidDirName(repoCfg.RepoDirName) {
 					utils.BadRequest(c, "自定义目录名只能包含字母、数字、下划线、短划线和点，不能只有点，且不能包含路径逻辑")
@@ -453,14 +441,8 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 			newAbsPath := getRepoPhysicalPath(repoCfg.TargetPath, repoCfg.RepoDirName, repoCfg.SourceURL, repoCfg.Branch)
 
 			var oldAbsPath string
-			if oldTask != nil && oldTask.Type == constant.TaskTypeRepo && oldTask.Config != "" {
-				var oldCfg struct {
-					SourceURL   string `json:"source_url"`
-					Branch      string `json:"branch"`
-					RepoDirName string `json:"repo_dir_name"`
-					TargetPath  string `json:"target_path"`
-				}
-				if json.Unmarshal([]byte(oldTask.Config), &oldCfg) == nil {
+			if oldTask != nil && oldTask.Type == constant.TaskTypeRepo {
+				if oldCfg := oldTask.GetRepoConfig(); oldCfg != nil {
 					oldAbsPath = getRepoPhysicalPath(oldCfg.TargetPath, oldCfg.RepoDirName, oldCfg.SourceURL, oldCfg.Branch)
 				}
 			}
@@ -485,7 +467,7 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		PostCommand:   req.PostCommand,
 		Tags:          req.Tags,
 		Type:          req.Type,
-		Config:        req.Config,
+		UnifiedConfig: req.UnifiedConfig,
 		Schedule:      req.Schedule,
 		Timeout:       req.Timeout,
 		WorkDir:       workDir,
@@ -590,11 +572,12 @@ func (tc *TaskController) deleteRepoPhysicalFiles(task *models.Task) {
 	}
 
 	logger.Infof("[Controller] 开始尝试物理删除任务关联文件: %s", task.Name)
-	var repoCfg models.RepoConfig
-	if err := json.Unmarshal([]byte(task.Config), &repoCfg); err != nil {
-		logger.Errorf("[Controller] 解析任务配置失败: %v", err)
+	repoCfgPtr := task.GetRepoConfig()
+	if repoCfgPtr == nil {
+		logger.Warnf("[Controller] 任务缺失 repo 配置，跳过删除文件")
 		return
 	}
+	repoCfg := *repoCfgPtr
 
 	targetPath := repoCfg.TargetPath
 	if targetPath == "" {
@@ -752,7 +735,7 @@ func (tc *TaskController) BatchDeleteByQuery(c *gin.Context) {
 		agentID = &agentIDStr
 	}
 
-	tasks, _ := tc.taskService.GetTasksWithPagination(1, 999999, name, agentID, tags, taskType, "", "")
+	tasks, _ := tc.taskService.GetTasksWithPagination(1, 999999, name, agentID, tags, taskType, "", "", "")
 	if len(tasks) == 0 {
 		utils.Success(c, gin.H{"count": 0})
 		return
@@ -877,7 +860,7 @@ func (tc *TaskController) ToggleTask(c *gin.Context) {
 		PostCommand:   string(task.PostCommand),
 		Tags:          task.Tags,
 		Type:          task.Type,
-		Config:        string(task.Config),
+		UnifiedConfig: string(task.UnifiedConfig),
 		Schedule:      task.Schedule,
 		Timeout:       task.Timeout,
 		WorkDir:       task.WorkDir,

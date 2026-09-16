@@ -34,6 +34,7 @@ const (
 
 	// System Settings Key 常量
 	KeyInitialized = "initialized"
+	KeyUnifiedTaskConfigMigrated = "unified_task_config_migrated"
 	// KeyLogRetention = "log_retention" // Deprecated
 
 	// Log Retention Keys
@@ -125,6 +126,12 @@ const (
 	// 任务类型
 	TaskTypeNormal = "task"
 	TaskTypeRepo   = "repo"
+	TaskTypeApp    = "app"
+
+	// 应用状态
+	AppStatusInstalled = "installed"
+	AppStatusError     = "error"
+	AppStatusDisabled  = "disabled"
 
 	// 任务置顶类型
 	PinTypeNone = "none"

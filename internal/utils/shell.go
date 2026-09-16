@@ -95,6 +95,27 @@ func NewShellCommandCmd(command string) *exec.Cmd {
 	return exec.Command(shell, args...)
 }
 
+// WrapFailFastScript 为脚本注入严格的过程错误即刻终止（Fail-Fast）逻辑：
+// - Windows (PowerShell 7+ / pwsh): 设置 $ErrorActionPreference = 'Stop' 和 $PSNativeCommandUseErrorActionPreference = $true
+//   使得任何命令（包括外部原生 exe 如 dotnet/git/mise）退出码非 0 时立即中止后续执行并退出非 0 状态码。
+// - Unix (bash/sh): 设置 set -eo pipefail，任何中间命令或管道失败立即中止。
+func WrapFailFastScript(script string) string {
+	script = strings.TrimSpace(script)
+	if script == "" {
+		return ""
+	}
+	if windows.IsWindows() {
+		return "$ErrorActionPreference = 'Stop'\n$PSNativeCommandUseErrorActionPreference = $true\n" + script
+	}
+	return "set -eo pipefail\n" + script
+}
+
+// NewFailFastShellCommandCmd 创建一个带有过程错误即刻终止特性的 Shell 执行命令
+func NewFailFastShellCommandCmd(command string) *exec.Cmd {
+	return NewShellCommandCmd(WrapFailFastScript(command))
+}
+
+
 // QuotePath 转义并包裹路径，防止 Shell 注入
 func QuotePath(path string) string {
 	if path == "" {

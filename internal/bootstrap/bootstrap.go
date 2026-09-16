@@ -103,13 +103,11 @@ func (a *App) setupBaihuBin() {
 	binDir := filepath.Join(constant.DataDir, "bin")
 	_ = os.MkdirAll(binDir, 0755)
 
-	exe, err := os.Executable()
-	if err == nil {
-		linkPath := filepath.Join(binDir, "baihu")
-		linkPath += windows.GetExeExtension()
-		os.Remove(linkPath)
-		_ = os.Symlink(exe, linkPath)
-	}
+	exe := utils.GetBaihuExecutable()
+	linkPath := filepath.Join(binDir, "baihu")
+	linkPath += windows.GetExeExtension()
+	os.Remove(linkPath)
+	_ = os.Symlink(exe, linkPath)
 }
 
 func (a *App) initDatabase() {
