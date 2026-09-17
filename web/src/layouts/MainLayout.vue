@@ -135,21 +135,21 @@ onMounted(() => {
             <X class="h-4 w-4" />
           </Button>
         </div>
-        <nav class="flex-1 px-3 py-6 space-y-1 flex flex-col items-center overflow-y-auto">
+        <nav class="flex-1 px-3 py-3 space-y-1 flex flex-col items-center overflow-y-auto">
           <RouterLink v-for="item in navItems" :key="item.to" :to="item.to" custom v-slot="{ navigate }">
             <Button variant="ghost"
               :class="[
-                'justify-center gap-3 h-10 px-3 w-full max-w-[140px] transition-all duration-200 menu-item relative',
+                'justify-center gap-2.5 h-9 px-3 w-full max-w-[140px] transition-all duration-200 menu-item relative',
                 isItemActive(item) 
                   ? 'bg-secondary text-foreground font-bold' 
-                  : 'text-foreground hover:bg-secondary/50'
+                  : 'text-foreground/80 hover:text-foreground hover:bg-secondary/50'
               ]"
               @click="handleNavClick(navigate)">
               <component :is="item.icon" class="h-4 w-4 shrink-0" />
               <span>{{ item.label }}</span>
               <span
                 v-if="item.badge"
-                class="absolute top-1 right-1 px-1 py-[0.5px] rounded text-[8px] font-bold tracking-tighter uppercase scale-75 origin-top-right border border-amber-500/50 bg-amber-500/15 text-amber-500 shadow-sm leading-none pointer-events-none"
+                class="absolute top-0.5 right-1 px-1 py-[0.5px] rounded text-[8px] font-bold tracking-tighter uppercase scale-75 origin-top-right border border-amber-500/50 bg-amber-500/15 text-amber-500 shadow-sm leading-none pointer-events-none"
               >
                 {{ item.badge }}
               </span>
