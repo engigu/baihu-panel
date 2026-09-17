@@ -591,9 +591,13 @@ async function executeDeploy() {
         <!-- 如果是自定义导入模式（无 targetApp） -->
         <div v-if="!targetApp" class="space-y-4">
           <Tabs v-model="activeTab" class="w-full">
-            <TabsList class="grid grid-cols-2 w-full">
-              <TabsTrigger value="url">远程或本地路径 (URL / Path)</TabsTrigger>
-              <TabsTrigger value="yaml">粘贴 YAML 清单 (Raw YAML)</TabsTrigger>
+            <TabsList class="grid grid-cols-2 w-full h-auto p-1">
+              <TabsTrigger value="url" class="text-xs py-1.5 px-2 truncate" title="远程或本地路径 (URL / Path)">
+                <span class="truncate">远程或本地路径 (URL / Path)</span>
+              </TabsTrigger>
+              <TabsTrigger value="yaml" class="text-xs py-1.5 px-2 truncate" title="粘贴 YAML 清单 (Raw YAML)">
+                <span class="truncate">粘贴 YAML 清单 (Raw YAML)</span>
+              </TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -803,7 +807,7 @@ async function executeDeploy() {
           <div v-if="showAdvanced" class="space-y-2">
             <!-- 1. 强制重新编译 -->
             <div
-              class="flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer select-none"
+              class="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer select-none gap-1.5 sm:gap-2"
               :class="[
                 forceSetup
                   ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/40'
@@ -823,14 +827,14 @@ async function executeDeploy() {
                   <span class="text-[11px] text-muted-foreground truncate">跳过探活断言，强行重新执行 setup.install 依赖安装与预编译</span>
                 </div>
               </div>
-              <Badge variant="secondary" class="text-[10px] shrink-0 font-normal ml-2">
+              <Badge variant="secondary" class="text-[10px] shrink-0 font-normal self-start sm:self-center sm:ml-2">
                 适用：依赖更新 / 修复编译
               </Badge>
             </div>
 
             <!-- 2. 跳过环境与依赖安装 -->
             <div
-              class="flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer select-none"
+              class="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer select-none gap-1.5 sm:gap-2"
               :class="[
                 skipSetup
                   ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/40'
@@ -850,14 +854,14 @@ async function executeDeploy() {
                   <span class="text-[11px] text-muted-foreground truncate">完全跳过 setup 阶段，仅同步环境变量与任务映射</span>
                 </div>
               </div>
-              <Badge variant="secondary" class="text-[10px] shrink-0 font-normal ml-2">
+              <Badge variant="secondary" class="text-[10px] shrink-0 font-normal self-start sm:self-center sm:ml-2">
                 适用：环境就绪 / 极速改配置
               </Badge>
             </div>
 
             <!-- 3. 跳过代码源同步 -->
             <div
-              class="flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer select-none"
+              class="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer select-none gap-1.5 sm:gap-2"
               :class="[
                 skipSync
                   ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/40'
@@ -876,14 +880,14 @@ async function executeDeploy() {
                   <span class="text-[11px] text-muted-foreground truncate">使用本地已有代码，不重新拉取 Git / URL 源码</span>
                 </div>
               </div>
-              <Badge variant="secondary" class="text-[10px] shrink-0 font-normal ml-2">
+              <Badge variant="secondary" class="text-[10px] shrink-0 font-normal self-start sm:self-center sm:ml-2">
                 适用：二次开发 / 避免覆盖
               </Badge>
             </div>
 
             <!-- 4. 覆盖已存在同名环境变量 -->
             <div
-              class="flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer select-none"
+              class="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer select-none gap-1.5 sm:gap-2"
               :class="[
                 overwriteEnv
                   ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/40'
@@ -902,7 +906,7 @@ async function executeDeploy() {
                   <span class="text-[11px] text-muted-foreground truncate">默认关闭（不覆盖）：已有变量保持原值；开启后将强制覆盖更新为下方输入值</span>
                 </div>
               </div>
-              <Badge variant="secondary" class="text-[10px] shrink-0 font-normal ml-2">
+              <Badge variant="secondary" class="text-[10px] shrink-0 font-normal self-start sm:self-center sm:ml-2">
                 默认：不覆盖已有值
               </Badge>
             </div>
