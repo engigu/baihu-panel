@@ -164,6 +164,11 @@ func (ac *AppController) ApplyApp(c *gin.Context) {
 		}
 	}
 
+	userID := c.GetString("userID")
+	if userID == "" {
+		userID = "0"
+	}
+
 	opts := app.ApplyOptions{
 		ScenarioID:    req.ScenarioID,
 		EnvValues:     req.EnvValues,
@@ -178,6 +183,7 @@ func (ac *AppController) ApplyApp(c *gin.Context) {
 		CleanConfig:   req.CleanConfig,
 		UnifiedConfig: req.UnifiedConfig,
 		Tag:           req.Tag,
+		UserID:        userID,
 		LogWriter:     multiLogWriter,
 	}
 

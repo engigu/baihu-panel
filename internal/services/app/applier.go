@@ -38,6 +38,7 @@ type ApplyOptions struct {
 	CleanConfig   string            // 日志清理配置
 	UnifiedConfig string            // 统一配置 JSON
 	Tag           string            // 统一绑定的分类 Tag
+	UserID        string            // 当前安装用户的 UserID
 	LogWriter     io.Writer         // 执行日志输出流
 }
 
@@ -102,7 +103,7 @@ func (a *AppApplier) Apply(manifest *AppManifest, rawYAML []byte, opts ApplyOpti
 	}
 
 	// 阶段 4: 环境变量契约写入与 Tag 绑定 (Env Schema)
-	createdEnvs, err := a.applyEnvSchema(manifest, opts.EnvValues, opts.Tag, log)
+	createdEnvs, err := a.applyEnvSchema(manifest, opts.EnvValues, opts.Tag, opts.UserID, log)
 	if err != nil {
 		return nil, err
 	}
@@ -402,66 +403,101 @@ func (a *AppApplier) runSetup(manifest *AppManifest, appDir string, skipSetup bo
 // --------------------------------------------------------------------------
 // 过程函数 4: 环境变量契约写入与 Tag 绑定 (Env Schema)
 // --------------------------------------------------------------------------
-func (a *AppApplier) applyEnvSchema(manifest *AppManifest, envValues map[string]string, appTag string, log LogFunc) ([]string, error) {
+func (a *AppApplier) applyEnvSchema(manifest *AppManifest, envValues map[string]string, appTag string, userID string, log LogFunc) ([]string, error) {
+	if userID == "" {
+		userID = "0"
+	}
 	log("[4/5] 配置应用环境变量契约 (共 %d 项)...", len(manifest.EnvSchema))
+
 	var createdEnvs []string
-
 	for _, envItem := range manifest.EnvSchema {
-		val := ""
-		if envValues != nil {
-			if v, ok := envValues[envItem.Key]; ok {
-				val = v
-			}
+		tag := resolveEnvTag(envItem.Tag, appTag, manifest.ID)
+		created, err := a.upsertSingleEnv(envItem, envValues, tag, userID, log)
+		if err != nil {
+			return nil, err
 		}
-		if val == "" && envItem.Default != nil {
-			val = fmt.Sprintf("%v", envItem.Default)
-		}
-
-		envType := constant.EnvTypeNormal
-		if envItem.Type == "secret" {
-			envType = constant.EnvTypeSecret
-		}
-
-		tag := strings.TrimSpace(appTag)
-		if tag == "" {
-			tag = envItem.Tag
-		}
-		if tag == "" {
-			tag = manifest.ID
-		}
-
-		var existingEnv models.EnvironmentVariable
-		res := database.DB.Where("name = ?", envItem.Key).Limit(1).Find(&existingEnv)
-		if res.RowsAffected > 0 {
-			if string(existingEnv.Value) == "" && val != "" {
-				existingEnv.Value = models.BigText(val)
-				database.DB.Model(&existingEnv).Update("value", existingEnv.Value)
-			}
-			relation.DataRelation.SaveTags(existingEnv.ID, constant.RelationTypeEnvTag, tag)
-		} else {
-			newEnv := models.EnvironmentVariable{
-				ID:        xid.New().String(),
-				Name:      envItem.Key,
-				Value:     models.BigText(val),
-				Remark:    envItem.Description,
-				Type:      envType,
-				Enabled:   utils.BoolPtr(true),
-				CreatedAt: models.Now(),
-				UpdatedAt: models.Now(),
-			}
-			if newEnv.Remark == "" {
-				newEnv.Remark = envItem.Label
-			}
-			if err := database.DB.Create(&newEnv).Error; err != nil {
-				return nil, fmt.Errorf("注册环境变量 '%s' 失败: %w", envItem.Key, err)
-			}
-			relation.DataRelation.SaveTags(newEnv.ID, constant.RelationTypeEnvTag, tag)
+		if created {
 			createdEnvs = append(createdEnvs, envItem.Key)
-			log("  + 注册环境变量: %s (Tag: %s, 必填: %v)", envItem.Key, tag, envItem.Required)
 		}
 	}
 
 	return createdEnvs, nil
+}
+
+// resolveEnvTag 计算 Tag 映射优先级 (appTag > envItem.Tag > manifestID)
+func resolveEnvTag(itemTag, appTag, manifestID string) string {
+	if tag := strings.TrimSpace(appTag); tag != "" {
+		return tag
+	}
+	if tag := strings.TrimSpace(itemTag); tag != "" {
+		return tag
+	}
+	return manifestID
+}
+
+// upsertSingleEnv 处理单条环境变量的创建、更新与 Tag 绑定
+func (a *AppApplier) upsertSingleEnv(envItem AppEnvItem, envValues map[string]string, tag, userID string, log LogFunc) (bool, error) {
+	val := ""
+	if envValues != nil {
+		if v, ok := envValues[envItem.Key]; ok {
+			val = v
+		}
+	}
+	if val == "" && envItem.Default != nil {
+		val = fmt.Sprintf("%v", envItem.Default)
+	}
+
+	envType := constant.EnvTypeNormal
+	if envItem.Type == "secret" {
+		envType = constant.EnvTypeSecret
+		if val != "" {
+			if encValue, err := utils.Encrypt(val); err == nil {
+				val = encValue
+			}
+		}
+	}
+
+	var existing models.EnvironmentVariable
+	res := database.DB.Where("name = ?", envItem.Key).Limit(1).Find(&existing)
+	if res.RowsAffected > 0 {
+		updates := map[string]interface{}{}
+		if val != "" {
+			updates["value"] = models.BigText(val)
+		}
+		if existing.UserID == "" {
+			updates["user_id"] = userID
+		}
+		if len(updates) > 0 {
+			database.DB.Model(&existing).Updates(updates)
+		}
+		relation.DataRelation.SaveTags(existing.ID, constant.RelationTypeEnvTag, tag)
+		return false, nil
+	}
+
+	remark := envItem.Description
+	if remark == "" {
+		remark = envItem.Label
+	}
+
+	newEnv := models.EnvironmentVariable{
+		ID:        xid.New().String(),
+		Name:      envItem.Key,
+		Value:     models.BigText(val),
+		Remark:    remark,
+		Type:      envType,
+		Enabled:   utils.BoolPtr(true),
+		UserID:    userID,
+		CreatedAt: models.Now(),
+		UpdatedAt: models.Now(),
+	}
+
+	if err := database.DB.Create(&newEnv).Error; err != nil {
+		return false, fmt.Errorf("注册环境变量 '%s' 失败: %w", envItem.Key, err)
+	}
+
+	relation.DataRelation.SaveTags(newEnv.ID, constant.RelationTypeEnvTag, tag)
+	log("  + 注册环境变量: %s (Tag: %s, 必填: %v)", envItem.Key, tag, envItem.Required)
+	return true, nil
 }
 
 // --------------------------------------------------------------------------

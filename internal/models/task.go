@@ -198,6 +198,10 @@ func (t *Task) GetName() string {
 	return t.Name
 }
 
+func (t *Task) GetType() string {
+	return t.Type
+}
+
 func (t *Task) GetCommand() string {
 	return string(t.Command)
 }

@@ -45,6 +45,7 @@ type WSMessage struct {
 type AgentTask struct {
 	ID          string              `json:"id"`
 	Name        string              `json:"name"`
+	Type        string              `json:"type"`
 	Command     string              `json:"command"`
 	PreCommand  string              `json:"pre_command"`
 	PostCommand string              `json:"post_command"`
@@ -65,6 +66,13 @@ func (t *AgentTask) GetID() string {
 
 func (t *AgentTask) GetName() string {
 	return t.Name
+}
+
+func (t *AgentTask) GetType() string {
+	if t.Type != "" {
+		return t.Type
+	}
+	return "task"
 }
 
 func (t *AgentTask) GetCommand() string {
@@ -751,7 +759,7 @@ func (a *Agent) updateTasks(tasks []AgentTask) {
 					logger.Errorf("添加调度任务 #%s 失败: %v", id, err)
 					continue
 				}
-				logger.Infof("已添加调度任务 #%s %s (%s)", id, task.Name, task.GetSchedule())
+				logger.Infof("已添加调度任务 #%s %s [类型: %s, Cron: %s]", id, task.Name, task.Type, task.GetSchedule())
 			} else {
 				a.cronManager.RemoveTask(id)
 				logger.Infof("调度任务 #%s 已禁用", id)

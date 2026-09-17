@@ -21,6 +21,7 @@ import (
 type Task interface {
 	GetID() string
 	GetName() string
+	GetType() string
 	GetCommand() string
 	GetPreCommand() string
 	GetPostCommand() string
