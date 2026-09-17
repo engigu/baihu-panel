@@ -153,6 +153,11 @@ function handleApplySuccess() {
         <h2 class="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
           <Store class="w-6 h-6 text-primary shrink-0" />
           <span>应用市场</span>
+          <span
+            class="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border border-amber-500/40 bg-amber-500/10 text-amber-500 shadow-sm leading-none align-middle -mt-1"
+          >
+            Beta
+          </span>
         </h2>
         <p class="text-muted-foreground text-xs mt-0.5 ml-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <span>浏览并一键部署官方声明式应用</span>

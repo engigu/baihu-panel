@@ -584,6 +584,14 @@ export interface MarketplaceApp {
   manifest_raw?: string
   is_installed?: boolean
   build_opts?: { force_setup?: boolean; skip_setup?: boolean; skip_sync?: boolean } | null
+  schedule?: string
+  schedule_opts?: {
+    schedule?: string
+    random_range?: number
+    timeout?: number
+    retry_count?: number
+    retry_interval?: number
+  } | null
   current_scenario?: string
   env_values?: Record<string, string>
 }
@@ -604,6 +612,7 @@ export interface ApplyAppPayload {
   clean_config?: string
   config?: string
   unified_config?: string
+  tag?: string
   enable_telemetry?: boolean
 }
 

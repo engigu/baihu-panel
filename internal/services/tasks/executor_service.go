@@ -609,16 +609,19 @@ func (es *ExecutorService) loadCronTasks() {
 				logger.Infof("[Executor] 触发开机服务启动任务 #%s: %s", t.ID, t.Name)
 				es.ExecuteTask(t.ID, nil)
 			}(task)
-		} else if task.TriggerType == constant.TriggerTypeCron && task.Schedule != "" && (task.AgentID == nil || *task.AgentID == "") {
-			// 只调度本地任务（agent_id 为空或 0）的定时任务
+		} else if task.TriggerType == constant.TriggerTypeCron {
+			if task.Schedule == "" || (task.AgentID != nil && *task.AgentID != "") {
+				continue
+			}
 			err := es.AddCronTask(&task)
 			if err != nil {
+				logger.Warnf("[Executor] 任务 '%s' (ID:%s, Schedule:%s) 添加Cron失败: %v", task.Name, task.ID, task.Schedule, err)
 				continue
 			}
 			count++
 		}
 	}
-	logger.Infof("[Executor] 启动调度已加载 %d 个定时任务", count)
+	logger.Infof("[Executor] 启动调度已加载 %d 个定时任务 (全量查询到 %d 个任务记录)", count, len(tasks))
 
 	eventbus.DefaultBus.Publish(eventbus.Event{
 		Type: constant.EventSchedulerLog,

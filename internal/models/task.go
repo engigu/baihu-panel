@@ -121,8 +121,19 @@ type AppTaskConfig struct {
 	ManifestRaw     string            `json:"manifest_raw,omitempty"`
 	CurrentScenario string            `json:"current_scenario,omitempty"`
 	Status          string            `json:"status,omitempty"`
-	EnvValues       map[string]string `json:"env_values,omitempty"`
-	BuildOpts       *AppBuildOpts     `json:"build_opts,omitempty"`
+	EnvValues       map[string]string      `json:"env_values,omitempty"`
+	BuildOpts       *AppBuildOpts          `json:"build_opts,omitempty"`
+	Schedule        string                 `json:"schedule,omitempty"`
+	ScheduleOpts    *TaskScheduleOpts      `json:"schedule_opts,omitempty"`
+}
+
+// TaskScheduleOpts 默认调度策略预设
+type TaskScheduleOpts struct {
+	Schedule      string `json:"schedule,omitempty"`
+	RandomRange   int    `json:"random_range,omitempty"`
+	Timeout       int    `json:"timeout,omitempty"`
+	RetryCount    int    `json:"retry_count,omitempty"`
+	RetryInterval int    `json:"retry_interval,omitempty"`
 }
 
 // AppBuildOpts 高级构建与部署控制选项

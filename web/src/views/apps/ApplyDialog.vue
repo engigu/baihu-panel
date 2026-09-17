@@ -65,6 +65,7 @@ const manifestYaml = ref('')
 // 安装参数配置
 const selectedScenario = ref('')
 const envForm = ref<Record<string, any>>({})
+const appTag = ref('')
 const showSecrets = ref<Record<string, boolean>>({})
 
 // 高级选项
@@ -137,6 +138,7 @@ watch(
     deploySuccess.value = false
     deployError.value = ''
     envForm.value = {}
+    appTag.value = app?.id || props.targetApp?.id || ''
     showSecrets.value = {}
     imageLoadError.value = false
     isFullscreenLog.value = false
@@ -220,12 +222,24 @@ watch(
         } catch { /* ignore */ }
       }
     } else {
+      if (appVal?.build_opts) {
+        forceSetup.value = Boolean(appVal.build_opts.force_setup)
+        skipSetup.value = Boolean(appVal.build_opts.skip_setup)
+        skipSync.value = Boolean(appVal.build_opts.skip_sync)
+      }
+
+      const defSched = appVal?.schedule_opts?.schedule || appVal?.schedule || ''
+      const defRandom = appVal?.schedule_opts?.random_range ?? 0
+      const defTimeout = appVal?.schedule_opts?.timeout ?? 30
+      const defRetryCount = appVal?.schedule_opts?.retry_count ?? 0
+      const defRetryInterval = appVal?.schedule_opts?.retry_interval ?? 0
+
       form.value = {
-        schedule: '',
-        random_range: 0,
-        timeout: 30,
-        retry_count: 0,
-        retry_interval: 0,
+        schedule: defSched,
+        random_range: defRandom,
+        timeout: defTimeout,
+        retry_count: defRetryCount,
+        retry_interval: defRetryInterval,
         clean_config: '',
         unified_config: ''
       }
@@ -389,6 +403,7 @@ async function executeDeploy() {
     retry_interval: form.value.retry_interval || 0,
     clean_config: form.value.clean_config || undefined,
     unified_config: form.value.unified_config || undefined,
+    tag: appTag.value || undefined,
     enable_telemetry: enableTelemetry.value
   }
 
@@ -620,6 +635,19 @@ async function executeDeploy() {
           </div>
         </div>
 
+        <!-- 统一分类 Tag 设置 -->
+        <div class="space-y-2 bg-muted/20 p-3 rounded-lg border border-border/40">
+          <div class="flex items-center justify-between">
+            <Label class="text-xs font-semibold">应用分类 Tag (App Tag)</Label>
+            <span class="text-[11px] text-muted-foreground">为本应用所有环境变量及任务绑定统一分类标签</span>
+          </div>
+          <Input
+            v-model="appTag"
+            placeholder="请输入分类 Tag (例如 ark)"
+            class="h-8 text-xs font-mono"
+          />
+        </div>
+
         <!-- 动态环境变量表单 (Env Schema) -->
         <div v-if="envSchemaList.length > 0" class="space-y-4">
           <div class="border-t border-border/50 pt-4 flex items-center justify-between">
@@ -641,8 +669,8 @@ async function executeDeploy() {
                   </Label>
                   <span class="text-[10px] font-mono text-muted-foreground break-all">({{ schema.key }})</span>
                 </div>
-                <Badge v-if="schema.tag" variant="secondary" class="text-[10px] font-mono shrink-0">
-                  Tag: {{ schema.tag }}
+                <Badge v-if="schema.tag || appTag" variant="secondary" class="text-[10px] font-mono shrink-0">
+                  Tag: {{ schema.tag || appTag }}
                 </Badge>
               </div>
 

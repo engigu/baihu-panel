@@ -37,6 +37,7 @@ type ApplyOptions struct {
 	RetryInterval int               // 失败重试间隔(秒)
 	CleanConfig   string            // 日志清理配置
 	UnifiedConfig string            // 统一配置 JSON
+	Tag           string            // 统一绑定的分类 Tag
 	LogWriter     io.Writer         // 执行日志输出流
 }
 
@@ -101,7 +102,7 @@ func (a *AppApplier) Apply(manifest *AppManifest, rawYAML []byte, opts ApplyOpti
 	}
 
 	// 阶段 4: 环境变量契约写入与 Tag 绑定 (Env Schema)
-	createdEnvs, err := a.applyEnvSchema(manifest, opts.EnvValues, log)
+	createdEnvs, err := a.applyEnvSchema(manifest, opts.EnvValues, opts.Tag, log)
 	if err != nil {
 		return nil, err
 	}
@@ -163,95 +164,130 @@ func (a *AppApplier) syncSources(manifest *AppManifest, appDir string, skipSync 
 
 	log("[2/5] 正在同步代码与资源源 (共 %d 个源)...", len(manifest.Sources))
 	for idx, src := range manifest.Sources {
-		targetSubPath := src.TargetPath
-		if targetSubPath == "" {
-			targetSubPath = src.ID
+		if err := a.syncSingleSource(idx, len(manifest.Sources), src, appDir, log); err != nil {
+			return err
 		}
-		targetAbsDir := filepath.Join(appDir, targetSubPath)
-		gitDir := filepath.Join(targetAbsDir, ".git")
-		if fi, err := os.Stat(targetAbsDir); err == nil && fi.IsDir() {
-			if _, gitErr := os.Stat(gitDir); os.IsNotExist(gitErr) {
-				// 目标目录存在但丢失了 .git，属于上一次失败留下的脏目录，自动清理以便重新 clean clone
-				_ = os.RemoveAll(targetAbsDir)
-			}
-		}
-		_ = os.MkdirAll(targetAbsDir, 0755)
-
-		// 映射组装 reposync 命令行参数
-		syncArgs := []string{
-			"--source-type", src.SourceType,
-			"--source-url", src.SourceURL,
-			"--target-path", targetAbsDir,
-			"--repo-name", ".",
-		}
-		if src.Branch != "" {
-			syncArgs = append(syncArgs, "--branch", src.Branch)
-		}
-		if src.Path != "" {
-			syncArgs = append(syncArgs, "--path", src.Path)
-		}
-		if src.SingleFile {
-			syncArgs = append(syncArgs, "--single-file")
-		}
-		if src.Proxy != "" && src.Proxy != "none" {
-			syncArgs = append(syncArgs, "--proxy", src.Proxy)
-			if src.Proxy == "custom" && src.ProxyURL != "" {
-				syncArgs = append(syncArgs, "--proxy-url", src.ProxyURL)
-			}
-		}
-		if src.AuthToken != "" {
-			syncArgs = append(syncArgs, "--auth-token", src.AuthToken)
-		}
-		if src.HttpProxy != "" {
-			syncArgs = append(syncArgs, "--http-proxy", src.HttpProxy)
-		}
-		if src.WhitelistPaths != "" {
-			syncArgs = append(syncArgs, "--whitelist-paths", src.WhitelistPaths)
-		}
-		if src.Blacklist != "" {
-			syncArgs = append(syncArgs, "--blacklist", src.Blacklist)
-		}
-
-		// 调度 reposync 同步代码源并静默捕获输出
-		var syncOutput string
-		exe := utils.GetBaihuExecutable()
-		syncCmd := exec.Command(exe, append([]string{"reposync"}, syncArgs...)...)
-		syncCmd.Env = append(os.Environ(), utils.BuildRuntimeProcessEnv()...)
-		if outBytes, err := syncCmd.CombinedOutput(); err == nil || len(outBytes) > 0 {
-			syncOutput = string(outBytes)
-		}
-
-		// 检查代码源是否成功同步并落盘
-		if fi, err := os.Stat(targetAbsDir); err != nil || !fi.IsDir() {
-			log("  ✗ 代码源 '%s' 同步失败: 目标目录缺失 (%s)", src.ID, targetAbsDir)
-			if syncOutput != "" {
-				log("    [底层同步错误日志]\n%s", syncOutput)
-			}
-			return fmt.Errorf("代码源 '%s' 同步失败: 目标目录缺失 (%s)", src.ID, targetAbsDir)
-		}
-		entries, err := os.ReadDir(targetAbsDir)
-		if err != nil || len(entries) == 0 {
-			log("  ✗ 代码源 '%s' 同步失败: 目标目录为空 (%s)", src.ID, targetAbsDir)
-			if syncOutput != "" {
-				log("    [底层同步错误日志]\n%s", syncOutput)
-			}
-			return fmt.Errorf("代码源 '%s' 同步失败: 目标目录为空 (%s)", src.ID, targetAbsDir)
-		}
-
-		// 从底层输出中提炼高价值的过滤与更新统计
-		filterNote := ""
-		reFilter := regexp.MustCompile(`共删除 (\d+) 个`)
-		if m := reFilter.FindStringSubmatch(syncOutput); len(m) > 1 {
-			filterNote = fmt.Sprintf(" | 清理冗余文件 %s 项", m[1])
-		}
-
-		branchDesc := src.Branch
-		if branchDesc == "" {
-			branchDesc = "默认分支"
-		}
-		log("  ✓ [%d/%d] 代码源 '%s' 同步就绪 (分支: %s%s)", idx+1, len(manifest.Sources), src.ID, branchDesc, filterNote)
 	}
 
+	return nil
+}
+
+// syncSingleSource 根据 source_type 路由调用不同的处理逻辑函数
+func (a *AppApplier) syncSingleSource(idx int, total int, src AppSource, appDir string, log LogFunc) error {
+	srcType := strings.ToLower(strings.TrimSpace(src.SourceType))
+
+	switch srcType {
+	case "null", "none", "":
+		return a.handleNullSource(idx, total, src, log)
+	case "git":
+		return a.handleGitSource(idx, total, src, appDir, log)
+	case "url":
+		return a.handleURLSource(idx, total, src, appDir, log)
+	default:
+		return fmt.Errorf("不支持的代码源类型 '%s' (源 ID: %s)", src.SourceType, src.ID)
+	}
+}
+
+// handleNullSource 处理空/纯二进制免同步模式 (null/none)
+func (a *AppApplier) handleNullSource(idx int, total int, src AppSource, log LogFunc) error {
+	log("  ✓ [%d/%d] 代码源 '%s' 为纯二进制免同步模式 (source_type: %s)，直接跳过代码同步", idx+1, total, src.ID, src.SourceType)
+	return nil
+}
+
+// handleGitSource 处理 Git 仓库代码同步
+func (a *AppApplier) handleGitSource(idx int, total int, src AppSource, appDir string, log LogFunc) error {
+	return a.execRepoSync(idx, total, src, appDir, log)
+}
+
+// handleURLSource 处理单文件/URL直链下载同步
+func (a *AppApplier) handleURLSource(idx int, total int, src AppSource, appDir string, log LogFunc) error {
+	return a.execRepoSync(idx, total, src, appDir, log)
+}
+
+// execRepoSync 调度底层 reposync 工具拉取 Git 或 URL 代码源
+func (a *AppApplier) execRepoSync(idx int, total int, src AppSource, appDir string, log LogFunc) error {
+	targetSubPath := src.TargetPath
+	if targetSubPath == "" {
+		targetSubPath = src.ID
+	}
+	targetAbsDir := filepath.Join(appDir, targetSubPath)
+	gitDir := filepath.Join(targetAbsDir, ".git")
+	if fi, err := os.Stat(targetAbsDir); err == nil && fi.IsDir() {
+		if _, gitErr := os.Stat(gitDir); os.IsNotExist(gitErr) {
+			_ = os.RemoveAll(targetAbsDir)
+		}
+	}
+	_ = os.MkdirAll(targetAbsDir, 0755)
+
+	syncArgs := []string{
+		"--source-type", src.SourceType,
+		"--source-url", src.SourceURL,
+		"--target-path", targetAbsDir,
+		"--repo-name", ".",
+	}
+	if src.Branch != "" {
+		syncArgs = append(syncArgs, "--branch", src.Branch)
+	}
+	if src.Path != "" {
+		syncArgs = append(syncArgs, "--path", src.Path)
+	}
+	if src.SingleFile {
+		syncArgs = append(syncArgs, "--single-file")
+	}
+	if src.Proxy != "" && src.Proxy != "none" {
+		syncArgs = append(syncArgs, "--proxy", src.Proxy)
+		if src.Proxy == "custom" && src.ProxyURL != "" {
+			syncArgs = append(syncArgs, "--proxy-url", src.ProxyURL)
+		}
+	}
+	if src.AuthToken != "" {
+		syncArgs = append(syncArgs, "--auth-token", src.AuthToken)
+	}
+	if src.HttpProxy != "" {
+		syncArgs = append(syncArgs, "--http-proxy", src.HttpProxy)
+	}
+	if src.WhitelistPaths != "" {
+		syncArgs = append(syncArgs, "--whitelist-paths", src.WhitelistPaths)
+	}
+	if src.Blacklist != "" {
+		syncArgs = append(syncArgs, "--blacklist", src.Blacklist)
+	}
+
+	var syncOutput string
+	exe := utils.GetBaihuExecutable()
+	syncCmd := exec.Command(exe, append([]string{"reposync"}, syncArgs...)...)
+	syncCmd.Env = append(os.Environ(), utils.BuildRuntimeProcessEnv()...)
+	if outBytes, err := syncCmd.CombinedOutput(); err == nil || len(outBytes) > 0 {
+		syncOutput = string(outBytes)
+	}
+
+	if fi, err := os.Stat(targetAbsDir); err != nil || !fi.IsDir() {
+		log("  ✗ 代码源 '%s' 同步失败: 目标目录缺失 (%s)", src.ID, targetAbsDir)
+		if syncOutput != "" {
+			log("    [底层同步错误日志]\n%s", syncOutput)
+		}
+		return fmt.Errorf("代码源 '%s' 同步失败: 目标目录缺失 (%s)", src.ID, targetAbsDir)
+	}
+	entries, err := os.ReadDir(targetAbsDir)
+	if err != nil || len(entries) == 0 {
+		log("  ✗ 代码源 '%s' 同步失败: 目标目录为空 (%s)", src.ID, targetAbsDir)
+		if syncOutput != "" {
+			log("    [底层同步错误日志]\n%s", syncOutput)
+		}
+		return fmt.Errorf("代码源 '%s' 同步失败: 目标目录为空 (%s)", src.ID, targetAbsDir)
+	}
+
+	filterNote := ""
+	reFilter := regexp.MustCompile(`共删除 (\d+) 个`)
+	if m := reFilter.FindStringSubmatch(syncOutput); len(m) > 1 {
+		filterNote = fmt.Sprintf(" | 清理冗余文件 %s 项", m[1])
+	}
+
+	branchDesc := src.Branch
+	if branchDesc == "" {
+		branchDesc = "默认分支"
+	}
+	log("  ✓ [%d/%d] 代码源 '%s' 同步就绪 (类型: %s, 分支: %s%s)", idx+1, total, src.ID, src.SourceType, branchDesc, filterNote)
 	return nil
 }
 
@@ -366,7 +402,7 @@ func (a *AppApplier) runSetup(manifest *AppManifest, appDir string, skipSetup bo
 // --------------------------------------------------------------------------
 // 过程函数 4: 环境变量契约写入与 Tag 绑定 (Env Schema)
 // --------------------------------------------------------------------------
-func (a *AppApplier) applyEnvSchema(manifest *AppManifest, envValues map[string]string, log LogFunc) ([]string, error) {
+func (a *AppApplier) applyEnvSchema(manifest *AppManifest, envValues map[string]string, appTag string, log LogFunc) ([]string, error) {
 	log("[4/5] 配置应用环境变量契约 (共 %d 项)...", len(manifest.EnvSchema))
 	var createdEnvs []string
 
@@ -386,7 +422,10 @@ func (a *AppApplier) applyEnvSchema(manifest *AppManifest, envValues map[string]
 			envType = constant.EnvTypeSecret
 		}
 
-		tag := envItem.Tag
+		tag := strings.TrimSpace(appTag)
+		if tag == "" {
+			tag = envItem.Tag
+		}
 		if tag == "" {
 			tag = manifest.ID
 		}

@@ -34,8 +34,11 @@ type AppManifest struct {
 	Template    interface{}       `json:"template,omitempty" yaml:"template,omitempty"`           // 模板宏变量声明池 (支持 map 或 list)
 	Description string            `json:"description,omitempty" yaml:"description,omitempty"`     // 应用功能描述
 	Icon        string            `json:"icon,omitempty" yaml:"icon,omitempty"`                   // 应用图标 URL
-	Homepage    string            `json:"homepage,omitempty" yaml:"homepage,omitempty"`           // 项目主页或 GitHub 仓库地址
-	Sources     []AppSource       `json:"sources,omitempty" yaml:"sources,omitempty"`             // 脚本/代码源列表
+	Homepage     string                 `json:"homepage,omitempty" yaml:"homepage,omitempty"`           // 项目主页或 GitHub 仓库地址
+	BuildOpts    *models.AppBuildOpts   `json:"build_opts,omitempty" yaml:"build_opts,omitempty"`       // 高级构建与部署控制预设开关
+	Schedule     string                 `json:"schedule,omitempty" yaml:"schedule,omitempty"`           // 默认 Cron 定时表达式
+	ScheduleOpts *ManifestScheduleOpts  `json:"schedule_opts,omitempty" yaml:"schedule_opts,omitempty"` // 主任务默认调度策略预设
+	Sources      []AppSource            `json:"sources,omitempty" yaml:"sources,omitempty"`             // 脚本/代码源列表
 	Setup       AppSetup          `json:"setup" yaml:"setup"`                                     // 原生 Shell 环境与依赖编排
 	EnvSchema   []AppEnvItem      `json:"env_schema,omitempty" yaml:"env_schema,omitempty"`       // 环境变量声明契约
 	SyncRules   *AppSyncRules     `json:"sync_rules,omitempty" yaml:"sync_rules,omitempty"`       // 任务映射规则与任务清单
@@ -85,6 +88,15 @@ type AppEnvItem struct {
 	Description string         `json:"description,omitempty" yaml:"description,omitempty"` // 详细说明
 	Placeholder string         `json:"placeholder,omitempty" yaml:"placeholder,omitempty"` // 输入框占位提示
 	Options     []AppEnvOption `json:"options,omitempty" yaml:"options,omitempty"`         // select 下拉类型的候选项
+}
+
+// ManifestScheduleOpts 主任务默认调度策略预设
+type ManifestScheduleOpts struct {
+	Schedule      string `json:"schedule,omitempty" yaml:"schedule,omitempty"`
+	RandomRange   int    `json:"random_range,omitempty" yaml:"random_range,omitempty"`
+	Timeout       int    `json:"timeout,omitempty" yaml:"timeout,omitempty"`
+	RetryCount    int    `json:"retry_count,omitempty" yaml:"retry_count,omitempty"`
+	RetryInterval int    `json:"retry_interval,omitempty" yaml:"retry_interval,omitempty"`
 }
 
 // AppSyncRules 任务生成与映射规则容器
@@ -408,12 +420,8 @@ func (m *AppManifest) Validate() error {
 		}
 		sourceIDSet[srcID] = true
 
-		if strings.TrimSpace(src.SourceURL) == "" {
-			return fmt.Errorf("代码源 '%s' 的 source_url 不能为空", srcID)
-		}
-		srcType := strings.ToLower(strings.TrimSpace(src.SourceType))
-		if srcType != "git" && srcType != "url" {
-			return fmt.Errorf("代码源 '%s' 的 source_type 必须为 'git' 或 'url'", srcID)
+		if err := ValidateSource(src); err != nil {
+			return err
 		}
 	}
 
@@ -866,4 +874,26 @@ func (m *AppManifest) GetAppDir(absScriptsDir string) string {
 // GetAppDirName 在 AppManifest 上的便捷成员函数
 func (m *AppManifest) GetAppDirName() string {
 	return GetAppDirName(m.Author, m.ID)
+}
+
+// ValidateSource 根据 source_type 校验单条代码源的有效性
+func ValidateSource(src AppSource) error {
+	srcID := strings.TrimSpace(src.ID)
+	if srcID == "" {
+		return errors.New("代码源的 id 不能为空")
+	}
+
+	srcType := strings.ToLower(strings.TrimSpace(src.SourceType))
+	switch srcType {
+	case "null", "none", "":
+		// 空源模式：不需要校验 source_url，跳过代码同步
+		return nil
+	case "git", "url":
+		if strings.TrimSpace(src.SourceURL) == "" {
+			return fmt.Errorf("代码源 '%s' 的 source_url 不能为空", srcID)
+		}
+		return nil
+	default:
+		return fmt.Errorf("代码源 '%s' 的 source_type 必须为 'git'、'url' 或 'null'/'none'", srcID)
+	}
 }

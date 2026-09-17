@@ -56,7 +56,7 @@ const sentenceContent = computed(() => {
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: '数据仪表', exact: true },
   { to: '/tasks', icon: ListTodo, label: '调度实体', exact: true },
-  { to: '/apps', icon: Store, label: '应用市场', exact: false },
+  { to: '/apps', icon: Store, label: '应用市场', exact: false, badge: 'Beta' },
   { to: '/editor', icon: FileCode, label: '脚本编辑', exact: false },
   { to: '/history', icon: ScrollText, label: '执行历史', exact: true },
   { to: '/environments', icon: Variable, label: '变量机密', exact: true },
@@ -139,14 +139,20 @@ onMounted(() => {
           <RouterLink v-for="item in navItems" :key="item.to" :to="item.to" custom v-slot="{ navigate }">
             <Button variant="ghost"
               :class="[
-                'justify-center gap-3 h-10 px-3 w-full max-w-[140px] transition-all duration-200 menu-item',
+                'justify-center gap-3 h-10 px-3 w-full max-w-[140px] transition-all duration-200 menu-item relative',
                 isItemActive(item) 
                   ? 'bg-secondary text-foreground font-bold' 
                   : 'text-foreground hover:bg-secondary/50'
               ]"
               @click="handleNavClick(navigate)">
-              <component :is="item.icon" class="h-4 w-4" />
-              {{ item.label }}
+              <component :is="item.icon" class="h-4 w-4 shrink-0" />
+              <span>{{ item.label }}</span>
+              <span
+                v-if="item.badge"
+                class="absolute top-1 right-1 px-1 py-[0.5px] rounded text-[8px] font-bold tracking-tighter uppercase scale-75 origin-top-right border border-amber-500/50 bg-amber-500/15 text-amber-500 shadow-sm leading-none pointer-events-none"
+              >
+                {{ item.badge }}
+              </span>
             </Button>
           </RouterLink>
         </nav>

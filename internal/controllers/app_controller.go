@@ -89,6 +89,7 @@ type ApplyAppRequest struct {
 	RetryInterval int               `json:"retry_interval"`
 	CleanConfig   string            `json:"clean_config"`
 	UnifiedConfig string            `json:"unified_config"`
+	Tag           string            `json:"tag"`
 	EnableTelemetry *bool           `json:"enable_telemetry"`
 }
 
@@ -176,6 +177,7 @@ func (ac *AppController) ApplyApp(c *gin.Context) {
 		RetryInterval: req.RetryInterval,
 		CleanConfig:   req.CleanConfig,
 		UnifiedConfig: req.UnifiedConfig,
+		Tag:           req.Tag,
 		LogWriter:     multiLogWriter,
 	}
 
