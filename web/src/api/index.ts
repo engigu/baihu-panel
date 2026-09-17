@@ -594,6 +594,7 @@ export interface MarketplaceApp {
   } | null
   current_scenario?: string
   env_values?: Record<string, string>
+  languages?: Array<{ name: string; version: string }>
 }
 
 export interface ApplyAppPayload {
@@ -613,6 +614,7 @@ export interface ApplyAppPayload {
   config?: string
   unified_config?: string
   tag?: string
+  languages?: Array<{ name: string; version: string }>
   enable_telemetry?: boolean
 }
 

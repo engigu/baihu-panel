@@ -39,6 +39,7 @@ type ApplyOptions struct {
 	UnifiedConfig string            // 统一配置 JSON
 	Tag           string            // 统一绑定的分类 Tag
 	UserID        string            // 当前安装用户的 UserID
+	Languages     []map[string]string // 关联绑定的运行语言环境列表
 	LogWriter     io.Writer         // 执行日志输出流
 }
 
@@ -115,7 +116,7 @@ func (a *AppApplier) Apply(manifest *AppManifest, rawYAML []byte, opts ApplyOpti
 	}
 
 	// 阶段 6: 场景编排与受控任务批量生成/热更新 (把 masterTask.ID 传入作为受控子任务的 source_id)
-	createdTasks, updatedTasks, err := a.orchestrateTasks(manifest, appDir, masterTask.ID, activeScenarioID, log)
+	createdTasks, updatedTasks, err := a.orchestrateTasks(manifest, appDir, masterTask.ID, activeScenarioID, opts, log)
 	if err != nil {
 		return nil, err
 	}
@@ -513,7 +514,7 @@ func (a *AppApplier) upsertSingleEnv(envItem AppEnvItem, envValues map[string]st
 // --------------------------------------------------------------------------
 // 过程函数 5: 场景编排与受控任务批量生成/热更新 (Tasks Orchestration)
 // --------------------------------------------------------------------------
-func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, masterTaskID string, targetScenarioID string, log LogFunc) ([]string, []string, error) {
+func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, masterTaskID string, targetScenarioID string, opts ApplyOptions, log LogFunc) ([]string, []string, error) {
 	activeScenarioID := targetScenarioID
 	var activeScenario *AppScenarioItem
 
@@ -603,6 +604,12 @@ func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, mast
 		}
 
 		taskLangs := t.GetParsedLanguages()
+		if len(taskLangs) == 0 && len(opts.Languages) > 0 {
+			taskLangs = opts.Languages
+		}
+		if len(taskLangs) == 0 {
+			taskLangs = manifest.GetLanguages()
+		}
 
 		var existingTask models.Task
 		tx := database.DB.Where("source_id = ? AND type = ? AND name = ?", masterTaskID, constant.TaskTypeNormal, t.Name).Limit(1).Find(&existingTask)

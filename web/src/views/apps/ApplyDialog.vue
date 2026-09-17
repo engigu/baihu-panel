@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
@@ -16,6 +16,7 @@ import { toast } from 'vue-sonner'
 import TaskNotificationConfig from '@/views/tasks/components/TaskNotificationConfig.vue'
 import TaskAdvancedConfig from '@/views/tasks/components/TaskAdvancedConfig.vue'
 import TaskCronConfig from '@/views/tasks/components/TaskCronConfig.vue'
+import TaskLangConfig, { type LangConfig } from '@/views/tasks/components/TaskLangConfig.vue'
 
 function formatDate(dateStr?: string) {
   if (!dateStr) return ''
@@ -66,6 +67,7 @@ const manifestYaml = ref('')
 const selectedScenario = ref('')
 const envForm = ref<Record<string, any>>({})
 const appTag = ref('')
+const selectedLangs = ref<LangConfig[]>([])
 const showSecrets = ref<Record<string, boolean>>({})
 
 // 高级选项
@@ -147,6 +149,16 @@ watch(
     skipSync.value = false
 
     if (app) {
+      if (app.languages && app.languages.length > 0) {
+        selectedLangs.value = app.languages.map(l => ({
+          name: l.name,
+          version: l.version,
+          availableVersions: []
+        }))
+      } else {
+        selectedLangs.value = []
+      }
+
       // 回显已保存的高级构建配置
       if (app.build_opts) {
         forceSetup.value = Boolean(app.build_opts.force_setup)
@@ -197,6 +209,13 @@ watch(
     enableTelemetry.value = modeVal !== 'edit_task' && !taskVal
 
     if (taskVal) {
+      if (taskVal.languages && taskVal.languages.length > 0) {
+        selectedLangs.value = taskVal.languages.map(l => ({
+          name: l.name,
+          version: l.version,
+          availableVersions: []
+        }))
+      }
       form.value = {
         schedule: taskVal.schedule || '',
         random_range: taskVal.random_range || 0,
@@ -327,7 +346,8 @@ async function startDeployProcess() {
         retry_count: form.value.retry_count || 0,
         retry_interval: form.value.retry_interval || 0,
         clean_config: form.value.clean_config || '',
-        unified_config: updatedUnifiedStr
+        unified_config: updatedUnifiedStr,
+        languages: selectedLangs.value.filter(l => l.name && l.version).map(l => ({ name: l.name, version: l.version }))
       }
       await api.tasks.update(taskId, updatePayload)
       if (notificationConfigRef.value) {
@@ -404,6 +424,7 @@ async function executeDeploy() {
     clean_config: form.value.clean_config || undefined,
     unified_config: form.value.unified_config || undefined,
     tag: appTag.value || undefined,
+    languages: selectedLangs.value.filter(l => l.name && l.version).map(l => ({ name: l.name, version: l.version })),
     enable_telemetry: enableTelemetry.value
   }
 
@@ -633,6 +654,15 @@ async function executeDeploy() {
               <p class="text-[11px] text-muted-foreground line-clamp-2">{{ sc.description || '无场景描述' }}</p>
             </div>
           </div>
+        </div>
+
+        <!-- 运行环境 (Mise) 选择 -->
+        <div class="space-y-2 bg-muted/20 p-3 rounded-lg border border-border/40">
+          <div class="flex items-center justify-between">
+            <Label class="text-xs font-semibold">运行环境 (Mise)</Label>
+            <span class="text-[11px] text-muted-foreground">自定义本应用及子任务运行依附的多语言基础环境</span>
+          </div>
+          <TaskLangConfig v-model="selectedLangs" />
         </div>
 
         <!-- 统一分类 Tag 设置 -->

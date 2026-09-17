@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 var (
@@ -38,6 +39,7 @@ type AppManifest struct {
 	BuildOpts    *models.AppBuildOpts   `json:"build_opts,omitempty" yaml:"build_opts,omitempty"`       // 高级构建与部署控制预设开关
 	Schedule     string                 `json:"schedule,omitempty" yaml:"schedule,omitempty"`           // 默认 Cron 定时表达式
 	ScheduleOpts *ManifestScheduleOpts  `json:"schedule_opts,omitempty" yaml:"schedule_opts,omitempty"` // 主任务默认调度策略预设
+	Languages    []AppLanguageItem      `json:"languages,omitempty" yaml:"languages,omitempty"`         // 应用语言契约列表
 	Sources      []AppSource            `json:"sources,omitempty" yaml:"sources,omitempty"`             // 脚本/代码源列表
 	Setup       AppSetup          `json:"setup" yaml:"setup"`                                     // 原生 Shell 环境与依赖编排
 	EnvSchema   []AppEnvItem      `json:"env_schema,omitempty" yaml:"env_schema,omitempty"`       // 环境变量声明契约
@@ -88,6 +90,12 @@ type AppEnvItem struct {
 	Description string         `json:"description,omitempty" yaml:"description,omitempty"` // 详细说明
 	Placeholder string         `json:"placeholder,omitempty" yaml:"placeholder,omitempty"` // 输入框占位提示
 	Options     []AppEnvOption `json:"options,omitempty" yaml:"options,omitempty"`         // select 下拉类型的候选项
+}
+
+// AppLanguageItem 运行语言契约定义
+type AppLanguageItem struct {
+	Name    string `json:"name" yaml:"name"`       // 语言名称 (如 go, node, python, dotnet)
+	Version string `json:"version" yaml:"version"` // 版本号 (如 1.22.5, 23.11.1)
 }
 
 // ManifestScheduleOpts 主任务默认调度策略预设
@@ -896,4 +904,44 @@ func ValidateSource(src AppSource) error {
 	default:
 		return fmt.Errorf("代码源 '%s' 的 source_type 必须为 'git'、'url' 或 'null'/'none'", srcID)
 	}
+}
+
+// GetLanguages 解析提取应用配置的运行语言契约列表
+func (m *AppManifest) GetLanguages() []map[string]string {
+	var result []map[string]string
+	if len(m.Languages) > 0 {
+		for _, l := range m.Languages {
+			if l.Name != "" {
+				result = append(result, map[string]string{
+					"name":    l.Name,
+					"version": l.Version,
+				})
+			}
+		}
+		return result
+	}
+
+	// 容灾解析：从 template 池的 mise_languages 获取 (例如: "go@1.22.5,node@23.11.1")
+	if m.Template != nil {
+		miseLangStr := ""
+		if tList, ok := m.Template.([]interface{}); ok {
+			for _, item := range tList {
+				if mItem, isMap := item.(map[string]interface{}); isMap {
+					if v, exists := mItem["mise_languages"]; exists {
+						miseLangStr = fmt.Sprintf("%v", v)
+						break
+					}
+				}
+			}
+		} else if tMap, ok := m.Template.(map[string]interface{}); ok {
+			if v, exists := tMap["mise_languages"]; exists {
+				miseLangStr = fmt.Sprintf("%v", v)
+			}
+		}
+
+		if miseLangStr != "" {
+			return utils.ParseMiseLanguages(miseLangStr)
+		}
+	}
+	return result
 }

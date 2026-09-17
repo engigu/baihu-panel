@@ -81,6 +81,19 @@ func BuildMiseCommand(command string, languages []map[string]string) string {
 	return builder.String()
 }
 
+// BuildAppTaskCommand 为应用受控任务构建多语言 mise 执行命令，自动剥离旧版硬编码前缀以保证 UI 语言配置生效
+func BuildAppTaskCommand(command string, languages []map[string]string) string {
+	cmd := strings.TrimSpace(command)
+	if cmd == "" {
+		return ""
+	}
+	if strings.HasPrefix(cmd, "mise exec") && strings.Contains(cmd, " -- ") {
+		idx := strings.Index(cmd, " -- ")
+		cmd = strings.TrimSpace(cmd[idx+4:])
+	}
+	return BuildMiseCommand(cmd, languages)
+}
+
 // BuildMiseCommandArgs 构建多语言 mise 执行命令 (参数列表形式)
 func BuildMiseCommandArgs(cmdArgs []string, languages []map[string]string) []string {
 	if len(languages) == 0 {
@@ -155,3 +168,36 @@ func ListMiseInstalledVersions(language string) ([]string, error) {
 	}
 	return versions, nil
 }
+
+// ParseMiseLanguages 将空格分隔的 mise 语言规范字符串 (例如: "go@1.22.5 node@23.11.1" 或 "python") 解析为结构化的语言属性列表
+func ParseMiseLanguages(miseLangStr string) []map[string]string {
+	var result []map[string]string
+	miseLangStr = strings.TrimSpace(miseLangStr)
+	if miseLangStr == "" {
+		return result
+	}
+
+	// 严格按空白分割
+	parts := strings.Fields(miseLangStr)
+
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		sub := strings.Split(p, "@")
+		name := strings.TrimSpace(sub[0])
+		ver := ""
+		if len(sub) > 1 {
+			ver = strings.TrimSpace(sub[1])
+		}
+		if name != "" {
+			result = append(result, map[string]string{
+				"name":    name,
+				"version": ver,
+			})
+		}
+	}
+	return result
+}
+
