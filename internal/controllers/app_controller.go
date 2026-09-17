@@ -79,10 +79,11 @@ type ApplyAppRequest struct {
 	RawYAML       string            `json:"raw_yaml"`
 	ScenarioID    string            `json:"scenario_id"`
 	EnvValues     map[string]string `json:"env_values"`
-	SkipSetup     bool              `json:"skip_setup"`
-	SkipSync      bool              `json:"skip_sync"`
-	ForceSetup    bool              `json:"force_setup"`
-	Schedule      string            `json:"schedule"`
+	SkipSetup       bool              `json:"skip_setup"`
+	SkipSync        bool              `json:"skip_sync"`
+	ForceSetup      bool              `json:"force_setup"`
+	OverwriteEnv    bool              `json:"overwrite_env"`
+	Schedule        string            `json:"schedule"`
 	RandomRange   int               `json:"random_range"`
 	Timeout       int               `json:"timeout"`
 	RetryCount    int               `json:"retry_count"`
@@ -176,6 +177,7 @@ func (ac *AppController) ApplyApp(c *gin.Context) {
 		SkipSetup:     req.SkipSetup,
 		SkipSync:      req.SkipSync,
 		ForceSetup:    req.ForceSetup,
+		OverwriteEnv:  req.OverwriteEnv,
 		Schedule:      req.Schedule,
 		RandomRange:   req.RandomRange,
 		Timeout:       req.Timeout,

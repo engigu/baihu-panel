@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
@@ -75,6 +75,7 @@ const showAdvanced = ref(true)
 const forceSetup = ref(false)
 const skipSetup = ref(false)
 const skipSync = ref(false)
+const overwriteEnv = ref(false)
 const enableTelemetry = ref(true)
 
 // 调度与通知策略配置
@@ -164,6 +165,9 @@ watch(
         forceSetup.value = Boolean(app.build_opts.force_setup)
         skipSetup.value = Boolean(app.build_opts.skip_setup)
         skipSync.value = Boolean(app.build_opts.skip_sync)
+        overwriteEnv.value = Boolean(app.build_opts.overwrite_env)
+      } else {
+        overwriteEnv.value = false
       }
 
       // 初始化场景（优先使用已保存的当前场景）
@@ -416,6 +420,7 @@ async function executeDeploy() {
     force_setup: forceSetup.value,
     skip_setup: skipSetup.value,
     skip_sync: skipSync.value,
+    overwrite_env: overwriteEnv.value,
     schedule: form.value.schedule || undefined,
     random_range: form.value.random_range || 0,
     timeout: form.value.timeout || 30,
@@ -806,10 +811,10 @@ async function executeDeploy() {
               ]"
               @click="forceSetup = !forceSetup; if (forceSetup) skipSetup = false"
             >
-              <div class="flex items-center gap-2.5 min-w-0">
+              <div class="flex items-start gap-2.5 min-w-0 pt-0.5">
                 <Checkbox
                   v-model="forceSetup"
-                  class="shrink-0"
+                  class="shrink-0 mt-0.5"
                   @click.stop
                   @update:model-value="(val) => { if (val) skipSetup = false }"
                 />
@@ -833,10 +838,10 @@ async function executeDeploy() {
               ]"
               @click="skipSetup = !skipSetup; if (skipSetup) forceSetup = false"
             >
-              <div class="flex items-center gap-2.5 min-w-0">
+              <div class="flex items-start gap-2.5 min-w-0 pt-0.5">
                 <Checkbox
                   v-model="skipSetup"
-                  class="shrink-0"
+                  class="shrink-0 mt-0.5"
                   @click.stop
                   @update:model-value="(val) => { if (val) forceSetup = false }"
                 />
@@ -860,10 +865,10 @@ async function executeDeploy() {
               ]"
               @click="skipSync = !skipSync"
             >
-              <div class="flex items-center gap-2.5 min-w-0">
+              <div class="flex items-start gap-2.5 min-w-0 pt-0.5">
                 <Checkbox
                   v-model="skipSync"
-                  class="shrink-0"
+                  class="shrink-0 mt-0.5"
                   @click.stop
                 />
                 <div class="flex flex-col min-w-0">
@@ -873,6 +878,32 @@ async function executeDeploy() {
               </div>
               <Badge variant="secondary" class="text-[10px] shrink-0 font-normal ml-2">
                 适用：二次开发 / 避免覆盖
+              </Badge>
+            </div>
+
+            <!-- 4. 覆盖已存在同名环境变量 -->
+            <div
+              class="flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer select-none"
+              :class="[
+                overwriteEnv
+                  ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/40'
+                  : 'border-border/60 hover:border-border hover:bg-muted/20'
+              ]"
+              @click="overwriteEnv = !overwriteEnv"
+            >
+              <div class="flex items-start gap-2.5 min-w-0 pt-0.5">
+                <Checkbox
+                  v-model="overwriteEnv"
+                  class="shrink-0 mt-0.5"
+                  @click.stop
+                />
+                <div class="flex flex-col min-w-0">
+                  <span class="text-xs font-bold text-foreground">覆盖已有同名环境变量</span>
+                  <span class="text-[11px] text-muted-foreground truncate">默认关闭（不覆盖）：已有变量保持原值；开启后将强制覆盖更新为下方输入值</span>
+                </div>
+              </div>
+              <Badge variant="secondary" class="text-[10px] shrink-0 font-normal ml-2">
+                默认：不覆盖已有值
               </Badge>
             </div>
           </div>

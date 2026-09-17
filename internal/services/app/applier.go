@@ -30,6 +30,7 @@ type ApplyOptions struct {
 	SkipSetup     bool              // 是否跳过依赖安装
 	SkipSync      bool              // 是否跳过代码源拉取
 	ForceSetup    bool              // 强制执行依赖安装与编译（跳过 check 探活）
+	OverwriteEnv  bool              // 是否覆盖已有环境变量（默认 false 不覆盖）
 	Schedule      string            // 定时规则 Cron 表达式
 	RandomRange   int               // 随机延迟范围(秒)
 	Timeout       int               // 执行超时时间(分钟)
@@ -104,7 +105,7 @@ func (a *AppApplier) Apply(manifest *AppManifest, rawYAML []byte, opts ApplyOpti
 	}
 
 	// 阶段 4: 环境变量契约写入与 Tag 绑定 (Env Schema)
-	createdEnvs, err := a.applyEnvSchema(manifest, opts.EnvValues, opts.Tag, opts.UserID, log)
+	createdEnvs, err := a.applyEnvSchema(manifest, opts, log)
 	if err != nil {
 		return nil, err
 	}
@@ -404,7 +405,8 @@ func (a *AppApplier) runSetup(manifest *AppManifest, appDir string, skipSetup bo
 // --------------------------------------------------------------------------
 // 过程函数 4: 环境变量契约写入与 Tag 绑定 (Env Schema)
 // --------------------------------------------------------------------------
-func (a *AppApplier) applyEnvSchema(manifest *AppManifest, envValues map[string]string, appTag string, userID string, log LogFunc) ([]string, error) {
+func (a *AppApplier) applyEnvSchema(manifest *AppManifest, opts ApplyOptions, log LogFunc) ([]string, error) {
+	userID := opts.UserID
 	if userID == "" {
 		userID = "0"
 	}
@@ -412,8 +414,8 @@ func (a *AppApplier) applyEnvSchema(manifest *AppManifest, envValues map[string]
 
 	var createdEnvs []string
 	for _, envItem := range manifest.EnvSchema {
-		tag := resolveEnvTag(envItem.Tag, appTag, manifest.ID)
-		created, err := a.upsertSingleEnv(envItem, envValues, tag, userID, log)
+		tag := resolveEnvTag(envItem.Tag, opts.Tag, manifest.ID)
+		created, err := a.upsertSingleEnv(envItem, opts.EnvValues, tag, userID, opts.OverwriteEnv, log)
 		if err != nil {
 			return nil, err
 		}
@@ -437,7 +439,7 @@ func resolveEnvTag(itemTag, appTag, manifestID string) string {
 }
 
 // upsertSingleEnv 处理单条环境变量的创建、更新与 Tag 绑定
-func (a *AppApplier) upsertSingleEnv(envItem AppEnvItem, envValues map[string]string, tag, userID string, log LogFunc) (bool, error) {
+func (a *AppApplier) upsertSingleEnv(envItem AppEnvItem, envValues map[string]string, tag, userID string, overwrite bool, log LogFunc) (bool, error) {
 	val := ""
 	if envValues != nil {
 		if v, ok := envValues[envItem.Key]; ok {
@@ -466,6 +468,13 @@ func (a *AppApplier) upsertSingleEnv(envItem AppEnvItem, envValues map[string]st
 	var existing models.EnvironmentVariable
 	res := database.DB.Where("name = ?", envItem.Key).Limit(1).Find(&existing)
 	if res.RowsAffected > 0 {
+		// 若已存在且未开启覆盖，则只绑定 Tag，保持原变量值不变
+		if !overwrite {
+			relation.DataRelation.SaveTags(existing.ID, constant.RelationTypeEnvTag, tag)
+			log("  ~ 环境变量已存在, 跳过覆盖: %s (Tag: %s)", envItem.Key, tag)
+			return false, nil
+		}
+
 		updates := map[string]interface{}{
 			"type": envType,
 		}
@@ -487,6 +496,7 @@ func (a *AppApplier) upsertSingleEnv(envItem AppEnvItem, envValues map[string]st
 			database.DB.Model(&existing).Updates(updates)
 		}
 		relation.DataRelation.SaveTags(existing.ID, constant.RelationTypeEnvTag, tag)
+		log("  + 覆盖更新环境变量: %s (Tag: %s)", envItem.Key, tag)
 		return false, nil
 	}
 
@@ -838,9 +848,10 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 		Status:          constant.AppStatusInstalled,
 		EnvValues:       envValues,
 		BuildOpts: &models.AppBuildOpts{
-			ForceSetup: opts.ForceSetup,
-			SkipSetup:  opts.SkipSetup,
-			SkipSync:   opts.SkipSync,
+			ForceSetup:   opts.ForceSetup,
+			SkipSetup:    opts.SkipSetup,
+			SkipSync:     opts.SkipSync,
+			OverwriteEnv: opts.OverwriteEnv,
 		},
 	}
 
