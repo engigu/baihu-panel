@@ -906,6 +906,42 @@ func ValidateSource(src AppSource) error {
 	}
 }
 
+// GetTemplateMap 统一提取解析 template 定义中的所有宏变量键值对
+func (m *AppManifest) GetTemplateMap() map[string]string {
+	result := make(map[string]string)
+	if m.Template == nil {
+		return result
+	}
+
+	if tList, ok := m.Template.([]interface{}); ok {
+		for _, item := range tList {
+			if mItem, isMap := item.(map[string]interface{}); isMap {
+				for k, v := range mItem {
+					if v != nil {
+						result[k] = fmt.Sprintf("%v", v)
+					}
+				}
+			}
+		}
+	} else if tMap, ok := m.Template.(map[string]interface{}); ok {
+		for k, v := range tMap {
+			if v != nil {
+				result[k] = fmt.Sprintf("%v", v)
+			}
+		}
+	}
+	return result
+}
+
+// GetTemplateVar 根据 key 提取 template 定义中的变量字符串值
+func (m *AppManifest) GetTemplateVar(key string) string {
+	tplMap := m.GetTemplateMap()
+	if val, ok := tplMap[key]; ok {
+		return strings.TrimSpace(val)
+	}
+	return ""
+}
+
 // GetLanguages 解析提取应用配置的运行语言契约列表
 func (m *AppManifest) GetLanguages() []map[string]string {
 	var result []map[string]string
@@ -921,27 +957,14 @@ func (m *AppManifest) GetLanguages() []map[string]string {
 		return result
 	}
 
-	// 容灾解析：从 template 池的 mise_languages 获取 (例如: "go@1.22.5,node@23.11.1")
-	if m.Template != nil {
-		miseLangStr := ""
-		if tList, ok := m.Template.([]interface{}); ok {
-			for _, item := range tList {
-				if mItem, isMap := item.(map[string]interface{}); isMap {
-					if v, exists := mItem["mise_languages"]; exists {
-						miseLangStr = fmt.Sprintf("%v", v)
-						break
-					}
-				}
-			}
-		} else if tMap, ok := m.Template.(map[string]interface{}); ok {
-			if v, exists := tMap["mise_languages"]; exists {
-				miseLangStr = fmt.Sprintf("%v", v)
-			}
-		}
-
-		if miseLangStr != "" {
-			return utils.ParseMiseLanguages(miseLangStr)
-		}
+	// 容灾解析：从 template 池的 mise_languages 获取 (例如: "dotnet@8.0.425 node@23")
+	if miseLangStr := m.GetTemplateVar("mise_languages"); miseLangStr != "" {
+		return utils.ParseMiseLanguages(miseLangStr)
 	}
 	return result
+}
+
+// GetTemplateTag 解析提取 template 定义中的 tag 变量
+func (m *AppManifest) GetTemplateTag() string {
+	return m.GetTemplateVar("tag")
 }

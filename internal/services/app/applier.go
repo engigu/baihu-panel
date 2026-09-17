@@ -412,9 +412,10 @@ func (a *AppApplier) applyEnvSchema(manifest *AppManifest, opts ApplyOptions, lo
 	}
 	log("[4/5] 配置应用环境变量契约 (共 %d 项)...", len(manifest.EnvSchema))
 
+	templateTag := manifest.GetTemplateTag()
 	var createdEnvs []string
 	for _, envItem := range manifest.EnvSchema {
-		tag := resolveEnvTag(envItem.Tag, opts.Tag, manifest.ID)
+		tag := resolveEnvTag(envItem.Tag, templateTag, opts.Tag, manifest.ID)
 		created, err := a.upsertSingleEnv(envItem, opts.EnvValues, tag, userID, opts.OverwriteEnv, log)
 		if err != nil {
 			return nil, err
@@ -427,12 +428,15 @@ func (a *AppApplier) applyEnvSchema(manifest *AppManifest, opts ApplyOptions, lo
 	return createdEnvs, nil
 }
 
-// resolveEnvTag 计算 Tag 映射优先级 (appTag > envItem.Tag > manifestID)
-func resolveEnvTag(itemTag, appTag, manifestID string) string {
-	if tag := strings.TrimSpace(appTag); tag != "" {
+// resolveEnvTag 计算 Tag 映射优先级 (envItem.Tag > templateTag > appTag > manifestID)
+func resolveEnvTag(itemTag, templateTag, appTag, manifestID string) string {
+	if tag := strings.TrimSpace(itemTag); tag != "" {
 		return tag
 	}
-	if tag := strings.TrimSpace(itemTag); tag != "" {
+	if tag := strings.TrimSpace(templateTag); tag != "" {
+		return tag
+	}
+	if tag := strings.TrimSpace(appTag); tag != "" {
 		return tag
 	}
 	return manifestID
@@ -605,9 +609,16 @@ func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, mast
 			timeout = t.Timeout
 		}
 
+		templateTag := manifest.GetTemplateTag()
 		taskTag := t.Tag
 		if taskTag == "" {
 			taskTag = defTag
+		}
+		if taskTag == "" {
+			taskTag = templateTag
+		}
+		if taskTag == "" && opts.Tag != "" {
+			taskTag = opts.Tag
 		}
 		if taskTag == "" {
 			taskTag = manifest.ID

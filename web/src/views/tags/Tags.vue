@@ -461,7 +461,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <DialogFooter class="gap-2 sm:gap-0">
+        <DialogFooter class="gap-2">
           <Button variant="outline" size="sm" @click="showEditDialog = false" class="h-9">取消</Button>
           <Button @click="saveTag" size="sm" class="h-9">确定</Button>
         </DialogFooter>
@@ -484,7 +484,7 @@ onMounted(() => {
             </span>
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter class="gap-2 sm:gap-0">
+        <DialogFooter class="gap-2">
           <Button variant="outline" size="sm" @click="showDeleteConfirm = false" class="h-9">取消</Button>
           <Button variant="destructive" size="sm" @click="deleteTag" class="h-9">确认删除</Button>
         </DialogFooter>

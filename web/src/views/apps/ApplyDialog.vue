@@ -141,7 +141,15 @@ watch(
     deploySuccess.value = false
     deployError.value = ''
     envForm.value = {}
-    appTag.value = app?.id || props.targetApp?.id || ''
+    let tplTag = ''
+    const tpl = (app as any)?.template || (props.targetApp as any)?.template
+    if (Array.isArray(tpl)) {
+      const item = tpl.find((t: any) => t && t.tag)
+      if (item && item.tag) tplTag = String(item.tag).trim()
+    } else if (tpl && typeof tpl === 'object' && tpl.tag) {
+      tplTag = String(tpl.tag).trim()
+    }
+    appTag.value = tplTag || app?.id || props.targetApp?.id || ''
     showSecrets.value = {}
     imageLoadError.value = false
     isFullscreenLog.value = false
@@ -709,7 +717,7 @@ async function executeDeploy() {
                   <span class="text-[10px] font-mono text-muted-foreground break-all">({{ schema.key }})</span>
                 </div>
                 <Badge v-if="schema.tag || appTag" variant="secondary" class="text-[10px] font-mono shrink-0">
-                  Tag: {{ schema.tag || appTag }}
+                  Tag: {{ (schema.tag && schema.tag !== '{tag}') ? schema.tag : appTag }}
                 </Badge>
               </div>
 
