@@ -457,12 +457,27 @@ func (a *AppApplier) upsertSingleEnv(envItem AppEnvItem, envValues map[string]st
 		}
 	}
 
+	remark := envItem.Description
+	if remark == "" {
+		remark = envItem.Label
+	}
+
 	var existing models.EnvironmentVariable
 	res := database.DB.Where("name = ?", envItem.Key).Limit(1).Find(&existing)
 	if res.RowsAffected > 0 {
-		updates := map[string]interface{}{}
+		updates := map[string]interface{}{
+			"type": envType,
+		}
+		if remark != "" {
+			updates["remark"] = remark
+		}
 		if val != "" {
 			updates["value"] = models.BigText(val)
+		} else if existing.Type == constant.EnvTypeSecret && envType == constant.EnvTypeNormal && string(existing.Value) != "" {
+			// 若原来为 secret 密文，现改为普通 string 且未传新值，自动解密恢复明文
+			if decValue, err := utils.Decrypt(string(existing.Value)); err == nil {
+				updates["value"] = models.BigText(decValue)
+			}
 		}
 		if existing.UserID == "" {
 			updates["user_id"] = userID
@@ -472,11 +487,6 @@ func (a *AppApplier) upsertSingleEnv(envItem AppEnvItem, envValues map[string]st
 		}
 		relation.DataRelation.SaveTags(existing.ID, constant.RelationTypeEnvTag, tag)
 		return false, nil
-	}
-
-	remark := envItem.Description
-	if remark == "" {
-		remark = envItem.Label
 	}
 
 	newEnv := models.EnvironmentVariable{
