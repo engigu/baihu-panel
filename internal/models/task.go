@@ -138,10 +138,11 @@ type TaskScheduleOpts struct {
 
 // AppBuildOpts 高级构建与部署控制选项
 type AppBuildOpts struct {
-	ForceSetup   bool `json:"force_setup"`   // 强制重新编译
-	SkipSetup    bool `json:"skip_setup"`    // 跳过环境与依赖安装
-	SkipSync     bool `json:"skip_sync"`     // 跳过代码源同步
-	OverwriteEnv bool `json:"overwrite_env"` // 是否覆盖已有环境变量
+	ForceSetup    bool  `json:"force_setup"`              // 强制重新编译
+	SkipSetup     bool  `json:"skip_setup"`               // 跳过环境与依赖安装
+	SkipSync      bool  `json:"skip_sync"`                // 跳过代码源同步
+	OverwriteEnv  bool  `json:"overwrite_env"`            // 是否覆盖已有环境变量
+	OverwriteTask *bool `json:"overwrite_task,omitempty"` // 是否覆盖和插入任务 (默认 true)
 }
 
 // Task 代表一个计划任务

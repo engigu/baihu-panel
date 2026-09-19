@@ -10,6 +10,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
+	"github.com/engigu/baihu-panel/internal/services/app"
 	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/engigu/baihu-panel/internal/utils"
 
@@ -466,6 +467,20 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		}
 	} else if oldTask != nil {
 		sourceID = oldTask.SourceID
+	}
+
+	// 若是 MasterTask (type == constant.TaskTypeApp)，同步回写编辑后的定制参数到 manifest_raw
+	if req.Type == constant.TaskTypeApp || (oldTask != nil && oldTask.Type == constant.TaskTypeApp) {
+		if req.UnifiedConfig != "" {
+			unified := models.ParseUnifiedTaskConfig(req.UnifiedConfig)
+			if unified.App != nil && unified.App.ManifestRaw != "" {
+				if req.Schedule != "" {
+					unified.App.Schedule = req.Schedule
+				}
+				unified.App.ManifestRaw = app.SyncManifestYAMLWithConfig(unified.App.ManifestRaw, unified.App)
+				req.UnifiedConfig = unified.ToJSON()
+			}
+		}
 	}
 
 	param := tasks.TaskParam{

@@ -72,10 +72,11 @@ const showSecrets = ref<Record<string, boolean>>({})
 
 // 高级选项
 const showAdvanced = ref(true)
-const forceSetup = ref(false)
+const forceSetup = ref(true)
 const skipSetup = ref(false)
 const skipSync = ref(false)
 const overwriteEnv = ref(false)
+const overwriteTask = ref(true)
 const enableTelemetry = ref(true)
 
 // 调度与通知策略配置
@@ -133,33 +134,39 @@ const envSchemaList = computed<AppEnvItemSchema[]>(() => {
 
 const imageLoadError = ref(false)
 
-// 监听目标应用变更，初始化表单
-watch(
-  () => props.targetApp,
-  (app) => {
-    deployLog.value = ''
-    deploySuccess.value = false
-    deployError.value = ''
-    envForm.value = {}
-    let tplTag = ''
-    const tpl = (app as any)?.template || (props.targetApp as any)?.template
-    if (Array.isArray(tpl)) {
-      const item = tpl.find((t: any) => t && t.tag)
-      if (item && item.tag) tplTag = String(item.tag).trim()
-    } else if (tpl && typeof tpl === 'object' && tpl.tag) {
-      tplTag = String(tpl.tag).trim()
-    }
-    appTag.value = tplTag || app?.id || props.targetApp?.id || ''
-    showSecrets.value = {}
-    imageLoadError.value = false
-    isFullscreenLog.value = false
-    forceSetup.value = false
-    skipSetup.value = false
-    skipSync.value = false
+// 初始化与回显表单数据
+function initDialogData() {
+  deployLog.value = ''
+  deploySuccess.value = false
+  deployError.value = ''
+  envForm.value = {}
+  showSecrets.value = {}
+  imageLoadError.value = false
+  isFullscreenLog.value = false
 
-    if (app) {
-      if (app.languages && app.languages.length > 0) {
-        selectedLangs.value = app.languages.map(l => ({
+  const app = props.targetApp
+  const taskVal = props.task
+  const isEditMode = props.mode === 'edit_task' || !!taskVal
+
+  enableTelemetry.value = !isEditMode
+
+  // 1. Tag 提取
+  let tplTag = ''
+  const tpl = (app as any)?.template
+  if (Array.isArray(tpl)) {
+    const item = tpl.find((t: any) => t && t.tag)
+    if (item && item.tag) tplTag = String(item.tag).trim()
+  } else if (tpl && typeof tpl === 'object' && tpl.tag) {
+    tplTag = String(tpl.tag).trim()
+  }
+  appTag.value = tplTag || app?.id || taskVal?.id || ''
+
+  // 2. 区分场景回显
+  if (isEditMode) {
+    // 场景 A: 任务管理编辑已有 MasterTask —— 100% 遵照 task 表已保存的数据
+    if (taskVal) {
+      if (taskVal.languages && taskVal.languages.length > 0) {
+        selectedLangs.value = taskVal.languages.map(l => ({
           name: l.name,
           version: l.version,
           availableVersions: []
@@ -168,66 +175,6 @@ watch(
         selectedLangs.value = []
       }
 
-      // 回显已保存的高级构建配置
-      if (app.build_opts) {
-        forceSetup.value = Boolean(app.build_opts.force_setup)
-        skipSetup.value = Boolean(app.build_opts.skip_setup)
-        skipSync.value = Boolean(app.build_opts.skip_sync)
-        overwriteEnv.value = Boolean(app.build_opts.overwrite_env)
-      } else {
-        overwriteEnv.value = false
-      }
-
-      // 初始化场景（优先使用已保存的当前场景）
-      const savedSc = app.scenarios?.find(s => s.id === app.current_scenario)
-      const defaultSc = app.scenarios?.find(s => s.default) || app.scenarios?.[0]
-      selectedScenario.value = savedSc?.id || defaultSc?.id || ''
-
-      // 初始化环境变量表单默认值（优先使用已保存的环境变量值）
-      if (app.env_schema) {
-        for (const item of app.env_schema) {
-          if (app.env_values && app.env_values[item.key] !== undefined) {
-            envForm.value[item.key] = app.env_values[item.key]
-          } else if (item.default !== undefined && item.default !== null) {
-            envForm.value[item.key] = item.type === 'boolean' ? Boolean(item.default) : String(item.default)
-          } else if (item.type === 'boolean') {
-            envForm.value[item.key] = false
-          } else {
-            envForm.value[item.key] = ''
-          }
-        }
-      }
-
-      // 如果有预置的 manifest_url
-      if (app.manifest_url) {
-        manifestUrl.value = app.manifest_url
-      } else {
-        manifestUrl.value = `https://raw.githubusercontent.com/engigu/baihu-appstore/main/apps/${app.id}/app.yaml`
-      }
-    } else {
-      selectedScenario.value = ''
-      manifestUrl.value = ''
-      manifestYaml.value = ''
-    }
-  },
-  { immediate: true }
-)
-
-watch(
-  [() => props.open, () => props.task, () => props.targetApp, () => props.mode],
-  ([isOpen, taskVal, appVal, modeVal]) => {
-    if (!isOpen) return
-
-    enableTelemetry.value = modeVal !== 'edit_task' && !taskVal
-
-    if (taskVal) {
-      if (taskVal.languages && taskVal.languages.length > 0) {
-        selectedLangs.value = taskVal.languages.map(l => ({
-          name: l.name,
-          version: l.version,
-          availableVersions: []
-        }))
-      }
       form.value = {
         schedule: taskVal.schedule || '',
         random_range: taskVal.random_range || 0,
@@ -239,31 +186,87 @@ watch(
         id: taskVal.id,
         updated_at: taskVal.updated_at
       }
-      if (taskVal.unified_config) {
-        try {
-          const cfg = JSON.parse(taskVal.unified_config)
-          if (cfg.app?.build_opts) {
-            forceSetup.value = Boolean(cfg.app.build_opts.force_setup)
-            skipSetup.value = Boolean(cfg.app.build_opts.skip_setup)
-            skipSync.value = Boolean(cfg.app.build_opts.skip_sync)
-          }
-          if (cfg.app?.current_scenario) {
-            selectedScenario.value = cfg.app.current_scenario
-          }
-        } catch { /* ignore */ }
-      }
+    }
+
+    // 从 task 的 unified_config 或 targetApp 中提取已保存的 app 配置
+    let savedAppCfg: any = null
+    if (taskVal?.unified_config) {
+      try {
+        const unified = JSON.parse(taskVal.unified_config)
+        savedAppCfg = unified.app
+      } catch {}
+    }
+
+    const savedBuildOpts = savedAppCfg?.build_opts || app?.build_opts
+    if (savedBuildOpts) {
+      forceSetup.value = savedBuildOpts.force_setup !== undefined ? Boolean(savedBuildOpts.force_setup) : false
+      skipSetup.value = Boolean(savedBuildOpts.skip_setup)
+      skipSync.value = Boolean(savedBuildOpts.skip_sync)
+      overwriteEnv.value = Boolean(savedBuildOpts.overwrite_env)
+      overwriteTask.value = savedBuildOpts.overwrite_task !== undefined ? Boolean(savedBuildOpts.overwrite_task) : true
     } else {
-      if (appVal?.build_opts) {
-        forceSetup.value = Boolean(appVal.build_opts.force_setup)
-        skipSetup.value = Boolean(appVal.build_opts.skip_setup)
-        skipSync.value = Boolean(appVal.build_opts.skip_sync)
+      forceSetup.value = false
+      skipSetup.value = false
+      skipSync.value = false
+      overwriteEnv.value = false
+      overwriteTask.value = true
+    }
+
+    // 场景
+    const currentScenarioId = savedAppCfg?.current_scenario || app?.current_scenario
+    const matchedSc = app?.scenarios?.find(s => s.id === currentScenarioId)
+    const defSc = app?.scenarios?.find(s => s.default) || app?.scenarios?.[0]
+    selectedScenario.value = matchedSc?.id || defSc?.id || ''
+
+    // 环境变量：优先使用已保存的 env_values
+    const savedEnvValues = savedAppCfg?.env_values || app?.env_values || {}
+    if (app?.env_schema) {
+      for (const item of app.env_schema) {
+        if (savedEnvValues[item.key] !== undefined) {
+          envForm.value[item.key] = savedEnvValues[item.key]
+        } else if (item.default !== undefined && item.default !== null) {
+          envForm.value[item.key] = item.type === 'boolean' ? Boolean(item.default) : String(item.default)
+        } else if (item.type === 'boolean') {
+          envForm.value[item.key] = false
+        } else {
+          envForm.value[item.key] = ''
+        }
+      }
+    }
+  } else {
+    // 场景 B: 应用市场全新安装 —— 100% 遵照应用市场原始 yml 的信息
+    if (app) {
+      if (app.languages && app.languages.length > 0) {
+        selectedLangs.value = app.languages.map(l => ({
+          name: l.name,
+          version: l.version,
+          availableVersions: []
+        }))
+      } else {
+        selectedLangs.value = []
       }
 
-      const defSched = appVal?.schedule_opts?.schedule || appVal?.schedule || ''
-      const defRandom = appVal?.schedule_opts?.random_range ?? 0
-      const defTimeout = appVal?.schedule_opts?.timeout ?? 30
-      const defRetryCount = appVal?.schedule_opts?.retry_count ?? 0
-      const defRetryInterval = appVal?.schedule_opts?.retry_interval ?? 0
+      // 高级构建控制：完全读取原始 yml 定义的 build_opts；未定义的遵循白虎规范默认值
+      if (app.build_opts) {
+        forceSetup.value = app.build_opts.force_setup !== undefined ? Boolean(app.build_opts.force_setup) : false
+        skipSetup.value = Boolean(app.build_opts.skip_setup)
+        skipSync.value = Boolean(app.build_opts.skip_sync)
+        overwriteEnv.value = Boolean(app.build_opts.overwrite_env)
+        overwriteTask.value = app.build_opts.overwrite_task !== undefined ? Boolean(app.build_opts.overwrite_task) : true
+      } else {
+        forceSetup.value = false
+        skipSetup.value = false
+        skipSync.value = false
+        overwriteEnv.value = false
+        overwriteTask.value = true
+      }
+
+      // 调度配置默认值
+      const defSched = app.schedule_opts?.schedule || app.schedule || ''
+      const defRandom = app.schedule_opts?.random_range ?? 0
+      const defTimeout = app.schedule_opts?.timeout ?? 30
+      const defRetryCount = app.schedule_opts?.retry_count ?? 0
+      const defRetryInterval = app.schedule_opts?.retry_interval ?? 0
 
       form.value = {
         schedule: defSched,
@@ -274,16 +277,68 @@ watch(
         clean_config: '',
         unified_config: ''
       }
-    }
 
-    const taskIdToLoad = taskVal?.id || appVal?.id
-    if (taskIdToLoad) {
-      setTimeout(() => {
-        notificationConfigRef.value?.loadConfig(taskIdToLoad)
-      }, 50)
+      // 默认推荐场景
+      const defSc = app.scenarios?.find(s => s.default) || app.scenarios?.[0]
+      selectedScenario.value = defSc?.id || ''
+
+      // 环境变量默认值
+      if (app.env_schema) {
+        for (const item of app.env_schema) {
+          if (item.default !== undefined && item.default !== null) {
+            envForm.value[item.key] = item.type === 'boolean' ? Boolean(item.default) : String(item.default)
+          } else if (item.type === 'boolean') {
+            envForm.value[item.key] = false
+          } else {
+            envForm.value[item.key] = ''
+          }
+        }
+      }
+
+      if (app.manifest_url) {
+        manifestUrl.value = app.manifest_url
+      } else {
+        manifestUrl.value = `https://raw.githubusercontent.com/engigu/baihu-appstore/main/apps/${app.id}/app.yaml`
+      }
+    } else {
+      selectedScenario.value = ''
+      manifestUrl.value = ''
+      manifestYaml.value = ''
+      forceSetup.value = false
+      skipSetup.value = false
+      skipSync.value = false
+      overwriteEnv.value = false
+      overwriteTask.value = true
+    }
+  }
+
+  // 加载通知配置
+  const taskIdToLoad = taskVal?.id || app?.id
+  if (taskIdToLoad) {
+    setTimeout(() => {
+      notificationConfigRef.value?.loadConfig(taskIdToLoad)
+    }, 50)
+  }
+}
+
+// 统一监听弹窗开启与外部数据变更，调用 initDialogData
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      initDialogData()
     }
   },
   { immediate: true }
+)
+
+watch(
+  () => props.targetApp,
+  () => {
+    if (props.open) {
+      initDialogData()
+    }
+  }
 )
 
 function toggleSecretVisibility(key: string) {
@@ -342,11 +397,23 @@ async function startDeployProcess() {
       parsedUnified.app.build_opts = {
         force_setup: forceSetup.value,
         skip_setup: skipSetup.value,
-        skip_sync: skipSync.value
+        skip_sync: skipSync.value,
+        overwrite_env: overwriteEnv.value,
+        overwrite_task: overwriteTask.value
       }
       if (selectedScenario.value) {
         parsedUnified.app.current_scenario = selectedScenario.value
       }
+
+      // 同步收集环境变量当前输入值
+      const currentEnvValues: Record<string, string> = {}
+      for (const [k, v] of Object.entries(envForm.value)) {
+        if (v !== undefined && v !== null && v !== '') {
+          currentEnvValues[k] = String(v)
+        }
+      }
+      parsedUnified.app.env_values = currentEnvValues
+
       const updatedUnifiedStr = JSON.stringify(parsedUnified)
 
       const updatePayload: any = {
@@ -365,6 +432,19 @@ async function startDeployProcess() {
       if (notificationConfigRef.value) {
         await notificationConfigRef.value.saveConfig(taskId)
       }
+
+      // 同步更新本地响应式数据，避免后续重新打开或调度时读取旧数据
+      form.value.unified_config = updatedUnifiedStr
+      if (props.task) {
+        props.task.unified_config = updatedUnifiedStr
+        props.task.schedule = form.value.schedule
+      }
+      if (props.targetApp) {
+        props.targetApp.build_opts = parsedUnified.app.build_opts
+        props.targetApp.current_scenario = selectedScenario.value
+        props.targetApp.env_values = currentEnvValues
+      }
+
       toast.success('更新应用调度配置成功！')
       emit('success')
       emit('update:open', false)
@@ -429,6 +509,7 @@ async function executeDeploy() {
     skip_setup: skipSetup.value,
     skip_sync: skipSync.value,
     overwrite_env: overwriteEnv.value,
+    overwrite_task: overwriteTask.value,
     schedule: form.value.schedule || undefined,
     random_range: form.value.random_range || 0,
     timeout: form.value.timeout || 30,
@@ -825,13 +906,13 @@ async function executeDeploy() {
             >
               <div class="flex items-start gap-2.5 min-w-0 pt-0.5">
                 <Checkbox
-                  v-model="forceSetup"
+                  v-model:checked="forceSetup"
                   class="shrink-0 mt-0.5"
                   @click.stop
-                  @update:model-value="(val) => { if (val) skipSetup = false }"
+                  @update:checked="(val) => { if (val) skipSetup = false }"
                 />
                 <div class="flex flex-col min-w-0">
-                  <span class="text-xs font-bold text-foreground">强制重新编译 (Rebuild)</span>
+                  <span class="text-xs font-bold text-foreground">强制重新构建 (Force Setup)</span>
                   <span class="text-[11px] text-muted-foreground truncate">跳过探活断言，强行重新执行 setup.install 依赖安装与预编译</span>
                 </div>
               </div>
@@ -852,10 +933,10 @@ async function executeDeploy() {
             >
               <div class="flex items-start gap-2.5 min-w-0 pt-0.5">
                 <Checkbox
-                  v-model="skipSetup"
+                  v-model:checked="skipSetup"
                   class="shrink-0 mt-0.5"
                   @click.stop
-                  @update:model-value="(val) => { if (val) forceSetup = false }"
+                  @update:checked="(val) => { if (val) forceSetup = false }"
                 />
                 <div class="flex flex-col min-w-0">
                   <span class="text-xs font-bold text-foreground">跳过环境与依赖安装</span>
@@ -879,7 +960,7 @@ async function executeDeploy() {
             >
               <div class="flex items-start gap-2.5 min-w-0 pt-0.5">
                 <Checkbox
-                  v-model="skipSync"
+                  v-model:checked="skipSync"
                   class="shrink-0 mt-0.5"
                   @click.stop
                 />
@@ -905,7 +986,7 @@ async function executeDeploy() {
             >
               <div class="flex items-start gap-2.5 min-w-0 pt-0.5">
                 <Checkbox
-                  v-model="overwriteEnv"
+                  v-model:checked="overwriteEnv"
                   class="shrink-0 mt-0.5"
                   @click.stop
                 />
@@ -916,6 +997,32 @@ async function executeDeploy() {
               </div>
               <Badge variant="secondary" class="text-[10px] shrink-0 font-normal self-start sm:self-center sm:ml-2">
                 默认：不覆盖已有值
+              </Badge>
+            </div>
+
+            <!-- 5. 覆盖和插入任务 -->
+            <div
+              class="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer select-none gap-1.5 sm:gap-2"
+              :class="[
+                overwriteTask
+                  ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/40'
+                  : 'border-border/60 hover:border-border hover:bg-muted/20'
+              ]"
+              @click="overwriteTask = !overwriteTask"
+            >
+              <div class="flex items-start gap-2.5 min-w-0 pt-0.5">
+                <Checkbox
+                  v-model:checked="overwriteTask"
+                  class="shrink-0 mt-0.5"
+                  @click.stop
+                />
+                <div class="flex flex-col min-w-0">
+                  <span class="text-xs font-bold text-foreground">覆盖和插入任务</span>
+                  <span class="text-[11px] text-muted-foreground truncate">默认开启（覆盖）：自动同步更新 Manifest 中的受控任务；取消勾选后跳过任务的更新与插入</span>
+                </div>
+              </div>
+              <Badge variant="secondary" class="text-[10px] shrink-0 font-normal self-start sm:self-center sm:ml-2">
+                默认：覆盖和更新
               </Badge>
             </div>
           </div>

@@ -83,6 +83,7 @@ type ApplyAppRequest struct {
 	SkipSync        bool              `json:"skip_sync"`
 	ForceSetup      bool              `json:"force_setup"`
 	OverwriteEnv    bool              `json:"overwrite_env"`
+	OverwriteTask   *bool             `json:"overwrite_task"`
 	Schedule        string            `json:"schedule"`
 	RandomRange   int               `json:"random_range"`
 	Timeout       int               `json:"timeout"`
@@ -178,6 +179,7 @@ func (ac *AppController) ApplyApp(c *gin.Context) {
 		SkipSync:      req.SkipSync,
 		ForceSetup:    req.ForceSetup,
 		OverwriteEnv:  req.OverwriteEnv,
+		OverwriteTask: req.OverwriteTask,
 		Schedule:      req.Schedule,
 		RandomRange:   req.RandomRange,
 		Timeout:       req.Timeout,

@@ -2,6 +2,8 @@ package app
 
 import (
 	"testing"
+
+	"github.com/engigu/baihu-panel/internal/models"
 )
 
 func TestGetAppDirName(t *testing.T) {
@@ -370,6 +372,69 @@ func TestLanguageExtractionAndValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestSyncManifestYAMLWithConfig(t *testing.T) {
+	rawYAML := `spec_version: v1
+id: test-app
+name: 测试应用
+version: 1.0.0
+build_opts:
+  force_setup: true
+  skip_setup: false
+  skip_sync: false
+schedule: 0 0 8 * * *
+setup:
+  install: echo 1
+tasks:
+  - id: t1
+    name: 任务1
+    command: echo 1
+`
+	overwriteTask := false
+	cfg := &models.AppTaskConfig{
+		BuildOpts: &models.AppBuildOpts{
+			ForceSetup:    false,
+			SkipSetup:     true,
+			SkipSync:      true,
+			OverwriteEnv:  true,
+			OverwriteTask: &overwriteTask,
+		},
+		Schedule: "0 30 9 * * *",
+	}
+
+	syncedYAML := SyncManifestYAMLWithConfig(rawYAML, cfg)
+	if syncedYAML == rawYAML {
+		t.Fatalf("SyncManifestYAMLWithConfig 期望修改 YAML 内容但未变动")
+	}
+
+	manifest, err := ParseManifestFromYAML([]byte(syncedYAML))
+	if err != nil {
+		t.Fatalf("解析同步后的 YAML 失败: %v\nYAML 内容:\n%s", err, syncedYAML)
+	}
+
+	if manifest.BuildOpts == nil {
+		t.Fatalf("manifest.BuildOpts 为 nil")
+	}
+	if manifest.BuildOpts.ForceSetup != false {
+		t.Errorf("期望 ForceSetup 为 false，实际为 %v", manifest.BuildOpts.ForceSetup)
+	}
+	if manifest.BuildOpts.SkipSetup != true {
+		t.Errorf("期望 SkipSetup 为 true，实际为 %v", manifest.BuildOpts.SkipSetup)
+	}
+	if manifest.BuildOpts.SkipSync != true {
+		t.Errorf("期望 SkipSync 为 true，实际为 %v", manifest.BuildOpts.SkipSync)
+	}
+	if manifest.BuildOpts.OverwriteEnv != true {
+		t.Errorf("期望 OverwriteEnv 为 true，实际为 %v", manifest.BuildOpts.OverwriteEnv)
+	}
+	if manifest.BuildOpts.OverwriteTask == nil || *manifest.BuildOpts.OverwriteTask != false {
+		t.Errorf("期望 OverwriteTask 为 false，实际为 %v", manifest.BuildOpts.OverwriteTask)
+	}
+	if manifest.Schedule != "0 30 9 * * *" {
+		t.Errorf("期望 Schedule 为 '0 30 9 * * *'，实际为 %s", manifest.Schedule)
+	}
+}
+
 
 
 

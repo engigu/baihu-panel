@@ -584,7 +584,7 @@ export interface MarketplaceApp {
   manifest_path?: string
   manifest_raw?: string
   is_installed?: boolean
-  build_opts?: { force_setup?: boolean; skip_setup?: boolean; skip_sync?: boolean; overwrite_env?: boolean } | null
+  build_opts?: { force_setup?: boolean; skip_setup?: boolean; skip_sync?: boolean; overwrite_env?: boolean; overwrite_task?: boolean } | null
   schedule?: string
   schedule_opts?: {
     schedule?: string
@@ -607,6 +607,7 @@ export interface ApplyAppPayload {
   skip_sync?: boolean
   force_setup?: boolean
   overwrite_env?: boolean
+  overwrite_task?: boolean
   schedule?: string
   random_range?: number
   timeout?: number

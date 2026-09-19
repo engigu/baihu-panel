@@ -61,12 +61,15 @@ func runApply(args []string) {
 	var skipSetup bool
 	var skipSync bool
 	var forceSetup bool
+	var overwriteTaskStr string
+	var overwriteEnv bool
 
 	fs.StringVar(&scenario, "scenario", "", "指定激活的应用场景模板 ID")
 	fs.BoolVar(&skipSetup, "skip-setup", false, "跳过前置环境检测与依赖安装步骤")
 	fs.BoolVar(&skipSync, "skip-sync", false, "跳过代码源同步步骤")
-	fs.BoolVar(&forceSetup, "rebuild", false, "强制重新执行依赖安装与编译（跳过 check 探活）")
 	fs.BoolVar(&forceSetup, "force-setup", false, "强制重新执行依赖安装与编译（跳过 check 探活）")
+	fs.BoolVar(&overwriteEnv, "overwrite-env", false, "是否覆盖已有同名环境变量")
+	fs.StringVar(&overwriteTaskStr, "overwrite-task", "", "是否覆盖并同步更新受控任务 (true/false)")
 
 	normArgs := normalizeArgs(args)
 	if err := fs.Parse(normArgs); err != nil {
@@ -76,18 +79,26 @@ func runApply(args []string) {
 	parsedArgs := fs.Args()
 	if len(parsedArgs) == 0 {
 		fmt.Fprintln(os.Stderr, "错误: 必须提供 app.yaml 的文件路径或远程 URL")
-		fmt.Fprintln(os.Stderr, "用法: baihu app apply <file-path-or-url> [--scenario <id>] [--rebuild]")
+		fmt.Fprintln(os.Stderr, "用法: baihu app apply <file-path-or-url> [--scenario <id>] [--force-setup]")
 		os.Exit(1)
 	}
 
 	targetPathOrURL := parsedArgs[0]
 
+	var overwriteTaskPtr *bool
+	if overwriteTaskStr != "" {
+		val := strings.ToLower(overwriteTaskStr) == "true" || overwriteTaskStr == "1"
+		overwriteTaskPtr = &val
+	}
+
 	opts := app.ApplyOptions{
-		ScenarioID: scenario,
-		SkipSetup:  skipSetup,
-		SkipSync:   skipSync,
-		ForceSetup: forceSetup,
-		LogWriter:  os.Stdout,
+		ScenarioID:    scenario,
+		SkipSetup:     skipSetup,
+		SkipSync:      skipSync,
+		ForceSetup:    forceSetup,
+		OverwriteEnv:  overwriteEnv,
+		OverwriteTask: overwriteTaskPtr,
+		LogWriter:     os.Stdout,
 	}
 
 	res, err := app.DefaultAppService.ApplyApp(targetPathOrURL, opts)
@@ -209,8 +220,8 @@ func normalizeArgs(args []string) []string {
 		arg := args[i]
 		if len(arg) > 0 && arg[0] == '-' {
 			flags = append(flags, arg)
-			// 如果是非布尔选项 (如 --scenario val)，连同下一个值一起存入 flags
-			if (arg == "--scenario" || arg == "-scenario") && !strings.Contains(arg, "=") && i+1 < len(args) && len(args[i+1]) > 0 && args[i+1][0] != '-' {
+			// 如果是非布尔选项 (如 --scenario val 或 --overwrite-task val)，连同下一个值一起存入 flags
+			if (arg == "--scenario" || arg == "-scenario" || arg == "--overwrite-task" || arg == "-overwrite-task") && !strings.Contains(arg, "=") && i+1 < len(args) && len(args[i+1]) > 0 && args[i+1][0] != '-' {
 				i++
 				flags = append(flags, args[i])
 			}

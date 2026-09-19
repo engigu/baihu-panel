@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/goccy/go-yaml"
 )
 
@@ -162,4 +163,58 @@ func ValidateManifest(m *AppManifest) error {
 		return errors.New("应用描述对象不能为空")
 	}
 	return m.Validate()
+}
+
+// SyncManifestYAMLWithConfig 将 AppTaskConfig 中的 build_opts、scenario、schedule 等用户定制项同步写入 YAML 文本中，生成实例级定制 YAML
+func SyncManifestYAMLWithConfig(rawYAML string, cfg *models.AppTaskConfig) string {
+	if strings.TrimSpace(rawYAML) == "" || cfg == nil {
+		return rawYAML
+	}
+
+	var m map[string]interface{}
+	if err := yaml.Unmarshal([]byte(rawYAML), &m); err != nil || m == nil {
+		return rawYAML
+	}
+
+	// 1. 同步 build_opts
+	if cfg.BuildOpts != nil {
+		buildOptsMap := map[string]interface{}{
+			"force_setup":   cfg.BuildOpts.ForceSetup,
+			"skip_setup":    cfg.BuildOpts.SkipSetup,
+			"skip_sync":     cfg.BuildOpts.SkipSync,
+			"overwrite_env": cfg.BuildOpts.OverwriteEnv,
+		}
+		if cfg.BuildOpts.OverwriteTask != nil {
+			buildOptsMap["overwrite_task"] = *cfg.BuildOpts.OverwriteTask
+		} else {
+			buildOptsMap["overwrite_task"] = true
+		}
+		m["build_opts"] = buildOptsMap
+	}
+
+	// 2. 同步 schedule
+	if cfg.Schedule != "" {
+		m["schedule"] = cfg.Schedule
+	}
+
+	// 3. 同步场景（若有默认场景且被覆盖）
+	if cfg.CurrentScenario != "" {
+		if scenariosRaw, ok := m["scenarios"].([]interface{}); ok {
+			for _, scRaw := range scenariosRaw {
+				if scMap, isMap := scRaw.(map[string]interface{}); isMap {
+					if scID, hasID := scMap["id"].(string); hasID {
+						scMap["default"] = (scID == cfg.CurrentScenario)
+					}
+				}
+			}
+		}
+	}
+
+	// 4. 重新序列化为 YAML 文本
+	updatedBytes, err := yaml.Marshal(m)
+	if err != nil {
+		return rawYAML
+	}
+
+	return string(updatedBytes)
 }

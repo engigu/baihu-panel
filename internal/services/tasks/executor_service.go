@@ -17,6 +17,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/executor"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/services/app"
 	"github.com/engigu/baihu-panel/internal/utils"
 	"github.com/engigu/baihu-panel/internal/windows"
 
@@ -1360,11 +1361,17 @@ func BuildAppCommand(task *models.Task) (string, string, string) {
 		return "", "", ""
 	}
 
+	// 确保临时 YML 是包含最新已保存配置的定制 YML (若有 build_opts 或定制项，自动同步进 YML)
+	finalYAML := appCfg.ManifestRaw
+	if appCfg.BuildOpts != nil {
+		finalYAML = app.SyncManifestYAMLWithConfig(finalYAML, appCfg)
+	}
+
 	// 执行 app 调度时使用临时文件保存 ManifestRaw，然后使用临时 yml 执行
 	tempDir := filepath.Join(os.TempDir(), "baihu-apps")
 	_ = os.MkdirAll(tempDir, 0755)
 	tempYmlPath := filepath.Join(tempDir, fmt.Sprintf("%s.yml", task.ID))
-	if err := os.WriteFile(tempYmlPath, []byte(appCfg.ManifestRaw), 0644); err != nil {
+	if err := os.WriteFile(tempYmlPath, []byte(finalYAML), 0644); err != nil {
 		return "", "", ""
 	}
 
@@ -1374,21 +1381,6 @@ func BuildAppCommand(task *models.Task) (string, string, string) {
 		"app",
 		"apply",
 		tempYmlPath,
-	}
-
-	if appCfg.CurrentScenario != "" {
-		args = append(args, "--scenario", appCfg.CurrentScenario)
-	}
-	if appCfg.BuildOpts != nil {
-		if appCfg.BuildOpts.ForceSetup {
-			args = append(args, "--force-setup")
-		}
-		if appCfg.BuildOpts.SkipSetup {
-			args = append(args, "--skip-setup")
-		}
-		if appCfg.BuildOpts.SkipSync {
-			args = append(args, "--skip-sync")
-		}
 	}
 
 	quotedArgs := make([]string, len(args))

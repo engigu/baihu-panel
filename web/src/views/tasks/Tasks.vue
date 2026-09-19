@@ -218,22 +218,49 @@ watch(showApplyDialog, (val) => {
   }
 })
 
-function openEditApp(task: Task) {
+async function openEditApp(task: Task) {
   editingAppTask.value = task
   const cfg = getAppConfig(task)
-  editingMarketApp.value = {
-    id: task.id,
-    name: task.name,
-    version: cfg.version || '1.0.0',
-    description: task.remark,
-    manifest_path: cfg.manifest_path,
-    manifest_url: cfg.manifest_url,
-    manifest_raw: cfg.manifest_raw,
-    scenarios: cfg.scenarios || [],
-    env_schema: cfg.env_schema || [],
-    build_opts: cfg.build_opts || null,
-    env_values: cfg.env_values || {},
-    current_scenario: cfg.current_scenario || ''
+
+  try {
+    const detail = await api.apps.get(task.id)
+    const appInfo = (detail as any)?.app || {}
+    const manifest = (detail as any)?.manifest || {}
+
+    editingMarketApp.value = {
+      id: task.id,
+      name: task.name,
+      version: appInfo.version || cfg.version || '1.0.0',
+      description: task.remark || appInfo.description || cfg.description,
+      icon: appInfo.icon || cfg.icon,
+      manifest_path: appInfo.manifest_path || cfg.manifest_path,
+      manifest_raw: appInfo.manifest_raw || cfg.manifest_raw,
+      scenarios: manifest.scenarios || [],
+      env_schema: manifest.env_schema || [],
+      build_opts: cfg.build_opts || manifest.build_opts || null,
+      env_values: cfg.env_values || {},
+      current_scenario: cfg.current_scenario || appInfo.current_scenario || '',
+      schedule: task.schedule,
+      languages: task.languages
+    }
+  } catch {
+    // 降级兜底直接从当前 task 内存获取
+    editingMarketApp.value = {
+      id: task.id,
+      name: task.name,
+      version: cfg.version || '1.0.0',
+      description: task.remark,
+      manifest_path: cfg.manifest_path,
+      manifest_url: cfg.manifest_url,
+      manifest_raw: cfg.manifest_raw,
+      scenarios: cfg.scenarios || [],
+      env_schema: cfg.env_schema || [],
+      build_opts: cfg.build_opts || null,
+      env_values: cfg.env_values || {},
+      current_scenario: cfg.current_scenario || '',
+      schedule: task.schedule,
+      languages: task.languages
+    }
   }
   showApplyDialog.value = true
 }

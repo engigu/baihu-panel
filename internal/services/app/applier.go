@@ -31,6 +31,7 @@ type ApplyOptions struct {
 	SkipSync      bool              // 是否跳过代码源拉取
 	ForceSetup    bool              // 强制执行依赖安装与编译（跳过 check 探活）
 	OverwriteEnv  bool              // 是否覆盖已有环境变量（默认 false 不覆盖）
+	OverwriteTask *bool             // 是否覆盖和插入任务（默认 true 覆盖）
 	Schedule      string            // 定时规则 Cron 表达式
 	RandomRange   int               // 随机延迟范围(秒)
 	Timeout       int               // 执行超时时间(分钟)
@@ -81,6 +82,25 @@ func (a *AppApplier) Apply(manifest *AppManifest, rawYAML []byte, opts ApplyOpti
 			msg += "\n"
 		}
 		out.Write([]byte(msg))
+	}
+
+	// 若 manifest 声明了 build_opts，作为基础预设生效
+	if manifest.BuildOpts != nil {
+		if !opts.ForceSetup && manifest.BuildOpts.ForceSetup {
+			opts.ForceSetup = true
+		}
+		if !opts.SkipSetup && manifest.BuildOpts.SkipSetup {
+			opts.SkipSetup = true
+		}
+		if !opts.SkipSync && manifest.BuildOpts.SkipSync {
+			opts.SkipSync = true
+		}
+		if !opts.OverwriteEnv && manifest.BuildOpts.OverwriteEnv {
+			opts.OverwriteEnv = true
+		}
+		if opts.OverwriteTask == nil && manifest.BuildOpts.OverwriteTask != nil {
+			opts.OverwriteTask = manifest.BuildOpts.OverwriteTask
+		}
 	}
 
 	log("==================================================================")
@@ -307,7 +327,7 @@ func (a *AppApplier) runSetup(manifest *AppManifest, appDir string, skipSetup bo
 
 	needInstall := true
 	if forceSetup {
-		log("  ℹ 已开启强制重构模式 (--rebuild/force-setup)，跳过环境探活，直接执行依赖安装与构建...")
+		log("  ℹ 已开启强制构建模式 (--force-setup)，跳过环境探活，直接执行依赖安装与构建...")
 	} else if manifest.Setup.Check != "" {
 		checkScript := strings.ReplaceAll(manifest.Setup.Check, "{app_dir}", appDir)
 		log("  -> 执行先验环境探活检查: %s", checkScript)
@@ -529,6 +549,11 @@ func (a *AppApplier) upsertSingleEnv(envItem AppEnvItem, envValues map[string]st
 // 过程函数 5: 场景编排与受控任务批量生成/热更新 (Tasks Orchestration)
 // --------------------------------------------------------------------------
 func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, masterTaskID string, targetScenarioID string, opts ApplyOptions, log LogFunc) ([]string, []string, error) {
+	if opts.OverwriteTask != nil && !*opts.OverwriteTask {
+		log("[5/5] 跳过任务编排阶段 (已开启不覆盖和插入任务选项)")
+		return []string{}, []string{}, nil
+	}
+
 	activeScenarioID := targetScenarioID
 	var activeScenario *AppScenarioItem
 
@@ -859,10 +884,11 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 		Status:          constant.AppStatusInstalled,
 		EnvValues:       envValues,
 		BuildOpts: &models.AppBuildOpts{
-			ForceSetup:   opts.ForceSetup,
-			SkipSetup:    opts.SkipSetup,
-			SkipSync:     opts.SkipSync,
-			OverwriteEnv: opts.OverwriteEnv,
+			ForceSetup:    opts.ForceSetup,
+			SkipSetup:     opts.SkipSetup,
+			SkipSync:      opts.SkipSync,
+			OverwriteEnv:  opts.OverwriteEnv,
+			OverwriteTask: opts.OverwriteTask,
 		},
 	}
 
@@ -874,7 +900,25 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 	var unified models.UnifiedTaskConfig
 	if tx.RowsAffected > 0 && string(existingTask.UnifiedConfig) != "" {
 		unified = models.ParseUnifiedTaskConfig(string(existingTask.UnifiedConfig))
+		if unified.App != nil {
+			// 如果本次没有传入环境变量（如调度执行场景），保留原有环境变量配置
+			if len(appCfg.EnvValues) == 0 && len(unified.App.EnvValues) > 0 {
+				appCfg.EnvValues = unified.App.EnvValues
+			}
+			if appCfg.BuildOpts != nil && unified.App.BuildOpts != nil {
+				// 兜底保护已有配置项
+				if appCfg.BuildOpts.OverwriteTask == nil && unified.App.BuildOpts.OverwriteTask != nil {
+					appCfg.BuildOpts.OverwriteTask = unified.App.BuildOpts.OverwriteTask
+				}
+			}
+		}
 	}
+
+	// 将当前最新的用户定制选项同步写入 ManifestRaw YAML，保证 task 表保存的是编辑之后的 YML
+	if opts.Schedule != "" {
+		appCfg.Schedule = opts.Schedule
+	}
+	appCfg.ManifestRaw = SyncManifestYAMLWithConfig(appCfg.ManifestRaw, &appCfg)
 
 	unified.App = &appCfg
 
