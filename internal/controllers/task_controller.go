@@ -321,7 +321,6 @@ func (tc *TaskController) GetTasks(c *gin.Context) {
 	p := utils.ParsePagination(c)
 	name := c.DefaultQuery("name", "")
 	agentIDStr := c.DefaultQuery("agent_id", "")
-
 	tags := c.DefaultQuery("tags", "")
 	taskType := c.DefaultQuery("type", "")
 	sourceID := c.DefaultQuery("source_id", "")
@@ -331,10 +330,20 @@ func (tc *TaskController) GetTasks(c *gin.Context) {
 		agentID = &agentIDStr
 	}
 
+	enabledStr := c.DefaultQuery("enabled", "")
+	var enabled *bool
+	if enabledStr == "1" || enabledStr == "true" {
+		val := true
+		enabled = &val
+	} else if enabledStr == "0" || enabledStr == "false" {
+		val := false
+		enabled = &val
+	}
+
 	sortBy := c.DefaultQuery("sort_by", "")
 	order := c.DefaultQuery("order", "")
 
-	tasks, total := tc.taskService.GetTasksWithPagination(p.Page, p.PageSize, name, agentID, tags, taskType, sourceID, sortBy, order)
+	tasks, total := tc.taskService.GetTasksWithPagination(p.Page, p.PageSize, name, agentID, tags, taskType, sourceID, enabled, sortBy, order)
 	utils.PaginatedResponse(c, vo.ToTaskVOListFromModels(tasks), total, p)
 }
 
@@ -735,7 +744,7 @@ func (tc *TaskController) BatchDeleteByQuery(c *gin.Context) {
 		agentID = &agentIDStr
 	}
 
-	tasks, _ := tc.taskService.GetTasksWithPagination(1, 999999, name, agentID, tags, taskType, "", "", "")
+	tasks, _ := tc.taskService.GetTasksWithPagination(1, 999999, name, agentID, tags, taskType, "", nil, "", "")
 	if len(tasks) == 0 {
 		utils.Success(c, gin.H{"count": 0})
 		return

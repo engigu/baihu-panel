@@ -8,7 +8,7 @@ import Pagination from '@/components/Pagination.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import LogViewer from './LogViewer.vue'
 import {
-  RefreshCw, Search, GitBranch, Terminal, Trash2
+  RefreshCw, Search, GitBranch, Terminal, Trash2, Package
 } from 'lucide-vue-next'
 import { api, type TaskLog } from '@/api'
 import LogDetailCard from '@/components/LogDetailCard.vue'
@@ -407,7 +407,9 @@ async function handleDeleteLog() {
 
 
 function getTaskTypeTitle(type: string) {
-  return type === TASK_TYPE.REPO ? '仓库同步' : '普通任务'
+  if (type === TASK_TYPE.APP || type?.startsWith('app:')) return '已装应用'
+  if (type === TASK_TYPE.REPO) return '仓库同步'
+  return '脚本任务'
 }
 
 onMounted(() => {
@@ -495,7 +497,7 @@ watch(() => route.query, (newQuery) => {
         <div
           class="flex sm:hidden items-center gap-1.5 px-3 h-[28px] border-b bg-muted/20 text-xs text-muted-foreground font-medium">
           <span class="w-10 shrink-0 pl-1">序号</span>
-          <span class="w-6 shrink-0 text-center">类型</span>
+          <span class="w-8 shrink-0 text-center whitespace-nowrap">类型</span>
           <span class="flex-1 min-w-0">任务名称</span>
           <span class="w-14 text-right shrink-0">耗时</span>
           <span class="w-7 text-center shrink-0"></span>
@@ -524,9 +526,10 @@ watch(() => route.query, (newQuery) => {
             <div class="flex sm:hidden items-center gap-1.5 px-3 py-2">
               <StatusDot :state="log.status" />
               <span class="w-10 shrink-0 text-muted-foreground text-[10px] tabular-nums truncate">#{{ total - (currentPage - 1) * pageSize - index }}</span>
-              <span class="w-6 shrink-0 flex justify-center" :title="getTaskTypeTitle(log.task_type || 'task')">
-                <GitBranch v-if="log.task_type === TASK_TYPE.REPO" class="h-3.5 w-3.5 text-primary" />
-                <Terminal v-else class="h-3.5 w-3.5 text-primary" />
+              <span class="w-8 shrink-0 flex justify-center" :title="getTaskTypeTitle(log.task_type || 'task')">
+                <Package v-if="log.task_type === TASK_TYPE.APP || log.task_type?.startsWith('app:')" class="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                <GitBranch v-else-if="log.task_type === TASK_TYPE.REPO" class="h-3.5 w-3.5 text-primary shrink-0" />
+                <Terminal v-else class="h-3.5 w-3.5 text-primary shrink-0" />
               </span>
               <span class="flex-1 min-w-0 font-medium truncate text-xs">{{ log.task_name }}</span>
               <span class="w-14 text-right shrink-0 text-muted-foreground text-xs whitespace-nowrap">{{ formatDuration(log.duration)
@@ -544,8 +547,9 @@ watch(() => route.query, (newQuery) => {
               <StatusDot :state="log.status" />
               <span class="w-16 shrink-0 text-muted-foreground text-[11px] tabular-nums">#{{ total - (currentPage - 1) * pageSize - index }}</span>
               <span class="w-10 shrink-0 flex justify-center" :title="getTaskTypeTitle(log.task_type || 'task')">
-                <GitBranch v-if="log.task_type === TASK_TYPE.REPO" class="h-4 w-4 text-primary" />
-                <Terminal v-else class="h-4 w-4 text-primary" />
+                <Package v-if="log.task_type === TASK_TYPE.APP || log.task_type?.startsWith('app:')" class="h-4 w-4 text-emerald-500 shrink-0" />
+                <GitBranch v-else-if="log.task_type === TASK_TYPE.REPO" class="h-4 w-4 text-primary shrink-0" />
+                <Terminal v-else class="h-4 w-4 text-primary shrink-0" />
               </span>
               <span class="w-36 shrink-0 font-medium truncate text-sm">{{ log.task_name }}</span>
               <code class="flex-1 min-w-0 text-muted-foreground truncate text-xs bg-muted/40 px-2 py-1 rounded">

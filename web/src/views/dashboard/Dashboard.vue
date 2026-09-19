@@ -26,7 +26,7 @@ const statItems = [
   { key: 'tasks', label: '任务总数', icon: ListTodo, route: '/tasks' },
   { key: 'envs', label: '环境变量', icon: Variable, route: '/environments' },
   { key: 'logs', label: '日志总数', icon: ScrollText, route: '/history' },
-  { key: 'scheduled', label: '调度注册', icon: Clock, route: '/tasks' },
+  { key: 'scheduled', label: '调度注册', icon: Clock, route: '/tasks?enabled=1&type=all' },
   { key: 'running', label: '正在运行', icon: Play, route: '/history?status=running' },
 ]
 

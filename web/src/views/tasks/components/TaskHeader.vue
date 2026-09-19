@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Search, Tag, ChevronDown, RefreshCw, Wrench, Plus, GitBranch, Terminal, Package,
-  Sparkles, Trash2, Pin, X, Server, Loader2
+  Sparkles, Trash2, Pin, X, Server, Loader2, Layers
 } from 'lucide-vue-next'
 import { TASK_TYPE } from '@/constants'
 import type { TaskView } from '../Tasks.vue'
@@ -67,7 +67,7 @@ function handleSaveView() {
         <PopoverTrigger as-child>
           <div class="flex items-center gap-2 cursor-pointer group w-fit">
             <h2 class="text-xl sm:text-2xl font-bold tracking-tight">
-              {{ filterType === TASK_TYPE.REPO ? '仓库同步' : (filterType === TASK_TYPE.APP ? '应用实体' : '调度实体') }}
+              {{ filterType === TASK_TYPE.REPO ? '仓库同步' : (filterType === TASK_TYPE.APP ? '应用实体' : (filterType === 'all' ? '全量调度' : '调度实体')) }}
             </h2>
             <div class="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted/50 group-hover:bg-primary/10 transition-colors border border-transparent group-hover:border-primary/20">
               <span class="text-[10px] font-bold text-muted-foreground group-hover:text-primary uppercase tracking-wider">视图</span>
@@ -207,14 +207,21 @@ function handleSaveView() {
           <SelectTrigger class="h-9 flex-1 sm:flex-none sm:w-[128px] px-2.5 text-sm font-medium bg-muted/20 border-muted-foreground/20 shadow-xs gap-1.5 justify-between">
             <SelectValue placeholder="脚本任务">
               <div class="flex items-center gap-2 min-w-0 text-sm">
-                <Terminal v-if="filterType === TASK_TYPE.NORMAL || filterType?.startsWith('app:')" class="w-4 h-4 text-primary shrink-0" />
+                <Layers v-if="filterType === 'all'" class="w-4 h-4 text-blue-500 shrink-0" />
+                <Terminal v-else-if="filterType === TASK_TYPE.NORMAL || filterType?.startsWith('app:')" class="w-4 h-4 text-primary shrink-0" />
                 <GitBranch v-else-if="filterType === TASK_TYPE.REPO" class="w-4 h-4 text-primary shrink-0" />
                 <Package v-else-if="filterType === TASK_TYPE.APP" class="w-4 h-4 text-emerald-500 shrink-0" />
-                <span class="truncate">{{ filterType === TASK_TYPE.REPO ? '仓库同步' : (filterType === TASK_TYPE.APP ? '已装应用' : '脚本任务') }}</span>
+                <span class="truncate">{{ filterType === 'all' ? '全部类型' : (filterType === TASK_TYPE.REPO ? '仓库同步' : (filterType === TASK_TYPE.APP ? '已装应用' : '脚本任务')) }}</span>
               </div>
             </SelectValue>
           </SelectTrigger>
           <SelectContent align="end" class="w-[132px] min-w-[132px] p-1 text-sm font-medium">
+            <SelectItem v-if="filterType === 'all'" value="all" class="py-1.5 pl-2 pr-6 text-sm">
+              <div class="flex items-center gap-2">
+                <Layers class="w-4 h-4 text-blue-500 shrink-0" />
+                <span>全部类型</span>
+              </div>
+            </SelectItem>
             <SelectItem :value="TASK_TYPE.NORMAL" class="py-1.5 pl-2 pr-6 text-sm">
               <div class="flex items-center gap-2">
                 <Terminal class="w-4 h-4 text-primary shrink-0" />

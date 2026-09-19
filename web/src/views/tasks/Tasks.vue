@@ -47,6 +47,7 @@ const filterTags = ref('')
 const filterType = ref<string>(TASK_TYPE.NORMAL)
 const filterSourceId = ref('')
 const filterAgentId = ref<string | null>(null)
+const filterEnabled = ref<string | undefined>(undefined)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 // 自定义视图列表
@@ -111,6 +112,7 @@ async function loadTasks() {
       type: filterType.value === 'all' ? undefined : filterType.value,
       source_id: filterSourceId.value || undefined,
       agent_id: filterAgentId.value || undefined,
+      enabled: filterEnabled.value,
       sort_by: sortBy.value || undefined,
       order: order.value || undefined
     })
@@ -409,7 +411,7 @@ async function loadViewsFromSettings() {
     const val = res['task_views']
     if (val) {
       taskViews.value = JSON.parse(val)
-      if (!route.query.agent_id && !route.query.keyword && !route.query.name && !route.query.tag && !route.query.type) {
+      if (!route.query.agent_id && !route.query.keyword && !route.query.name && !route.query.tag && !route.query.type && route.query.enabled === undefined) {
         const defaultView = taskViews.value.find((v: any) => v.isDefault)
         if (defaultView) {
           applyViewWithoutSearch(defaultView)
@@ -673,11 +675,13 @@ onMounted(async () => {
   const keywordParam = route.query.keyword || route.query.name
   if (keywordParam) filterName.value = String(keywordParam)
   const typeParam = route.query.type
-  if (typeParam && (typeParam === TASK_TYPE.NORMAL || typeParam === TASK_TYPE.REPO || typeParam === TASK_TYPE.APP || String(typeParam).startsWith('app:'))) {
+  if (typeParam && (typeParam === 'all' || typeParam === TASK_TYPE.NORMAL || typeParam === TASK_TYPE.REPO || typeParam === TASK_TYPE.APP || String(typeParam).startsWith('app:'))) {
     filterType.value = String(typeParam)
   }
   const tagParam = route.query.tag
   if (tagParam) filterTags.value = String(tagParam)
+  const enabledParam = route.query.enabled
+  if (enabledParam !== undefined) filterEnabled.value = String(enabledParam)
 
   await loadViewsFromSettings()
   loadTasks()
@@ -707,8 +711,14 @@ watch(() => route.query.agent_id, (newVal: any) => {
   loadTasks()
 })
 
+watch(() => route.query.enabled, (newVal: any) => {
+  filterEnabled.value = newVal !== undefined ? String(newVal) : undefined
+  currentPage.value = 1
+  loadTasks()
+})
+
 watch(() => route.query.type, (newVal: any) => {
-  if (newVal && (newVal === TASK_TYPE.NORMAL || newVal === TASK_TYPE.REPO || newVal === TASK_TYPE.APP || String(newVal).startsWith('app:'))) {
+  if (newVal && (newVal === 'all' || newVal === TASK_TYPE.NORMAL || newVal === TASK_TYPE.REPO || newVal === TASK_TYPE.APP || String(newVal).startsWith('app:'))) {
     filterType.value = String(newVal)
   } else if (!newVal) {
     filterType.value = TASK_TYPE.NORMAL

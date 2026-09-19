@@ -148,7 +148,7 @@ export const api = {
       request<void>('/auth/otp/disable', { method: 'POST', body: JSON.stringify(data) })
   },
   tasks: {
-    list: (params?: { page?: number; page_size?: number; name?: string; agent_id?: string; tags?: string; type?: string; source_id?: string; sort_by?: string; order?: string }) => {
+    list: (params?: { page?: number; page_size?: number; name?: string; agent_id?: string; tags?: string; type?: string; source_id?: string; enabled?: boolean | string; sort_by?: string; order?: string }) => {
       const query = new URLSearchParams()
       if (params?.page) query.set('page', String(params.page))
       if (params?.page_size) query.set('page_size', String(params.page_size))
@@ -157,6 +157,7 @@ export const api = {
       if (params?.agent_id) query.set('agent_id', params.agent_id)
       if (params?.type) query.set('type', params.type)
       if (params?.source_id) query.set('source_id', params.source_id)
+      if (params?.enabled !== undefined && params?.enabled !== '') query.set('enabled', String(params.enabled))
       if (params?.sort_by) query.set('sort_by', params.sort_by)
       if (params?.order) query.set('order', params.order)
       return request<TaskListResponse>(`/tasks?${query}`)

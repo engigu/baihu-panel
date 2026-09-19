@@ -44,7 +44,7 @@ function getAppConfig(task: Task) {
 <template>
   <div>
     <!-- ========== 1. 大屏/中屏 (Desktop/Tablet >= 640px) ========== -->
-    <div class="hidden sm:flex items-center gap-2 px-4 py-2 hover:bg-muted/30 transition-colors bg-emerald-500/5 border-l-2 border-emerald-500">
+    <div class="hidden sm:flex items-center gap-2 px-4 py-2 hover:bg-muted/30 transition-colors border-l-2 border-emerald-500">
       <StatusDot
         :state="task.running_status === 'running' ? 'running' : (task.running_status === 'queued' || task.running_status === 'pending' ? 'pending' : 'none')"
         :title="task.running_status === 'running' ? '运行中' : (task.running_status === 'queued' || task.running_status === 'pending' ? '排队中' : '')"
@@ -171,7 +171,7 @@ function getAppConfig(task: Task) {
     </div>
 
     <!-- ========== 2. 小屏 (Mobile < 640px) 卡片式布局 ========== -->
-    <div class="sm:hidden p-3 hover:bg-muted/30 transition-colors border-l-2 border-emerald-500 bg-emerald-500/5 space-y-2.5">
+    <div class="sm:hidden p-3 hover:bg-muted/30 transition-colors border-l-2 border-emerald-500 space-y-2.5">
       <div class="flex items-center justify-between gap-2 border-b border-border/40 pb-2">
         <div class="flex items-center gap-1.5 min-w-0 flex-1">
           <span class="text-[10px] text-muted-foreground tabular-nums shrink-0">#{{ total - (currentPage - 1) * pageSize - index }}</span>

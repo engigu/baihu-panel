@@ -113,7 +113,7 @@ func (ts *TaskService) GetTasks() []models.Task {
 }
 
 // GetTasksWithPagination 分页获取任务列表
-func (ts *TaskService) GetTasksWithPagination(page, pageSize int, name string, agentID *string, tags string, taskType string, sourceID string, sortBy string, order string) ([]models.Task, int64) {
+func (ts *TaskService) GetTasksWithPagination(page, pageSize int, name string, agentID *string, tags string, taskType string, sourceID string, enabled *bool, sortBy string, order string) ([]models.Task, int64) {
 	var tasks []models.Task
 	var total int64
 
@@ -157,6 +157,9 @@ func (ts *TaskService) GetTasksWithPagination(page, pageSize int, name string, a
 	}
 	if agentID != nil {
 		query = query.Where("agent_id = ?", *agentID)
+	}
+	if enabled != nil {
+		query = query.Where("enabled = ?", *enabled)
 	}
 
 	sortColumn := "created_at"

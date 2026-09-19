@@ -40,7 +40,7 @@ const emit = defineEmits<{
     <!-- 大屏/中屏统一表格头部 (sm 隐藏，md/lg 显示) -->
     <div class="hidden sm:flex items-center gap-2 px-4 py-2 border-b bg-muted/20 text-xs text-muted-foreground font-medium">
       <span class="w-10 md:w-12 shrink-0">序号</span>
-      <span class="w-8 shrink-0 text-center">类型</span>
+      <span class="w-8 shrink-0 text-center whitespace-nowrap">类型</span>
       <span
         class="w-44 lg:w-56 shrink-0 flex items-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors"
         @click="$emit('toggleSort', 'name')"
