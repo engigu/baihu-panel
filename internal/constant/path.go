@@ -36,6 +36,60 @@ func init() {
 	_ = os.Setenv("BH_SCRIPTS_DIR", ScriptsWorkDir)
 }
 
+// NormalizeScriptPath 将任意路径归一化为以 $SCRIPTS_DIR$ 开头的逻辑路径
+// 逻辑：如果路径在当前系统的 ScriptsWorkDir (data/scripts) 目录下，归一化为 $SCRIPTS_DIR$/xxx；
+// 如果是非 scriptsDir 目录下的外部绝对路径，原样保留。
+func NormalizeScriptPath(rawPath string) string {
+	rawPath = strings.TrimSpace(rawPath)
+	if rawPath == "" {
+		return ScriptsDirPlaceholder
+	}
+
+	// 如果本身已经是 $SCRIPTS_DIR$ 开头，统一斜杠后返回
+	if strings.HasPrefix(rawPath, ScriptsDirPlaceholder) {
+		return filepath.ToSlash(filepath.Clean(rawPath))
+	}
+
+	cleanRaw := filepath.Clean(rawPath)
+	cleanScripts := filepath.Clean(ScriptsWorkDir)
+
+	// 不区分大小写判断前缀（兼顾 Windows）
+	if strings.HasPrefix(strings.ToLower(cleanRaw), strings.ToLower(cleanScripts)) {
+		rel, err := filepath.Rel(cleanScripts, cleanRaw)
+		if err == nil && rel != "." && rel != "" {
+			return filepath.ToSlash(filepath.Join(ScriptsDirPlaceholder, rel))
+		}
+		return ScriptsDirPlaceholder
+	}
+
+	// 不在脚本目录下的外部绝对路径，原样保留（转为标准斜杠）
+	return filepath.ToSlash(cleanRaw)
+}
+
+// ResolveScriptPath 将以 $SCRIPTS_DIR$ 开头的逻辑路径还原为当前系统的真实物理绝对路径
+func ResolveScriptPath(logicPath string) string {
+	logicPath = strings.TrimSpace(logicPath)
+	if logicPath == "" {
+		return ""
+	}
+	if logicPath == ScriptsDirPlaceholder {
+		return ScriptsWorkDir
+	}
+
+	if strings.HasPrefix(logicPath, ScriptsDirPlaceholder) {
+		rel := strings.TrimPrefix(logicPath, ScriptsDirPlaceholder)
+		rel = strings.TrimPrefix(rel, "/")
+		rel = strings.TrimPrefix(rel, "\\")
+		if rel == "" {
+			return ScriptsWorkDir
+		}
+		return filepath.Clean(filepath.Join(ScriptsWorkDir, rel))
+	}
+
+	// 若不含 $SCRIPTS_DIR$ 占位符（如常规 Shell 指令、普通参数等），原样返回
+	return logicPath
+}
+
 // ResolveAppRootDir 获取应用程序的绝对根目录路径。
 func ResolveAppRootDir() string {
 	// 0. 优先检查显式传递的 BH_ROOT_DIR 环境变量

@@ -663,7 +663,7 @@ func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, mast
 			existingTask.Name = t.Name
 			existingTask.Command = models.BigText(cmdStr)
 			existingTask.Schedule = scheduleCron
-			existingTask.WorkDir = taskWorkDir
+			existingTask.WorkDir = constant.NormalizeScriptPath(taskWorkDir)
 			existingTask.Timeout = timeout
 			existingTask.Languages = taskLangs
 			existingTask.Type = constant.TaskTypeNormal
@@ -683,7 +683,7 @@ func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, mast
 				TriggerType: constant.TriggerTypeCron,
 				Enabled:     utils.BoolPtr(isEnabled),
 				Timeout:     timeout,
-				WorkDir:     taskWorkDir,
+				WorkDir:     constant.NormalizeScriptPath(taskWorkDir),
 				Languages:   taskLangs,
 				SourceID:    masterTaskID,
 				CleanConfig: `{"type":"count","keep":30}`,
@@ -740,6 +740,28 @@ func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, mast
 	return createdTasks, updatedTasks, nil
 }
 
+func sanitizeManifestPath(manifestPath string, manifest *AppManifest) string {
+	if manifestPath == "" {
+		return ""
+	}
+	if strings.HasPrefix(manifestPath, "http://") || strings.HasPrefix(manifestPath, "https://") {
+		return manifestPath
+	}
+	cleaned := filepath.Clean(manifestPath)
+	tempDir := filepath.Clean(os.TempDir())
+	if strings.HasPrefix(cleaned, tempDir) || strings.Contains(strings.ToLower(cleaned), "temp") || strings.Contains(strings.ToLower(cleaned), "tmp") {
+		if manifest != nil && manifest.ID != "" {
+			author := manifest.Author
+			if author == "" {
+				author = "baihu"
+			}
+			return fmt.Sprintf("apps/%s-%s/app.yaml", author, manifest.ID)
+		}
+		return ""
+	}
+	return manifestPath
+}
+
 // --------------------------------------------------------------------------
 // 过程函数 6: 持久化 models.App 实体记录
 // --------------------------------------------------------------------------
@@ -755,7 +777,7 @@ func (a *AppApplier) saveAppRecord(manifest *AppManifest, rawYAML []byte, manife
 		Description:     manifest.Description,
 		Icon:            manifest.Icon,
 		Homepage:        manifest.Homepage,
-		ManifestPath:    manifestPath,
+		ManifestPath:    sanitizeManifestPath(manifestPath, manifest),
 		ManifestRaw:     models.BigText(string(rawYAML)),
 		CurrentScenario: activeScenarioID,
 		Status:          constant.AppStatusInstalled,
@@ -878,7 +900,7 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 		Description:     manifest.Description,
 		Icon:            manifest.Icon,
 		Homepage:        manifest.Homepage,
-		ManifestPath:    manifestPath,
+		ManifestPath:    sanitizeManifestPath(manifestPath, manifest),
 		ManifestRaw:     string(rawYAML),
 		CurrentScenario: activeScenarioID,
 		Status:          constant.AppStatusInstalled,
@@ -940,7 +962,7 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 
 	if tx.RowsAffected > 0 {
 		existingTask.Name = manifest.Name
-		existingTask.WorkDir = appDir
+		existingTask.WorkDir = constant.NormalizeScriptPath(appDir)
 		existingTask.SourceID = appSourceID
 		existingTask.UnifiedConfig = models.BigText(finalUnifiedStr)
 		if opts.Schedule != "" {
@@ -970,7 +992,7 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 		Name:          manifest.Name,
 		Type:          constant.TaskTypeApp,
 		SourceID:      appSourceID,
-		WorkDir:       appDir,
+		WorkDir:       constant.NormalizeScriptPath(appDir),
 		UnifiedConfig: models.BigText(finalUnifiedStr),
 		Schedule:      opts.Schedule,
 		RandomRange:   opts.RandomRange,

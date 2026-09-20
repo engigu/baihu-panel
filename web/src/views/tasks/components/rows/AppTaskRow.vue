@@ -7,9 +7,10 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import { Package, Pencil, Trash2, ListTodo, Zap, ZapOff, Play, ScrollText, Loader2, MoreHorizontal } from 'lucide-vue-next'
+import { Package, Pencil, Trash2, ListTodo, Zap, ZapOff, Play, ScrollText, Loader2, MoreHorizontal, Share2 } from 'lucide-vue-next'
 import StatusDot from '@/components/StatusDot.vue'
 import type { Task, Agent } from '@/api'
+import { TASK_TYPE, TASK_TYPE_CONFIG } from '@/constants'
 
 const props = defineProps<{
   task: Task
@@ -28,6 +29,7 @@ const emit = defineEmits<{
   'editApp': [task: Task]
   'uninstallApp': [task: Task]
   'toggleTask': [task: Task, enabled: boolean]
+  'shareApp': [task: Task]
 }>()
 
 function getAppConfig(task: Task) {
@@ -55,7 +57,7 @@ function getAppConfig(task: Task) {
       </div>
 
       <span class="w-8 shrink-0 flex justify-center" title="白虎应用">
-        <Package class="h-4 w-4 text-emerald-500" />
+        <Package class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.APP]?.color" />
       </span>
 
       <div class="w-44 lg:w-56 shrink-0 flex flex-col justify-center gap-0.5 overflow-hidden">
@@ -160,6 +162,10 @@ function getAppConfig(task: Task) {
               <ListTodo class="h-3.5 w-3.5 mr-2 text-emerald-500" />
               <span>受控任务</span>
             </DropdownMenuItem>
+            <DropdownMenuItem @click="$emit('shareApp', task)">
+              <Share2 class="h-3.5 w-3.5 mr-2 text-blue-500" />
+              <span>导出配置</span>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem class="text-destructive focus:text-destructive" @click="$emit('uninstallApp', task)">
               <Trash2 class="h-3.5 w-3.5 mr-2" />
@@ -175,7 +181,7 @@ function getAppConfig(task: Task) {
       <div class="flex items-center justify-between gap-2 border-b border-border/40 pb-2">
         <div class="flex items-center gap-1.5 min-w-0 flex-1">
           <span class="text-[10px] text-muted-foreground tabular-nums shrink-0">#{{ total - (currentPage - 1) * pageSize - index }}</span>
-          <Package class="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+          <Package class="h-3.5 w-3.5 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.APP]?.color" />
           <span class="font-bold text-xs text-foreground truncate cursor-pointer" @click="$emit('filterByApp', task.id)">{{ task.name }}</span>
         </div>
         <div class="flex items-center gap-1 shrink-0">
@@ -224,6 +230,10 @@ function getAppConfig(task: Task) {
             <DropdownMenuItem @click="$emit('filterByApp', task.id)">
               <ListTodo class="h-3.5 w-3.5 mr-2 text-emerald-500" />
               <span>受控任务</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem @click="$emit('shareApp', task)">
+              <Share2 class="h-3.5 w-3.5 mr-2 text-blue-500" />
+              <span>导出配置</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem class="text-destructive focus:text-destructive" @click="$emit('uninstallApp', task)">

@@ -1461,8 +1461,7 @@ func (es *ExecutorService) refreshExecutionRequestEnvs(req *executor.ExecutionRe
 }
 
 func (es *ExecutorService) ResolvePath(path string) string {
-	absScriptsDir := resolveAbsScriptsDir()
-	return strings.ReplaceAll(path, constant.ScriptsDirPlaceholder, absScriptsDir)
+	return constant.ResolveScriptPath(path)
 }
 
 func buildRepoCommandEnvPrefix() string {

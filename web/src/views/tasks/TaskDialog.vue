@@ -13,7 +13,7 @@ import { Plus, X, ChevronDown, Search, AlertCircle, Terminal, Zap, Lock, Variabl
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { api, type Task, type EnvVar, type Agent } from '@/api'
-import { PATHS, TRIGGER_TYPE, TASK_TYPE } from '@/constants'
+import { PATHS, TRIGGER_TYPE, TASK_TYPE, normalizeScriptPath, resolveScriptPath } from '@/constants'
 import { toast } from 'vue-sonner'
 
 import TaskNotificationConfig from './components/TaskNotificationConfig.vue'
@@ -229,30 +229,18 @@ function removeEnv(id: string) {
 
 function normalizeLocalWorkDirForDisplay(workDir?: string | null): string {
   if (!workDir) return ''
-  if (workDir === PATHS.SCRIPTS_DIR_PLACEHOLDER) return ''
-  if (workDir.startsWith(`${PATHS.SCRIPTS_DIR_PLACEHOLDER}/`)) {
-    return workDir.slice(PATHS.SCRIPTS_DIR_PLACEHOLDER.length + 1)
-  }
-  const base = scriptsDir.value || PATHS.SCRIPTS_DIR
-  if (workDir === base) return ''
-  if (workDir.startsWith(`${base}/`)) {
-    return workDir.slice(base.length + 1)
+  const resolved = resolveScriptPath(workDir, scriptsDir.value)
+  const base = (scriptsDir.value || PATHS.SCRIPTS_DIR).replace(/\\/g, '/').replace(/\/$/, '')
+  if (resolved === base) return ''
+  if (resolved.startsWith(`${base}/`)) {
+    return resolved.slice(base.length + 1)
   }
   return workDir
 }
 
 function encodeLocalWorkDir(workDir?: string | null): string {
-  const value = workDir?.trim() || ''
-  if (!value) return PATHS.SCRIPTS_DIR_PLACEHOLDER
-  if (value === PATHS.SCRIPTS_DIR_PLACEHOLDER || value.startsWith(`${PATHS.SCRIPTS_DIR_PLACEHOLDER}/`)) {
-    return value
-  }
-  const base = scriptsDir.value || PATHS.SCRIPTS_DIR
-  if (value === base) return PATHS.SCRIPTS_DIR_PLACEHOLDER
-  if (value.startsWith(`${base}/`)) {
-    return `${PATHS.SCRIPTS_DIR_PLACEHOLDER}/${value.slice(base.length + 1)}`
-  }
-  return `${PATHS.SCRIPTS_DIR_PLACEHOLDER}/${value.replace(/^\/+/, '')}`
+  if (!workDir || !workDir.trim()) return PATHS.SCRIPTS_DIR_PLACEHOLDER
+  return normalizeScriptPath(workDir, scriptsDir.value)
 }
 
 async function save() {

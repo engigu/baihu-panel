@@ -147,7 +147,7 @@ function handleApplySuccess() {
 <template>
   <div class="space-y-4 w-full flex-1 flex flex-col">
     <!-- 顶部主标题与操作工具栏 -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
       <!-- 标题区域 -->
       <div class="flex flex-col shrink-0">
         <h2 class="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
@@ -184,10 +184,10 @@ function handleApplySuccess() {
         </p>
       </div>
 
-      <!-- 右侧控制栏：搜索框 + 刷新 + 官方仓库 + 导入 + 已装应用 -->
-      <div class="flex items-center flex-wrap gap-2 w-full md:w-auto md:ml-auto md:justify-end">
-        <!-- 搜索框 -->
-        <div class="relative w-full sm:w-[200px] group text-sm">
+      <!-- 右侧控制栏：搜索框 + 刷新 + 导入 + 已装应用 -->
+      <div class="flex items-center gap-2 w-full lg:w-auto lg:ml-auto lg:justify-end">
+        <!-- 搜索框：在非 lg 屏幕下全宽弹性填充 (flex-1) -->
+        <div class="relative flex-1 lg:w-[240px] lg:flex-initial group text-sm min-w-[160px]">
           <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <Input
             v-model="searchQuery"
@@ -202,7 +202,7 @@ function handleApplySuccess() {
           />
         </div>
 
-        <div class="flex items-center gap-2 w-full sm:w-auto">
+        <div class="flex items-center gap-2 shrink-0">
           <!-- 刷新按钮 -->
           <Button
             variant="outline"
@@ -215,15 +215,14 @@ function handleApplySuccess() {
             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loadingMarketplace }" />
           </Button>
 
-
-          <!-- 导入应用 (小屏下 flex-1 铺满) -->
-          <Button size="sm" class="h-9 px-3 text-xs flex-1 sm:flex-none justify-center shadow-sm font-medium gap-1" @click="openCustomApply">
+          <!-- 导入应用 -->
+          <Button size="sm" class="h-9 px-3 text-xs shrink-0 justify-center shadow-sm font-medium gap-1" @click="openCustomApply">
             <Plus class="h-3.5 w-3.5 shrink-0" />
             <span>导入应用</span>
           </Button>
 
-          <!-- 前往已装应用 (小屏下 flex-1 铺满) -->
-          <Button variant="outline" size="sm" class="h-9 px-3 text-xs flex-1 sm:flex-none justify-center shadow-sm font-medium gap-1" @click="router.push('/tasks?type=app')" title="查看已装应用">
+          <!-- 前往已装应用 -->
+          <Button variant="outline" size="sm" class="h-9 px-3 text-xs shrink-0 justify-center shadow-sm font-medium gap-1" @click="router.push('/tasks?type=app')" title="查看已装应用">
             <Package class="h-3.5 w-3.5 text-emerald-500 shrink-0" />
             <span>已装应用</span>
           </Button>

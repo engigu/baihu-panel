@@ -32,6 +32,7 @@ const emit = defineEmits<{
   'duplicateTask': [task: Task]
   'openExportDialog': [task: Task]
   'confirmDelete': [id: string]
+  'shareApp': [task: Task]
 }>()
 </script>
 
@@ -110,6 +111,7 @@ const emit = defineEmits<{
           @edit-app="$emit('openEditApp', $event)"
           @uninstall-app="$emit('uninstallApp', $event)"
           @toggle-task="(t, val) => $emit('toggleTask', t, val)"
+          @share-app="$emit('shareApp', $event)"
         />
 
         <!-- 业务场景 B: Git 仓库同步任务 -->

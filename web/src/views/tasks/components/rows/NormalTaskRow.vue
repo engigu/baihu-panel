@@ -14,7 +14,7 @@ import {
 import StatusDot from '@/components/StatusDot.vue'
 import TextOverflow from '@/components/TextOverflow.vue'
 import type { Task, Agent } from '@/api'
-import { AGENT_STATUS, TRIGGER_TYPE } from '@/constants'
+import { AGENT_STATUS, TRIGGER_TYPE, TASK_TYPE, TASK_TYPE_CONFIG } from '@/constants'
 
 const props = defineProps<{
   task: Task
@@ -92,8 +92,8 @@ function getShortLangName(name: string): string {
       </div>
 
       <span class="w-8 shrink-0 flex justify-center" title="普通脚本任务">
-        <Package v-if="(task.source_id || '').startsWith('app:')" class="h-4 w-4 text-emerald-500" />
-        <Terminal v-else class="h-4 w-4 text-primary" />
+        <Package v-if="(task.source_id || '').startsWith('app:')" class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.APP]?.color" />
+        <Terminal v-else class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.NORMAL]?.color" />
       </span>
 
       <div class="w-44 lg:w-56 shrink-0 flex flex-col justify-center gap-0.5 overflow-hidden">
@@ -198,7 +198,7 @@ function getShortLangName(name: string): string {
             :state="task.running_status === 'running' ? 'running' : (task.running_status === 'queued' || task.running_status === 'pending' ? 'pending' : 'none')"
           />
           <span class="text-[10px] text-muted-foreground tabular-nums shrink-0">#{{ total - (currentPage - 1) * pageSize - index }}</span>
-          <Terminal class="h-4 w-4 text-primary shrink-0" />
+          <Terminal class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.NORMAL]?.color" />
           <span class="font-bold text-sm text-foreground truncate">{{ task.name }}</span>
           <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
         </div>

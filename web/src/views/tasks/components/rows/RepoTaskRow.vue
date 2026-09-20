@@ -14,7 +14,7 @@ import {
 import StatusDot from '@/components/StatusDot.vue'
 import TextOverflow from '@/components/TextOverflow.vue'
 import type { Task, Agent } from '@/api'
-import { AGENT_STATUS } from '@/constants'
+import { AGENT_STATUS, TASK_TYPE, TASK_TYPE_CONFIG } from '@/constants'
 
 const props = defineProps<{
   task: Task
@@ -74,7 +74,7 @@ function getRepoConfig(task: Task) {
       </div>
 
       <span class="w-8 shrink-0 flex justify-center" title="仓库同步任务">
-        <GitBranch class="h-4 w-4 text-primary" />
+        <GitBranch class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.REPO]?.color" />
       </span>
 
       <div class="w-44 lg:w-56 shrink-0 flex flex-col justify-center gap-0.5 overflow-hidden">
@@ -167,7 +167,7 @@ function getRepoConfig(task: Task) {
             :state="task.running_status === 'running' ? 'running' : (task.running_status === 'queued' || task.running_status === 'pending' ? 'pending' : 'none')"
           />
           <span class="text-[10px] text-muted-foreground tabular-nums shrink-0">#{{ total - (currentPage - 1) * pageSize - index }}</span>
-          <GitBranch class="h-4 w-4 text-primary shrink-0" />
+          <GitBranch class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.REPO]?.color" />
           <span class="font-bold text-sm text-foreground truncate">{{ task.name }}</span>
           <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
         </div>

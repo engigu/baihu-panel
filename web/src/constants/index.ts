@@ -12,6 +12,43 @@ export const PATHS = {
   SCRIPTS_DIR_PLACEHOLDER: '$SCRIPTS_DIR$',
 } as const
 
+/**
+ * 前端归一化路径：如果路径属于脚本目录或包含脚本目录前缀，归一化为 $SCRIPTS_DIR$/...
+ * 如果是非脚本目录的外部绝对路径，原样保留。
+ */
+export function normalizeScriptPath(rawPath?: string, scriptsDir: string = PATHS.SCRIPTS_DIR): string {
+  if (!rawPath || !rawPath.trim()) {
+    return PATHS.SCRIPTS_DIR_PLACEHOLDER
+  }
+  const clean = rawPath.trim().replace(/\\/g, '/')
+  if (clean.startsWith(PATHS.SCRIPTS_DIR_PLACEHOLDER)) {
+    return clean
+  }
+  const cleanScripts = scriptsDir.replace(/\\/g, '/').replace(/\/$/, '')
+  if (clean.toLowerCase().startsWith(cleanScripts.toLowerCase())) {
+    const rel = clean.substring(cleanScripts.length).replace(/^\//, '')
+    return rel ? `${PATHS.SCRIPTS_DIR_PLACEHOLDER}/${rel}` : PATHS.SCRIPTS_DIR_PLACEHOLDER
+  }
+  // 外部绝对路径原样保留
+  return clean
+}
+
+/**
+ * 前端还原/展示路径
+ */
+export function resolveScriptPath(logicPath?: string, scriptsDir: string = PATHS.SCRIPTS_DIR): string {
+  if (!logicPath || !logicPath.trim() || logicPath === PATHS.SCRIPTS_DIR_PLACEHOLDER) {
+    return scriptsDir
+  }
+  const clean = logicPath.trim().replace(/\\/g, '/')
+  if (clean.startsWith(PATHS.SCRIPTS_DIR_PLACEHOLDER)) {
+    const rel = clean.substring(PATHS.SCRIPTS_DIR_PLACEHOLDER.length).replace(/^\//, '')
+    const base = scriptsDir.replace(/\\/g, '/').replace(/\/$/, '')
+    return rel ? `${base}/${rel}` : base
+  }
+  return clean
+}
+
 // 文件扩展名对应的运行命令
 export const FILE_RUNNERS: Record<string, string> = {
   py: 'python',
@@ -47,6 +84,46 @@ export const TASK_TYPE = {
   APP: 'app',
   REPO: 'repo',
 } as const
+
+export interface TaskTypeConfigItem {
+  label: string
+  color: string
+  bgColor: string
+  borderColor: string
+}
+
+// 任务类型统一配置表（极客科技高级配色与标签规范）
+export const TASK_TYPE_CONFIG = {
+  all: {
+    label: '全部类型',
+    color: 'text-sky-500 dark:text-sky-400',
+    bgColor: 'bg-sky-500/10',
+    borderColor: 'border-sky-500/20',
+  },
+  [TASK_TYPE.NORMAL]: {
+    label: '脚本任务',
+    color: 'text-cyan-500 dark:text-cyan-400',
+    bgColor: 'bg-cyan-500/10',
+    borderColor: 'border-cyan-500/20',
+  },
+  [TASK_TYPE.REPO]: {
+    label: '仓库同步',
+    color: 'text-violet-500 dark:text-violet-400',
+    bgColor: 'bg-violet-500/10',
+    borderColor: 'border-violet-500/20',
+  },
+  [TASK_TYPE.APP]: {
+    label: '已装应用',
+    color: 'text-emerald-500 dark:text-emerald-400',
+    bgColor: 'bg-emerald-500/10',
+    borderColor: 'border-emerald-500/20',
+  },
+} as const
+
+export function getTaskTypeConfig(type?: string): TaskTypeConfigItem {
+  const key = (type || 'task') as keyof typeof TASK_TYPE_CONFIG
+  return (TASK_TYPE_CONFIG[key] || TASK_TYPE_CONFIG[TASK_TYPE.NORMAL]) as TaskTypeConfigItem
+}
 
 // 触发类型
 export const TRIGGER_TYPE = {

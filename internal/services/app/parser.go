@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -165,53 +166,173 @@ func ValidateManifest(m *AppManifest) error {
 	return m.Validate()
 }
 
+var preferredKeyOrder = map[string]int{
+	"spec_version":  1,
+	"id":            2,
+	"name":          3,
+	"version":       4,
+	"author":        5,
+	"category":      6,
+	"last_commit":   7,
+	"template":      8,
+	"description":   9,
+	"icon":          10,
+	"homepage":      11,
+	"build_opts":    12,
+	"schedule_opts": 13,
+	"sources":       14,
+	"setup":         15,
+	"env_schema":    16,
+	"tasks":         17,
+	"scenarios":     18,
+}
+
+// SortManifestMapSlice 根据白虎应用规范 v1 标准固定节点顺序对 MapSlice 进行稳定排序
+func SortManifestMapSlice(ms yaml.MapSlice) yaml.MapSlice {
+	sorted := make(yaml.MapSlice, len(ms))
+	copy(sorted, ms)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		keyI := fmt.Sprintf("%v", sorted[i].Key)
+		keyJ := fmt.Sprintf("%v", sorted[j].Key)
+		orderI, hasI := preferredKeyOrder[keyI]
+		orderJ, hasJ := preferredKeyOrder[keyJ]
+		if hasI && hasJ {
+			return orderI < orderJ
+		}
+		if hasI {
+			return true
+		}
+		if hasJ {
+			return false
+		}
+		return i < j
+	})
+	return sorted
+}
+
+// FormatManifestYAML 按照白虎规范 18 个标准节点物理顺序重排任意 YAML 字段
+func FormatManifestYAML(rawYAML string) string {
+	if strings.TrimSpace(rawYAML) == "" {
+		return rawYAML
+	}
+	var ms yaml.MapSlice
+	if err := yaml.Unmarshal([]byte(rawYAML), &ms); err != nil || len(ms) == 0 {
+		return rawYAML
+	}
+	ms = SortManifestMapSlice(ms)
+	bytes, err := yaml.Marshal(ms)
+	if err != nil {
+		return rawYAML
+	}
+	return string(bytes)
+}
+
+// getMapSliceValue 从 MapSlice 中按 Key 查找对应节点的 Value
+func getMapSliceValue(slice yaml.MapSlice, key string) (interface{}, bool) {
+	for _, item := range slice {
+		if fmt.Sprintf("%v", item.Key) == key {
+			return item.Value, true
+		}
+	}
+	return nil, false
+}
+
+// setMapSliceValue 设置或覆盖 MapSlice 中指定 Key 的 Value
+func setMapSliceValue(slice *yaml.MapSlice, key string, val interface{}) {
+	for i, item := range *slice {
+		if fmt.Sprintf("%v", item.Key) == key {
+			(*slice)[i].Value = val
+			return
+		}
+	}
+	*slice = append(*slice, yaml.MapItem{Key: key, Value: val})
+}
+
+// getMapSliceChildValue 递归/二级查找 MapSlice 嵌套节点的子 Key 属性值
+func getMapSliceChildValue(slice yaml.MapSlice, parentKey string, childKey string) (interface{}, bool) {
+	if parentVal, ok := getMapSliceValue(slice, parentKey); ok {
+		if childMS, isMS := parentVal.(yaml.MapSlice); isMS {
+			return getMapSliceValue(childMS, childKey)
+		}
+	}
+	return nil, false
+}
+
+// updateScenarioItemDefault 统一更新单项场景定义 (支持 yaml.MapSlice 或 map) 的 default 默认选中标记
+func updateScenarioItemDefault(scRaw interface{}, targetScenario string) interface{} {
+	switch sc := scRaw.(type) {
+	case yaml.MapSlice:
+		if scIDVal, hasID := getMapSliceValue(sc, "id"); hasID {
+			scID := fmt.Sprintf("%v", scIDVal)
+			setMapSliceValue(&sc, "default", scID == targetScenario)
+		}
+		return sc
+	case map[string]interface{}:
+		if scID, hasID := sc["id"].(string); hasID {
+			sc["default"] = (scID == targetScenario)
+		}
+		return sc
+	default:
+		return scRaw
+	}
+}
+
 // SyncManifestYAMLWithConfig 将 AppTaskConfig 中的 build_opts、scenario、schedule 等用户定制项同步写入 YAML 文本中，生成实例级定制 YAML
 func SyncManifestYAMLWithConfig(rawYAML string, cfg *models.AppTaskConfig) string {
 	if strings.TrimSpace(rawYAML) == "" || cfg == nil {
 		return rawYAML
 	}
 
-	var m map[string]interface{}
-	if err := yaml.Unmarshal([]byte(rawYAML), &m); err != nil || m == nil {
+	var ms yaml.MapSlice
+	if err := yaml.Unmarshal([]byte(rawYAML), &ms); err != nil || len(ms) == 0 {
 		return rawYAML
 	}
 
 	// 1. 同步 build_opts
 	if cfg.BuildOpts != nil {
-		buildOptsMap := map[string]interface{}{
-			"force_setup":   cfg.BuildOpts.ForceSetup,
-			"skip_setup":    cfg.BuildOpts.SkipSetup,
-			"skip_sync":     cfg.BuildOpts.SkipSync,
-			"overwrite_env": cfg.BuildOpts.OverwriteEnv,
-		}
+		overwriteTaskVal := true
 		if cfg.BuildOpts.OverwriteTask != nil {
-			buildOptsMap["overwrite_task"] = *cfg.BuildOpts.OverwriteTask
-		} else {
-			buildOptsMap["overwrite_task"] = true
+			overwriteTaskVal = *cfg.BuildOpts.OverwriteTask
+		} else if existingVal, ok := getMapSliceChildValue(ms, "build_opts", "overwrite_task"); ok {
+			if bVal, isBool := existingVal.(bool); isBool {
+				overwriteTaskVal = bVal
+			}
 		}
-		m["build_opts"] = buildOptsMap
+
+		buildOptsMap := yaml.MapSlice{
+			{Key: "force_setup", Value: cfg.BuildOpts.ForceSetup},
+			{Key: "skip_setup", Value: cfg.BuildOpts.SkipSetup},
+			{Key: "skip_sync", Value: cfg.BuildOpts.SkipSync},
+			{Key: "overwrite_env", Value: cfg.BuildOpts.OverwriteEnv},
+			{Key: "overwrite_task", Value: overwriteTaskVal},
+		}
+		setMapSliceValue(&ms, "build_opts", buildOptsMap)
 	}
 
 	// 2. 同步 schedule
 	if cfg.Schedule != "" {
-		m["schedule"] = cfg.Schedule
+		setMapSliceValue(&ms, "schedule", cfg.Schedule)
 	}
 
-	// 3. 同步场景（若有默认场景且被覆盖）
+	// 3. 场景 default 标记同步（已注释：保持原始 App Manifest 的场景预设声明原汁原味，用户切换场景通过 masterTask 记录控制即可，无需重写 YAML 的 scenarios 节点）
+	/*
 	if cfg.CurrentScenario != "" {
-		if scenariosRaw, ok := m["scenarios"].([]interface{}); ok {
-			for _, scRaw := range scenariosRaw {
-				if scMap, isMap := scRaw.(map[string]interface{}); isMap {
-					if scID, hasID := scMap["id"].(string); hasID {
-						scMap["default"] = (scID == cfg.CurrentScenario)
-					}
+		if scenariosRaw, ok := getMapSliceValue(ms, "scenarios"); ok {
+			if scenariosList, isList := scenariosRaw.([]interface{}); isList {
+				newScenarios := make([]interface{}, len(scenariosList))
+				for j, scRaw := range scenariosList {
+					newScenarios[j] = updateScenarioItemDefault(scRaw, cfg.CurrentScenario)
 				}
+				setMapSliceValue(&ms, "scenarios", newScenarios)
 			}
 		}
 	}
+	*/
 
-	// 4. 重新序列化为 YAML 文本
-	updatedBytes, err := yaml.Marshal(m)
+	// 4. 依据白虎规范 18 个标准节点顺序进行稳定排序
+	ms = SortManifestMapSlice(ms)
+
+	updatedBytes, err := yaml.Marshal(ms)
 	if err != nil {
 		return rawYAML
 	}

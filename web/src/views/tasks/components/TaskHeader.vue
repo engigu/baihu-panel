@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import TagInput from '@/components/TagInput.vue'
@@ -16,7 +17,7 @@ import {
   Search, Tag, ChevronDown, RefreshCw, Wrench, Plus, GitBranch, Terminal, Package,
   Sparkles, Trash2, Pin, X, Server, Loader2, Layers
 } from 'lucide-vue-next'
-import { TASK_TYPE } from '@/constants'
+import { TASK_TYPE, TASK_TYPE_CONFIG } from '@/constants'
 import type { TaskView } from '../Tasks.vue'
 
 const props = defineProps<{
@@ -47,6 +48,7 @@ const emit = defineEmits<{
   'saveView': [name: string]
 }>()
 
+const router = useRouter()
 const newViewName = ref('')
 const isSavingView = ref(false)
 
@@ -67,7 +69,7 @@ function handleSaveView() {
         <PopoverTrigger as-child>
           <div class="flex items-center gap-2 cursor-pointer group w-fit">
             <h2 class="text-xl sm:text-2xl font-bold tracking-tight">
-              {{ filterType === TASK_TYPE.REPO ? '仓库同步' : (filterType === TASK_TYPE.APP ? '应用实体' : (filterType === 'all' ? '全量调度' : '调度实体')) }}
+              {{ filterType === TASK_TYPE.REPO ? '仓库同步' : (filterType === TASK_TYPE.APP ? '已装应用' : '调度实体') }}
             </h2>
             <div class="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted/50 group-hover:bg-primary/10 transition-colors border border-transparent group-hover:border-primary/20">
               <span class="text-[10px] font-bold text-muted-foreground group-hover:text-primary uppercase tracking-wider">视图</span>
@@ -194,49 +196,76 @@ function handleSaveView() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <!-- 新建任务 / 同步仓库按钮 -->
-        <Button v-if="filterType === TASK_TYPE.NORMAL || filterType?.startsWith('app:')" class="shrink-0 px-2 xl:px-3 h-9 shadow-sm font-medium" title="新建任务" @click="$emit('openCreateTask')">
-          <Plus class="h-4 w-4 xl:mr-2" /> <span class="hidden xl:inline">新建任务</span>
-        </Button>
-        <Button v-else-if="filterType === TASK_TYPE.REPO" class="shrink-0 px-2 xl:px-3 h-9 shadow-sm font-medium" title="同步仓库" @click="$emit('openCreateRepo')">
-          <GitBranch class="h-4 w-4 xl:mr-2" /> <span class="hidden xl:inline">同步仓库</span>
-        </Button>
+        <!-- 统一新建下拉菜单按钮 -->
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button class="shrink-0 px-2.5 xl:px-3.5 h-9 shadow-sm font-medium gap-1 text-sm bg-primary text-primary-foreground hover:bg-primary/90">
+              <Plus class="h-4 w-4" />
+              <span class="hidden sm:inline">新建</span>
+              <ChevronDown class="h-3.5 w-3.5 opacity-75" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" class="w-52 p-1">
+            <DropdownMenuItem class="cursor-pointer gap-2.5 py-2" @click="$emit('openCreateTask')">
+              <Terminal class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.NORMAL]?.color" />
+              <div class="flex flex-col min-w-0">
+                <span class="font-medium text-sm leading-none mb-1">新建脚本任务</span>
+                <span class="text-[11px] text-muted-foreground leading-none">自定义单次 / 定时 CLI 任务</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem class="cursor-pointer gap-2.5 py-2" @click="$emit('openCreateRepo')">
+              <GitBranch class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.REPO]?.color" />
+              <div class="flex flex-col min-w-0">
+                <span class="font-medium text-sm leading-none mb-1">添加仓库同步</span>
+                <span class="text-[11px] text-muted-foreground leading-none">自动同步 Git / 远程代码仓库</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem class="cursor-pointer gap-2.5 py-2" @click="router.push('/apps')">
+              <Package class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.APP]?.color" />
+              <div class="flex flex-col min-w-0">
+                <span class="font-medium text-sm leading-none mb-1">从应用市场安装</span>
+                <span class="text-[11px] text-muted-foreground leading-none">探索并一键部署预装应用</span>
+              </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <!-- 调度实体类型切换下拉框 -->
         <Select :model-value="filterType" @update:model-value="$emit('update:filterType', String($event)); $emit('typeChange')">
           <SelectTrigger class="h-9 flex-1 sm:flex-none sm:w-[128px] px-2.5 text-sm font-medium bg-muted/20 border-muted-foreground/20 shadow-xs gap-1.5 justify-between">
-            <SelectValue placeholder="脚本任务">
+            <SelectValue placeholder="全部类型">
               <div class="flex items-center gap-2 min-w-0 text-sm">
-                <Layers v-if="filterType === 'all'" class="w-4 h-4 text-blue-500 shrink-0" />
-                <Terminal v-else-if="filterType === TASK_TYPE.NORMAL || filterType?.startsWith('app:')" class="w-4 h-4 text-primary shrink-0" />
-                <GitBranch v-else-if="filterType === TASK_TYPE.REPO" class="w-4 h-4 text-primary shrink-0" />
-                <Package v-else-if="filterType === TASK_TYPE.APP" class="w-4 h-4 text-emerald-500 shrink-0" />
+                <Layers v-if="filterType === 'all'" class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG['all']?.color" />
+                <Terminal v-else-if="filterType === TASK_TYPE.NORMAL || filterType?.startsWith('app:')" class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.NORMAL]?.color" />
+                <GitBranch v-else-if="filterType === TASK_TYPE.REPO" class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.REPO]?.color" />
+                <Package v-else-if="filterType === TASK_TYPE.APP" class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.APP]?.color" />
                 <span class="truncate">{{ filterType === 'all' ? '全部类型' : (filterType === TASK_TYPE.REPO ? '仓库同步' : (filterType === TASK_TYPE.APP ? '已装应用' : '脚本任务')) }}</span>
               </div>
             </SelectValue>
           </SelectTrigger>
           <SelectContent align="end" class="w-[132px] min-w-[132px] p-1 text-sm font-medium">
-            <SelectItem v-if="filterType === 'all'" value="all" class="py-1.5 pl-2 pr-6 text-sm">
+            <SelectItem value="all" class="py-1.5 pl-2 pr-6 text-sm">
               <div class="flex items-center gap-2">
-                <Layers class="w-4 h-4 text-blue-500 shrink-0" />
+                <Layers class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG['all']?.color" />
                 <span>全部类型</span>
               </div>
             </SelectItem>
             <SelectItem :value="TASK_TYPE.NORMAL" class="py-1.5 pl-2 pr-6 text-sm">
               <div class="flex items-center gap-2">
-                <Terminal class="w-4 h-4 text-primary shrink-0" />
+                <Terminal class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.NORMAL]?.color" />
                 <span>脚本任务</span>
               </div>
             </SelectItem>
             <SelectItem :value="TASK_TYPE.REPO" class="py-1.5 pl-2 pr-6 text-sm">
               <div class="flex items-center gap-2">
-                <GitBranch class="w-4 h-4 text-primary shrink-0" />
+                <GitBranch class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.REPO]?.color" />
                 <span>仓库同步</span>
               </div>
             </SelectItem>
             <SelectItem :value="TASK_TYPE.APP" class="py-1.5 pl-2 pr-6 text-sm">
               <div class="flex items-center gap-2">
-                <Package class="w-4 h-4 text-emerald-500 shrink-0" />
+                <Package class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.APP]?.color" />
                 <span>已装应用</span>
               </div>
             </SelectItem>

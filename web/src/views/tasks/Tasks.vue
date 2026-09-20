@@ -12,6 +12,7 @@ import TaskHeader from './components/TaskHeader.vue'
 import TaskList from './components/TaskList.vue'
 import TaskDeleteDialog from './components/dialogs/TaskDeleteDialog.vue'
 import TaskExportDialog from './components/dialogs/TaskExportDialog.vue'
+import AppShareDialog from './components/dialogs/AppShareDialog.vue'
 import { X } from 'lucide-vue-next'
 import { api, type Agent, type Task, type TaskLog } from '@/api'
 import { toast } from 'vue-sonner'
@@ -44,7 +45,7 @@ const sortBy = ref('created_at')
 const order = ref('desc')
 const filterName = ref('')
 const filterTags = ref('')
-const filterType = ref<string>(TASK_TYPE.NORMAL)
+const filterType = ref<string>('all')
 const filterSourceId = ref('')
 const filterAgentId = ref<string | null>(null)
 const filterEnabled = ref<string | undefined>(undefined)
@@ -61,8 +62,12 @@ const showDeleteDialog = ref(false)
 const showBatchDeleteDialog = ref(false)
 const showBatchUpdateDialog = ref(false)
 const showExportDialog = ref(false)
+const showShareDialog = ref(false)
 const showTerminalDialog = ref(false)
 const showLogViewer = ref(false)
+
+const shareAppName = ref('')
+const shareYamlText = ref('')
 
 const editingTask = ref<Partial<Task>>({})
 const editingMarketApp = ref<any>(null)
@@ -151,7 +156,7 @@ function handleTypeChange(clearSource = true) {
   currentPage.value = 1
 
   const currentQueryType = (route.query.type as string) || ''
-  const targetType = (filterType.value === TASK_TYPE.NORMAL || !filterType.value) ? '' : filterType.value
+  const targetType = (filterType.value === 'all' || !filterType.value) ? '' : filterType.value
 
   if (currentQueryType !== targetType) {
     const query = { ...route.query }
@@ -308,6 +313,41 @@ function openExportDialog(task: Task) {
   }
   exportCommandText.value = cmd
   showExportDialog.value = true
+}
+
+async function openShareApp(task: Task) {
+  shareAppName.value = task.name
+  
+  // 1. 优先调用后端 API 获取经 FormatManifestYAML 规范重排后的权威 app.yaml
+  try {
+    const detail = await api.apps.get(task.id) as any
+    const rawYaml = detail?.manifest_raw || detail?.app?.manifest_raw
+    if (rawYaml) {
+      shareYamlText.value = rawYaml
+      showShareDialog.value = true
+      return
+    }
+  } catch (err) {
+    console.warn('从后端 API 获取 App 权威 Manifest 失败，降级读取内存结构', err)
+  }
+
+  // 2. 降级兜底：从任务内存的 unified_config 中获取 manifest_raw
+  let rawYaml = ''
+  if (task.unified_config) {
+    try {
+      const unified = JSON.parse(task.unified_config)
+      if (unified.app && unified.app.manifest_raw) {
+        rawYaml = unified.app.manifest_raw
+      }
+    } catch {}
+  }
+
+  if (rawYaml) {
+    shareYamlText.value = rawYaml
+    showShareDialog.value = true
+  } else {
+    toast.error('未找到该应用的 manifest_raw 原始配置文件')
+  }
 }
 
 function copyCommandText() {
@@ -510,7 +550,7 @@ function applyViewWithoutSearch(view: any) {
   filterName.value = view.query.name || ''
   filterTags.value = view.query.tags || ''
   filterAgentId.value = view.query.agent_id || null
-  filterType.value = view.query.type || TASK_TYPE.NORMAL
+  filterType.value = view.query.type || 'all'
   sortBy.value = view.query.sort_by || 'created_at'
   order.value = view.query.order || 'desc'
 }
@@ -748,7 +788,7 @@ watch(() => route.query.type, (newVal: any) => {
   if (newVal && (newVal === 'all' || newVal === TASK_TYPE.NORMAL || newVal === TASK_TYPE.REPO || newVal === TASK_TYPE.APP || String(newVal).startsWith('app:'))) {
     filterType.value = String(newVal)
   } else if (!newVal) {
-    filterType.value = TASK_TYPE.NORMAL
+    filterType.value = 'all'
   }
   currentPage.value = 1
   loadTasks()
@@ -804,6 +844,7 @@ watch(() => route.query.type, (newVal: any) => {
       @duplicate-task="duplicateTask"
       @open-export-dialog="openExportDialog"
       @confirm-delete="confirmDelete"
+      @share-app="openShareApp"
     />
 
     <!-- 分页 -->
@@ -840,6 +881,13 @@ watch(() => route.query.type, (newVal: any) => {
       v-model:open="showExportDialog"
       :command-text="exportCommandText"
       @copy="copyCommandText"
+    />
+
+    <!-- 分享 / 导出 app.yaml 配置文件弹窗 -->
+    <AppShareDialog
+      v-model:open="showShareDialog"
+      :app-name="shareAppName"
+      :yaml-content="shareYamlText"
     />
 
     <!-- 依赖补全终端 -->

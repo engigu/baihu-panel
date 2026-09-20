@@ -222,7 +222,7 @@ func TestParseBiliBiliToolProManifest(t *testing.T) {
 	if daily.Tag != "BiliBiliToolPro" {
 		t.Errorf("daily 任务 Tag 宏展开提取错误: %s", daily.Tag)
 	}
-	if daily.Language != "dotnet@8.0.425" {
+	if daily.Language != "dotnet@10.0.401" {
 		t.Errorf("daily 任务 Language 宏展开提取错误: %s", daily.Language)
 	}
 	if daily.WorkDir != "{app_dir}/bin" {
@@ -291,7 +291,7 @@ func TestParseBiliBiliToolProManifest(t *testing.T) {
 		t.Errorf("GetTasksByLanguage('dotnet') 期望匹配 13 个任务，实际: %d", len(dotnetTasks))
 	}
 	taskLangs, ok := m.GetTaskLanguages("daily")
-	if !ok || len(taskLangs) != 1 || taskLangs[0]["name"] != "dotnet" || taskLangs[0]["version"] != "8.0.425" {
+	if !ok || len(taskLangs) != 1 || taskLangs[0]["name"] != "dotnet" || taskLangs[0]["version"] != "10.0.401" {
 		t.Errorf("GetTaskLanguages('daily') 提取错误: %+v", taskLangs)
 	}
 }

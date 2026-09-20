@@ -203,7 +203,7 @@ func upsertRepoTask(parentTask *models.Task, sourceID, name, command, cron, work
 		existing.Languages = parentTask.Languages
 		existing.SourceID = sourceID
 		existing.RepoTaskID = parentTask.ID
-		existing.WorkDir = workDir
+		existing.WorkDir = constant.NormalizeScriptPath(workDir)
 		// 如果原 UnifiedConfig 为空或者是 {}，则应用默认配置
 		if string(existing.UnifiedConfig) == "" || string(existing.UnifiedConfig) == "{}" {
 			existing.UnifiedConfig = models.BigText(defaultUnifiedConfig)
@@ -230,7 +230,7 @@ func upsertRepoTask(parentTask *models.Task, sourceID, name, command, cron, work
 			Timeout:       parentTask.Timeout,
 			UnifiedConfig: models.BigText(defaultUnifiedConfig),
 			Enabled:       utils.BoolPtr(true),
-			WorkDir:       workDir,
+			WorkDir:       constant.NormalizeScriptPath(workDir),
 			SourceID:      sourceID,
 			RepoTaskID:    parentTask.ID,
 			CleanConfig:   `{"type":"count","keep":30}`,

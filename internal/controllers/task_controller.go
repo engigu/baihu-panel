@@ -32,30 +32,9 @@ func NewTaskController(taskService *tasks.TaskService, executorService *tasks.Ex
 	}
 }
 
-// resolveWorkDir 将相对路径转换为绝对路径
+// resolveWorkDir 将前端或请求中的工作目录归一化为规范的逻辑路径 ($SCRIPTS_DIR$/...)
 func resolveWorkDir(workDir string) string {
-	if workDir == "" {
-		// 空则使用默认 scripts 目录
-		absPath, err := filepath.Abs(constant.ScriptsWorkDir)
-		if err != nil {
-			return constant.ScriptsWorkDir
-		}
-		return absPath
-	}
-	// 如果已经是绝对路径，直接返回
-	if strings.HasPrefix(workDir, constant.ScriptsDirPlaceholder) {
-		return workDir
-	}
-	if filepath.IsAbs(workDir) {
-		return workDir
-	}
-	// 相对路径，基于 scripts 目录
-	fullPath := filepath.Join(constant.ScriptsWorkDir, workDir)
-	absPath, err := filepath.Abs(fullPath)
-	if err != nil {
-		return fullPath
-	}
-	return absPath
+	return constant.NormalizeScriptPath(workDir)
 }
 
 // isValidDirName 校验目录名是否合法
@@ -469,8 +448,20 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		sourceID = oldTask.SourceID
 	}
 
-	// 若是 MasterTask (type == constant.TaskTypeApp)，同步回写编辑后的定制参数到 manifest_raw
+	// 若是 MasterTask (type == constant.TaskTypeApp)，保持其专属应用目录格式 $SCRIPTS_DIR$/apps/{author}-{id}
 	if req.Type == constant.TaskTypeApp || (oldTask != nil && oldTask.Type == constant.TaskTypeApp) {
+		if oldTask != nil && oldTask.WorkDir != "" && oldTask.WorkDir != constant.ScriptsDirPlaceholder {
+			workDir = oldTask.WorkDir
+		} else if oldTask != nil {
+			manifestID := oldTask.GetManifestID()
+			author := oldTask.GetAppAuthor()
+			if manifestID != "" {
+				if author == "" {
+					author = "baihu"
+				}
+				workDir = constant.NormalizeScriptPath(app.GetAppDir(constant.ScriptsWorkDir, author, manifestID))
+			}
+		}
 		if req.UnifiedConfig != "" {
 			unified := models.ParseUnifiedTaskConfig(req.UnifiedConfig)
 			if unified.App != nil && unified.App.ManifestRaw != "" {

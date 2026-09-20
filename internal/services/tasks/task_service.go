@@ -80,7 +80,7 @@ func (ts *TaskService) CreateTask(p *TaskParam) *models.Task {
 		UnifiedConfig: models.BigText(p.UnifiedConfig),
 		Schedule:      p.Schedule,
 		Timeout:       p.Timeout,
-		WorkDir:       p.WorkDir,
+		WorkDir:       constant.NormalizeScriptPath(p.WorkDir),
 		CleanConfig:   p.CleanConfig,
 		Envs:          models.BigText(p.Envs),
 		Languages:     p.Languages,
@@ -207,7 +207,7 @@ func (ts *TaskService) UpdateTask(id string, p *TaskParam) *models.Task {
 	task.PinType = p.PinType
 	task.Schedule = p.Schedule
 	task.Timeout = p.Timeout
-	task.WorkDir = p.WorkDir
+	task.WorkDir = constant.NormalizeScriptPath(p.WorkDir)
 	task.CleanConfig = p.CleanConfig
 	task.Enabled = &p.Enabled
 	task.AgentID = p.AgentID

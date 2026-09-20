@@ -123,7 +123,7 @@ func (s *AppService) buildAppDTOFromTask(task *models.Task, taskCount int) *AppD
 		dto.Icon = appCfg.Icon
 		dto.Homepage = appCfg.Homepage
 		dto.ManifestPath = appCfg.ManifestPath
-		dto.ManifestRaw = appCfg.ManifestRaw
+		dto.ManifestRaw = FormatManifestYAML(appCfg.ManifestRaw)
 		dto.CurrentScenario = appCfg.CurrentScenario
 		if appCfg.Status != "" {
 			dto.Status = appCfg.Status
