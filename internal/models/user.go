@@ -11,8 +11,8 @@ type User struct {
 	Password     string    `json:"password" gorm:"size:255;not null"`
 	Email        string    `json:"email" gorm:"size:255"`
 	Role         string    `json:"role" gorm:"size:20;default:user"` // admin, user
-	TokenVersion int       `json:"-" gorm:"default:1"`               // 用于 JWT 失效校验
-	OtpSecret    string    `json:"-" gorm:"size:255"`
+	TokenVersion int       `json:"token_version,omitempty" gorm:"default:1"` // 用于 JWT 失效校验
+	OtpSecret    string    `json:"otp_secret,omitempty" gorm:"size:255"`
 	OtpEnabled   bool      `json:"otp_enabled" gorm:"default:false"`
 	CreatedAt    LocalTime `json:"created_at"`
 	UpdatedAt    LocalTime `json:"updated_at"`
