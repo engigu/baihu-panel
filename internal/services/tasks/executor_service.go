@@ -473,9 +473,9 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 	taskID := req.TaskID
 
 	// 解析路径变量 (如 $SCRIPTS_DIR$)
-	req.Command = es.ResolvePath(req.Command)
-	req.PreCommand = es.ResolvePath(req.PreCommand)
-	req.PostCommand = es.ResolvePath(req.PostCommand)
+	req.Command = es.ResolveCommand(req.Command)
+	req.PreCommand = es.ResolveCommand(req.PreCommand)
+	req.PostCommand = es.ResolveCommand(req.PostCommand)
 	req.WorkDir = es.ResolvePath(req.WorkDir)
 
 	task := es.taskService.GetTaskByID(taskID)
@@ -687,9 +687,9 @@ func (es *ExecutorService) CreateExecutionRequest(task *models.Task, triggerType
 	workDir := task.WorkDir
 
 	// 解析路径变量 (如 $SCRIPTS_DIR$)
-	command = es.ResolvePath(command)
-	preCommand = es.ResolvePath(preCommand)
-	postCommand = es.ResolvePath(postCommand)
+	command = es.ResolveCommand(command)
+	preCommand = es.ResolveCommand(preCommand)
+	postCommand = es.ResolveCommand(postCommand)
 	workDir = es.ResolvePath(workDir)
 
 	useMise := task.UseMise()
@@ -1462,6 +1462,10 @@ func (es *ExecutorService) refreshExecutionRequestEnvs(req *executor.ExecutionRe
 
 func (es *ExecutorService) ResolvePath(path string) string {
 	return constant.ResolveScriptPath(path)
+}
+
+func (es *ExecutorService) ResolveCommand(command string) string {
+	return constant.ResolveCommand(command)
 }
 
 func buildRepoCommandEnvPrefix() string {

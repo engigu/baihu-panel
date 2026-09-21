@@ -38,6 +38,7 @@ func init() {
 
 // NormalizeScriptPath 将任意路径归一化为以 $SCRIPTS_DIR$ 开头的逻辑路径
 // 逻辑：如果路径在当前系统的 ScriptsWorkDir (data/scripts) 目录下，归一化为 $SCRIPTS_DIR$/xxx；
+// 如果是相对路径（如 apps/xxx/bin），自动补全 $SCRIPTS_DIR$ 占位符前缀归一化存库；
 // 如果是非 scriptsDir 目录下的外部绝对路径，原样保留。
 func NormalizeScriptPath(rawPath string) string {
 	rawPath = strings.TrimSpace(rawPath)
@@ -60,6 +61,11 @@ func NormalizeScriptPath(rawPath string) string {
 			return filepath.ToSlash(filepath.Join(ScriptsDirPlaceholder, rel))
 		}
 		return ScriptsDirPlaceholder
+	}
+
+	// 如果传入的是相对路径（如 apps/xxx/bin），自动补全 $SCRIPTS_DIR$ 占位符前缀归一化存库
+	if !filepath.IsAbs(cleanRaw) {
+		return filepath.ToSlash(filepath.Join(ScriptsDirPlaceholder, cleanRaw))
 	}
 
 	// 不在脚本目录下的外部绝对路径，原样保留（转为标准斜杠）
@@ -86,8 +92,25 @@ func ResolveScriptPath(logicPath string) string {
 		return filepath.Clean(filepath.Join(ScriptsWorkDir, rel))
 	}
 
-	// 若不含 $SCRIPTS_DIR$ 占位符（如常规 Shell 指令、普通参数等），原样返回
+	// 若不含 $SCRIPTS_DIR$ 占位符且为相对路径（非绝对路径），自动基于脚本根目录拼接还原
+	if !filepath.IsAbs(logicPath) {
+		return filepath.Clean(filepath.Join(ScriptsWorkDir, logicPath))
+	}
+
+	// 若不含 $SCRIPTS_DIR$ 占位符，原样返回
 	return logicPath
+}
+
+// ResolveCommand 将命令字符串中的 $SCRIPTS_DIR$ 占位符纯文本替换为当前系统的真实物理绝对路径
+func ResolveCommand(command string) string {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return ""
+	}
+	if strings.Contains(command, ScriptsDirPlaceholder) {
+		return strings.ReplaceAll(command, ScriptsDirPlaceholder, ScriptsWorkDir)
+	}
+	return command
 }
 
 // ResolveAppRootDir 获取应用程序的绝对根目录路径。
