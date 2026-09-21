@@ -32,8 +32,29 @@ func init() {
 	DataDir = filepath.Clean(filepath.Join(rootDir, "data"))
 	DefaultDBPath = filepath.Clean(filepath.Join(rootDir, "data", "baihu.db"))
 	WebDistDir = filepath.Clean(filepath.Join(rootDir, "web", "dist"))
-	ScriptsWorkDir = filepath.Clean(filepath.Join(rootDir, "data", "scripts"))
+	ScriptsWorkDir = ResolveScriptsDir(rootDir)
 	_ = os.Setenv("BH_SCRIPTS_DIR", ScriptsWorkDir)
+}
+
+// ResolveScriptsDir 解析脚本工作目录（优先读取 BH_SCRIPTS_DIR 环境变量，若无则基于 rootDir/data/scripts 兜底）
+func ResolveScriptsDir(rootDir string) string {
+	if scriptsDir := os.Getenv("BH_SCRIPTS_DIR"); scriptsDir != "" {
+		if !strings.Contains(scriptsDir, "go-build") && !strings.Contains(scriptsDir, "Temp") {
+			if absScriptsDir, err := filepath.Abs(scriptsDir); err == nil {
+				return filepath.Clean(absScriptsDir)
+			}
+			return filepath.Clean(scriptsDir)
+		}
+	}
+
+	if rootDir == "" {
+		rootDir = ResolveAppRootDir()
+	}
+	defaultScriptsDir := filepath.Join(rootDir, "data", "scripts")
+	if abs, err := filepath.Abs(defaultScriptsDir); err == nil {
+		return filepath.Clean(abs)
+	}
+	return filepath.Clean(defaultScriptsDir)
 }
 
 // NormalizeScriptPath 将任意路径归一化为以 $SCRIPTS_DIR$ 开头的逻辑路径

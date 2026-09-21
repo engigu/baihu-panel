@@ -2,11 +2,11 @@ package utils
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/windows"
 )
 
 // BuildRuntimeProcessEnv 构造 Baihu 内部可信子进程需要继承的运行时环境变量。
@@ -63,7 +63,7 @@ func GetSystemSecrets() []string {
 	return secrets
 }
 
-// BuildShellEnvPrefix 将 KEY=VALUE 环境变量切片转换为 shell 前缀。
+// BuildShellEnvPrefix 将 KEY=VALUE 环境变量切片转换为对应 Shell（PowerShell 或 Bash）的前缀。
 func BuildShellEnvPrefix(envs []string) string {
 	parts := make([]string, 0, len(envs))
 	for _, env := range envs {
@@ -78,29 +78,28 @@ func BuildShellEnvPrefix(envs []string) string {
 		return ""
 	}
 
+	if windows.IsWindows() {
+		// PowerShell 7+ (pwsh) 多变量分号分隔语句: $env:KEY='VALUE'; $env:KEY2='VALUE2';
+		return strings.Join(parts, "; ") + "; "
+	}
+
+	// Bash / Sh 空格分隔: KEY='VALUE' KEY2='VALUE2'
 	return strings.Join(parts, " ") + " "
 }
 
-// ShellEnvAssignment 生成 shell 可安全使用的 KEY='VALUE' 赋值片段。
+// ShellEnvAssignment 生成当前操作系统 Shell 可安全使用的 KEY=VALUE 环境变量赋值语句。
 func ShellEnvAssignment(key, value string) string {
+	if windows.IsWindows() {
+		// PowerShell 7+ 环境变量赋值语法: $env:KEY='VALUE'（单引号转义为 ''）
+		return "$env:" + key + "='" + strings.ReplaceAll(value, "'", "''") + "'"
+	}
+	// Bash / Sh 环境变量赋值语法: KEY='VALUE'（单引号转义为 '\''）
 	return key + "='" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 // ResolveAbsScriptsDir 解析 Baihu 运行时脚本目录的绝对路径。
 func ResolveAbsScriptsDir() string {
-	if scriptsDir := os.Getenv("BH_SCRIPTS_DIR"); scriptsDir != "" {
-		if !strings.Contains(scriptsDir, "go-build") && !strings.Contains(scriptsDir, "Temp") {
-			if absScriptsDir, err := filepath.Abs(scriptsDir); err == nil {
-				return filepath.Clean(absScriptsDir)
-			}
-			return filepath.Clean(scriptsDir)
-		}
-	}
-
-	if abs, err := filepath.Abs(constant.ScriptsWorkDir); err == nil {
-		return filepath.Clean(abs)
-	}
-	return filepath.Clean(constant.ScriptsWorkDir)
+	return constant.ResolveScriptsDir("")
 }
 
 func appendEnvIfSet(envs *[]string, key, value string) {

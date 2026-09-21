@@ -17,6 +17,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/services/repo"
 	"github.com/engigu/baihu-panel/internal/utils"
+	"github.com/engigu/baihu-panel/internal/windows"
 )
 
 type Config struct {
@@ -529,7 +530,7 @@ func preserve(baseDir string, paths string) func() {
 		return func() {}
 	}
 
-	preservedList := strings.Split(paths, ",")
+	preservedList := splitKeywords(paths)
 	// 优化：将临时目录创建在 baseDir 同一级或内部，确保在同一个文件系统，使得 Rename 是 O(1) 瞬时完成的
 	tmpParent, err := os.MkdirTemp(baseDir, ".baihu_sync_preserve_*")
 	if err != nil {
@@ -559,7 +560,12 @@ func preserve(baseDir string, paths string) func() {
 		}
 
 		// If literal path exists but Glob didn't find it (common for direct dir reference), add it manually
-		if len(matches) == 0 && pathExists(pattern) {
+		// 在 Windows 平台上，文件名绝对不能包含 |<>:"?* 等字符，若包含则非物理路径，跳过检查
+		isValidLiteralPath := true
+		if windows.IsWindows() && strings.ContainsAny(p, "|<>:\"?*") {
+			isValidLiteralPath = false
+		}
+		if len(matches) == 0 && isValidLiteralPath && pathExists(pattern) {
 			matches = []string{pattern}
 		}
 

@@ -1346,6 +1346,9 @@ func BuildRepoCommand(task *models.Task) (string, string) {
 	}
 
 	cmdStr := utils.QuotePath(exePath) + " " + strings.Join(quotedArgs, " ")
+	if windows.IsWindows() {
+		cmdStr = "& " + cmdStr
+	}
 	return buildRepoCommandEnvPrefix() + cmdStr, filepath.Dir(exePath)
 }
 
