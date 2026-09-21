@@ -420,7 +420,9 @@ func (ac *AppController) GetMarketplace(c *gin.Context) {
 				var rawJSON interface{}
 				if err := json.Unmarshal(body, &rawJSON); err == nil {
 					var appList interface{} = rawJSON
+					var rawMap map[string]interface{}
 					if m, ok := rawJSON.(map[string]interface{}); ok {
+						rawMap = m
 						if arr, exists := m["apps"]; exists {
 							appList = arr
 						}
@@ -431,10 +433,24 @@ func (ac *AppController) GetMarketplace(c *gin.Context) {
 
 					// 后台异步上报应用市场浏览 PV +1 (防阻塞)
 					reportMarketplacePVTelemetry()
-					utils.Success(c, gin.H{
+
+					respData := gin.H{
 						"source": "remote",
 						"apps":   appList,
-					})
+					}
+					if rawMap != nil {
+						if v, ok := rawMap["generated_at_utc8"]; ok {
+							respData["generated_at_utc8"] = v
+						}
+						if v, ok := rawMap["build_time"]; ok {
+							respData["build_time"] = v
+						}
+						if v, ok := rawMap["generated_at"]; ok {
+							respData["generated_at"] = v
+						}
+					}
+
+					utils.Success(c, respData)
 					return
 				}
 		}

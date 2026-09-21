@@ -38,6 +38,7 @@ function formatDate(dateStr?: string) {
   }
 }
 
+
 const router = useRouter()
 const searchQuery = ref('')
 const imageErrorMap = ref<Record<string, boolean>>({})
@@ -45,6 +46,7 @@ const imageErrorMap = ref<Record<string, boolean>>({})
 // 数据状态
 const loadingMarketplace = ref(false)
 const marketplaceApps = ref<MarketplaceApp[]>([])
+const marketplaceBuildTime = ref('')
 
 // 统计热度数据
 interface MarketStats {
@@ -89,11 +91,17 @@ async function fetchMarketStats() {
 async function fetchMarketplace() {
   loadingMarketplace.value = true
   try {
-    const res = await api.apps.marketplace()
+    const res: any = await api.apps.marketplace()
+    if (res && (res.build_time || res.generated_at_utc8)) {
+      marketplaceBuildTime.value = res.build_time || res.generated_at_utc8
+    }
     if (Array.isArray(res.apps)) {
       marketplaceApps.value = res.apps
     } else if (res.apps && typeof res.apps === 'object' && Array.isArray((res.apps as any).apps)) {
       marketplaceApps.value = (res.apps as any).apps
+      if (!marketplaceBuildTime.value) {
+        marketplaceBuildTime.value = (res.apps as any).build_time || (res.apps as any).generated_at_utc8 || ''
+      }
     } else {
       marketplaceApps.value = []
     }
@@ -159,27 +167,31 @@ function handleApplySuccess() {
             Beta
           </span>
         </h2>
-        <p class="text-muted-foreground text-xs mt-0.5 ml-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <span>浏览并一键部署官方声明式应用</span>
-          <span class="hidden sm:inline text-border">|</span>
-          <span class="text-[11px] text-emerald-500 font-medium">100% 开源免费</span>
-          <span class="hidden sm:inline text-border">|</span>
+        <p class="text-muted-foreground text-xs mt-0.5 ml-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <span>声明式应用</span>
+          <span class="hidden sm:inline text-border/60">|</span>
+          <span class="text-[11px] text-emerald-500 font-medium">开源免费</span>
+          <span class="hidden sm:inline text-border/60">|</span>
           <a
             href="https://github.com/engigu/baihu-appstore"
             target="_blank"
-            class="text-[11px] text-muted-foreground/90 hover:text-primary transition-colors inline-flex items-center gap-1 font-mono hover:underline"
+            class="text-[11px] text-muted-foreground/90 hover:text-primary transition-colors inline-flex items-center gap-0.5 font-mono hover:underline"
             title="访问 engigu/baihu-appstore GitHub 开源仓库"
           >
             <Github class="w-3 h-3 text-foreground shrink-0" />
-            <span>官方应用源</span>
+            <span>应用源</span>
             <ExternalLink class="w-2.5 h-2.5 opacity-60 shrink-0" />
           </a>
-          <span v-if="statsData.pv?.marketplace || statsData.downloads?.global" class="hidden sm:inline text-border">|</span>
+          <span v-if="statsData.pv?.marketplace || statsData.downloads?.global" class="hidden sm:inline text-border/60">|</span>
           <span v-if="statsData.pv?.marketplace" class="text-[11px] text-muted-foreground/90 flex items-center gap-1" title="应用市场累计浏览次数">
             <Eye class="w-3 h-3 text-primary/80" /> {{ statsData.pv.marketplace }} 浏览
           </span>
           <span v-if="statsData.downloads?.global" class="text-[11px] text-muted-foreground/90 flex items-center gap-1" title="所有应用累计下载安装总数">
             <Download class="w-3 h-3 text-emerald-500/80" /> {{ statsData.downloads.global }} 安装
+          </span>
+          <span v-if="marketplaceBuildTime" class="hidden sm:inline text-border/60">|</span>
+          <span v-if="marketplaceBuildTime" class="text-[11px] text-muted-foreground/90 flex items-center gap-1 font-mono" :title="`应用源全量构建时间 (东八区): ${marketplaceBuildTime}`">
+            <Clock class="w-3 h-3 text-amber-500/80 shrink-0" /> 构建于 {{ marketplaceBuildTime }}
           </span>
         </p>
       </div>
