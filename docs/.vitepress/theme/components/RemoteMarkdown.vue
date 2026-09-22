@@ -229,8 +229,37 @@ function scrollToTargetId(targetId: string, pushHash?: string) {
   }
 }
 
-// 处理文档内部点击：拦截内部锚点跳转并触发平滑滚动
+// 处理文档内部点击：拦截内部锚点跳转并触发平滑滚动；支持代码块一键复制
 function handleContentClick(e: MouseEvent) {
+  // 1. 处理代码复制按钮点击
+  const copyBtn = (e.target as HTMLElement).closest('.copy-code-btn') as HTMLButtonElement | null
+  if (copyBtn) {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const container = copyBtn.closest('.vp-adaptive-theme')
+    const codeEl = container?.querySelector('code')
+    if (codeEl) {
+      const codeText = codeEl.innerText || codeEl.textContent || ''
+      const onCopied = () => {
+        copyBtn.classList.add('copied')
+        setTimeout(() => {
+          copyBtn.classList.remove('copied')
+        }, 2000)
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(codeText).then(onCopied).catch(() => {
+          fallbackCopy(codeText, onCopied)
+        })
+      } else {
+        fallbackCopy(codeText, onCopied)
+      }
+    }
+    return
+  }
+
+  // 2. 处理链接点击
   const anchor = (e.target as HTMLElement).closest('a')
   if (!anchor) return
 
@@ -246,6 +275,25 @@ function handleContentClick(e: MouseEvent) {
     // 外部链接一律新标签页安全打开
     anchor.setAttribute('target', '_blank')
     anchor.setAttribute('rel', 'noopener noreferrer')
+  }
+}
+
+// 降级剪贴板复制实现
+function fallbackCopy(text: string, callback: () => void) {
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.top = '-9999px'
+    ta.style.left = '-9999px'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    callback()
+  } catch (err) {
+    console.error('复制失败', err)
   }
 }
 
@@ -338,21 +386,41 @@ async function fetchMarkdown() {
           }
 
           const langClass = language ? `language-${language}` : ''
-          return `<div class="language-${language || 'text'} vp-adaptive-theme"><span class="lang">${language || ''}</span><pre class="hljs"><code class="${langClass}">${highlighted}</code></pre></div>\n`
+          const copyBtnHtml = `
+            <div class="code-actions-bar">
+              <span class="lang">${language || ''}</span>
+              <button type="button" class="copy-code-btn" title="复制代码" aria-label="复制代码">
+                <span class="copy-default">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  <span class="copy-tip">复制</span>
+                </span>
+                <span class="copy-success">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span class="copy-tip">已复制</span>
+                </span>
+              </button>
+            </div>
+          `.trim()
+
+          return `<div class="language-${language || 'text'} vp-adaptive-theme">${copyBtnHtml}<pre class="hljs"><code class="${langClass}">${highlighted}</code></pre></div>\n`
         }
       }
     })
 
     const parsed = await markedInstance.parse(normalizedMarkdown)
 
-    // 尝试 dompurify 消毒，显式保留 id 属性与代码高亮 span/class
+    // 尝试 dompurify 消毒，显式保留 id 属性、按钮、SVG 与代码高亮 span/class
     if (typeof window !== 'undefined') {
       try {
         const DOMPurifyModule = await import('dompurify')
         const DOMPurify = DOMPurifyModule.default || DOMPurifyModule
         renderedHtml.value = DOMPurify.sanitize(parsed, {
-          ADD_ATTR: ['id', 'target', 'rel', 'class'],
-          ADD_TAGS: ['span']
+          ADD_TAGS: ['span', 'button', 'svg', 'path', 'rect', 'polyline', 'line', 'circle'],
+          ADD_ATTR: [
+            'id', 'target', 'rel', 'class', 'title', 'type', 'aria-label',
+            'viewBox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin',
+            'points', 'x', 'y', 'width', 'height', 'rx', 'ry', 'd'
+          ]
         })
       } catch {
         renderedHtml.value = parsed
@@ -684,17 +752,79 @@ onMounted(() => {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
-:deep(.vp-adaptive-theme .lang) {
+/* 代码块右上角操作栏 (语言标签 + 复制按钮) */
+:deep(.code-actions-bar) {
   position: absolute;
-  top: 6px;
+  top: 8px;
   right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 2;
+  user-select: none;
+}
+
+:deep(.code-actions-bar .lang) {
   font-size: 11px;
   font-weight: 700;
   color: #75715e;
   text-transform: uppercase;
-  user-select: none;
-  pointer-events: none;
   letter-spacing: 0.5px;
+}
+
+/* 复制按钮样式 (经典 Monokai 适配) */
+:deep(.copy-code-btn) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: #a8a8a2;
+  background-color: rgba(39, 40, 34, 0.9);
+  border: 1px solid #3e3d32;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+:deep(.vp-adaptive-theme:hover .copy-code-btn) {
+  opacity: 1;
+}
+
+:deep(.copy-code-btn:hover) {
+  background-color: #3e3d32;
+  color: #f8f8f2;
+  border-color: #75715e;
+}
+
+:deep(.copy-code-btn .copy-default) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+:deep(.copy-code-btn .copy-success) {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  color: #a6e22e; /* 经典 Monokai 柠檬草绿 */
+  font-weight: 600;
+}
+
+:deep(.copy-code-btn.copied) {
+  opacity: 1 !important;
+  border-color: #a6e22e;
+  background-color: rgba(166, 226, 46, 0.1);
+}
+
+:deep(.copy-code-btn.copied .copy-default) {
+  display: none;
+}
+
+:deep(.copy-code-btn.copied .copy-success) {
+  display: inline-flex;
 }
 
 :deep(.vp-adaptive-theme pre) {
