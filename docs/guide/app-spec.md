@@ -1,6 +1,8 @@
 # 白虎应用市场与规范 (App Specification)
 
-> 💡 **实时动态同步**：本页面直接在线拉取并渲染官方应用商店仓库 [engigu/baihu-appstore](https://github.com/engigu/baihu-appstore) 的最新 `README.md` 文档。任何应用商店规范、环境变量契约或目录结构的最新改动均在此实时同步呈现。
+::: tip 实时动态同步
+本页面直接在线拉取并渲染官方应用商店仓库 [engigu/baihu-appstore](https://github.com/engigu/baihu-appstore) 的最新 `README.md` 文档。任何应用商店规范、环境变量契约或目录结构的最新改动均在此实时同步呈现。
+:::
 
 <ClientOnly>
   <RemoteMarkdown 
