@@ -13,6 +13,7 @@
         "@scalar/api-reference": "^1.48.2",
         "dompurify": "^3.4.13",
         "fast-uri": "^3.1.5",
+        "marked": "^18.0.14",
         "postcss": "^8.5.18"
     },
     "overrides": {

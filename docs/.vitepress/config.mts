@@ -43,6 +43,7 @@ export default defineConfig({
                     { text: '终端命令', link: '/guide/terminal' },
                     { text: '消息中心', link: '/guide/notify' },
                     { text: '仓库同步', link: '/guide/sync' },
+                    { text: '应用市场与规范', link: '/guide/app-spec' },
                     { text: '命令行(CLI)', link: '/guide/cli' },
                     {
                         text: '脚本示例',
