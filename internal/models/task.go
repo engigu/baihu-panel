@@ -121,10 +121,12 @@ type AppTaskConfig struct {
 	ManifestRaw     string            `json:"manifest_raw,omitempty"`
 	CurrentScenario string            `json:"current_scenario,omitempty"`
 	Status          string            `json:"status,omitempty"`
-	EnvValues       map[string]string      `json:"env_values,omitempty"`
-	BuildOpts       *AppBuildOpts          `json:"build_opts,omitempty"`
-	Schedule        string                 `json:"schedule,omitempty"`
-	ScheduleOpts    *TaskScheduleOpts      `json:"schedule_opts,omitempty"`
+	Languages       TaskLanguages     `json:"languages,omitempty"`
+	Template        interface{}       `json:"template,omitempty"`
+	EnvValues       map[string]string `json:"env_values,omitempty"`
+	BuildOpts       *AppBuildOpts     `json:"build_opts,omitempty"`
+	Schedule        string            `json:"schedule,omitempty"`
+	ScheduleOpts    *TaskScheduleOpts `json:"schedule_opts,omitempty"`
 }
 
 // TaskScheduleOpts 默认调度策略预设

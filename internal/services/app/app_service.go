@@ -29,6 +29,8 @@ type AppDTO struct {
 	Status          string           `json:"status,omitempty"`
 	ManifestPath    string           `json:"manifest_path,omitempty"`
 	ManifestRaw     string           `json:"manifest_raw,omitempty"`
+	Tag             string           `json:"tag,omitempty"`
+	Languages       []map[string]string `json:"languages,omitempty"`
 	TasksCount      int              `json:"tasks_count"`
 	ScenariosCount  int              `json:"scenarios_count"`
 	CreatedAt       models.LocalTime `json:"created_at"`
@@ -133,6 +135,8 @@ func (s *AppService) buildAppDTOFromTask(task *models.Task, taskCount int) *AppD
 	if dto.ManifestRaw != "" {
 		if manifest, err := ParseManifestFromYAML([]byte(dto.ManifestRaw)); err == nil {
 			dto.ScenariosCount = len(manifest.Scenarios)
+			dto.Languages = manifest.GetLanguages()
+			dto.Tag = manifest.GetTemplateTag()
 		}
 	}
 

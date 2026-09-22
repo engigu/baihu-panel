@@ -246,7 +246,9 @@ async function openEditApp(task: Task) {
       env_values: cfg.env_values || {},
       current_scenario: cfg.current_scenario || appInfo.current_scenario || '',
       schedule: task.schedule,
-      languages: task.languages
+      languages: appInfo.languages || manifest.languages || task.languages || [],
+      tag: appInfo.tag,
+      template: manifest.template || cfg.template
     }
   } catch {
     // 降级兜底直接从当前 task 内存获取
@@ -264,7 +266,8 @@ async function openEditApp(task: Task) {
       env_values: cfg.env_values || {},
       current_scenario: cfg.current_scenario || '',
       schedule: task.schedule,
-      languages: task.languages
+      languages: task.languages || [],
+      template: cfg.template
     }
   }
   showApplyDialog.value = true

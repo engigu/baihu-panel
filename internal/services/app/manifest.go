@@ -906,6 +906,27 @@ func ValidateSource(src AppSource) error {
 	}
 }
 
+// ParseTemplateItemMap 解析单个 template 项（支持 map[string]interface{} 和 map[interface{}]interface{}）并写入结果 map
+func ParseTemplateItemMap(item interface{}, target map[string]string) {
+	if target == nil || item == nil {
+		return
+	}
+	switch mItem := item.(type) {
+	case map[string]interface{}:
+		for k, v := range mItem {
+			if v != nil {
+				target[k] = fmt.Sprintf("%v", v)
+			}
+		}
+	case map[interface{}]interface{}:
+		for k, v := range mItem {
+			if v != nil {
+				target[fmt.Sprintf("%v", k)] = fmt.Sprintf("%v", v)
+			}
+		}
+	}
+}
+
 // GetTemplateMap 统一提取解析 template 定义中的所有宏变量键值对
 func (m *AppManifest) GetTemplateMap() map[string]string {
 	result := make(map[string]string)
@@ -915,20 +936,10 @@ func (m *AppManifest) GetTemplateMap() map[string]string {
 
 	if tList, ok := m.Template.([]interface{}); ok {
 		for _, item := range tList {
-			if mItem, isMap := item.(map[string]interface{}); isMap {
-				for k, v := range mItem {
-					if v != nil {
-						result[k] = fmt.Sprintf("%v", v)
-					}
-				}
-			}
+			ParseTemplateItemMap(item, result)
 		}
-	} else if tMap, ok := m.Template.(map[string]interface{}); ok {
-		for k, v := range tMap {
-			if v != nil {
-				result[k] = fmt.Sprintf("%v", v)
-			}
-		}
+	} else {
+		ParseTemplateItemMap(m.Template, result)
 	}
 	return result
 }

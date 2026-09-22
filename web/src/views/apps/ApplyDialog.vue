@@ -150,31 +150,24 @@ function initDialogData() {
 
   enableTelemetry.value = !isEditMode
 
-  // 1. Tag 提取
-  let tplTag = ''
-  const tpl = (app as any)?.template
-  if (Array.isArray(tpl)) {
-    const item = tpl.find((t: any) => t && t.tag)
-    if (item && item.tag) tplTag = String(item.tag).trim()
-  } else if (tpl && typeof tpl === 'object' && tpl.tag) {
-    tplTag = String(tpl.tag).trim()
+  // 1. Tag 提取：直接使用 Go 后端统一解析导出的 tag 字段
+  appTag.value = (app as any)?.tag || app?.id || taskVal?.id || ''
+
+  // 统一直接使用后端自动解析返回的 app.languages
+  if (app?.languages && app.languages.length > 0) {
+    selectedLangs.value = app.languages.map(l => ({
+      name: l.name,
+      version: l.version,
+      availableVersions: []
+    }))
+  } else {
+    selectedLangs.value = []
   }
-  appTag.value = tplTag || app?.id || taskVal?.id || ''
 
   // 2. 区分场景回显
   if (isEditMode) {
     // 场景 A: 任务管理编辑已有 MasterTask —— 100% 遵照 task 表已保存的数据
     if (taskVal) {
-      if (taskVal.languages && taskVal.languages.length > 0) {
-        selectedLangs.value = taskVal.languages.map(l => ({
-          name: l.name,
-          version: l.version,
-          availableVersions: []
-        }))
-      } else {
-        selectedLangs.value = []
-      }
-
       form.value = {
         schedule: taskVal.schedule || '',
         random_range: taskVal.random_range || 0,
@@ -236,16 +229,6 @@ function initDialogData() {
   } else {
     // 场景 B: 应用市场全新安装 —— 100% 遵照应用市场原始 yml 的信息
     if (app) {
-      if (app.languages && app.languages.length > 0) {
-        selectedLangs.value = app.languages.map(l => ({
-          name: l.name,
-          version: l.version,
-          availableVersions: []
-        }))
-      } else {
-        selectedLangs.value = []
-      }
-
       // 高级构建控制：完全读取原始 yml 定义的 build_opts；未定义的遵循白虎规范默认值
       if (app.build_opts) {
         forceSetup.value = app.build_opts.force_setup !== undefined ? Boolean(app.build_opts.force_setup) : false

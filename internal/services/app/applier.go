@@ -904,6 +904,8 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 		ManifestRaw:     string(rawYAML),
 		CurrentScenario: activeScenarioID,
 		Status:          constant.AppStatusInstalled,
+		Template:        manifest.Template,
+		Languages:       manifest.GetLanguages(),
 		EnvValues:       envValues,
 		BuildOpts: &models.AppBuildOpts{
 			ForceSetup:    opts.ForceSetup,
