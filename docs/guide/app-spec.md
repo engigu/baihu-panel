@@ -5,10 +5,10 @@
 <ClientOnly>
   <RemoteMarkdown 
     :urls="[
-      'https://raw.githubusercontent.com/engigu/baihu-appstore/main/README.md',
       'https://fastly.jsdelivr.net/gh/engigu/baihu-appstore@main/README.md',
       'https://cdn.jsdelivr.net/gh/engigu/baihu-appstore@main/README.md',
-      'https://ghproxy.net/https://raw.githubusercontent.com/engigu/baihu-appstore/main/README.md'
+      'https://gcore.jsdelivr.net/gh/engigu/baihu-appstore@main/README.md',
+      'https://raw.githubusercontent.com/engigu/baihu-appstore/main/README.md'
     ]"
     repoUrl="https://github.com/engigu/baihu-appstore"
     rawBase="https://raw.githubusercontent.com/engigu/baihu-appstore/main/"

@@ -68,10 +68,10 @@ const props = withDefaults(
   }>(),
   {
     urls: () => [
-      'https://raw.githubusercontent.com/engigu/baihu-appstore/main/README.md',
       'https://fastly.jsdelivr.net/gh/engigu/baihu-appstore@main/README.md',
       'https://cdn.jsdelivr.net/gh/engigu/baihu-appstore@main/README.md',
-      'https://ghproxy.net/https://raw.githubusercontent.com/engigu/baihu-appstore/main/README.md'
+      'https://gcore.jsdelivr.net/gh/engigu/baihu-appstore@main/README.md',
+      'https://raw.githubusercontent.com/engigu/baihu-appstore/main/README.md'
     ],
     repoUrl: 'https://github.com/engigu/baihu-appstore',
     defaultBranch: 'main',
@@ -123,26 +123,27 @@ async function fetchMarkdown() {
   let content = ''
   let successUrl = ''
 
-  for (const url of props.urls) {
+  for (const rawUrl of props.urls) {
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 8000)
+      const timeoutId = setTimeout(() => controller.abort(), 6000)
 
-      const res = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          'Cache-Control': 'no-cache'
-        }
+      // 使用时间戳参数避免缓存，且不带任何自定义 header，以确保为 CORS Simple Request 避免触发 preflight
+      const separator = rawUrl.includes('?') ? '&' : '?'
+      const fetchUrl = `${rawUrl}${separator}_t=${Date.now()}`
+
+      const res = await fetch(fetchUrl, {
+        signal: controller.signal
       })
       clearTimeout(timeoutId)
 
       if (res.ok) {
         content = await res.text()
-        successUrl = url
+        successUrl = rawUrl
         break
       }
     } catch {
-      // 忽略单次失败，尝试下一轮镜像
+      // 忽略单次失败，继续尝试下一个镜像源
       continue
     }
   }
