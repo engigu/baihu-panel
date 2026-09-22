@@ -67,10 +67,9 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 		var taskIDs []string
 		database.DB.Model(&models.Task{}).Where("name LIKE ?", "%"+taskName+"%").Pluck("id", &taskIDs)
 		if len(taskIDs) > 0 {
-			query = query.Where("task_id IN ?", taskIDs)
+			query = query.Where("(task_id IN ? OR task_name LIKE ?)", taskIDs, "%"+taskName+"%")
 		} else {
-			utils.PaginatedResponse(c, []vo.TaskLogVO{}, 0, p)
-			return
+			query = query.Where("task_name LIKE ?", "%"+taskName+"%")
 		}
 	}
 
@@ -96,10 +95,17 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 		if taskType == "" {
 			taskType = "task"
 		}
+		logTaskName := task.Name
+		if logTaskName == "" {
+			logTaskName = log.TaskName
+		}
+		if logTaskName == "" {
+			logTaskName = "<已删除任务>"
+		}
 		result[i] = vo.TaskLogVO{
 			ID:        log.ID,
 			TaskID:    log.TaskID,
-			TaskName:  task.Name,
+			TaskName:  logTaskName,
 			TaskType:  taskType,
 			AgentID:   log.AgentID,
 			Command:   string(log.Command),
