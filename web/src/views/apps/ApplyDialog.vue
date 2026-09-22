@@ -150,12 +150,13 @@ function initDialogData() {
 
   enableTelemetry.value = !isEditMode
 
-  // 1. Tag 提取：直接使用 Go 后端统一解析导出的 tag 字段
-  appTag.value = (app as any)?.tag || app?.id || taskVal?.id || ''
+  // 1. Tag 提取：优先从强类型 app.template.tag 提取，降级从旧属性或 ID 提取
+  appTag.value = (app as any)?.template?.tag || (app as any)?.tag || app?.id || taskVal?.id || ''
 
-  // 统一直接使用后端自动解析返回的 app.languages
-  if (app?.languages && app.languages.length > 0) {
-    selectedLangs.value = app.languages.map(l => ({
+  // 统一优先使用后端强类型 app.template.languages 提取
+  const tplLangs = (app as any)?.template?.languages || app?.languages
+  if (tplLangs && Array.isArray(tplLangs) && tplLangs.length > 0) {
+    selectedLangs.value = tplLangs.map((l: any) => ({
       name: l.name,
       version: l.version,
       availableVersions: []
@@ -388,6 +389,12 @@ async function startDeployProcess() {
         parsedUnified.app.current_scenario = selectedScenario.value
       }
 
+      if (!parsedUnified.app.template) {
+        parsedUnified.app.template = {}
+      }
+      parsedUnified.app.template.tag = appTag.value
+      parsedUnified.app.template.languages = selectedLangs.value.filter(l => l.name && l.version).map(l => ({ name: l.name, version: l.version }))
+
       // 同步收集环境变量当前输入值
       const currentEnvValues: Record<string, string> = {}
       for (const [k, v] of Object.entries(envForm.value)) {
@@ -426,6 +433,11 @@ async function startDeployProcess() {
         props.targetApp.build_opts = parsedUnified.app.build_opts
         props.targetApp.current_scenario = selectedScenario.value
         props.targetApp.env_values = currentEnvValues
+        if (!props.targetApp.template) {
+          props.targetApp.template = {}
+        }
+        props.targetApp.template.tag = appTag.value
+        props.targetApp.template.languages = parsedUnified.app.template.languages
       }
 
       toast.success('更新应用调度配置成功！')

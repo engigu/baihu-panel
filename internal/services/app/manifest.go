@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/models"
-	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 var (
@@ -953,15 +952,27 @@ func (m *AppManifest) GetTemplateVar(key string) string {
 	return ""
 }
 
-// GetLanguages 解析提取应用配置的运行语言契约列表
+// GetLanguages 解析提取应用配置的运行语言契约列表 (兼容 map 结构)
 func (m *AppManifest) GetLanguages() []map[string]string {
 	var result []map[string]string
+	for _, l := range m.GetTypedLanguages() {
+		result = append(result, map[string]string{
+			"name":    l.Name,
+			"version": l.Version,
+		})
+	}
+	return result
+}
+
+// GetTypedLanguages 解析提取应用配置的运行语言契约强类型列表
+func (m *AppManifest) GetTypedLanguages() []models.AppLanguageItem {
+	var result []models.AppLanguageItem
 	if len(m.Languages) > 0 {
 		for _, l := range m.Languages {
 			if l.Name != "" {
-				result = append(result, map[string]string{
-					"name":    l.Name,
-					"version": l.Version,
+				result = append(result, models.AppLanguageItem{
+					Name:    l.Name,
+					Version: l.Version,
 				})
 			}
 		}
@@ -970,7 +981,7 @@ func (m *AppManifest) GetLanguages() []map[string]string {
 
 	// 容灾解析：从 template 池的 mise_languages 获取 (例如: "dotnet@8.0.425 node@23")
 	if miseLangStr := m.GetTemplateVar("mise_languages"); miseLangStr != "" {
-		return utils.ParseMiseLanguages(miseLangStr)
+		return models.ParseAppLanguagesFromMiseSpec(miseLangStr)
 	}
 	return result
 }
@@ -978,4 +989,12 @@ func (m *AppManifest) GetLanguages() []map[string]string {
 // GetTemplateTag 解析提取 template 定义中的 tag 变量
 func (m *AppManifest) GetTemplateTag() string {
 	return m.GetTemplateVar("tag")
+}
+
+// GetTypedTemplateConfig 一键解析获取 AppTemplateConfig 强类型结构
+func (m *AppManifest) GetTypedTemplateConfig() *models.AppTemplateConfig {
+	return &models.AppTemplateConfig{
+		Tag:       m.GetTemplateTag(),
+		Languages: m.GetTypedLanguages(),
+	}
 }

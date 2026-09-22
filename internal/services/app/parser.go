@@ -277,6 +277,22 @@ func updateScenarioItemDefault(scRaw interface{}, targetScenario string) interfa
 	}
 }
 
+// extractTemplateMapSlice 从 template 节点中提取平铺合并后的 MapSlice
+func extractTemplateMapSlice(rawVal interface{}) yaml.MapSlice {
+	var res yaml.MapSlice
+	switch v := rawVal.(type) {
+	case yaml.MapSlice:
+		res = v
+	case []interface{}:
+		for _, item := range v {
+			if msItem, isMS := item.(yaml.MapSlice); isMS {
+				res = append(res, msItem...)
+			}
+		}
+	}
+	return res
+}
+
 // SyncManifestYAMLWithConfig 将 AppTaskConfig 中的 build_opts、scenario、schedule 等用户定制项同步写入 YAML 文本中，生成实例级定制 YAML
 func SyncManifestYAMLWithConfig(rawYAML string, cfg *models.AppTaskConfig) string {
 	if strings.TrimSpace(rawYAML) == "" || cfg == nil {
@@ -312,6 +328,27 @@ func SyncManifestYAMLWithConfig(rawYAML string, cfg *models.AppTaskConfig) strin
 	// 2. 同步 schedule
 	if cfg.Schedule != "" {
 		setMapSliceValue(&ms, "schedule", cfg.Schedule)
+	}
+
+	// 3. 同步 template 属性（提取 tag 与 Languages 格式化为 mise_languages 写回 YAML 文本）
+	if cfg.Template != nil {
+		tagVal := cfg.Template.Tag
+		miseLangVal := models.FormatAppLanguagesToMiseSpec(cfg.Template.Languages)
+
+		if tagVal != "" || miseLangVal != "" {
+			var tplSlice yaml.MapSlice
+			if existingTpl, ok := getMapSliceValue(ms, "template"); ok {
+				tplSlice = extractTemplateMapSlice(existingTpl)
+			}
+
+			if tagVal != "" {
+				setMapSliceValue(&tplSlice, "tag", tagVal)
+			}
+			if miseLangVal != "" {
+				setMapSliceValue(&tplSlice, "mise_languages", miseLangVal)
+			}
+			setMapSliceValue(&ms, "template", tplSlice)
+		}
 	}
 
 	// 3. 场景 default 标记同步（已注释：保持原始 App Manifest 的场景预设声明原汁原味，用户切换场景通过 masterTask 记录控制即可，无需重写 YAML 的 scenarios 节点）

@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/engigu/baihu-panel/internal/constant"
 )
 
@@ -106,27 +108,82 @@ type RepoConfig struct {
 	RepoDirName    string `json:"repo_dir_name,omitempty"`
 }
 
+// AppLanguageItem 运行语言项 (如 name: "dotnet", version: "10.0.401")
+type AppLanguageItem struct {
+	Name    string `json:"name" yaml:"name"`
+	Version string `json:"version,omitempty" yaml:"version,omitempty"`
+}
+
+// ToMiseSpec 将语言项转换为 mise 格式字符串 (如 "node@23.11.1" 或 "go")
+func (l AppLanguageItem) ToMiseSpec() string {
+	if l.Name == "" {
+		return ""
+	}
+	if l.Version != "" {
+		return l.Name + "@" + l.Version
+	}
+	return l.Name
+}
+
+// FormatAppLanguagesToMiseSpec 将语言项切片格式化为空格分隔的 mise 声明字符串 (如 "dotnet@8.0.425 node@23")
+func FormatAppLanguagesToMiseSpec(items []AppLanguageItem) string {
+	var parts []string
+	for _, item := range items {
+		if spec := item.ToMiseSpec(); spec != "" {
+			parts = append(parts, spec)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// ParseAppLanguagesFromMiseSpec 将空格分隔的 mise 规范字符串 (如 "dotnet@8.0.425 node@23") 解析为强类型 []AppLanguageItem
+func ParseAppLanguagesFromMiseSpec(miseLangStr string) []AppLanguageItem {
+	var result []AppLanguageItem
+	for _, p := range strings.Fields(strings.TrimSpace(miseLangStr)) {
+		sub := strings.Split(strings.TrimSpace(p), "@")
+		name := strings.TrimSpace(sub[0])
+		if name == "" {
+			continue
+		}
+		ver := ""
+		if len(sub) > 1 {
+			ver = strings.TrimSpace(sub[1])
+		}
+		result = append(result, AppLanguageItem{
+			Name:    name,
+			Version: ver,
+		})
+	}
+	return result
+}
+
+
+// AppTemplateConfig 模板宏变量声明结构体 (全强类型约束)
+type AppTemplateConfig struct {
+	Tag       string            `json:"tag,omitempty" yaml:"tag,omitempty"`             // 统一绑定的应用/任务分类标签
+	Languages []AppLanguageItem `json:"languages,omitempty" yaml:"languages,omitempty"` // 结构化多语言环境列表
+}
+
 // AppTaskConfig 应用任务配置
 type AppTaskConfig struct {
-	ID              string            `json:"id,omitempty"`
-	Name            string            `json:"name,omitempty"`
-	Version         string            `json:"version,omitempty"`
-	Author          string            `json:"author,omitempty"`
-	Category        string            `json:"category,omitempty"`
-	LastCommit      string            `json:"last_commit,omitempty"`
-	Description     string            `json:"description,omitempty"`
-	Icon            string            `json:"icon,omitempty"`
-	Homepage        string            `json:"homepage,omitempty"`
-	ManifestPath    string            `json:"manifest_path,omitempty"`
-	ManifestRaw     string            `json:"manifest_raw,omitempty"`
-	CurrentScenario string            `json:"current_scenario,omitempty"`
-	Status          string            `json:"status,omitempty"`
-	Languages       TaskLanguages     `json:"languages,omitempty"`
-	Template        interface{}       `json:"template,omitempty"`
-	EnvValues       map[string]string `json:"env_values,omitempty"`
-	BuildOpts       *AppBuildOpts     `json:"build_opts,omitempty"`
-	Schedule        string            `json:"schedule,omitempty"`
-	ScheduleOpts    *TaskScheduleOpts `json:"schedule_opts,omitempty"`
+	ID              string             `json:"id,omitempty"`
+	Name            string             `json:"name,omitempty"`
+	Version         string             `json:"version,omitempty"`
+	Author          string             `json:"author,omitempty"`
+	Category        string             `json:"category,omitempty"`
+	LastCommit      string             `json:"last_commit,omitempty"`
+	Description     string             `json:"description,omitempty"`
+	Icon            string             `json:"icon,omitempty"`
+	Homepage        string             `json:"homepage,omitempty"`
+	ManifestPath    string             `json:"manifest_path,omitempty"`
+	ManifestRaw     string             `json:"manifest_raw,omitempty"`
+	CurrentScenario string             `json:"current_scenario,omitempty"`
+	Status          string             `json:"status,omitempty"`
+	Template        *AppTemplateConfig `json:"template,omitempty"`
+	EnvValues       map[string]string  `json:"env_values,omitempty"`
+	BuildOpts       *AppBuildOpts      `json:"build_opts,omitempty"`
+	Schedule        string             `json:"schedule,omitempty"`
+	ScheduleOpts    *TaskScheduleOpts  `json:"schedule_opts,omitempty"`
 }
 
 // TaskScheduleOpts 默认调度策略预设

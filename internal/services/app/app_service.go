@@ -27,14 +27,13 @@ type AppDTO struct {
 	Homepage        string           `json:"homepage,omitempty"`
 	CurrentScenario string           `json:"current_scenario,omitempty"`
 	Status          string           `json:"status,omitempty"`
-	ManifestPath    string           `json:"manifest_path,omitempty"`
-	ManifestRaw     string           `json:"manifest_raw,omitempty"`
-	Tag             string           `json:"tag,omitempty"`
-	Languages       []map[string]string `json:"languages,omitempty"`
-	TasksCount      int              `json:"tasks_count"`
-	ScenariosCount  int              `json:"scenarios_count"`
-	CreatedAt       models.LocalTime `json:"created_at"`
-	UpdatedAt       models.LocalTime `json:"updated_at"`
+	ManifestPath    string                   `json:"manifest_path,omitempty"`
+	ManifestRaw     string                   `json:"manifest_raw,omitempty"`
+	Template        *models.AppTemplateConfig `json:"template,omitempty"`
+	TasksCount      int                      `json:"tasks_count"`
+	ScenariosCount  int                      `json:"scenarios_count"`
+	CreatedAt       models.LocalTime         `json:"created_at"`
+	UpdatedAt       models.LocalTime         `json:"updated_at"`
 }
 
 type AppService struct{}
@@ -130,13 +129,17 @@ func (s *AppService) buildAppDTOFromTask(task *models.Task, taskCount int) *AppD
 		if appCfg.Status != "" {
 			dto.Status = appCfg.Status
 		}
+		if appCfg.Template != nil {
+			dto.Template = appCfg.Template
+		}
 	}
 
 	if dto.ManifestRaw != "" {
 		if manifest, err := ParseManifestFromYAML([]byte(dto.ManifestRaw)); err == nil {
 			dto.ScenariosCount = len(manifest.Scenarios)
-			dto.Languages = manifest.GetLanguages()
-			dto.Tag = manifest.GetTemplateTag()
+			if dto.Template == nil {
+				dto.Template = manifest.GetTypedTemplateConfig()
+			}
 		}
 	}
 

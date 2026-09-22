@@ -118,20 +118,20 @@ func (a *AppApplier) Apply(manifest *AppManifest, rawYAML []byte, opts ApplyOpti
 		return nil, err
 	}
 
-	// 阶段 3: 执行前置环境探测与依赖安装 (Setup)
+	// 阶段 3: 先持久化主应用记录到 tasks 表 (Type = app)，并更新内存 manifest 中的 Tag 与 Languages 模板配置
+	masterTask, activeScenarioID, err := a.saveMasterAppTask(manifest, rawYAML, appDir, opts.ManifestPath, opts.ScenarioID, opts.EnvValues, opts, log)
+	if err != nil {
+		return nil, err
+	}
+
+	// 阶段 4: 执行前置环境探测与依赖安装 (Setup)，此时 manifest.GetLanguages() / {mise_languages} 均采用最新修改值
 	skippedSetup, err := a.runSetup(manifest, appDir, opts.SkipSetup, opts.ForceSetup, out, log)
 	if err != nil {
 		return nil, err
 	}
 
-	// 阶段 4: 环境变量契约写入与 Tag 绑定 (Env Schema)
+	// 阶段 5: 环境变量契约写入与 Tag 绑定 (Env Schema)，此时 manifest 已获取最新的 Tag
 	createdEnvs, err := a.applyEnvSchema(manifest, opts, log)
-	if err != nil {
-		return nil, err
-	}
-
-	// 阶段 5: 先持久化主应用记录到 tasks 表 (Type = app)，获取主应用任务实体 masterTask.ID
-	masterTask, activeScenarioID, err := a.saveMasterAppTask(manifest, rawYAML, appDir, opts.ManifestPath, opts.ScenarioID, opts.EnvValues, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -448,15 +448,15 @@ func (a *AppApplier) applyEnvSchema(manifest *AppManifest, opts ApplyOptions, lo
 	return createdEnvs, nil
 }
 
-// resolveEnvTag 计算 Tag 映射优先级 (envItem.Tag > templateTag > appTag > manifestID)
+// resolveEnvTag 计算 Tag 映射优先级 (appTag > templateTag > itemTag > manifestID)
 func resolveEnvTag(itemTag, templateTag, appTag, manifestID string) string {
-	if tag := strings.TrimSpace(itemTag); tag != "" {
+	if tag := strings.TrimSpace(appTag); tag != "" {
 		return tag
 	}
 	if tag := strings.TrimSpace(templateTag); tag != "" {
 		return tag
 	}
-	if tag := strings.TrimSpace(appTag); tag != "" {
+	if tag := strings.TrimSpace(itemTag); tag != "" && tag != "{tag}" && tag != "{{tag}}" {
 		return tag
 	}
 	return manifestID
@@ -492,10 +492,10 @@ func (a *AppApplier) upsertSingleEnv(envItem AppEnvItem, envValues map[string]st
 	var existing models.EnvironmentVariable
 	res := database.DB.Where("name = ?", envItem.Key).Limit(1).Find(&existing)
 	if res.RowsAffected > 0 {
-		// 若已存在且未开启覆盖，则只绑定 Tag，保持原变量值不变
+		// 若已存在且未开启覆盖，则重新更新绑定最新的 Tag 关系，保持原变量值不变
+		relation.DataRelation.SaveTags(existing.ID, constant.RelationTypeEnvTag, tag)
 		if !overwrite {
-			relation.DataRelation.SaveTags(existing.ID, constant.RelationTypeEnvTag, tag)
-			log("  ~ 环境变量已存在, 跳过覆盖: %s (Tag: %s)", envItem.Key, tag)
+			log("  ~ 环境变量已存在, 跳过值覆盖: %s (已更新绑定 Tag: %s)", envItem.Key, tag)
 			return false, nil
 		}
 
@@ -554,25 +554,10 @@ func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, mast
 		return []string{}, []string{}, nil
 	}
 
-	activeScenarioID := targetScenarioID
-	var activeScenario *AppScenarioItem
-
-	if len(manifest.Scenarios) > 0 {
-		for i := range manifest.Scenarios {
-			sc := &manifest.Scenarios[i]
-			if activeScenarioID != "" && sc.ID == activeScenarioID {
-				activeScenario = sc
-				break
-			} else if activeScenarioID == "" && sc.Default {
-				activeScenario = sc
-				activeScenarioID = sc.ID
-				break
-			}
-		}
-		if activeScenario == nil {
-			activeScenario = &manifest.Scenarios[0]
-			activeScenarioID = activeScenario.ID
-		}
+	activeScenario := resolveActiveScenarioItem(manifest.Scenarios, targetScenarioID)
+	activeScenarioID := ""
+	if activeScenario != nil {
+		activeScenarioID = activeScenario.ID
 	}
 
 	log("[5/5] 编排应用定时任务 (激活场景: '%s')...", activeScenarioID)
@@ -872,23 +857,97 @@ func (w *smartLogWriter) isHighlightLine(line string) bool {
 	return false
 }
 
-// saveMasterAppTask 将应用实体数据持久化保存到 tasks 表 (Type = "app", Config 存 Unified——TaskConfig JSON)
-func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, appDir string, manifestPath string, targetScenarioID string, envValues map[string]string, opts ApplyOptions) (*models.Task, string, error) {
-	activeScenarioID := targetScenarioID
-	if len(manifest.Scenarios) > 0 {
-		for i := range manifest.Scenarios {
-			sc := &manifest.Scenarios[i]
-			if activeScenarioID != "" && sc.ID == activeScenarioID {
-				break
-			} else if activeScenarioID == "" && sc.Default {
-				activeScenarioID = sc.ID
-				break
-			}
-		}
-		if activeScenarioID == "" {
-			activeScenarioID = manifest.Scenarios[0].ID
+// resolveActiveScenarioItem 确定应用当前的激活场景对象
+func resolveActiveScenarioItem(scenarios []AppScenarioItem, targetID string) *AppScenarioItem {
+	if len(scenarios) == 0 {
+		return nil
+	}
+	for i := range scenarios {
+		sc := &scenarios[i]
+		if targetID != "" && sc.ID == targetID {
+			return sc
+		} else if targetID == "" && sc.Default {
+			return sc
 		}
 	}
+	return &scenarios[0]
+}
+
+// resolveActiveScenarioID 确定应用当前的激活场景 ID
+func resolveActiveScenarioID(scenarios []AppScenarioItem, targetID string) string {
+	item := resolveActiveScenarioItem(scenarios, targetID)
+	if item != nil {
+		return item.ID
+	}
+	return targetID
+}
+
+// mergePassedUnifiedConfig 解析并合并前端传入的 UnifiedConfig 策略配置
+func mergePassedUnifiedConfig(opts *ApplyOptions, unified *models.UnifiedTaskConfig) {
+	if opts.UnifiedConfig == "" {
+		return
+	}
+	passedUnified := models.ParseUnifiedTaskConfig(opts.UnifiedConfig)
+	if passedUnified.Common != nil {
+		if unified.Common == nil {
+			unified.Common = &models.CommonConfig{}
+		}
+		if passedUnified.Common.Concurrency > 0 {
+			unified.Common.Concurrency = passedUnified.Common.Concurrency
+		}
+		unified.Common.AllEnvs = passedUnified.Common.AllEnvs
+	}
+	if passedUnified.App != nil && passedUnified.App.Template != nil {
+		tpl := passedUnified.App.Template
+		if opts.Tag == "" {
+			opts.Tag = tpl.Tag
+		}
+		if len(opts.Languages) == 0 && len(tpl.Languages) > 0 {
+			for _, l := range tpl.Languages {
+				opts.Languages = append(opts.Languages, map[string]string{
+					"name":    l.Name,
+					"version": l.Version,
+				})
+			}
+		}
+	}
+}
+
+// resolveTemplateConfig 解析得出应用最新的 Tag 与 Languages 模板配置
+func resolveTemplateConfig(opts *ApplyOptions, unified *models.UnifiedTaskConfig, manifest *AppManifest) *models.AppTemplateConfig {
+	finalTag := opts.Tag
+	if finalTag == "" && unified.App != nil && unified.App.Template != nil && unified.App.Template.Tag != "" {
+		finalTag = unified.App.Template.Tag
+	}
+	if finalTag == "" {
+		finalTag = manifest.GetTemplateTag()
+	}
+
+	var parsedLangs []models.AppLanguageItem
+	if len(opts.Languages) > 0 {
+		for _, l := range opts.Languages {
+			if l["name"] != "" {
+				parsedLangs = append(parsedLangs, models.AppLanguageItem{
+					Name:    l["name"],
+					Version: l["version"],
+				})
+			}
+		}
+	} else if unified.App != nil && unified.App.Template != nil && len(unified.App.Template.Languages) > 0 {
+		parsedLangs = unified.App.Template.Languages
+	} else {
+		parsedLangs = manifest.GetTypedLanguages()
+	}
+
+	return &models.AppTemplateConfig{
+		Tag:       finalTag,
+		Languages: parsedLangs,
+	}
+}
+
+// saveMasterAppTask 将应用实体数据持久化保存到 tasks 表 (Type = "app", Config 存 UnifiedTaskConfig JSON)
+func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, appDir string, manifestPath string, targetScenarioID string, envValues map[string]string, opts ApplyOptions, log LogFunc) (*models.Task, string, error) {
+	activeScenarioID := resolveActiveScenarioID(manifest.Scenarios, targetScenarioID)
 
 	appCfg := models.AppTaskConfig{
 		ID:              manifest.ID,
@@ -904,8 +963,6 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 		ManifestRaw:     string(rawYAML),
 		CurrentScenario: activeScenarioID,
 		Status:          constant.AppStatusInstalled,
-		Template:        manifest.Template,
-		Languages:       manifest.GetLanguages(),
 		EnvValues:       envValues,
 		BuildOpts: &models.AppBuildOpts{
 			ForceSetup:    opts.ForceSetup,
@@ -925,17 +982,27 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 	if tx.RowsAffected > 0 && string(existingTask.UnifiedConfig) != "" {
 		unified = models.ParseUnifiedTaskConfig(string(existingTask.UnifiedConfig))
 		if unified.App != nil {
-			// 如果本次没有传入环境变量（如调度执行场景），保留原有环境变量配置
 			if len(appCfg.EnvValues) == 0 && len(unified.App.EnvValues) > 0 {
 				appCfg.EnvValues = unified.App.EnvValues
 			}
 			if appCfg.BuildOpts != nil && unified.App.BuildOpts != nil {
-				// 兜底保护已有配置项
 				if appCfg.BuildOpts.OverwriteTask == nil && unified.App.BuildOpts.OverwriteTask != nil {
 					appCfg.BuildOpts.OverwriteTask = unified.App.BuildOpts.OverwriteTask
 				}
 			}
 		}
+	}
+
+	// 尝试解析并合并前端传入的策略配置 (UnifiedConfig)
+	mergePassedUnifiedConfig(&opts, &unified)
+
+	// 优先计算模版与多语言契约配置
+	appCfg.Template = resolveTemplateConfig(&opts, &unified, manifest)
+
+	// 内存同步：确保内存中运行的 manifest 对象也实时更新最新的 template Tag 与 mise_languages
+	manifest.Template = []interface{}{
+		map[string]interface{}{"tag": appCfg.Template.Tag},
+		map[string]interface{}{"mise_languages": models.FormatAppLanguagesToMiseSpec(appCfg.Template.Languages)},
 	}
 
 	// 将当前最新的用户定制选项同步写入 ManifestRaw YAML，保证 task 表保存的是编辑之后的 YML
@@ -945,21 +1012,6 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 	appCfg.ManifestRaw = SyncManifestYAMLWithConfig(appCfg.ManifestRaw, &appCfg)
 
 	unified.App = &appCfg
-
-	// 尝试解析传入的策略
-	if opts.UnifiedConfig != "" {
-		passedUnified := models.ParseUnifiedTaskConfig(opts.UnifiedConfig)
-		if passedUnified.Common != nil {
-			if unified.Common == nil {
-				unified.Common = &models.CommonConfig{}
-			}
-			if passedUnified.Common.Concurrency > 0 {
-				unified.Common.Concurrency = passedUnified.Common.Concurrency
-			}
-			unified.Common.AllEnvs = passedUnified.Common.AllEnvs
-		}
-	}
-
 	finalUnifiedStr := unified.ToJSON()
 
 	if tx.RowsAffected > 0 {
@@ -981,11 +1033,11 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 		if opts.CleanConfig != "" {
 			existingTask.CleanConfig = opts.CleanConfig
 		}
-		existingTask.UpdatedAt = models.Now()
 		err := database.DB.Model(&existingTask).Select("Name", "WorkDir", "SourceID", "UnifiedConfig", "Schedule", "RandomRange", "Timeout", "RetryCount", "RetryInterval", "CleanConfig", "UpdatedAt").Updates(&existingTask).Error
 		if err != nil {
 			return nil, "", err
 		}
+		relation.DataRelation.SaveTags(existingTask.ID, constant.RelationTypeTaskTag, appCfg.Template.Tag)
 		return &existingTask, activeScenarioID, nil
 	}
 
@@ -1010,6 +1062,7 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 	if err != nil {
 		return nil, "", err
 	}
+	relation.DataRelation.SaveTags(newTask.ID, constant.RelationTypeTaskTag, appCfg.Template.Tag)
 	return &newTask, activeScenarioID, nil
 }
 

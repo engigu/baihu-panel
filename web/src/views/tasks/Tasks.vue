@@ -246,9 +246,9 @@ async function openEditApp(task: Task) {
       env_values: cfg.env_values || {},
       current_scenario: cfg.current_scenario || appInfo.current_scenario || '',
       schedule: task.schedule,
-      languages: appInfo.languages || manifest.languages || task.languages || [],
-      tag: appInfo.tag,
-      template: manifest.template || cfg.template
+      languages: appInfo.template?.languages || appInfo.languages || manifest.languages || task.languages || [],
+      tag: appInfo.template?.tag || appInfo.tag,
+      template: appInfo.template || manifest.template || cfg.template
     }
   } catch {
     // 降级兜底直接从当前 task 内存获取
