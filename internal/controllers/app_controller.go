@@ -428,8 +428,8 @@ func (ac *AppController) GetMarketplace(c *gin.Context) {
 						}
 					}
 
-					// 统一提取并注入结构化的 languages 契约列表
-					enrichMarketplaceAppLanguages(appList)
+					// 统一提取并注入结构化的 template、tag 与 languages 契约列表
+					enrichMarketplaceApps(appList)
 
 					// 后台异步上报应用市场浏览 PV +1 (防阻塞)
 					reportMarketplacePVTelemetry()
@@ -463,8 +463,8 @@ func (ac *AppController) GetMarketplace(c *gin.Context) {
 	})
 }
 
-// enrichMarketplaceAppLanguages 遍历应用列表，由 Go 后端统一提取并注入结构化的 languages 运行环境契约列表
-func enrichMarketplaceAppLanguages(appList interface{}) {
+// enrichMarketplaceApps 遍历应用列表，由 Go 后端统一提取并注入结构化的 template、tag 与 languages 契约
+func enrichMarketplaceApps(appList interface{}) {
 	appsArr, ok := appList.([]interface{})
 	if !ok {
 		return
@@ -474,22 +474,24 @@ func enrichMarketplaceAppLanguages(appList interface{}) {
 		if !isMap {
 			continue
 		}
-		langs, hasLangs := appMap["languages"].([]interface{})
-		if hasLangs && len(langs) > 0 {
-			continue
-		}
+
 		var manifest *app.AppManifest
 		if rawYAML, hasYAML := appMap["manifest_raw"].(string); hasYAML && rawYAML != "" {
 			manifest, _ = app.ParseManifestFromYAML([]byte(rawYAML))
 		} else if tmpl, hasTmpl := appMap["template"]; hasTmpl {
 			manifest = &app.AppManifest{Template: tmpl}
 		}
+
 		if manifest != nil {
-			parsedLangs := manifest.GetLanguages()
-			if len(parsedLangs) > 0 {
-				appMap["languages"] = parsedLangs
+			tplCfg := manifest.GetTypedTemplateConfig()
+			if tplCfg != nil {
+				appMap["template"] = tplCfg
 			}
 		}
+
+		// 彻底清理外层平铺的冗余字段，统一且仅保留 template 结构
+		delete(appMap, "tag")
+		delete(appMap, "languages")
 	}
 }
 

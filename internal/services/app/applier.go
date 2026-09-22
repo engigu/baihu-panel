@@ -433,9 +433,9 @@ func (a *AppApplier) applyEnvSchema(manifest *AppManifest, opts ApplyOptions, lo
 	log("[4/5] 配置应用环境变量契约 (共 %d 项)...", len(manifest.EnvSchema))
 
 	templateTag := manifest.GetTemplateTag()
+	tag := resolveEnvTag(templateTag, opts.Tag, manifest.ID)
 	var createdEnvs []string
 	for _, envItem := range manifest.EnvSchema {
-		tag := resolveEnvTag(envItem.Tag, templateTag, opts.Tag, manifest.ID)
 		created, err := a.upsertSingleEnv(envItem, opts.EnvValues, tag, userID, opts.OverwriteEnv, log)
 		if err != nil {
 			return nil, err
@@ -448,15 +448,12 @@ func (a *AppApplier) applyEnvSchema(manifest *AppManifest, opts ApplyOptions, lo
 	return createdEnvs, nil
 }
 
-// resolveEnvTag 计算 Tag 映射优先级 (appTag > templateTag > itemTag > manifestID)
-func resolveEnvTag(itemTag, templateTag, appTag, manifestID string) string {
+// resolveEnvTag 统一使用应用配置的全局 Tag 映射 (appTag > templateTag > manifestID)
+func resolveEnvTag(templateTag, appTag, manifestID string) string {
 	if tag := strings.TrimSpace(appTag); tag != "" {
 		return tag
 	}
 	if tag := strings.TrimSpace(templateTag); tag != "" {
-		return tag
-	}
-	if tag := strings.TrimSpace(itemTag); tag != "" && tag != "{tag}" && tag != "{{tag}}" {
 		return tag
 	}
 	return manifestID
@@ -571,7 +568,6 @@ func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, mast
 
 	defTimeout := 30
 	defWorkDir := appDir
-	defTag := ""
 	if manifest.SyncRules != nil {
 		if manifest.SyncRules.Defaults.Timeout > 0 {
 			defTimeout = manifest.SyncRules.Defaults.Timeout
@@ -580,6 +576,10 @@ func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, mast
 			defWorkDir = strings.ReplaceAll(manifest.SyncRules.Defaults.WorkDir, "{app_dir}", appDir)
 		}
 	}
+
+	templateTag := manifest.GetTemplateTag()
+	taskTag := resolveEnvTag(templateTag, opts.Tag, manifest.ID)
+
 	for _, t := range tasksList {
 		foundTaskNames[t.Name] = true
 
@@ -617,21 +617,6 @@ func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, mast
 		timeout := defTimeout
 		if t.Timeout > 0 {
 			timeout = t.Timeout
-		}
-
-		templateTag := manifest.GetTemplateTag()
-		taskTag := t.Tag
-		if taskTag == "" {
-			taskTag = defTag
-		}
-		if taskTag == "" {
-			taskTag = templateTag
-		}
-		if taskTag == "" && opts.Tag != "" {
-			taskTag = opts.Tag
-		}
-		if taskTag == "" {
-			taskTag = manifest.ID
 		}
 
 		taskLangs := t.GetParsedLanguages()
@@ -747,37 +732,6 @@ func sanitizeManifestPath(manifestPath string, manifest *AppManifest) string {
 	return manifestPath
 }
 
-// --------------------------------------------------------------------------
-// 过程函数 6: 持久化 models.App 实体记录
-// --------------------------------------------------------------------------
-func (a *AppApplier) saveAppRecord(manifest *AppManifest, rawYAML []byte, manifestPath string, activeScenarioID string) error {
-	var existingApp models.App
-	res := database.DB.Where("id = ?", manifest.ID).Limit(1).Find(&existingApp)
-	appRecord := models.App{
-		ID:              manifest.ID,
-		Name:            manifest.Name,
-		Version:         manifest.Version,
-		Author:          manifest.Author,
-		Category:        manifest.Category,
-		Description:     manifest.Description,
-		Icon:            manifest.Icon,
-		Homepage:        manifest.Homepage,
-		ManifestPath:    sanitizeManifestPath(manifestPath, manifest),
-		ManifestRaw:     models.BigText(string(rawYAML)),
-		CurrentScenario: activeScenarioID,
-		Status:          constant.AppStatusInstalled,
-		UpdatedAt:       models.Now(),
-	}
-
-	if res.RowsAffected > 0 {
-		appRecord.CreatedAt = existingApp.CreatedAt
-		return database.DB.Model(&existingApp).Updates(&appRecord).Error
-	}
-
-	appRecord.CreatedAt = models.Now()
-	return database.DB.Create(&appRecord).Error
-}
-
 // normalizeCron 确保 Cron 表达式具有 6 个字段 (若为 5 位标准格式则自动补齐秒位 0)
 func normalizeCron(cron string) string {
 	fields := strings.Fields(cron)
@@ -785,36 +739,6 @@ func normalizeCron(cron string) string {
 		return "0 " + cron
 	}
 	return cron
-}
-
-// captureOutput 捕获指定函数执行期间向 os.Stdout 和 os.Stderr 输出的全部内容，避免刷屏
-func captureOutput(fn func()) string {
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-	r, w, err := os.Pipe()
-	if err != nil {
-		fn()
-		return ""
-	}
-	os.Stdout = w
-	os.Stderr = w
-
-	var buf bytes.Buffer
-	done := make(chan struct{})
-	go func() {
-		_, _ = io.Copy(&buf, r)
-		close(done)
-	}()
-
-	fn()
-
-	_ = w.Close()
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-	<-done
-	_ = r.Close()
-
-	return buf.String()
 }
 
 // smartLogWriter 智能行流式日志过滤器：过滤控制台旋转动画/无意义转义符，提炼高价值业务回显
@@ -1005,9 +929,39 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 		map[string]interface{}{"mise_languages": models.FormatAppLanguagesToMiseSpec(appCfg.Template.Languages)},
 	}
 
+	// 继承 manifest 默认调度参数预设 (schedule_opts / schedule)
+	effectiveSchedule := opts.Schedule
+	effectiveRandomRange := opts.RandomRange
+	effectiveTimeout := opts.Timeout
+	effectiveRetryCount := opts.RetryCount
+	effectiveRetryInterval := opts.RetryInterval
+
+	if manifest.ScheduleOpts != nil {
+		if effectiveSchedule == "" && manifest.ScheduleOpts.Schedule != "" {
+			effectiveSchedule = manifest.ScheduleOpts.Schedule
+		}
+		if effectiveRandomRange <= 0 && manifest.ScheduleOpts.RandomRange > 0 {
+			effectiveRandomRange = manifest.ScheduleOpts.RandomRange
+		}
+		if effectiveTimeout <= 0 && manifest.ScheduleOpts.Timeout > 0 {
+			effectiveTimeout = manifest.ScheduleOpts.Timeout
+		}
+		if effectiveRetryCount <= 0 && manifest.ScheduleOpts.RetryCount > 0 {
+			effectiveRetryCount = manifest.ScheduleOpts.RetryCount
+		}
+		if effectiveRetryInterval <= 0 && manifest.ScheduleOpts.RetryInterval > 0 {
+			effectiveRetryInterval = manifest.ScheduleOpts.RetryInterval
+		}
+	} else if effectiveSchedule == "" && manifest.Schedule != "" {
+		effectiveSchedule = manifest.Schedule
+	}
+	if effectiveSchedule != "" {
+		effectiveSchedule = normalizeCron(effectiveSchedule)
+	}
+
 	// 将当前最新的用户定制选项同步写入 ManifestRaw YAML，保证 task 表保存的是编辑之后的 YML
-	if opts.Schedule != "" {
-		appCfg.Schedule = opts.Schedule
+	if effectiveSchedule != "" {
+		appCfg.Schedule = effectiveSchedule
 	}
 	appCfg.ManifestRaw = SyncManifestYAMLWithConfig(appCfg.ManifestRaw, &appCfg)
 
@@ -1019,17 +973,17 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 		existingTask.WorkDir = constant.NormalizeScriptPath(appDir)
 		existingTask.SourceID = appSourceID
 		existingTask.UnifiedConfig = models.BigText(finalUnifiedStr)
-		if opts.Schedule != "" {
-			existingTask.Schedule = opts.Schedule
+		if effectiveSchedule != "" {
+			existingTask.Schedule = effectiveSchedule
 		}
-		if opts.RandomRange > 0 {
-			existingTask.RandomRange = opts.RandomRange
+		if effectiveRandomRange > 0 {
+			existingTask.RandomRange = effectiveRandomRange
 		}
-		if opts.Timeout > 0 {
-			existingTask.Timeout = opts.Timeout
+		if effectiveTimeout > 0 {
+			existingTask.Timeout = effectiveTimeout
 		}
-		existingTask.RetryCount = opts.RetryCount
-		existingTask.RetryInterval = opts.RetryInterval
+		existingTask.RetryCount = effectiveRetryCount
+		existingTask.RetryInterval = effectiveRetryInterval
 		if opts.CleanConfig != "" {
 			existingTask.CleanConfig = opts.CleanConfig
 		}
@@ -1048,11 +1002,11 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 		SourceID:      appSourceID,
 		WorkDir:       constant.NormalizeScriptPath(appDir),
 		UnifiedConfig: models.BigText(finalUnifiedStr),
-		Schedule:      opts.Schedule,
-		RandomRange:   opts.RandomRange,
-		Timeout:       opts.Timeout,
-		RetryCount:    opts.RetryCount,
-		RetryInterval: opts.RetryInterval,
+		Schedule:      effectiveSchedule,
+		RandomRange:   effectiveRandomRange,
+		Timeout:       effectiveTimeout,
+		RetryCount:    effectiveRetryCount,
+		RetryInterval: effectiveRetryInterval,
 		CleanConfig:   opts.CleanConfig,
 		Enabled:       utils.BoolPtr(true),
 		CreatedAt:     models.Now(),

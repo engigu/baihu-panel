@@ -500,9 +500,13 @@ func (m *AppManifest) Validate() error {
 			return fmt.Errorf("select 类型的环境变量 '%s' 必须提供 options 候选列表", key)
 		}
 
-		// 标签兜底
+		// 标签统一使用 template.tag，无则回退 manifest ID
 		if strings.TrimSpace(m.EnvSchema[i].Tag) == "" {
-			m.EnvSchema[i].Tag = m.ID
+			if tplTag := m.GetTemplateTag(); tplTag != "" {
+				m.EnvSchema[i].Tag = tplTag
+			} else {
+				m.EnvSchema[i].Tag = m.ID
+			}
 		}
 	}
 
@@ -536,7 +540,7 @@ func (m *AppManifest) Validate() error {
 // 结构数据提取方法 (Data Extraction)
 // ==============================================================================
 
-// GetTasks 提取所有任务列表（自动继承 sync_rules.defaults 全局默认参数）
+// GetTasks 提取所有任务列表（自动继承 sync_rules.defaults 全局默认参数与 template.tag）
 func (m *AppManifest) GetTasks() []AppTaskItem {
 	var rawList []AppTaskItem
 	if m.SyncRules != nil && len(m.SyncRules.Tasks) > 0 {
@@ -545,30 +549,37 @@ func (m *AppManifest) GetTasks() []AppTaskItem {
 		rawList = m.Tasks
 	}
 
-	if m.SyncRules == nil {
-		return rawList
-	}
-
-	// 注入 defaults 默认参数
-	defs := m.SyncRules.Defaults
+	tplTag := m.GetTemplateTag()
+	defaultLang := m.GetDefaultLanguage()
 	result := make([]AppTaskItem, len(rawList))
 	for i, t := range rawList {
 		item := t
-		if item.Timeout <= 0 && defs.Timeout > 0 {
-			item.Timeout = defs.Timeout
-		}
-		if item.WorkDir == "" && defs.WorkDir != "" {
-			item.WorkDir = defs.WorkDir
-		}
-		if item.Language == "" && item.Languages == "" {
-			if defs.Language != "" {
-				item.Language = defs.Language
-			} else if defs.Languages != "" {
-				item.Languages = defs.Languages
+		if m.SyncRules != nil {
+			defs := m.SyncRules.Defaults
+			if item.Timeout <= 0 && defs.Timeout > 0 {
+				item.Timeout = defs.Timeout
+			}
+			if item.WorkDir == "" && defs.WorkDir != "" {
+				item.WorkDir = defs.WorkDir
+			}
+			if item.Language == "" && item.Languages == "" {
+				if defs.Language != "" {
+					item.Language = defs.Language
+				} else if defs.Languages != "" {
+					item.Languages = defs.Languages
+				}
+			}
+			if item.Tag == "" && tplTag != "" {
+				item.Tag = tplTag
+			} else if item.Tag == "" && defs.Tag != "" {
+				item.Tag = defs.Tag
 			}
 		}
-		if item.Tag == "" && defs.Tag != "" {
-			item.Tag = defs.Tag
+		if item.Language == "" && item.Languages == "" && defaultLang != "" {
+			item.Language = defaultLang
+		}
+		if item.Tag == "" && tplTag != "" {
+			item.Tag = tplTag
 		}
 		result[i] = item
 	}
@@ -577,24 +588,41 @@ func (m *AppManifest) GetTasks() []AppTaskItem {
 
 // GetTask 根据 ID 提取单个任务定义
 func (m *AppManifest) GetTask(id string) (*AppTaskItem, bool) {
-	for _, t := range m.GetTasks() {
-		if t.ID == id {
-			return &t, true
+	tasks := m.GetTasks()
+	for i := range tasks {
+		if tasks[i].ID == id {
+			return &tasks[i], true
 		}
 	}
 	return nil, false
 }
 
-// GetEnvSchema 提取环境变量契约列表
+// GetEnvSchema 提取环境变量契约列表（自动保证每个变量项的 Tag 继承自 template.tag）
 func (m *AppManifest) GetEnvSchema() []AppEnvItem {
-	return m.EnvSchema
+	if len(m.EnvSchema) == 0 {
+		return nil
+	}
+	tplTag := m.GetTemplateTag()
+	if tplTag == "" {
+		tplTag = m.ID
+	}
+	result := make([]AppEnvItem, len(m.EnvSchema))
+	for i, e := range m.EnvSchema {
+		item := e
+		if strings.TrimSpace(item.Tag) == "" {
+			item.Tag = tplTag
+		}
+		result[i] = item
+	}
+	return result
 }
 
 // GetEnvItem 根据 key 提取环境变量契约项
 func (m *AppManifest) GetEnvItem(key string) (*AppEnvItem, bool) {
-	for _, e := range m.EnvSchema {
-		if e.Key == key {
-			return &e, true
+	envs := m.GetEnvSchema()
+	for i := range envs {
+		if envs[i].Key == key {
+			return &envs[i], true
 		}
 	}
 	return nil, false
@@ -607,9 +635,9 @@ func (m *AppManifest) GetSources() []AppSource {
 
 // GetSource 根据 id 提取代码源
 func (m *AppManifest) GetSource(id string) (*AppSource, bool) {
-	for _, s := range m.Sources {
-		if s.ID == id {
-			return &s, true
+	for i := range m.Sources {
+		if m.Sources[i].ID == id {
+			return &m.Sources[i], true
 		}
 	}
 	return nil, false
@@ -622,9 +650,9 @@ func (m *AppManifest) GetScenarios() []AppScenarioItem {
 
 // GetScenario 根据 id 提取指定场景预设
 func (m *AppManifest) GetScenario(id string) (*AppScenarioItem, bool) {
-	for _, sc := range m.Scenarios {
-		if sc.ID == id {
-			return &sc, true
+	for i := range m.Scenarios {
+		if m.Scenarios[i].ID == id {
+			return &m.Scenarios[i], true
 		}
 	}
 	return nil, false
@@ -632,9 +660,9 @@ func (m *AppManifest) GetScenario(id string) (*AppScenarioItem, bool) {
 
 // GetDefaultScenario 提取默认场景预设（若无显式 default 则返回第一个场景）
 func (m *AppManifest) GetDefaultScenario() *AppScenarioItem {
-	for _, sc := range m.Scenarios {
-		if sc.Default {
-			return &sc
+	for i := range m.Scenarios {
+		if m.Scenarios[i].Default {
+			return &m.Scenarios[i]
 		}
 	}
 	if len(m.Scenarios) > 0 {
@@ -671,20 +699,23 @@ func (m *AppManifest) ResolveScenarioTaskState(scenarioID string, taskID string)
 	return enabled, cron
 }
 
-// GetDefaultLanguage 提取应用全局默认语言原始配置字符串
+// GetDefaultLanguage 提取应用全局默认语言原始配置字符串 (优先 sync_rules.defaults.language，次选 template.mise_languages)
 func (m *AppManifest) GetDefaultLanguage() string {
-	if m.SyncRules != nil {
+	if m.SyncRules != nil && m.SyncRules.Defaults.GetLanguage() != "" {
 		return m.SyncRules.Defaults.GetLanguage()
 	}
-	return ""
+	return m.GetTemplateVar("mise_languages")
 }
 
 // GetDefaultLanguages 提取应用全局默认运行语言解析列表
 func (m *AppManifest) GetDefaultLanguages() models.TaskLanguages {
 	if m.SyncRules != nil {
-		return m.SyncRules.Defaults.GetParsedLanguages()
+		langs := m.SyncRules.Defaults.GetParsedLanguages()
+		if len(langs) > 0 {
+			return langs
+		}
 	}
-	return nil
+	return m.GetLanguages()
 }
 
 // GetAllLanguages 提取整个应用所声明的全部运行环境配置 (自动汇总 Defaults 与 Tasks 并去重)
@@ -717,6 +748,13 @@ func (m *AppManifest) GetAllLanguages() models.TaskLanguages {
 
 	for _, t := range m.GetTasks() {
 		for _, l := range t.GetParsedLanguages() {
+			appendLang(l)
+		}
+	}
+
+	// 容灾兜底：若任务与 defaults 均未显式声明，回退从 template.mise_languages 提取全局契约
+	if len(allLangs) == 0 {
+		for _, l := range m.GetLanguages() {
 			appendLang(l)
 		}
 	}
@@ -783,6 +821,11 @@ func (m *AppManifest) HasLanguage(langName string) bool {
 
 // ValidateLanguages 集中校验应用中所有任务与全局默认配置的运行语言规格
 func (m *AppManifest) ValidateLanguages() error {
+	if miseLang := m.GetTemplateVar("mise_languages"); miseLang != "" {
+		if err := ValidateLanguageSpec(miseLang); err != nil {
+			return fmt.Errorf("模板运行环境配置 (template.mise_languages) %w", err)
+		}
+	}
 	if m.SyncRules != nil {
 		if err := m.SyncRules.Defaults.ValidateLanguage(); err != nil {
 			return fmt.Errorf("全局任务默认配置 (sync_rules.defaults.language) %w", err)
@@ -827,6 +870,8 @@ func (m *AppManifest) ExtractMetadata() map[string]interface{} {
 		}
 	}
 
+	envs := m.GetEnvSchema()
+
 	return map[string]interface{}{
 		"spec_version":    m.SpecVersion,
 		"id":              m.ID,
@@ -838,11 +883,11 @@ func (m *AppManifest) ExtractMetadata() map[string]interface{} {
 		"description":     m.Description,
 		"icon":            m.Icon,
 		"homepage":        m.Homepage,
-		"languages":       m.GetAllLanguages(),
+		"template":        m.GetTypedTemplateConfig(),
 		"tasks_count":     len(tasks),
 		"tasks":           tasksSummary,
-		"env_count":       len(m.EnvSchema),
-		"env_schema":      m.EnvSchema,
+		"env_count":       len(envs),
+		"env_schema":      envs,
 		"scenarios_count": len(m.Scenarios),
 		"scenarios":       scenariosSummary,
 	}
@@ -922,6 +967,22 @@ func ParseTemplateItemMap(item interface{}, target map[string]string) {
 			if v != nil {
 				target[fmt.Sprintf("%v", k)] = fmt.Sprintf("%v", v)
 			}
+		}
+	case *models.AppTemplateConfig:
+		if mItem != nil {
+			if mItem.Tag != "" {
+				target["tag"] = mItem.Tag
+			}
+			if len(mItem.Languages) > 0 {
+				target["mise_languages"] = models.FormatAppLanguagesToMiseSpec(mItem.Languages)
+			}
+		}
+	case models.AppTemplateConfig:
+		if mItem.Tag != "" {
+			target["tag"] = mItem.Tag
+		}
+		if len(mItem.Languages) > 0 {
+			target["mise_languages"] = models.FormatAppLanguagesToMiseSpec(mItem.Languages)
 		}
 	}
 }

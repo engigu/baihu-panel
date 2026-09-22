@@ -595,8 +595,10 @@ export interface MarketplaceApp {
   } | null
   current_scenario?: string
   env_values?: Record<string, string>
-  languages?: Array<{ name: string; version: string }>
-  template?: any
+  template?: {
+    tag?: string
+    languages?: Array<{ name: string; version: string }>
+  }
 }
 
 export interface ApplyAppPayload {

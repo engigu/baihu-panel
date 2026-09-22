@@ -150,12 +150,12 @@ function initDialogData() {
 
   enableTelemetry.value = !isEditMode
 
-  // 1. Tag 提取：优先从强类型 app.template.tag 提取，降级从旧属性或 ID 提取
-  appTag.value = (app as any)?.template?.tag || (app as any)?.tag || app?.id || taskVal?.id || ''
+  // 1. Tag 提取：统一使用 template.tag
+  appTag.value = (app as any)?.template?.tag || ''
 
-  // 统一优先使用后端强类型 app.template.languages 提取
-  const tplLangs = (app as any)?.template?.languages || app?.languages
-  if (tplLangs && Array.isArray(tplLangs) && tplLangs.length > 0) {
+  // 2. Languages 提取：统一使用后端结构化的 template.languages
+  const tplLangs = (app as any)?.template?.languages
+  if (Array.isArray(tplLangs) && tplLangs.length > 0) {
     selectedLangs.value = tplLangs.map((l: any) => ({
       name: l.name,
       version: l.version,
