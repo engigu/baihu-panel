@@ -211,7 +211,7 @@ onMounted(() => {
         <div class="flex flex-row items-center gap-2 w-full sm:flex-1 md:flex-none md:w-auto text-sm">
           <div class="relative flex-1 md:flex-none md:w-[150px] lg:w-[200px] group">
             <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-            <Input v-model="filterName" placeholder="搜索名称..." class="h-9 pl-9 w-full bg-muted/20 border-muted-foreground/10 focus:bg-background text-sm" @input="handleSearch" />
+            <Input v-model="filterName" type="search" name="env_filter_search" autocomplete="off" placeholder="搜索名称..." class="h-9 pl-9 w-full bg-muted/20 border-muted-foreground/10 focus:bg-background text-sm" @input="handleSearch" />
           </div>
           <div class="w-[120px] lg:w-[150px] shrink-0">
             <TagInput v-model="filterTags" placeholder="标签过滤..." :icon="Tag" multiple :fetchTags="api.env.tags" class="h-9 bg-muted/20 border-muted-foreground/10 focus:bg-background text-sm" @enter="handleSearch" @update:modelValue="handleSearch" />

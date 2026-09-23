@@ -138,7 +138,17 @@ defineExpose({
     description="查看机密明文前需进行安全身份二次核验，数据通过本地临时 ECDH 椭圆曲线与 AES-GCM 端到端协商加密传输。"
     class="sm:max-w-[420px]"
   >
-    <div class="space-y-4 py-2">
+    <form @submit.prevent="handleDecrypt" autocomplete="on" class="space-y-4 py-2">
+      <!-- 显式提供给浏览器密码管理器的隐藏用户名字段，将自动填充闭环在当前弹窗表单内，杜绝穿透污染页面其他输入框 -->
+      <input
+        type="text"
+        name="username"
+        autocomplete="username"
+        style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;"
+        tabindex="-1"
+        aria-hidden="true"
+      />
+
       <div v-if="currentEnv" class="rounded-lg bg-muted/50 p-3 border text-xs space-y-1">
         <div class="text-muted-foreground">待解密机密名称:</div>
         <div class="font-mono font-semibold text-foreground truncate">{{ currentEnv.name }}</div>
@@ -159,6 +169,8 @@ defineExpose({
           ref="inputRef"
           v-model="otpCode"
           type="text"
+          name="one-time-code"
+          autocomplete="one-time-code"
           inputmode="numeric"
           pattern="[0-9]*"
           maxlength="6"
@@ -181,6 +193,8 @@ defineExpose({
             ref="inputRef"
             v-model="password"
             :type="showPassword ? 'text' : 'password'"
+            name="current-password"
+            autocomplete="current-password"
             placeholder="请输入当前账号登录密码"
             class="pr-10"
             :disabled="isDecrypting"
@@ -198,7 +212,7 @@ defineExpose({
         </div>
         <p class="text-[11px] text-muted-foreground">未开启两步验证，请输入当前登录管理员的登录密码</p>
       </div>
-    </div>
+    </form>
 
     <template #footer>
       <div class="flex justify-end gap-2">
