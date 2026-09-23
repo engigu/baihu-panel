@@ -452,11 +452,21 @@ func (ec *EnvController) DecryptSecret(c *gin.Context) {
 		return
 	}
 
-	// 解密数据库存储的密文
-	rawValue, err := utils.Decrypt(string(envVar.Value))
-	if err != nil {
-		utils.BadRequest(c, err.Error())
-		return
+	// 解密数据库存储的密文（兼容历史未加密的明文机密）
+	valStr := string(envVar.Value)
+	rawValue := valStr
+	if utils.IsSecretEncrypted(valStr) {
+		decrypted, err := utils.Decrypt(valStr)
+		if err != nil {
+			utils.BadRequest(c, "机密解密失败: "+err.Error())
+			return
+		}
+		rawValue = decrypted
+	} else if valStr != "" {
+		// 历史未加密存储的明文机密，在身份鉴权通过后自动加密写回，实现无感平滑迁移
+		if encValue, err := utils.Encrypt(valStr); err == nil && encValue != "" {
+			database.DB.Model(&envVar).Update("value", models.BigText(encValue))
+		}
 	}
 
 	// 若未传入公钥（如前端在局域网纯 HTTP IP 等非安全上下文环境，浏览器禁用 Web Crypto API），二次校验通过后直接返回原始值
