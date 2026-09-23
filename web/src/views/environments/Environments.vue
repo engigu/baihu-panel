@@ -144,7 +144,6 @@ function toggleShow(env: EnvVar) {
 }
 
 function onSecretDecrypted(payload: { id: string; value: string }) {
-  console.log('[Environments] 收到解密成功明文:', payload.id, payload.value)
   // 1. 同步更新 envVars 列表中的对象，确保响应式视图 100% 刷新
   const target = envVars.value.find(e => e.id === payload.id)
   if (target) {

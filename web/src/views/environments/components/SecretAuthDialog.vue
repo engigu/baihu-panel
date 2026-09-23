@@ -106,7 +106,6 @@ async function handleDecrypt() {
       }
     }
 
-    console.log('[SecretAuth] 解密成功，明文长度:', plainValue.length, '值:', plainValue)
     toast.success('机密解密成功')
     emit('decrypted', { id: currentEnv.value.id, value: plainValue })
     isOpen.value = false

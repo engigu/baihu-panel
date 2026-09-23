@@ -3,7 +3,6 @@ package controllers
 import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
-	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
@@ -459,7 +458,6 @@ func (ec *EnvController) DecryptSecret(c *gin.Context) {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	logger.Infof("[Secret] 成功解密机密 [%s] ID=%s, 长度=%d", envVar.Name, envVar.ID, len(rawValue))
 
 	// 若未传入公钥（如前端在局域网纯 HTTP IP 等非安全上下文环境，浏览器禁用 Web Crypto API），二次校验通过后直接返回原始值
 	if req.PublicKey == "" {
