@@ -223,20 +223,21 @@ func ToTaskVOListFromModels(tasks []models.Task) []*TaskVO {
 
 // TaskLogVO 任务历史视图对象
 type TaskLogVO struct {
-	ID        string            `json:"id"`
-	TaskID    string            `json:"task_id"`
-	TaskName  string            `json:"task_name"`
-	TaskType  string            `json:"task_type"`
-	AgentID   *string           `json:"agent_id"`
-	Command   string            `json:"command"`
-	Error     string            `json:"error"`
-	Status    string            `json:"status"`
-	Duration  int64             `json:"duration"`
-	ExitCode  int               `json:"exit_code"`
-	StartTime *models.LocalTime `json:"start_time"`
-	EndTime   *models.LocalTime `json:"end_time"`
-	CreatedAt models.LocalTime  `json:"created_at"`
-	Output    string            `json:"output,omitempty"`
+	ID          string            `json:"id"`
+	TaskID      string            `json:"task_id"`
+	TaskName    string            `json:"task_name"`
+	TaskDeleted bool              `json:"task_deleted,omitempty"`
+	TaskType    string            `json:"task_type"`
+	AgentID     *string           `json:"agent_id"`
+	Command     string            `json:"command"`
+	Error       string            `json:"error"`
+	Status      string            `json:"status"`
+	Duration    int64             `json:"duration"`
+	ExitCode    int               `json:"exit_code"`
+	StartTime   *models.LocalTime `json:"start_time"`
+	EndTime     *models.LocalTime `json:"end_time"`
+	CreatedAt   models.LocalTime  `json:"created_at"`
+	Output      string            `json:"output,omitempty"`
 }
 
 // ToTaskLogVO 将 TaskLog 模型转换为 TaskLogVO
@@ -249,6 +250,7 @@ func ToTaskLogVO(log *models.TaskLog) *TaskLogVO {
 	return &TaskLogVO{
 		ID:        log.ID,
 		TaskID:    log.TaskID,
+		TaskName:  log.TaskName,
 		AgentID:   log.AgentID,
 		Command:   string(log.Command),
 		Error:     string(log.Error),

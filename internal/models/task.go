@@ -362,7 +362,7 @@ func (t *Task) GetAppAuthor() string {
 type TaskLog struct {
 	ID        string     `json:"id" gorm:"primaryKey;size:20"`
 	TaskID    string     `json:"task_id" gorm:"size:20;index"`
-	TaskName  string     `json:"task_name" gorm:"size:255;default:''"` // 冗余任务名称，以便任务删除后还能正常展示
+	TaskName  string     `json:"task_name" gorm:"size:255;index;default:''"` // 冗余任务名称，以便任务删除后还能正常展示
 	AgentID   *string    `json:"agent_id" gorm:"size:20;index"` // Agent ID，为空表示本地执行
 	Command   BigText    `json:"command"`
 	Output    BigText    `json:"-"`                           // gzip+base64 压缩后的日志

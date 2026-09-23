@@ -161,7 +161,7 @@ func (h *ServerSchedulerHandler) OnTaskExecuting(req *executor.ExecutionRequest)
 	}
 
 	// 1. 使用预先准备好的脱敏指令创建初始日志记录
-	taskLog, err := h.es.taskLogService.CreateEmptyLog(task.ID, req.MaskedCommand)
+	taskLog, err := h.es.taskLogService.CreateEmptyLog(task.ID, req.MaskedCommand, task.Name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("创建初始日志失败: %v", err)
 	}
@@ -263,6 +263,7 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 	taskLog := &models.TaskLog{
 		ID:        req.LogID,
 		TaskID:    task.ID,
+		TaskName:  task.Name,
 		Command:   models.BigText(req.MaskedCommand),
 		Output:    models.BigText(output),
 		Error:     models.BigText(result.Error),
@@ -352,10 +353,17 @@ func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, er
 		output, _ = utils.CompressToBase64(fmt.Sprintf("任务执行失败: %v", err))
 	}
 
+	task := h.es.taskService.GetTaskByID(taskID)
+	taskName := ""
+	if task != nil {
+		taskName = task.Name
+	}
+
 	now := models.LocalTime(time.Now())
 	taskLog := &models.TaskLog{
 		ID:        req.LogID,
 		TaskID:    taskID,
+		TaskName:  taskName,
 		Command:   models.BigText(req.MaskedCommand),
 		Output:    models.BigText(output),
 		Error:     models.BigText(err.Error()),
@@ -367,7 +375,6 @@ func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, er
 	}
 
 	// 补充 AgentID
-	task := h.es.taskService.GetTaskByID(taskID)
 	if task != nil && task.AgentID != nil && *task.AgentID != "" {
 		agentID := *task.AgentID
 		taskLog.AgentID = &agentID
