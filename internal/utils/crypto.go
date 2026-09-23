@@ -5,8 +5,11 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/rsa"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -42,23 +45,15 @@ func Encrypt(plaintext string) (string, error) {
 		return "", ErrKeyNotSet
 	}
 
-	block, err := aes.NewCipher(masterSecretKey)
+	cipherBytes, err := AesGcmEncrypt(masterSecretKey, []byte(plaintext))
 	if err != nil {
 		return "", err
 	}
-
-	aesGCM, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
+	if cipherBytes == nil {
+		return "", nil
 	}
 
-	nonce := make([]byte, aesGCM.NonceSize())
-	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		return "", err
-	}
-
-	ciphertext := aesGCM.Seal(nonce, nonce, []byte(plaintext), nil)
-	return base64.StdEncoding.EncodeToString(ciphertext), nil
+	return base64.StdEncoding.EncodeToString(cipherBytes), nil
 }
 
 // Decrypt decrypts a ciphertext string using AES-GCM
@@ -126,4 +121,105 @@ func MaskString(s string) string {
 		return s[:1] + "***" + s[n-1:]
 	}
 	return s[:2] + "****" + s[n-2:]
+}
+
+// AesGcmEncrypt AES-GCM 加密
+func AesGcmEncrypt(keyBytes []byte, plainBytes []byte) ([]byte, error) {
+	if len(plainBytes) <= 0 {
+		return nil, nil
+	}
+	if len(keyBytes) <= 0 {
+		return nil, errors.New("keyBytes is empty")
+	}
+
+	block, err := aes.NewCipher(keyBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	aesGCM, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonce := make([]byte, aesGCM.NonceSize())
+	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+
+	cipherBytes := aesGCM.Seal(nonce, nonce, plainBytes, nil)
+	return cipherBytes, nil
+}
+
+// AesGcmEncryptString AES-GCM 加密
+func AesGcmEncryptString(key string, plainText string) (string, error) {
+	if plainText == "" {
+		return "", nil
+	}
+	if key == "" {
+		return "", errors.New("key is empty")
+	}
+
+	cipherBytes, err := AesGcmEncrypt([]byte(key), []byte(plainText))
+	if err != nil {
+		return "", err
+	}
+	if cipherBytes == nil {
+		return "", nil
+	}
+
+	return base64.StdEncoding.EncodeToString(cipherBytes), nil
+}
+
+// RsaEncryptByPublicKey RSA 根据公钥加密
+func RsaEncryptByPublicKey(publicKeyBytes []byte, plainBytes []byte) ([]byte, error) {
+	if len(plainBytes) <= 0 {
+		return nil, nil
+	}
+	if len(publicKeyBytes) <= 0 {
+		return nil, errors.New("publicKeyBytes is empty")
+	}
+
+	pub, err := x509.ParsePKIXPublicKey(publicKeyBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	publicKey, ok := pub.(*rsa.PublicKey)
+	if !ok {
+		return nil, errors.New("publicKey is error")
+	}
+
+	cipherBytes, err := rsa.EncryptOAEP(
+		nil,
+		rand.Reader,
+		publicKey,
+		plainBytes,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return cipherBytes, nil
+}
+
+// RsaEncryptByPublicKeyString RSA 根据公钥加密
+func RsaEncryptByPublicKeyString(publicKey string, plainText string) (string, error) {
+	if plainText == "" {
+		return "", nil
+	}
+	if publicKey == "" {
+		return "", errors.New("publicKey is empty")
+	}
+
+	cipherBytes, err := RsaEncryptByPublicKey([]byte(publicKey), []byte(plainText))
+	if err != nil {
+		return "", err
+	}
+	if cipherBytes == nil {
+		return "", nil
+	}
+
+	return base64.StdEncoding.EncodeToString(cipherBytes), nil
 }
