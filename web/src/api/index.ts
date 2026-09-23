@@ -754,6 +754,7 @@ export interface TaskLog {
   id: string
   task_id: string
   task_name: string
+  task_deleted?: boolean
   task_type: string
   command: string
   status: string

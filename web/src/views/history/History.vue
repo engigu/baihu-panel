@@ -531,7 +531,7 @@ watch(() => route.query, (newQuery) => {
                 <GitBranch v-else-if="log.task_type === TASK_TYPE.REPO" class="h-3.5 w-3.5 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.REPO]?.color" />
                 <Terminal v-else class="h-3.5 w-3.5 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.NORMAL]?.color" />
               </span>
-              <span class="flex-1 min-w-0 font-medium truncate text-xs">{{ log.task_name }}</span>
+              <span class="flex-1 min-w-0 font-medium truncate text-xs" :class="{ 'text-muted-foreground': log.task_deleted }">{{ log.task_name }}</span>
               <span class="w-14 text-right shrink-0 text-muted-foreground text-xs whitespace-nowrap">{{ formatDuration(log.duration)
                 }}</span>
               <span class="w-7 shrink-0 flex justify-center opacity-100">
@@ -551,7 +551,7 @@ watch(() => route.query, (newQuery) => {
                 <GitBranch v-else-if="log.task_type === TASK_TYPE.REPO" class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.REPO]?.color" />
                 <Terminal v-else class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.NORMAL]?.color" />
               </span>
-              <span class="w-36 shrink-0 font-medium truncate text-sm">{{ log.task_name }}</span>
+              <span class="w-36 shrink-0 font-medium truncate text-sm" :class="{ 'text-muted-foreground': log.task_deleted }">{{ log.task_name }}</span>
               <code class="flex-1 min-w-0 text-muted-foreground truncate text-xs bg-muted/40 px-2 py-1 rounded">
                 <TextOverflow :text="log.command" title="执行命令" disable-dialog />
               </code>

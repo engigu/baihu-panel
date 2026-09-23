@@ -36,11 +36,19 @@ type CleanConfig struct {
 }
 
 // CreateEmptyLog 创建一个空的日志记录（任务开始时调用）
-func (s *TaskLogService) CreateEmptyLog(taskID string, command string) (*models.TaskLog, error) {
+func (s *TaskLogService) CreateEmptyLog(taskID string, command string, taskName ...string) (*models.TaskLog, error) {
+	name := ""
+	if len(taskName) > 0 && taskName[0] != "" {
+		name = taskName[0]
+	} else if taskID != "" {
+		database.DB.Model(&models.Task{}).Where("id = ?", taskID).Pluck("name", &name)
+	}
+
 	startTime := models.Now()
 	taskLog := &models.TaskLog{
 		ID:        utils.GenerateID(),
 		TaskID:    taskID,
+		TaskName:  name,
 		Command:   models.BigText(command),
 		Status:    "running",
 		StartTime: &startTime,
@@ -59,12 +67,20 @@ func (s *TaskLogService) CreateEmptyLog(taskID string, command string) (*models.
 // SaveTaskLog 保存或更新任务日志
 func (s *TaskLogService) SaveTaskLog(taskLog *models.TaskLog) error {
 	var err error
+	if taskLog.TaskName == "" && taskLog.TaskID != "" {
+		database.DB.Model(&models.Task{}).Where("id = ?", taskLog.TaskID).Pluck("name", &taskLog.TaskName)
+	}
+
 	if taskLog.ID != "" {
 		// 先检查记录是否存在，如果不存在则创建，存在则更新
 		var count int64
 		database.DB.Model(&models.TaskLog{}).Where("id = ?", taskLog.ID).Count(&count)
 		if count > 0 {
-			err = database.DB.Model(taskLog).Where("id = ?", taskLog.ID).Select("Status", "Duration", "ExitCode", "StartTime", "EndTime", "Output", "Error", "AgentID").Updates(taskLog).Error
+			updateFields := []string{"Status", "Duration", "ExitCode", "StartTime", "EndTime", "Output", "Error", "AgentID"}
+			if taskLog.TaskName != "" {
+				updateFields = append(updateFields, "TaskName")
+			}
+			err = database.DB.Model(taskLog).Where("id = ?", taskLog.ID).Select(updateFields).Updates(taskLog).Error
 		} else {
 			err = database.DB.Create(taskLog).Error
 		}
@@ -187,9 +203,15 @@ func (s *TaskLogService) CreateTaskLogFromAgentResult(result *models.AgentTaskRe
 		logID = utils.GenerateID()
 	}
 
+	var name string
+	if result.TaskID != "" {
+		database.DB.Model(&models.Task{}).Where("id = ?", result.TaskID).Pluck("name", &name)
+	}
+
 	taskLog := &models.TaskLog{
 		ID:        logID,
 		TaskID:    result.TaskID,
+		TaskName:  name,
 		AgentID:   &result.AgentID,
 		Command:   models.BigText(result.Command),
 		Output:    models.BigText(compressed),
@@ -233,9 +255,15 @@ func (s *TaskLogService) CreateTaskLogFromLocalExecution(taskID string, command,
 	startTime := models.LocalTime(start)
 	endTime := models.LocalTime(end)
 
+	var name string
+	if taskID != "" {
+		database.DB.Model(&models.Task{}).Where("id = ?", taskID).Pluck("name", &name)
+	}
+
 	taskLog := &models.TaskLog{
 		ID:        utils.GenerateID(),
 		TaskID:    taskID,
+		TaskName:  name,
 		Command:   models.BigText(command),
 		Output:    models.BigText(compressed),
 		Error:     models.BigText(systemErr),
