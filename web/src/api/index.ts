@@ -224,7 +224,9 @@ export const api = {
         method: 'DELETE',
         credentials: 'include'
       }).then(res => res.json() as Promise<ApiResponse<any>>)
-    }
+    },
+    decryptSecret: (id: string, data: { otp_code?: string; password?: string; public_key?: string }) =>
+      request<DecryptSecretResponse>(`/env/${id}/decrypt`, { method: 'POST', body: JSON.stringify(data) })
   },
   execute: {
     command: (command: string) => request('/execute/command', { method: 'POST', body: JSON.stringify({ command }) }),
@@ -749,6 +751,14 @@ export interface Stats {
   running: number
 }
 
+export interface DecryptSecretResponse {
+  server_public_key?: string
+  ciphertext?: string
+  nonce?: string
+  raw_value?: string
+}
+
+export type DecryptSecretPayload = DecryptSecretResponse
 
 export interface TaskLog {
   id: string

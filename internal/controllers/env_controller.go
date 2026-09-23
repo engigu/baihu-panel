@@ -3,6 +3,7 @@ package controllers
 import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
+	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
@@ -411,11 +412,7 @@ func (ec *EnvController) DecryptSecret(c *gin.Context) {
 	}
 
 	if req.OtpCode == "" && req.Password == "" {
-		utils.BadRequest(c, "参数错误")
-		return
-	}
-	if req.PublicKey == "" {
-		utils.BadRequest(c, "参数错误")
+		utils.BadRequest(c, "参数错误，请输入密码或验证码")
 		return
 	}
 
@@ -456,19 +453,28 @@ func (ec *EnvController) DecryptSecret(c *gin.Context) {
 		return
 	}
 
-	// 解密
+	// 解密数据库存储的密文
 	rawValue, err := utils.Decrypt(string(envVar.Value))
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
+	logger.Infof("[Secret] 成功解密机密 [%s] ID=%s, 长度=%d", envVar.Name, envVar.ID, len(rawValue))
 
-	// 再通过公钥加密
-	cipherText, err := utils.RsaEncryptByPublicKeyString(req.PublicKey, rawValue)
-	if err != nil {
-		utils.BadRequest(c, err.Error())
+	// 若未传入公钥（如前端在局域网纯 HTTP IP 等非安全上下文环境，浏览器禁用 Web Crypto API），二次校验通过后直接返回原始值
+	if req.PublicKey == "" {
+		utils.Success(c, gin.H{
+			"raw_value": rawValue,
+		})
 		return
 	}
 
-	utils.Success(c, cipherText)
+	// 采用现代椭圆曲线 ECDH (P-256) + AES-256-GCM 进行端到端安全传输
+	ecdhPayload, err := utils.EcdhEncrypt(req.PublicKey, rawValue)
+	if err != nil {
+		utils.BadRequest(c, "加密机密传输数据失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, ecdhPayload)
 }
