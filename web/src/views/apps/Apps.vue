@@ -197,9 +197,9 @@ function handleApplySuccess() {
       </div>
 
       <!-- 右侧控制栏：搜索框 + 刷新 + 导入 + 已装应用 -->
-      <div class="flex items-center gap-2 w-full lg:w-auto lg:ml-auto lg:justify-end">
-        <!-- 搜索框：在非 lg 屏幕下全宽弹性填充 (flex-1) -->
-        <div class="relative flex-1 lg:w-[240px] lg:flex-initial group text-sm min-w-[160px]">
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto lg:ml-auto lg:justify-end">
+        <!-- 搜索框：在移动端全宽自适应，在 sm 及以上保持固定宽度 -->
+        <div class="relative w-full sm:w-[220px] lg:w-[240px] group text-sm min-w-0">
           <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <Input
             v-model="searchQuery"
@@ -214,7 +214,7 @@ function handleApplySuccess() {
           />
         </div>
 
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
           <!-- 刷新按钮 -->
           <Button
             variant="outline"
@@ -228,13 +228,13 @@ function handleApplySuccess() {
           </Button>
 
           <!-- 导入应用 -->
-          <Button size="sm" class="h-9 px-3 text-xs shrink-0 justify-center shadow-sm font-medium gap-1" @click="openCustomApply">
+          <Button size="sm" class="h-9 px-3 text-xs flex-1 sm:flex-initial shrink-0 justify-center shadow-sm font-medium gap-1" @click="openCustomApply">
             <Plus class="h-3.5 w-3.5 shrink-0" />
             <span>导入应用</span>
           </Button>
 
           <!-- 前往已装应用 -->
-          <Button variant="outline" size="sm" class="h-9 px-3 text-xs shrink-0 justify-center shadow-sm font-medium gap-1" @click="router.push('/tasks?type=app')" title="查看已装应用">
+          <Button variant="outline" size="sm" class="h-9 px-3 text-xs flex-1 sm:flex-initial shrink-0 justify-center shadow-sm font-medium gap-1" @click="router.push('/tasks?type=app')" title="查看已装应用">
             <Package class="h-3.5 w-3.5 text-emerald-500 shrink-0" />
             <span>已装应用</span>
           </Button>
