@@ -16,7 +16,6 @@ import (
 	"github.com/engigu/baihu-panel/internal/services/relation"
 	"github.com/engigu/baihu-panel/internal/utils"
 	"github.com/engigu/baihu-panel/internal/windows"
-	"github.com/rs/xid"
 )
 
 // LogFunc 日志输出函数签名
@@ -522,7 +521,7 @@ func (a *AppApplier) upsertSingleEnv(envItem AppEnvItem, envValues map[string]st
 	}
 
 	newEnv := models.EnvironmentVariable{
-		ID:        xid.New().String(),
+		ID:        utils.GenerateID(),
 		Name:      envItem.Key,
 		Value:     models.BigText(val),
 		Remark:    remark,
@@ -579,6 +578,13 @@ func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, mast
 
 	templateTag := manifest.GetTemplateTag()
 	taskTag := resolveEnvTag(templateTag, opts.Tag, manifest.ID)
+
+	defaultUnifiedConfig := models.UnifiedTaskConfig{
+		Common: &models.CommonConfig{
+			Concurrency: 0,
+			AllEnvs:     true,
+		},
+	}.ToJSON()
 
 	for _, t := range tasksList {
 		foundTaskNames[t.Name] = true
@@ -638,25 +644,38 @@ func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, mast
 			existingTask.Languages = taskLangs
 			existingTask.Type = constant.TaskTypeNormal
 			existingTask.SourceID = masterTaskID
-			if err := database.DB.Model(&existingTask).Select("Name", "Command", "Schedule", "WorkDir", "Timeout", "Languages", "Type", "SourceID").Updates(&existingTask).Error; err != nil {
+
+			// 如果原 UnifiedConfig 为空或未包含 Common，则确保具备全量环境变量注入策略
+			if string(existingTask.UnifiedConfig) == "" || string(existingTask.UnifiedConfig) == "{}" {
+				existingTask.UnifiedConfig = models.BigText(defaultUnifiedConfig)
+			} else {
+				existingUnified := models.ParseUnifiedTaskConfig(string(existingTask.UnifiedConfig))
+				if existingUnified.Common == nil {
+					existingUnified.Common = &models.CommonConfig{AllEnvs: true}
+					existingTask.UnifiedConfig = models.BigText(existingUnified.ToJSON())
+				}
+			}
+
+			if err := database.DB.Model(&existingTask).Select("Name", "Command", "Schedule", "WorkDir", "Timeout", "Languages", "Type", "SourceID", "UnifiedConfig").Updates(&existingTask).Error; err != nil {
 				return nil, nil, fmt.Errorf("更新任务 '%s' 失败: %w", t.Name, err)
 			}
 			relation.DataRelation.SaveTags(existingTask.ID, constant.RelationTypeTaskTag, taskTag)
 			updatedTasks = append(updatedTasks, t.Name)
 		} else {
 			newTask := models.Task{
-				ID:          utils.GenerateID(),
-				Name:        t.Name,
-				Command:     models.BigText(cmdStr),
-				Schedule:    scheduleCron,
-				Type:        constant.TaskTypeNormal,
-				TriggerType: constant.TriggerTypeCron,
-				Enabled:     utils.BoolPtr(isEnabled),
-				Timeout:     timeout,
-				WorkDir:     constant.NormalizeScriptPath(taskWorkDir),
-				Languages:   taskLangs,
-				SourceID:    masterTaskID,
-				CleanConfig: `{"type":"count","keep":30}`,
+				ID:            utils.GenerateID(),
+				Name:          t.Name,
+				Command:       models.BigText(cmdStr),
+				Schedule:      scheduleCron,
+				Type:          constant.TaskTypeNormal,
+				TriggerType:   constant.TriggerTypeCron,
+				Enabled:       utils.BoolPtr(isEnabled),
+				Timeout:       timeout,
+				WorkDir:       constant.NormalizeScriptPath(taskWorkDir),
+				Languages:     taskLangs,
+				SourceID:      masterTaskID,
+				CleanConfig:   `{"type":"count","keep":30}`,
+				UnifiedConfig: models.BigText(defaultUnifiedConfig),
 			}
 			if err := database.DB.Create(&newTask).Error; err != nil {
 				return nil, nil, fmt.Errorf("创建任务 '%s' 失败: %w", t.Name, err)
@@ -964,6 +983,15 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 		appCfg.Schedule = effectiveSchedule
 	}
 	appCfg.ManifestRaw = SyncManifestYAMLWithConfig(appCfg.ManifestRaw, &appCfg)
+
+	if unified.Common == nil {
+		unified.Common = &models.CommonConfig{
+			Concurrency: 0,
+			AllEnvs:     true,
+		}
+	} else {
+		unified.Common.AllEnvs = true
+	}
 
 	unified.App = &appCfg
 	finalUnifiedStr := unified.ToJSON()
