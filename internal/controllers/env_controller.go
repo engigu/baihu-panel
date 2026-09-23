@@ -10,14 +10,16 @@ import (
 	"github.com/engigu/baihu-panel/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pquerna/otp/totp"
 )
 
 type EnvController struct {
 	envService *services.EnvService
+	userService *services.UserService
 }
 
-func NewEnvController(envService *services.EnvService) *EnvController {
-	return &EnvController{envService: envService}
+func NewEnvController(envService *services.EnvService, userService *services.UserService) *EnvController {
+	return &EnvController{envService: envService, userService: userService}
 }
 
 // GetSecretStatus 获取加密秘钥状态
@@ -386,4 +388,91 @@ func (ec *EnvController) BulkSaveEnv(c *gin.Context) {
 
 	services.GetAgentWSManager().BroadcastTasksToAll()
 	utils.Success(c, nil)
+}
+
+// DecryptSecret 解密机密的值
+// @Description 解密机密的值。需要传入OTP码或密码进行二次校验，OTP码优先
+func (ec *EnvController) DecryptSecret(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		utils.BadRequest(c, "无效的机密ID")
+		return
+	}
+
+	var req struct {
+		OtpCode      string    `json:"otp_code"`
+		Password     string    `json:"password"`
+		PublicKey    string    `json:"public_key"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	if req.OtpCode == "" && req.Password == "" {
+		utils.BadRequest(c, "参数错误，请输入密码或验证码")
+		return
+	}
+
+	userID := c.GetString("userID")
+	user, err := ec.userService.GetUserByID(userID)
+	if err != nil {
+		utils.Unauthorized(c, "会话无效")
+		return
+	}
+
+	if user.OtpEnabled && user.OtpSecret != "" {
+		if req.OtpCode == "" {
+			utils.BadRequest(c, "请输入两步验证码")
+			return
+		}
+
+		// 验证 OTP 验证码
+		if !totp.Validate(req.OtpCode, user.OtpSecret) {
+			utils.BadRequest(c, "验证码错误")
+			return
+		}
+	} else {
+		if req.Password == "" {
+			utils.BadRequest(c, "请输入登录密码")
+			return
+		}
+
+		// 验证登录密码
+		if !ec.userService.ValidatePassword(user, req.Password) {
+			utils.BadRequest(c, "密码错误")
+			return
+		}
+	}
+
+	envVar := ec.envService.GetEnvVarByID(id)
+	if envVar == nil || envVar.Type != constant.EnvTypeSecret {
+		utils.NotFound(c, "机密不存在")
+		return
+	}
+
+	// 解密数据库存储的密文
+	rawValue, err := utils.Decrypt(string(envVar.Value))
+	if err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	// 若未传入公钥（如前端在局域网纯 HTTP IP 等非安全上下文环境，浏览器禁用 Web Crypto API），二次校验通过后直接返回原始值
+	if req.PublicKey == "" {
+		utils.Success(c, gin.H{
+			"raw_value": rawValue,
+		})
+		return
+	}
+
+	// 采用现代椭圆曲线 ECDH (P-256) + AES-256-GCM 进行端到端安全传输
+	ecdhPayload, err := utils.EcdhEncrypt(req.PublicKey, rawValue)
+	if err != nil {
+		utils.BadRequest(c, "加密机密传输数据失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, ecdhPayload)
 }

@@ -47,7 +47,7 @@ func RegisterControllers() *Controllers {
 	startAppLogCleanup(appLogService)
 
 	taskController := controllers.NewTaskController(taskService, executorService)
-	envController := controllers.NewEnvController(envService)
+	envController := controllers.NewEnvController(envService, userService)
 
 	// 初始化并返回控制器
 	return &Controllers{

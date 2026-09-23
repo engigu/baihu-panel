@@ -51,10 +51,36 @@ function handleClick(e: MouseEvent) {
   }
   emits("click", e)
 }
+
+const inputElement = ref<HTMLInputElement | null>(null)
+
+function focus() {
+  if (!props.readonly) {
+    isReadonly.value = false
+  }
+  inputElement.value?.focus()
+}
+
+function blur() {
+  inputElement.value?.blur()
+}
+
+function select() {
+  inputElement.value?.select()
+}
+
+defineExpose({
+  focus,
+  blur,
+  select,
+  inputElement,
+  $el: inputElement,
+})
 </script>
 
 <template>
   <input
+    ref="inputElement"
     v-model="modelValue"
     data-slot="input"
     :type="props.type || 'text'"

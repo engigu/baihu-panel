@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import EditEnvDialog from './components/EditEnvDialog.vue'
 import DeleteEnvDialog from './components/DeleteEnvDialog.vue'
 import DependentTasksDialog from './components/DependentTasksDialog.vue'
+import SecretAuthDialog from './components/SecretAuthDialog.vue'
 
 function formatDate(dateStr?: string) {
   if (!dateStr) return '-'
@@ -33,6 +34,7 @@ const { pageSize } = useSiteSettings()
 
 const envVars = ref<EnvVar[]>([])
 const showValues = ref<Record<string, boolean>>({})
+const decryptedSecrets = ref<Record<string, string>>({})
 
 const filterName = ref('')
 const filterTags = ref('')
@@ -51,6 +53,7 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null
 const editDialogRef = ref<InstanceType<typeof EditEnvDialog> | null>(null)
 const deleteDialogRef = ref<InstanceType<typeof DeleteEnvDialog> | null>(null)
 const dependentTasksDialogRef = ref<InstanceType<typeof DependentTasksDialog> | null>(null)
+const secretAuthDialogRef = ref<InstanceType<typeof SecretAuthDialog> | null>(null)
 
 async function checkSecretStatus() {
   try {
@@ -118,8 +121,43 @@ function confirmDelete(id: string) {
   deleteDialogRef.value?.confirmDelete(id, activeTab.value)
 }
 
-function toggleShow(id: string) {
-  showValues.value[id] = !showValues.value[id]
+function getDisplayValue(env: EnvVar): string {
+  if (showValues.value[env.id]) {
+    if (env.type === ENV_TYPE.SECRET) {
+      return decryptedSecrets.value[env.id] ?? env.value
+    }
+    return env.value
+  }
+  return maskValue(env.value)
+}
+
+function toggleShow(env: EnvVar) {
+  // 若为机密且尚未解密过，点击查看触发二次身份认证
+  if (env.type === ENV_TYPE.SECRET && !showValues.value[env.id] && decryptedSecrets.value[env.id] === undefined) {
+    secretAuthDialogRef.value?.open(env)
+    return
+  }
+  showValues.value = {
+    ...showValues.value,
+    [env.id]: !showValues.value[env.id]
+  }
+}
+
+function onSecretDecrypted(payload: { id: string; value: string }) {
+  // 1. 同步更新 envVars 列表中的对象，确保响应式视图 100% 刷新
+  const target = envVars.value.find(e => e.id === payload.id)
+  if (target) {
+    target.value = payload.value
+  }
+  // 2. 展开更新字典，触发模板依赖追踪更新
+  decryptedSecrets.value = {
+    ...decryptedSecrets.value,
+    [payload.id]: payload.value
+  }
+  showValues.value = {
+    ...showValues.value,
+    [payload.id]: true
+  }
 }
 
 async function toggleEnabled(env: EnvVar) {
@@ -172,7 +210,7 @@ onMounted(() => {
         <div class="flex flex-row items-center gap-2 w-full sm:flex-1 md:flex-none md:w-auto text-sm">
           <div class="relative flex-1 md:flex-none md:w-[150px] lg:w-[200px] group">
             <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-            <Input v-model="filterName" placeholder="搜索名称..." class="h-9 pl-9 w-full bg-muted/20 border-muted-foreground/10 focus:bg-background text-sm" @input="handleSearch" />
+            <Input v-model="filterName" type="search" name="env_filter_search" autocomplete="off" placeholder="搜索名称..." class="h-9 pl-9 w-full bg-muted/20 border-muted-foreground/10 focus:bg-background text-sm" @input="handleSearch" />
           </div>
           <div class="w-[120px] lg:w-[150px] shrink-0">
             <TagInput v-model="filterTags" placeholder="标签过滤..." :icon="Tag" multiple :fetchTags="api.env.tags" class="h-9 bg-muted/20 border-muted-foreground/10 focus:bg-background text-sm" @enter="handleSearch" @update:modelValue="handleSearch" />
@@ -249,7 +287,7 @@ onMounted(() => {
             </div>
 
             <div class="flex-1 min-w-0 text-muted-foreground truncate text-xs px-1">
-              <TextOverflow :text="showValues[env.id] ? env.value : maskValue(env.value)" :title="activeTab === ENV_TYPE.SECRET ? '机密内容' : '变量值'" />
+              <TextOverflow :text="getDisplayValue(env)" :title="activeTab === ENV_TYPE.SECRET ? '机密内容' : '变量值'" />
             </div>
 
             <div class="w-48 shrink-0 text-muted-foreground truncate text-xs">
@@ -272,7 +310,7 @@ onMounted(() => {
             </div>
 
             <div class="w-24 shrink-0 flex justify-center">
-              <Button variant="ghost" size="icon" class="h-6 w-6" @click="toggleShow(env.id)" :title="showValues[env.id] ? '隐藏' : '显示'">
+              <Button variant="ghost" size="icon" class="h-6 w-6" @click="toggleShow(env)" :title="showValues[env.id] ? '隐藏' : '显示'">
                 <Eye v-if="!showValues[env.id]" class="h-3 w-3" />
                 <EyeOff v-else class="h-3 w-3" />
               </Button>
@@ -317,7 +355,7 @@ onMounted(() => {
             </div>
 
             <div class="flex-1 min-w-0 text-muted-foreground truncate text-xs">
-               <TextOverflow :text="showValues[env.id] ? env.value : maskValue(env.value)" />
+               <TextOverflow :text="getDisplayValue(env)" />
             </div>
 
             <div class="w-8 shrink-0 flex justify-center">
@@ -332,7 +370,7 @@ onMounted(() => {
             </div>
 
             <div class="w-24 shrink-0 flex justify-center">
-              <Button variant="ghost" size="icon" class="h-6 w-6" @click="toggleShow(env.id)">
+              <Button variant="ghost" size="icon" class="h-6 w-6" @click="toggleShow(env)">
                 <Eye v-if="!showValues[env.id]" class="h-3 w-3" />
                 <EyeOff v-else class="h-3 w-3" />
               </Button>
@@ -382,7 +420,7 @@ onMounted(() => {
             <div class="flex items-start gap-3">
               <span class="w-10 shrink-0 font-medium mt-0.5 opacity-70">内容:</span>
               <div class="flex-1 min-w-0 text-foreground break-all line-clamp-2">
-                <TextOverflow :text="showValues[env.id] ? env.value : maskValue(env.value)" />
+                <TextOverflow :text="getDisplayValue(env)" />
               </div>
             </div>
             <div v-if="env.remark" class="flex items-start gap-3">
@@ -392,7 +430,7 @@ onMounted(() => {
           </div>
 
           <div class="grid grid-cols-4 items-center pt-2 mt-3 border-t border-border/40 -mx-3 -mb-3">
-            <Button variant="ghost" class="h-9 px-0 text-xs gap-1.5 hover:bg-primary/5 rounded-none" @click="toggleShow(env.id)">
+            <Button variant="ghost" class="h-9 px-0 text-xs gap-1.5 hover:bg-primary/5 rounded-none" @click="toggleShow(env)">
               <Eye v-if="!showValues[env.id]" class="h-3.5 w-3.5" />
               <EyeOff v-else class="h-3.5 w-3.5" />
               {{ showValues[env.id] ? '隐藏' : '显示' }}
@@ -419,5 +457,6 @@ onMounted(() => {
     <EditEnvDialog ref="editDialogRef" @saved="loadEnvVars" />
     <DeleteEnvDialog ref="deleteDialogRef" @deleted="loadEnvVars" />
     <DependentTasksDialog ref="dependentTasksDialogRef" />
+    <SecretAuthDialog ref="secretAuthDialogRef" @decrypted="onSecretDecrypted" />
   </Tabs>
 </template>

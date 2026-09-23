@@ -139,6 +139,8 @@ func registerEnvRoutes(g *gin.RouterGroup, c *Controllers) {
 		env.GET("/:id/tasks", c.Env.GetAssociatedTasks)
 		env.PUT("/:id", c.Env.UpdateEnvVar)
 		env.DELETE("/:id", c.Env.DeleteEnvVar)
+		env.POST("/:id/decrypt", c.Env.DecryptSecret)
+		env.POST("/:id", c.Env.DecryptSecret) // 向后兼容
 	}
 }
 
