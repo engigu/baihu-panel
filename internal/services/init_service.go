@@ -50,7 +50,11 @@ func (s *InitService) initializeLanguages() {
 // initializeAdmin 创建管理员账号
 func (s *InitService) initializeAdmin(userService *UserService) {
 	// 当前存在 role=admin 的用户时，跳过创建，避免因用户修改了默认管理员username后导致再次创建admin管理员从而引发不可预期的安全性问题
-	existAdmin, _ := userService.ExistUserByRole("admin")
+	existAdmin, err := userService.ExistUserByRole("admin")
+	if err != nil {
+		logger.Errorf("[Init] 检查管理员账号状态失败: %v", err)
+		return
+	}
 	if existAdmin {
 		logger.Info("[Init] 管理员账号已存在，跳过创建")
 		return
