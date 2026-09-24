@@ -58,6 +58,16 @@ func (us *UserService) GetUserByUsername(username string) *models.User {
 	return &user
 }
 
+// ExistUserByRole 判断是否存在指定角色的用户
+func (us *UserService) ExistUserByRole(role string) (bool, error) {
+	var count int64
+	err := database.DB.Model(&models.User{}).Where("role = ?", role).Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (us *UserService) GetUserByID(id string) (*models.User, error) {
 	var user models.User
 	res := database.DB.Where("id = ?", id).Limit(1).Find(&user)
