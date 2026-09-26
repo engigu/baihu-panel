@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -55,7 +56,9 @@ func GinRecovery() gin.HandlerFunc {
 		defer func() {
 			if err := recover(); err != nil {
 				logger.Errorf("[HTTP] Panic: %v | %s", err, c.Request.URL.Path)
-				c.AbortWithStatus(500)
+				// 返回真实 500 + JSON 信封，避免空 body 导致前端 res.json() 抛异常
+				utils.ServerError(c, "服务器内部错误")
+				c.Abort()
 			}
 		}()
 		c.Next()

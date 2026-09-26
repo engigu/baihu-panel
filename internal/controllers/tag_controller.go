@@ -49,7 +49,7 @@ func (tc *TagController) GetTags(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} utils.Response{data=models.DataStorage}
+// @Success 201 {object} utils.Response{data=models.DataStorage}
 // @Router /tags [post]
 func (tc *TagController) CreateTag(c *gin.Context) {
 	var req struct {
@@ -66,7 +66,8 @@ func (tc *TagController) CreateTag(c *gin.Context) {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	utils.Success(c, tag)
+	// 创建标签资源并返回其表示
+	utils.Created(c, tag)
 }
 
 // UpdateTag 重命名标签
@@ -103,7 +104,7 @@ func (tc *TagController) UpdateTag(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "标签ID"
-// @Success 200 {object} utils.Response
+// @Success 204 "无内容"
 // @Router /tags/{id} [delete]
 func (tc *TagController) DeleteTag(c *gin.Context) {
 	id := c.Param("id")
@@ -111,7 +112,8 @@ func (tc *TagController) DeleteTag(c *gin.Context) {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	utils.SuccessMsg(c, "删除成功")
+	// 无业务数据，返回 204 无 body
+	utils.NoContent(c)
 }
 
 // GetTagResources 获取指定标签关联的实际资源列表

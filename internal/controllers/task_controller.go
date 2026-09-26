@@ -87,7 +87,8 @@ func getRepoPhysicalPath(targetPath, dirName, sourceURL, branch string) string {
 // @Produce json
 // @Security BearerAuth
 // @Param body body vo.TaskCreateReq true "任务创建信息"
-// @Success 200 {object} utils.Response{data=vo.TaskVO}
+// @Success 201 {object} utils.Response{data=vo.TaskVO} "新建成功"
+// @Success 200 {object} utils.Response{data=vo.TaskVO} "命中既有仓库任务的更新路径"
 // @Failure 400 {object} utils.Response
 // @Router /tasks [post]
 func (tc *TaskController) CreateTask(c *gin.Context) {
@@ -138,7 +139,7 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 			// 校验 SourceID 是否已存在（任务唯一性）
 			existingTask := tc.taskService.GetTaskBySourceID(sourceID)
 			if existingTask != nil {
-				utils.BadRequest(c, "当前任务已存在，请检查或更换仓库目录名称")
+				utils.Conflict(c, "当前任务已存在，请检查或更换仓库目录名称")
 				return
 			}
 
@@ -146,7 +147,7 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 			newAbsPath := getRepoPhysicalPath(repoCfg.TargetPath, repoCfg.RepoDirName, repoCfg.SourceURL, repoCfg.Branch)
 			if newAbsPath != "" {
 				if info, err := os.Stat(newAbsPath); err == nil && info.IsDir() {
-					utils.BadRequest(c, "本地已存在同名仓库文件夹，请更换自定义目录名或清理残留文件")
+					utils.Conflict(c, "本地已存在同名仓库文件夹，请更换自定义目录名或清理残留文件")
 					return
 				}
 			}
@@ -179,6 +180,7 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 	}
 
 	var task *models.Task
+	isCreated := false
 	// 去重逻辑：如果已存在相同 SourceID 的仓库任务，则改为更新
 	if sourceID != "" {
 		task = tc.taskService.GetTaskBySourceID(sourceID)
@@ -189,6 +191,7 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 
 	if task == nil {
 		task = tc.taskService.CreateTask(&param)
+		isCreated = true
 	}
 
 	// 如果是 Agent 任务，通知 Agent；否则添加到本地 cron
@@ -198,6 +201,11 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		tc.executorService.AddCronTask(task)
 	}
 
+	// 仅真正新建时返回 201；命中既有仓库任务的更新路径按更新语义返回 200
+	if isCreated {
+		utils.Created(c, vo.ToTaskVO(task))
+		return
+	}
 	utils.Success(c, vo.ToTaskVO(task))
 }
 
@@ -421,7 +429,7 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 			if sourceID != oldTask.SourceID {
 				existingTask := tc.taskService.GetTaskBySourceID(sourceID)
 				if existingTask != nil && existingTask.ID != oldTask.ID {
-					utils.BadRequest(c, "当前任务已存在，请检查或更换仓库目录名称")
+					utils.Conflict(c, "当前任务已存在，请检查或更换仓库目录名称")
 					return
 				}
 			}
@@ -439,7 +447,7 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 			// 如果路径发生了改变（或者是个全新计算的路径），并且新路径已存在，则报错拦截
 			if newAbsPath != "" && newAbsPath != oldAbsPath {
 				if info, err := os.Stat(newAbsPath); err == nil && info.IsDir() {
-					utils.BadRequest(c, "目标目录在本地已存在同名文件夹，请更换目录名或清理残留文件")
+					utils.Conflict(c, "目标目录在本地已存在同名文件夹，请更换目录名或清理残留文件")
 					return
 				}
 			}
@@ -538,7 +546,7 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "任务ID"
-// @Success 200 {object} utils.Response
+// @Success 204 "无内容"
 // @Failure 404 {object} utils.Response
 // @Router /tasks/{id} [delete]
 func (tc *TaskController) DeleteTask(c *gin.Context) {
@@ -577,7 +585,8 @@ func (tc *TaskController) DeleteTask(c *gin.Context) {
 		tc.agentWSManager.BroadcastTasks(*agentID)
 	}
 
-	utils.SuccessMsg(c, "删除成功")
+	// 无业务数据，返回 204 无 body
+	utils.NoContent(c)
 }
 
 // deleteRepoPhysicalFiles 删除仓库关联的物理文件

@@ -311,7 +311,7 @@ func LocalhostOnly() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
 		if ip != "127.0.0.1" && ip != "::1" {
-			utils.BadRequest(c, "仅允许本地访问")
+			utils.Forbidden(c, "仅允许本地访问")
 			c.Abort()
 			return
 		}

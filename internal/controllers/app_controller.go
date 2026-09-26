@@ -242,12 +242,9 @@ func (ac *AppController) ApplyApp(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusOK, utils.Response{
-			Code: 400,
-			Msg:  "部署应用失败: " + err.Error(),
-			Data: gin.H{
-				"log": buf.String(),
-			},
+		// 部署失败按双轨契约返回 HTTP 400，日志经 data 回传
+		utils.ErrorData(c, 400, "部署应用失败: "+err.Error(), gin.H{
+			"log": buf.String(),
 		})
 		return
 	}
@@ -285,11 +282,8 @@ func (ac *AppController) SwitchScenario(c *gin.Context) {
 	var buf bytes.Buffer
 	err := ac.appService.SwitchScenario(id, req.ScenarioID, &buf)
 	if err != nil {
-		c.JSON(http.StatusOK, utils.Response{
-			Code: 400,
-			Msg:  "切换场景失败: " + err.Error(),
-			Data: gin.H{"log": buf.String()},
-		})
+		// 切换失败按双轨契约返回 HTTP 400，日志经 data 回传
+		utils.ErrorData(c, 400, "切换场景失败: "+err.Error(), gin.H{"log": buf.String()})
 		return
 	}
 
@@ -342,11 +336,8 @@ func (ac *AppController) RebuildApp(c *gin.Context) {
 
 	res, err := app.DefaultApplier.Apply(manifest, []byte(appEntity.ManifestRaw), opts)
 	if err != nil {
-		c.JSON(http.StatusOK, utils.Response{
-			Code: 400,
-			Msg:  "重建失败: " + err.Error(),
-			Data: gin.H{"log": buf.String()},
-		})
+		// 重建失败按双轨契约返回 HTTP 400，日志经 data 回传
+		utils.ErrorData(c, 400, "重建失败: "+err.Error(), gin.H{"log": buf.String()})
 		return
 	}
 

@@ -24,7 +24,7 @@ func NewScriptController(scriptService *services.ScriptService) *ScriptControlle
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "脚本信息"
-// @Success 200 {object} utils.Response{data=vo.ScriptVO}
+// @Success 201 {object} utils.Response{data=vo.ScriptVO}
 // @Router /scripts [post]
 func (sc *ScriptController) CreateScript(c *gin.Context) {
 	userID := c.GetString("userID")
@@ -40,7 +40,8 @@ func (sc *ScriptController) CreateScript(c *gin.Context) {
 	}
 
 	script := sc.scriptService.CreateScript(req.Name, req.Content, userID)
-	utils.Success(c, vo.ToScriptVO(script))
+	// 创建脚本资源并返回其表示
+	utils.Created(c, vo.ToScriptVO(script))
 }
 
 // GetScripts 获取脚本列表
@@ -135,7 +136,7 @@ func (sc *ScriptController) UpdateScript(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "脚本ID"
-// @Success 200 {object} utils.Response
+// @Success 204 "无内容"
 // @Failure 404 {object} utils.Response
 // @Router /scripts/{id} [delete]
 func (sc *ScriptController) DeleteScript(c *gin.Context) {
@@ -151,5 +152,6 @@ func (sc *ScriptController) DeleteScript(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessMsg(c, "删除成功")
+	// 无业务数据，返回 204 无 body
+	utils.NoContent(c)
 }

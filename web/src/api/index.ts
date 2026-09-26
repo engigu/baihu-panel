@@ -101,7 +101,18 @@ export async function request<T>(url: string, options?: RequestInit): Promise<T>
     throw err
   }
 
-  const json: ApiResponse<T> = await res.json()
+  // HTTP 204 无 body（如无数据 DELETE），不得调用 res.json()
+  if (res.status === 204) {
+    return undefined as T
+  }
+
+  // 非 JSON 错误响应（如网关/代理返回 HTML）时给出可读错误，而非 SyntaxError
+  let json: ApiResponse<T>
+  try {
+    json = await res.json()
+  } catch {
+    throw new Error(`请求失败 (HTTP ${res.status})`)
+  }
 
   if (json.code === 401) {
     // 未登录或登录过期，跳转到登录页
@@ -109,7 +120,8 @@ export async function request<T>(url: string, options?: RequestInit): Promise<T>
     throw new Error(json.msg || '请先登录')
   }
 
-  if (json.code !== 200) {
+  // 成功判断放行全部 2xx（如创建类 POST 的 201）；双轨错误（4xx/5xx）在此抛出
+  if (json.code >= 400) {
     throw new Error(json.msg || '请求失败')
   }
 
@@ -218,12 +230,19 @@ export const api = {
     tasks: (id: string) => request<Task[]>(`/env/${id}/tasks`),
     create: (data: Partial<EnvVar>) => request<EnvVar>('/env', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: Partial<EnvVar>) => request<EnvVar>(`/env/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    delete: (id: string, force?: boolean) => {
+    delete: async (id: string, force?: boolean) => {
       const query = force ? '?force=true' : ''
-      return fetch(`${API_BASE_URL}/env/${id}${query}`, {
+      const res = await fetch(`${API_BASE_URL}/env/${id}${query}`, {
         method: 'DELETE',
         credentials: 'include'
-      }).then(res => res.json() as Promise<ApiResponse<any>>)
+      })
+      // HTTP 204 无 body（删除成功），不得调用 res.json()，返回 undefined
+      if (res.status === 204) return undefined
+      try {
+        return (await res.json()) as ApiResponse<any>
+      } catch {
+        throw new Error(`请求失败 (HTTP ${res.status})`)
+      }
     },
     decryptSecret: (id: string, data: { otp_code?: string; password?: string; public_key?: string }) =>
       request<DecryptSecretResponse>(`/env/${id}/decrypt`, { method: 'POST', body: JSON.stringify(data) })
@@ -307,7 +326,12 @@ export const api = {
         credentials: 'include',
         body: formData
       })
-      const json: ApiResponse<null> = await res.json()
+      let json: ApiResponse<null>
+      try {
+        json = await res.json()
+      } catch {
+        throw new Error(`请求失败 (HTTP ${res.status})`)
+      }
       if (json.code === 401) {
         window.location.href = BASE_URL + '/login'
         throw new Error('请先登录')
@@ -336,7 +360,12 @@ export const api = {
         credentials: 'include',
         body: formData
       })
-      const json: ApiResponse<null> = await res.json()
+      let json: ApiResponse<null>
+      try {
+        json = await res.json()
+      } catch {
+        throw new Error(`请求失败 (HTTP ${res.status})`)
+      }
       if (json.code === 401) {
         window.location.href = BASE_URL + '/login'
         throw new Error('请先登录')
@@ -359,7 +388,12 @@ export const api = {
         credentials: 'include',
         body: formData
       })
-      const json: ApiResponse<null> = await res.json()
+      let json: ApiResponse<null>
+      try {
+        json = await res.json()
+      } catch {
+        throw new Error(`请求失败 (HTTP ${res.status})`)
+      }
       if (json.code === 401) {
         window.location.href = BASE_URL + '/login'
         throw new Error('请先登录')
@@ -483,7 +517,12 @@ export const api = {
         credentials: 'include',
         body: formData
       })
-      const json: ApiResponse<{ message: string, theme: string }> = await res.json()
+      let json: ApiResponse<{ message: string, theme: string }>
+      try {
+        json = await res.json()
+      } catch {
+        throw new Error(`请求失败 (HTTP ${res.status})`)
+      }
       if (json.code === 401) {
         window.location.href = BASE_URL + '/login'
         throw new Error('请先登录')

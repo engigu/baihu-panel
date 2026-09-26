@@ -27,10 +27,36 @@ func SuccessMsg(c *gin.Context, msg string) {
 	})
 }
 
+// Created 创建成功响应（HTTP 201）：用于「创建持久化命名资源且返回其表示」的 POST 端点，
+// 信封结构不变、code 为 201；动作类/批量/导入导出类 POST 仍用 Success
+func Created(c *gin.Context, data interface{}) {
+	c.JSON(http.StatusCreated, Response{
+		Code: 201,
+		Msg:  "success",
+		Data: data,
+	})
+}
+
+// NoContent 无内容响应（HTTP 204）：用于无业务数据的 DELETE 端点；204 不得再写 body，
+// 调用后直接 return
+func NoContent(c *gin.Context) {
+	c.Status(http.StatusNoContent)
+}
+
+// Error 错误统一出口：HTTP 状态码与 body code 严格一致（双轨）
 func Error(c *gin.Context, code int, msg string) {
-	c.JSON(http.StatusOK, Response{
+	c.JSON(code, Response{
 		Code: code,
 		Msg:  msg,
+	})
+}
+
+// ErrorData 错误响应携带 data（如代理上游失败时回传子节点原始响应体）
+func ErrorData(c *gin.Context, code int, msg string, data interface{}) {
+	c.JSON(code, Response{
+		Code: code,
+		Msg:  msg,
+		Data: data,
 	})
 }
 
@@ -48,6 +74,11 @@ func Forbidden(c *gin.Context, msg string) {
 
 func NotFound(c *gin.Context, msg string) {
 	Error(c, 404, msg)
+}
+
+// Conflict 资源冲突（如已存在/同名/重复）
+func Conflict(c *gin.Context, msg string) {
+	Error(c, http.StatusConflict, msg)
 }
 
 func TooManyRequests(c *gin.Context, msg string) {

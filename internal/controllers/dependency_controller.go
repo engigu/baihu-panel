@@ -64,6 +64,7 @@ func (c *DependencyController) Create(ctx *gin.Context) {
 		return
 	}
 
+	// 同名同版本依赖命中时 service 走更新（upsert 语义），可能非新建，按规范保持 200
 	utils.Success(ctx, vo.ToDependencyVO(dep))
 }
 
@@ -80,7 +81,8 @@ func (c *DependencyController) Delete(ctx *gin.Context) {
 		return
 	}
 
-	utils.SuccessMsg(ctx, "删除成功")
+	// 无业务数据，返回 204 无 body
+	utils.NoContent(ctx)
 }
 
 func (c *DependencyController) Install(ctx *gin.Context) {

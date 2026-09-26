@@ -161,5 +161,6 @@ func (c *MiseController) UnsetEnv(ctx *gin.Context) {
 		utils.ServerError(ctx, "取消环境变量失败: "+err.Error())
 		return
 	}
-	utils.Success(ctx, nil)
+	// 无业务数据，返回 204 无 body
+	utils.NoContent(ctx)
 }

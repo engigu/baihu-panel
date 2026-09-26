@@ -65,7 +65,8 @@ func (nc *NotificationController) DeleteChannel(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessMsg(c, "删除成功")
+	// 无业务数据，返回 204 无 body
+	utils.NoContent(c)
 }
 
 // TestChannel 测试渠道
@@ -140,7 +141,8 @@ func (nc *NotificationController) DeleteBinding(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessMsg(c, "删除成功")
+	// 无业务数据，返回 204 无 body
+	utils.NoContent(c)
 }
 
 // BatchSaveBindings 批量保存事件绑定
@@ -241,5 +243,6 @@ func (nc *NotificationController) DeleteFilter(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessMsg(c, "删除成功")
+	// 无业务数据，返回 204 无 body
+	utils.NoContent(c)
 }

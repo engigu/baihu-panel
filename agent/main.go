@@ -364,6 +364,15 @@ func cmdTasks() {
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
+		// 尝试解析响应信封中的 msg 输出友好错误，失败时降级打印原始响应体
+		var errResp struct {
+			Code int    `json:"code"`
+			Msg  string `json:"msg"`
+		}
+		if json.Unmarshal(body, &errResp) == nil && errResp.Msg != "" {
+			fmt.Printf("获取任务列表失败: %s\n", errResp.Msg)
+			return
+		}
 		fmt.Printf("获取任务列表失败 (HTTP %d): %s\n", resp.StatusCode, string(body))
 		return
 	}

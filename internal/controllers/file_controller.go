@@ -281,7 +281,7 @@ func (fc *FileController) MoveFile(c *gin.Context) {
 
 	// 检查目标是否存在
 	if _, err := os.Stat(newFull); err == nil {
-		utils.BadRequest(c, "目标已存在")
+		utils.Conflict(c, "目标已存在")
 		return
 	}
 
@@ -332,7 +332,7 @@ func (fc *FileController) CopyFile(c *gin.Context) {
 
 	// 检查目标是否存在
 	if _, err := os.Stat(targetFull); err == nil {
-		utils.BadRequest(c, "目标已存在")
+		utils.Conflict(c, "目标已存在")
 		return
 	}
 
@@ -357,7 +357,7 @@ func (fc *FileController) RenameFile(c *gin.Context) {
 
 	// 校验：重命名禁止跨目录
 	if filepath.Dir(filepath.Clean(req.OldPath)) != filepath.Dir(filepath.Clean(req.NewPath)) {
-		utils.BadRequest(c, "禁止跨目录重命名")
+		utils.Forbidden(c, "禁止跨目录重命名")
 		return
 	}
 
@@ -376,7 +376,7 @@ func (fc *FileController) RenameFile(c *gin.Context) {
 
 	// 检查目标是否存在
 	if _, err := os.Stat(newFull); err == nil {
-		utils.BadRequest(c, "文件已存在")
+		utils.Conflict(c, "文件已存在")
 		return
 	}
 
