@@ -238,49 +238,17 @@ func (es *EnvService) GetAllEnvVarsAndSecrets() ([]string, []string) {
 
 // formatEnvVars 将环境变量列表格式化为 NAME=VALUE 数组，并处理重名合并 (过滤掉所有的 Secret)
 func (es *EnvService) formatEnvVars(envs []models.EnvironmentVariable) []string {
-	if len(envs) == 0 {
-		return nil
-	}
-
-	type mergedEnv struct {
-		name   string
-		values []string
-	}
-	var mergedList []mergedEnv
-	nameToIndex := make(map[string]int)
-
-	for _, env := range envs {
-		// 非调度器入口，直接当做没有（跳过 Secret）
-		if env.Type == constant.EnvTypeSecret {
-			continue
-		}
-
-		value := string(env.Value)
-		if !utils.DerefBool(env.Enabled, true) {
-			value = ""
-		}
-
-		if idx, ok := nameToIndex[env.Name]; ok {
-			mergedList[idx].values = append(mergedList[idx].values, value)
-		} else {
-			nameToIndex[env.Name] = len(mergedList)
-			mergedList = append(mergedList, mergedEnv{
-				name:   env.Name,
-				values: []string{value},
-			})
-		}
-	}
-
-	var result []string
-	for _, item := range mergedList {
-		val := strings.Join(item.values, "&")
-		result = append(result, item.name+"="+val)
-	}
+	result, _ := es.formatEnvVarsInternal(envs, false)
 	return result
 }
 
 // formatEnvVarsAndSecrets 将环境变量列表格式化为 NAME=VALUE 数组，并提取明文安全机密列表
 func (es *EnvService) formatEnvVarsAndSecrets(envs []models.EnvironmentVariable) ([]string, []string) {
+	return es.formatEnvVarsInternal(envs, true)
+}
+
+// formatEnvVarsInternal 统一合并并格式化环境变量，支持是否解析与提取 Secret
+func (es *EnvService) formatEnvVarsInternal(envs []models.EnvironmentVariable, includeSecret bool) ([]string, []string) {
 	if len(envs) == 0 {
 		return nil, nil
 	}
@@ -294,18 +262,23 @@ func (es *EnvService) formatEnvVarsAndSecrets(envs []models.EnvironmentVariable)
 	nameToIndex := make(map[string]int)
 
 	for _, env := range envs {
+		// 若环境变量被禁用，直接跳过不注入
+		if !utils.DerefBool(env.Enabled, true) {
+			continue
+		}
+
 		value := string(env.Value)
 		if env.Type == constant.EnvTypeSecret {
+			if !includeSecret {
+				// 不包含机密时直接跳过 Secret
+				continue
+			}
 			if decValue, err := utils.Decrypt(value); err == nil {
 				value = decValue
-				if utils.DerefBool(env.Enabled, true) && value != "" {
+				if value != "" {
 					secrets = append(secrets, value)
 				}
 			}
-		}
-
-		if !utils.DerefBool(env.Enabled, true) {
-			value = ""
 		}
 
 		if idx, ok := nameToIndex[env.Name]; ok {
