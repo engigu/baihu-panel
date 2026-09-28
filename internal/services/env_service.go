@@ -273,11 +273,13 @@ func (es *EnvService) formatEnvVarsInternal(envs []models.EnvironmentVariable, i
 				// 不包含机密时直接跳过 Secret
 				continue
 			}
+			// 兼容历史未加密的明文机密：解密成功后使用明文，失败则按原样处理，
+			// 但无论能否解密，都必须将最终生效值纳入脱敏列表，避免明文机密泄露到日志
 			if decValue, err := utils.Decrypt(value); err == nil {
 				value = decValue
-				if value != "" {
-					secrets = append(secrets, value)
-				}
+			}
+			if value != "" {
+				secrets = append(secrets, value)
 			}
 		}
 
