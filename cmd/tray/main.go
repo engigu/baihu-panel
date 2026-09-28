@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -25,6 +27,7 @@ var (
 	destroyWindow    = user32.NewProc("DestroyWindow")
 	postQuitMessage  = user32.NewProc("PostQuitMessage")
 	createPopupMenu  = user32.NewProc("CreatePopupMenu")
+	destroyMenu      = user32.NewProc("DestroyMenu")
 	appendMenu       = user32.NewProc("AppendMenuW")
 	trackPopupMenu   = user32.NewProc("TrackPopupMenu")
 	getCursorPos     = user32.NewProc("GetCursorPos")
@@ -36,6 +39,8 @@ var (
 	dispatchMessage  = user32.NewProc("DispatchMessageW")
 	createMutex      = kernel32.NewProc("CreateMutexW")
 	setDefaultMenuItem = user32.NewProc("SetMenuDefaultItem")
+	getCurrentProcess        = kernel32.NewProc("GetCurrentProcess")
+	setProcessWorkingSetSize = kernel32.NewProc("SetProcessWorkingSetSize")
 
 	// 序数导入 Windows 10 1903+ / Win11 原生深色沉浸式主题 API
 	setPreferredAppMode = uxtheme.NewProc("#135")
@@ -165,6 +170,12 @@ func main() {
 	// 创建托盘图标
 	setupTrayIcon()
 
+	// 启动后台定时检查更新 (方案 B: 全量安装包自动升级)
+	startPeriodicUpdateCheck()
+
+	// 启动完成后异步修剪工作集，使托盘常驻内存降至 1~3 MB，不影响任何功能
+	trimWorkingSet()
+
 	// 消息循环
 	var msg struct {
 		Hwnd    syscall.Handle
@@ -275,6 +286,16 @@ func showPopupMenu() {
 	appendMenu.Call(uintptr(hmenu), mfString, 1, uintptr(unsafe.Pointer(openStr)))
 	setDefaultMenuItem.Call(uintptr(hmenu), 1, 0) // 1 是 ID，0 代表 byPosition = False
 
+	// 若检测到新版本或正在下载，在顶部第一位置显著提示！
+	if isDownloadingUpdate {
+		dlNoticeStr, _ := syscall.UTF16PtrFromString("正在下载更新包，请稍候...")
+		appendMenu.Call(uintptr(hmenu), uintptr(mfString|0x00000001), 8, uintptr(unsafe.Pointer(dlNoticeStr)))
+	} else if hasNewVersion && latestReleaseInfo != nil {
+		topNoticeText := fmt.Sprintf("发现新版本 %s (点击立即升级)", latestReleaseInfo.TagName)
+		topNoticeStr, _ := syscall.UTF16PtrFromString(topNoticeText)
+		appendMenu.Call(uintptr(hmenu), mfString, 8, uintptr(unsafe.Pointer(topNoticeStr)))
+	}
+
 	appendMenu.Call(uintptr(hmenu), mfSeparator, 0, 0)
 
 	// 2. 服务状态与管理
@@ -292,7 +313,20 @@ func showPopupMenu() {
 
 	appendMenu.Call(uintptr(hmenu), mfSeparator, 0, 0)
 
-	// 3. 配置与日志
+	// 3. 配置、日志与更新
+	updateMenuText := "检查新版本..."
+	if isDownloadingUpdate {
+		updateMenuText = "正在下载更新包..."
+	} else if hasNewVersion && latestReleaseInfo != nil {
+		updateMenuText = fmt.Sprintf("立即升级到 %s", latestReleaseInfo.TagName)
+	}
+	updateStr, _ := syscall.UTF16PtrFromString(updateMenuText)
+	updateFlags := uint32(mfString)
+	if isDownloadingUpdate {
+		updateFlags |= 0x00000001 // 置灰不可选
+	}
+	appendMenu.Call(uintptr(hmenu), uintptr(updateFlags), 8, uintptr(unsafe.Pointer(updateStr)))
+
 	appendMenu.Call(uintptr(hmenu), mfString, 6, uintptr(unsafe.Pointer(configStr)))
 	appendMenu.Call(uintptr(hmenu), mfString, 7, uintptr(unsafe.Pointer(logStr)))
 
@@ -314,6 +348,11 @@ func showPopupMenu() {
 		uintptr(hwnd),
 		0,
 	)
+
+	// 菜单关闭后：立即销毁 GDI 菜单对象，并自动将闲置图形内存归还系统
+	destroyMenu.Call(uintptr(hmenu))
+	hmenu = 0
+	trimWorkingSet()
 }
 
 func handleMenuCommand(id uint32) {
@@ -340,6 +379,8 @@ func handleMenuCommand(id uint32) {
 		openConfigFile()
 	case 7: // 查看运行日志
 		openLogFile()
+	case 8: // 检查新版本 / 立即升级 (方案 B: 全量安装包自动升级)
+		go checkAndTriggerUpdate(true)
 	}
 }
 
@@ -569,4 +610,28 @@ func isServiceRunning() bool {
 
 func getIconData() []byte {
 	return defaultIcon
+}
+
+var (
+	trimTimer *time.Timer
+	trimLock  sync.Mutex
+)
+
+// trimWorkingSet 安全归还闲置物理工作集给操作系统，使托盘常驻内存降至 1~3 MB
+// 采用原生 SetProcessWorkingSetSize(-1, -1)，支持防抖，不阻塞主消息循环，不破坏任何运行状态
+func trimWorkingSet() {
+	trimLock.Lock()
+	defer trimLock.Unlock()
+
+	if trimTimer != nil {
+		trimTimer.Stop()
+	}
+	trimTimer = time.AfterFunc(1*time.Second, func() {
+		runtime.GC()
+		debug.FreeOSMemory()
+		if setProcessWorkingSetSize.Find() == nil && getCurrentProcess.Find() == nil {
+			hProc, _, _ := getCurrentProcess.Call()
+			setProcessWorkingSetSize.Call(hProc, ^uintptr(0), ^uintptr(0))
+		}
+	})
 }

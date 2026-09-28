@@ -127,7 +127,7 @@ build-agent-darwin-arm64:
 # Build Windows Tray GUI App
 release-windows-tray:
 	@mkdir -p bin
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -H=windowsgui" -o bin/baihu-tray.exe ./cmd/tray
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -H=windowsgui -X 'github.com/engigu/baihu-panel/internal/constant.Version=$(VERSION)' -X 'github.com/engigu/baihu-panel/internal/constant.BuildTime=$(BUILD_TIME)'" -o bin/baihu-tray.exe ./cmd/tray
 
 # Pack Windows GUI Installer using ISCC (Inno Setup)
 pack-windows-installer: release-windows release-windows-tray
