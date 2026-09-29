@@ -35,6 +35,10 @@ async function checkBackupStatus() {
 }
 
 async function createBackup() {
+  if (isDemoMode.value) {
+    toast.error('演示模式下禁止创建备份')
+    return
+  }
   backupLoading.value = true
   try {
     await api.settings.createBackup()
@@ -48,6 +52,10 @@ async function createBackup() {
 }
 
 function downloadBackup() {
+  if (isDemoMode.value) {
+    toast.error('演示模式下禁止下载备份')
+    return
+  }
   window.open(api.settings.downloadBackup(), '_blank')
   setTimeout(checkBackupStatus, 6000)
 }
@@ -108,25 +116,40 @@ onMounted(async () => {
           <div class="flex items-center gap-2">
             <Archive class="w-4 h-4 text-foreground/80" />
             <h4 class="text-xs font-semibold text-foreground">数据备份</h4>
+            <span
+              v-if="isDemoMode"
+              class="px-1.5 py-0.2 rounded text-[9px] font-semibold border border-destructive/40 bg-destructive/10 text-destructive leading-none"
+            >
+              演示模式已禁用
+            </span>
           </div>
           <p class="text-[10px] text-muted-foreground leading-relaxed">
             备份包含任务、执行日志、环境变量、脚本、系统设置及整个 scripts 文件夹。
           </p>
-          <p class="text-[10px] text-amber-600 dark:text-amber-500 font-medium">
+          <p v-if="isDemoMode" class="text-[10px] text-destructive font-medium flex items-center gap-1">
+            <ShieldAlert class="w-3 h-3 shrink-0" />
+            演示模式下禁止创建和下载备份，以防止公开环境泄露敏感配置与数据。
+          </p>
+          <p v-else class="text-[10px] text-amber-600 dark:text-amber-500 font-medium">
             提示：备份文件在第一次被下载 5 分钟后将被系统自动物理删除。
           </p>
         </div>
         
         <div class="space-y-2">
-          <div v-if="hasBackup && backupTime" class="text-[10px] text-muted-foreground flex items-center gap-1.5">
+          <div v-if="hasBackup && backupTime && !isDemoMode" class="text-[10px] text-muted-foreground flex items-center gap-1.5">
             <span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0"></span>
             备份生成时间: {{ backupTime }}
           </div>
           <div class="flex flex-wrap gap-2.5">
-            <Button @click="createBackup" :disabled="backupLoading" class="h-9 text-xs shadow-sm">
+            <Button
+              @click="createBackup"
+              :disabled="backupLoading || isDemoMode"
+              class="h-9 text-xs shadow-sm"
+              :title="isDemoMode ? '演示模式下禁止创建备份' : '创建备份'"
+            >
               {{ backupLoading ? '备份中...' : '创建备份' }}
             </Button>
-            <Button v-if="hasBackup" @click="downloadBackup" variant="outline" class="h-9 text-xs shadow-sm">
+            <Button v-if="hasBackup && !isDemoMode" @click="downloadBackup" variant="outline" class="h-9 text-xs shadow-sm">
               <Download class="w-3.5 h-3.5 mr-1.5" />
               下载备份
             </Button>

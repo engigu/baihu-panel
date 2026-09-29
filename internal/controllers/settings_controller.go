@@ -496,6 +496,11 @@ func (sc *SettingsController) GetLoginLogs(c *gin.Context) {
 
 // CreateBackup 创建备份
 func (sc *SettingsController) CreateBackup(c *gin.Context) {
+	if constant.DemoMode {
+		utils.BadRequest(c, "演示模式下禁止创建备份")
+		return
+	}
+
 	_, err := sc.backupService.CreateBackup()
 	if err != nil {
 		utils.ServerError(c, "创建备份失败: "+err.Error())
@@ -506,6 +511,14 @@ func (sc *SettingsController) CreateBackup(c *gin.Context) {
 
 // GetBackupStatus 获取备份状态
 func (sc *SettingsController) GetBackupStatus(c *gin.Context) {
+	if constant.DemoMode {
+		utils.Success(c, gin.H{
+			"has_backup":  false,
+			"backup_time": "",
+		})
+		return
+	}
+
 	filePath := sc.backupService.GetBackupFile()
 	var backupTime string
 	if filePath != "" {
@@ -521,6 +534,11 @@ func (sc *SettingsController) GetBackupStatus(c *gin.Context) {
 
 // DownloadBackup 下载备份文件
 func (sc *SettingsController) DownloadBackup(c *gin.Context) {
+	if constant.DemoMode {
+		utils.BadRequest(c, "演示模式下禁止下载备份")
+		return
+	}
+
 	filePath := sc.backupService.GetBackupFile()
 	if filePath == "" {
 		utils.NotFound(c, "没有可下载的备份")
