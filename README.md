@@ -15,9 +15,9 @@
 
 文档说明 [文档说明](https://engigu.github.io/baihu-panel/)
 
-## 更新日志 ☕
+## 更新日志
 
-> 💡 **最新版本**：[v1.4.0](https://github.com/engigu/baihu-panel/releases/tag/v1.4.0) (2026.09.29)
+> **最新版本**：[v1.4.0](https://github.com/engigu/baihu-panel/releases/tag/v1.4.0) (2026.09.29)
 
 * **RESTful 状态码与业务码双轨对齐**：API 响应消除冗余嵌套，统一收敛至 7 大标准 HTTP 状态码并规范错误回传 ([#174](https://github.com/engigu/baihu-panel/pull/174))。
 * **Bark 端到端加密推送**：支持 AES (CBC/ECB/GCM) 高强度加密通道与随机安全 IV，通知配置弹窗新增开关与下拉动态表单控件 ([#177](https://github.com/engigu/baihu-panel/pull/177))。
@@ -25,7 +25,7 @@
 * **安全加固与演示模式防护**：演示模式下禁止恢复备份数据；历史明文机密全量脱敏防泄露 ([#175](https://github.com/engigu/baihu-panel/pull/175))；避免管理员重复初始化 ([#172](https://github.com/engigu/baihu-panel/pull/172))；禁用环境变量彻底跳过注入。
 
 <details>
-<summary>📜 <b>点击展开查看近期历史版本日志</b></summary>
+<summary><b>点击展开查看近期历史版本日志</b></summary>
 
 - **2026.09.23 (v1.3.0)** - 机密端到端安全解密查看 (ECDH+AES-GCM)、日志表冗余任务名称、应用全量变量注入与文档体验升级。
 
@@ -45,7 +45,7 @@
 
 </details>
 
-👉 [**查看完整历史更新日志 (在线文档)**](https://engigu.github.io/baihu-panel/guide/changelog.html)
+[**查看完整历史更新日志 (在线文档)**](https://engigu.github.io/baihu-panel/guide/changelog.html)
 
 ## 项目来由
 
@@ -396,7 +396,7 @@ table_prefix = baihu_
 <details>
 <summary><b>方式三：配合独立中心化消息服务部署（非必需/仅供参考）</b></summary>
 
-> 🎉 **好消息**：自白虎面板最新版本起，系统已**原生内置**了完整强大的消息推送功能！您可直接在面板「消息推送」菜单内绑定十余种主流渠道和系统通知事件，原配合外置的 `Message-Push-Nest` 部署方式已不再是使用面板的基础要求。您可随时直接使用上方的第一种简单命令开箱即用体验。
+> **好消息**：自白虎面板最新版本起，系统已**原生内置**了完整强大的消息推送功能！您可直接在面板「消息推送」菜单内绑定十余种主流渠道和系统通知事件，原配合外置的 `Message-Push-Nest` 部署方式已不再是使用面板的基础要求。您可随时直接使用上方的第一种简单命令开箱即用体验。
 >  
 > 以下「白虎 + 消息聚合服务」的联合部署内容被予以保留，专为仍然需要「中心化通知网关」的重度企业解耦用户作为参考：
 
@@ -770,7 +770,7 @@ location /baihu/ {
 
 </details>
 
-## 免责声明 ⚠️
+## 免责声明
 
 白虎面板（Baihu Panel）仅作为一个轻量级的任务托管与调度平台，本项目及相关代码**不提供、不内置任何具有实际业务逻辑的第三方脚本**。
 
@@ -780,7 +780,7 @@ location /baihu/ {
 2. **安全责任自负**：本项目作为基础调度工具，**无法且不保证任何被执行任务的安全性**。因运行不安全、违规脚本带来的一切数据泄露、系统损坏、财产损失及法律责任等后果，均由使用者自行承担，与本项目及开发者无关。
 3. **软件按“原样”提供**：本项目为业余开源开发，按“原样”提供，**不保证不存在 Bug 或漏洞**。开发者不对因使用本项目而引起的任何直接或间接损失负责。
 
-## 贡献者 ✨
+## 贡献者
 
 感谢所有为白虎面板做出贡献的开发者们！大家的 Star 和 Pull Request 是项目持续迭代的动力！
 
@@ -790,11 +790,11 @@ location /baihu/ {
   </a>
 </p>
 
-## 社区交流 💬
+## 社区交流
 
 欢迎加入白虎面板交流社区，与开发者和用户共同探讨、交流经验与反馈建议！
 
-| 📢 社区反馈与指引 | 👥 QQ 交流群 |
+| 社区反馈与指引 | QQ 交流群 |
 | :--- | :---: |
 | <ul><li>**问题反馈 (Bug Report)**：如果在使用中遇到问题，欢迎提交 <a href="https://github.com/engigu/baihu-panel/issues">GitHub Issues</a></li><li>**功能建议 (Feature Request)**：有新的想法或需求，随时发起讨论</li><li>**代码贡献 (Pull Request)**：非常欢迎提交 PR 参与共建</li><li>**使用文档 (Documentation)**：遇到配置与使用疑问可查阅 <a href="https://engigu.github.io/baihu-panel/">官方文档中心</a></li></ul> | <img src="https://f.pz.al/pzal/2026/01/07/83be93eb4e2a3.png" width="180" alt="baihuPanel交流群" /><br/><b>QQ 群号：468870216</b> |
 
