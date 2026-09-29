@@ -47,6 +47,9 @@ function flattenDirs(nodes: FileNode[], depth = 0): FlatDir[] {
   const result: FlatDir[] = []
   for (const node of nodes) {
     if (!node.isDir) continue
+    if (props.modelValue?.startsWith(node.path) && props.modelValue !== node.path) {
+      expandedDirs.value.add(node.path)
+    }
     const children = node.children?.filter(c => c.isDir) || []
     result.push({
       path: node.path,
@@ -112,8 +115,6 @@ function getRootLabel() {
 // 检查是否是默认目录
 function isDefaultSelected(): boolean {
   if (!props.modelValue || props.modelValue === '/' || props.modelValue === PATHS.SCRIPTS_DIR_PLACEHOLDER) return true
-  // 绝对路径以 /scripts 结尾且没有子目录
-  if (props.modelValue.endsWith('/scripts') || props.modelValue.endsWith('/data/scripts')) return true
   return false
 }
 
