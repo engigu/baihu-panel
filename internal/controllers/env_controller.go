@@ -42,7 +42,7 @@ func (ec *EnvController) GetSecretStatus(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "环境变量信息"
-// @Success 201 {object} utils.Response{data=vo.EnvVO}
+// @Success 200 {object} utils.Response{data=vo.EnvVO}
 // @Router /env [post]
 func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 	userID := c.GetString("userID")
@@ -85,8 +85,7 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 	// Broadcast tasks to all agents because global envs changed
 	services.GetAgentWSManager().BroadcastTasksToAll()
 
-	// 创建环境变量资源并返回其表示
-	utils.Created(c, vo.ToEnvVO(envVar))
+	utils.Success(c, vo.ToEnvVO(envVar))
 }
 
 // GetEnvVars 获取环境变量列表
@@ -234,9 +233,9 @@ func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path string true "环境变量ID"
 // @Param force query boolean false "强制删除（忽略任务关联）"
-// @Success 204 "无内容"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response{data=[]vo.TaskVO}
 // @Failure 404 {object} utils.Response
-// @Failure 409 {object} utils.Response{data=[]vo.TaskVO}
 // @Router /env/{id} [delete]
 func (ec *EnvController) DeleteEnvVar(c *gin.Context) {
 	id := c.Param("id")
@@ -249,8 +248,7 @@ func (ec *EnvController) DeleteEnvVar(c *gin.Context) {
 	success, associatedTasks := ec.envService.DeleteEnvVar(id, force)
 
 	if len(associatedTasks) > 0 {
-		// 资源冲突：环境变量仍被任务引用，HTTP 状态码与 body code 对齐为 409
-		utils.ErrorData(c, 409, "该环境变量已被任务引用，请先在任务中删除引用或选择强制删除", vo.ToTaskVOListFromModels(associatedTasks))
+		utils.ErrorData(c, 400, "该环境变量已被任务引用，请先在任务中删除引用或选择强制删除", vo.ToTaskVOListFromModels(associatedTasks))
 		return
 	}
 
@@ -262,8 +260,7 @@ func (ec *EnvController) DeleteEnvVar(c *gin.Context) {
 	// Broadcast tasks to all agents because global envs changed
 	services.GetAgentWSManager().BroadcastTasksToAll()
 
-	// 无业务数据，返回 204 无 body
-	utils.NoContent(c)
+	utils.SuccessMsg(c, "删除成功")
 }
 
 // GetAssociatedTasks 获取关联任务

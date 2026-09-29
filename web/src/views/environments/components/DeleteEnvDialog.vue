@@ -34,28 +34,21 @@ async function deleteEnv(force = false) {
   isDeleting.value = true
   try {
     const res = await api.env.delete(deleteEnvId.value, force)
-    // HTTP 204 无响应体（res 为 undefined），视为删除成功
-    if (!res) {
+    if (res.code === 200) {
       toast.success(envType.value === ENV_TYPE.SECRET ? '机密已删除' : '变量已删除')
       isOpen.value = false
       emit('deleted')
       return
     }
-    if (res.code === 409) {
-      associatedTasks.value = res.data || []
+    if (res.data && res.data.length > 0) {
+      associatedTasks.value = res.data
       isDeleting.value = false
       return
     }
-    if (res.code >= 400) {
-      toast.error(res.msg || '删除失败')
-      isDeleting.value = false
-      return
-    }
-    toast.success(envType.value === ENV_TYPE.SECRET ? '机密已删除' : '变量已删除')
-    isOpen.value = false
-    emit('deleted')
-  } catch {
-    toast.error('网络错误，删除失败')
+    toast.error(res.msg || '删除失败')
+    isDeleting.value = false
+  } catch (err: any) {
+    toast.error(err.message || '删除失败')
   } finally {
     isDeleting.value = false
   }

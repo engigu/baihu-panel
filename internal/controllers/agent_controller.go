@@ -156,8 +156,7 @@ func (c *AgentController) Delete(ctx *gin.Context) {
 		return
 	}
 
-	// 无业务数据，返回 204 无 body
-	utils.NoContent(ctx)
+	utils.SuccessMsg(ctx, "删除成功")
 }
 
 // RegenerateToken 重新生成 Token
@@ -714,8 +713,7 @@ func (c *AgentController) CreateToken(ctx *gin.Context) {
 		return
 	}
 
-	// 创建令牌资源并返回其表示
-	utils.Created(ctx, vo.ToAgentTokenVO(token))
+	utils.Success(ctx, vo.ToAgentTokenVO(token))
 }
 
 // DeleteToken 删除令牌
@@ -731,8 +729,7 @@ func (c *AgentController) DeleteToken(ctx *gin.Context) {
 		return
 	}
 
-	// 无业务数据，返回 204 无 body
-	utils.NoContent(ctx)
+	utils.SuccessMsg(ctx, "删除成功")
 }
 
 // getIntSetting 辅助方法

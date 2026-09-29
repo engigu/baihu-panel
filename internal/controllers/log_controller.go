@@ -250,6 +250,5 @@ func (lc *LogController) DeleteLog(c *gin.Context) {
 		return
 	}
 
-	// 无业务数据，返回 204 无 body
-	utils.NoContent(c)
+	utils.SuccessMsg(c, "日志已删除")
 }

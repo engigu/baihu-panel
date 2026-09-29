@@ -281,7 +281,7 @@ func (fc *FileController) MoveFile(c *gin.Context) {
 
 	// 检查目标是否存在
 	if _, err := os.Stat(newFull); err == nil {
-		utils.Conflict(c, "目标已存在")
+		utils.BadRequest(c, "目标已存在")
 		return
 	}
 
@@ -332,7 +332,7 @@ func (fc *FileController) CopyFile(c *gin.Context) {
 
 	// 检查目标是否存在
 	if _, err := os.Stat(targetFull); err == nil {
-		utils.Conflict(c, "目标已存在")
+		utils.BadRequest(c, "目标已存在")
 		return
 	}
 
@@ -376,7 +376,7 @@ func (fc *FileController) RenameFile(c *gin.Context) {
 
 	// 检查目标是否存在
 	if _, err := os.Stat(newFull); err == nil {
-		utils.Conflict(c, "文件已存在")
+		utils.BadRequest(c, "文件已存在")
 		return
 	}
 

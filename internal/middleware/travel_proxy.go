@@ -68,7 +68,7 @@ func TravelProxyMiddleware() gin.HandlerFunc {
 					c.Abort()
 					return
 				}
-				c.JSON(502, gin.H{"code": 502, "msg": "与子节点逆向隧道通信异常: " + err.Error()})
+				c.JSON(500, gin.H{"code": 500, "msg": "与子节点逆向隧道通信异常: " + err.Error()})
 				c.Abort()
 				return
 			}
@@ -114,7 +114,7 @@ func TravelProxyMiddleware() gin.HandlerFunc {
 				c.Abort()
 				return
 			}
-			c.JSON(502, gin.H{"code": 502, "msg": "无法连接至目标子节点: " + err.Error()})
+			c.JSON(500, gin.H{"code": 500, "msg": "无法连接至目标子节点: " + err.Error()})
 			c.Abort()
 			return
 		}

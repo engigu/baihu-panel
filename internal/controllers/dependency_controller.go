@@ -81,8 +81,7 @@ func (c *DependencyController) Delete(ctx *gin.Context) {
 		return
 	}
 
-	// 无业务数据，返回 204 无 body
-	utils.NoContent(ctx)
+	utils.SuccessMsg(ctx, "删除成功")
 }
 
 func (c *DependencyController) Install(ctx *gin.Context) {

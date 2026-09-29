@@ -101,11 +101,6 @@ export async function request<T>(url: string, options?: RequestInit): Promise<T>
     throw err
   }
 
-  // HTTP 204 无 body（如无数据 DELETE），不得调用 res.json()
-  if (res.status === 204) {
-    return undefined as T
-  }
-
   // 非 JSON 错误响应（如网关/代理返回 HTML）时给出可读错误，而非 SyntaxError
   let json: ApiResponse<T>
   try {
@@ -114,15 +109,17 @@ export async function request<T>(url: string, options?: RequestInit): Promise<T>
     throw new Error(`请求失败 (HTTP ${res.status})`)
   }
 
-  if (json.code === 401) {
+  if (res.status === 401 || json.code === 401) {
     // 未登录或登录过期，跳转到登录页
     window.location.href = BASE_URL + '/login'
     throw new Error(json.msg || '请先登录')
   }
 
-  // 成功判断放行全部 2xx（如创建类 POST 的 201）；双轨错误（4xx/5xx）在此抛出
-  if (json.code >= 400) {
-    throw new Error(json.msg || '请求失败')
+  if (!res.ok || json.code !== 200) {
+    const err: any = new Error(json.msg || '请求失败')
+    err.code = json.code
+    err.data = json.data
+    throw err
   }
 
   return json.data
@@ -236,8 +233,6 @@ export const api = {
         method: 'DELETE',
         credentials: 'include'
       })
-      // HTTP 204 无 body（删除成功），不得调用 res.json()，返回 undefined
-      if (res.status === 204) return undefined
       try {
         return (await res.json()) as ApiResponse<any>
       } catch {
