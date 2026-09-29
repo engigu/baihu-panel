@@ -15,6 +15,7 @@ import StatusDot from '@/components/StatusDot.vue'
 import TextOverflow from '@/components/TextOverflow.vue'
 import type { Task, Agent } from '@/api'
 import { AGENT_STATUS, TASK_TYPE, TASK_TYPE_CONFIG } from '@/constants'
+import { formatDateTime } from '@/utils/date'
 
 const props = defineProps<{
   task: Task
@@ -110,8 +111,8 @@ function getRepoConfig(task: Task) {
       </div>
 
       <div class="hidden md:flex w-28 lg:w-36 shrink-0 flex-col justify-center gap-0.5 text-[11px] text-muted-foreground tabular-nums">
-        <span class="truncate">上: {{ task.last_run || '-' }}</span>
-        <span class="truncate">下: {{ task.next_run || '-' }}</span>
+        <span class="truncate" :title="task.last_run">上: {{ formatDateTime(task.last_run) || '-' }}</span>
+        <span class="truncate" :title="task.next_run">下: {{ formatDateTime(task.next_run) || '-' }}</span>
       </div>
 
       <span class="w-12 lg:w-14 flex justify-center shrink-0 cursor-pointer group" @click="$emit('toggleTask', task, !task.enabled)">

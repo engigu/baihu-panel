@@ -11,6 +11,7 @@ import { Package, Pencil, Trash2, ListTodo, Zap, ZapOff, Play, ScrollText, Loade
 import StatusDot from '@/components/StatusDot.vue'
 import type { Task, Agent } from '@/api'
 import { TASK_TYPE, TASK_TYPE_CONFIG } from '@/constants'
+import {formatDateTime} from "@/utils/date.ts";
 
 const props = defineProps<{
   task: Task
@@ -101,8 +102,8 @@ function getAppConfig(task: Task) {
       <!-- 执行 / 部署时间 -->
       <div class="hidden md:flex w-28 lg:w-36 shrink-0 flex-col justify-center gap-0.5 text-[11px] text-muted-foreground tabular-nums">
         <template v-if="task.schedule">
-          <span class="truncate">上: {{ task.last_run || '-' }}</span>
-          <span class="truncate">下: {{ task.next_run || '-' }}</span>
+          <span class="truncate" :title="task.last_run">上: {{ formatDateTime(task.last_run) || '-' }}</span>
+          <span class="truncate" :title="task.next_run">下: {{ formatDateTime(task.next_run) || '-' }}</span>
         </template>
         <template v-else>
           <span class="truncate" :title="'部署于 ' + (task.created_at || '')">部署于 {{ task.created_at ? task.created_at.split(' ')[0] : '-' }}</span>

@@ -12,22 +12,13 @@ import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ENV_TYPE } from '@/constants'
-import { format } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
 
 import EditEnvDialog from './components/EditEnvDialog.vue'
 import DeleteEnvDialog from './components/DeleteEnvDialog.vue'
 import DependentTasksDialog from './components/DependentTasksDialog.vue'
 import SecretAuthDialog from './components/SecretAuthDialog.vue'
-
-function formatDate(dateStr?: string) {
-  if (!dateStr) return '-'
-  try {
-    return format(new Date(dateStr), 'yyyy-MM-dd HH:mm:ss')
-  } catch {
-    return dateStr
-  }
-}
+import { formatDateTime } from '@/utils/date'
 
 const route = useRoute()
 const { pageSize } = useSiteSettings()
@@ -295,7 +286,7 @@ onMounted(() => {
             </div>
 
             <div class="w-40 shrink-0 text-muted-foreground tabular-nums text-[11px] opacity-70">
-              {{ formatDate(env.created_at) }}
+              {{ formatDateTime(env.created_at) }}
             </div>
 
             <div class="w-8 shrink-0 flex justify-center">
