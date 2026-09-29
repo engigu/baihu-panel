@@ -16,14 +16,17 @@
 
 ## 更新日志 ☕
 
-> 💡 **最新版本**：[v1.3.0](https://github.com/engigu/baihu-panel/releases/tag/v1.3.0) (2026.09.23)
+> 💡 **最新版本**：[v1.4.0](https://github.com/engigu/baihu-panel/releases/tag/v1.4.0) (2026.09.29)
 
-* **机密端到端安全解密查看**：采用 ECDH (P-256) + AES-GCM 现代加密传输体系与二级密码鉴权，杜绝网络传输泄露，实现机密凭证安全可控查看 ([#171](https://github.com/engigu/baihu-panel/pull/171))。
-* **日志表冗余任务名称与追溯**：数据表持久化冗余 `task_name`，彻底解决任务删除或更新后历史日志展示空名问题，并标记已删除状态徽章 ([#170](https://github.com/engigu/baihu-panel/pull/170))。
-* **文档中心与移动端排版体验优化**：文档中心支持在线动态加载渲染应用商店规范并增强 Monokai 代码复制；重构优化移动端窄屏下应用市场顶部控制栏响应式排版。
+* **RESTful 状态码与业务码双轨对齐**：API 响应消除冗余嵌套，统一收敛至 7 大标准 HTTP 状态码并规范错误回传 ([#174](https://github.com/engigu/baihu-panel/pull/174))。
+* **Bark 端到端加密推送**：支持 AES (CBC/ECB/GCM) 高强度加密通道与随机安全 IV，通知配置弹窗新增开关与下拉动态表单控件 ([#177](https://github.com/engigu/baihu-panel/pull/177))。
+* **任务编辑目录层级深层展开与体验优化**：任务编辑工作目录支持上级节点自动展开定位 ([#178](https://github.com/engigu/baihu-panel/pull/178))，修复通知时机选择 ([#176](https://github.com/engigu/baihu-panel/pull/176))，优化长目录显示与时间排版。
+* **安全加固与演示模式防护**：演示模式下禁止恢复备份数据；历史明文机密全量脱敏防泄露 ([#175](https://github.com/engigu/baihu-panel/pull/175))；避免管理员重复初始化 ([#172](https://github.com/engigu/baihu-panel/pull/172))；禁用环境变量彻底跳过注入。
 
 <details>
 <summary>📜 <b>点击展开查看近期历史版本日志</b></summary>
+
+- **2026.09.23 (v1.3.0)** - 机密端到端安全解密查看 (ECDH+AES-GCM)、日志表冗余任务名称、应用全量变量注入与文档体验升级。
 
 - **2026.09.22 (v1.2.0)** - 全新声明式应用引擎与官方应用市场、2FA 备份恢复修复、任务状态筛选与跨平台路径引擎升级。
 
