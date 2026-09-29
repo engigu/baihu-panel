@@ -154,15 +154,15 @@ defineExpose({
           <div class="sm:col-span-3 space-y-3">
             <div class="flex flex-wrap gap-4 p-3 rounded-lg bg-muted/20 border border-muted-foreground/10 items-center transition-all hover:bg-muted/30">
               <div class="flex items-center gap-2 group">
-                <Checkbox :id="`ns-${taskId || 'new'}`" v-model="notifyOnSuccess" class="border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary" />
+                <Checkbox :id="`ns-${taskId || 'new'}`" :checked="notifyOnSuccess" @update:checked="notifyOnSuccess = $event as boolean" class="border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary" />
                 <label :for="`ns-${taskId || 'new'}`" class="text-xs font-medium shrink-0 cursor-pointer group-hover:text-primary transition-colors text-foreground/80">成功时</label>
               </div>
               <div class="flex items-center gap-2 group">
-                <Checkbox :id="`nf-${taskId || 'new'}`" v-model="notifyOnFailure" class="border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary" />
+                <Checkbox :id="`nf-${taskId || 'new'}`" :checked="notifyOnFailure" @update:checked="notifyOnFailure = $event as boolean" class="border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary" />
                 <label :for="`nf-${taskId || 'new'}`" class="text-xs font-medium shrink-0 cursor-pointer group-hover:text-primary transition-colors text-foreground/80">失败时</label>
               </div>
               <div class="flex items-center gap-2 group">
-                <Checkbox :id="`nt-${taskId || 'new'}`" v-model="notifyOnTimeout" class="border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary" />
+                <Checkbox :id="`nt-${taskId || 'new'}`" :checked="notifyOnTimeout" @update:checked="notifyOnTimeout = $event as boolean" class="border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary" />
                 <label :for="`nt-${taskId || 'new'}`" class="text-xs font-medium shrink-0 cursor-pointer group-hover:text-primary transition-colors text-foreground/80">超时时</label>
               </div>
             </div>
