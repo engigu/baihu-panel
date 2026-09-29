@@ -26,7 +26,7 @@ const props = defineProps<{
   isEditing: boolean
   channel: Partial<NotifyChannel>
   channelTypes: ChannelType[]
-  configFields: Record<string, { key: string; label: string; required: boolean; placeholder?: string; type?: string; items?: Array<SelectItemProps> }[]>
+  configFields: Record<string, { key: string; label: string; required: boolean; placeholder?: string; type?: string; items?: Array<SelectItemProps>; defaultValue?: string }[]>
 }>()
 
 const emit = defineEmits<{

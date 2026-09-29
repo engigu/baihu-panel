@@ -64,7 +64,7 @@ const barkCipherPaddingSelectItems: Array<SelectItemProps> = [
 ]
 
 // 渠道配置模板
-const channelConfigFields: Record<string, { key: string; label: string; required: boolean; placeholder?: string; type?: string; items?: Array<SelectItemProps> }[]> = {
+const channelConfigFields: Record<string, { key: string; label: string; required: boolean; placeholder?: string; type?: string; items?: Array<SelectItemProps>; defaultValue?: string }[]> = {
   Telegram: [
     { key: 'bot_token', label: 'Bot Token', required: true, placeholder: '从 @BotFather 获取' },
     { key: 'chat_id', label: 'Chat ID', required: true, placeholder: '聊天/群组 ID' },
