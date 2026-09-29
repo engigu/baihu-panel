@@ -112,8 +112,6 @@ function getRootLabel() {
 // 检查是否是默认目录
 function isDefaultSelected(): boolean {
   if (!props.modelValue || props.modelValue === '/' || props.modelValue === PATHS.SCRIPTS_DIR_PLACEHOLDER) return true
-  // 绝对路径以 /scripts 结尾且没有子目录
-  if (props.modelValue.endsWith('/scripts') || props.modelValue.endsWith('/data/scripts')) return true
   return false
 }
 
