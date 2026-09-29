@@ -19,14 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { NotifyChannel, ChannelType } from '@/api'
+import type { NotifyChannel, ChannelType, SelectItemProps } from '@/api'
 
 const props = defineProps<{
   open: boolean
   isEditing: boolean
   channel: Partial<NotifyChannel>
   channelTypes: ChannelType[]
-  configFields: Record<string, { key: string; label: string; required: boolean; placeholder?: string; type?: string }[]>
+  configFields: Record<string, { key: string; label: string; required: boolean; placeholder?: string; type?: string; items?: Array<SelectItemProps> }[]>
 }>()
 
 const emit = defineEmits<{
@@ -123,6 +123,25 @@ function updateConfigField(key: string, value: string) {
                   :placeholder="field.placeholder || ''"
                   class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[80px]"
                 />
+                <Switch
+                    v-else-if="field.type === 'switch'"
+                    :model-value="channel.config?.[field.key] === 'true'"
+                    @update:model-value="updateConfigField(field.key, String($event))"
+                />
+                <Select
+                    v-else-if="field.type === 'select'"
+                    :model-value="channel.config?.[field.key] || field.defaultValue"
+                    @update:model-value="updateConfigField(field.key, String($event))"
+                >
+                  <SelectTrigger>
+                    <SelectValue :placeholder="field.placeholder" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="ct in field.items" :value="ct.value">
+                      {{ ct.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>

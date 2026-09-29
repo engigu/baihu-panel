@@ -34,13 +34,16 @@ func (c *BarkChannel) Send(config ChannelConfig, msg *Message) (*Result, error) 
 		Icon:     config.GetString("icon"),
 		Level:    config.GetString("level"),
 		URL:      config.GetString("url"),
-		Key:      config.GetString("key"),
-		IV:       config.GetString("iv"),
 		Server:   config.GetString("server"),
 		Badge:    config.GetString("badge"),
 		Copy:     config.GetString("copy"),
 		AutoCopy: config.GetString("auto_copy"),
 		ProxyURL: config.GetString("proxy_url"),
+		CipherEnable: config.GetString("cipher_enable"),
+		CipherAlgorithm: config.GetString("cipher_algorithm"),
+		CipherMode: config.GetString("cipher_mode"),
+		CipherPadding: config.GetString("cipher_padding"),
+		CipherKey: config.GetString("cipher_key"),
 	}
 
 	res, err := cli.Request(msg.Title, msg.Text)

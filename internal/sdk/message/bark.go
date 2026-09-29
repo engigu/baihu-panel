@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"golang.org/x/net/proxy"
+	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 // Copyright (c) 2026 engigu (Baihu Panel). All rights reserved.
@@ -36,20 +37,23 @@ type barkResponse struct {
 }
 
 type Bark struct {
-	PushKey  string
-	Archive  string
-	Group    string
-	Sound    string
-	Icon     string
-	Level    string
-	URL      string
-	Key      string
-	IV       string
-	Server   string
-	Badge    string
-	Copy     string
-	AutoCopy string
-	ProxyURL string // 可选的代理地址
+	PushKey         string
+	Archive         string
+	Group           string
+	Sound           string
+	Icon            string
+	Level           string
+	URL             string
+	Server          string
+	Badge           string
+	Copy            string
+	AutoCopy        string
+	ProxyURL        string // 可选的代理地址
+	CipherEnable    string // 加密开关
+	CipherAlgorithm string // 加密算法
+	CipherMode      string // 加密模式
+	CipherPadding   string // 加密填充
+	CipherKey       string // 加密密钥
 }
 
 func (b *Bark) Request(title, content string) ([]byte, error) {
@@ -99,7 +103,7 @@ func (b *Bark) Request(title, content string) ([]byte, error) {
 	}
 
 	var postData interface{}
-	if b.Key != "" && b.IV != "" {
+	if b.CipherEnable == "true" {
 		// Encrypted Request
 		// 1. Prepare the full notification payload (without device_key, as specified for encryption)
 		encryptData := make(map[string]interface{})
@@ -114,14 +118,14 @@ func (b *Bark) Request(title, content string) ([]byte, error) {
 			return nil, err
 		}
 
-		ciphertext, err := b.encryptPayload(string(jsonData))
+		ciphertext, cipherIv, err := b.encryptPayload(string(jsonData))
 		if err != nil {
 			return nil, fmt.Errorf("encryption failed: %v", err)
 		}
 
 		postData = map[string]interface{}{
 			"ciphertext": ciphertext,
-			"iv":         b.IV,
+			"iv":         cipherIv,
 			"device_key": b.PushKey,
 		}
 	} else {
@@ -163,27 +167,80 @@ func (b *Bark) Request(title, content string) ([]byte, error) {
 	return body, nil
 }
 
-func (b *Bark) encryptPayload(payload string) (string, error) {
-	key := []byte(b.Key)
-	iv := []byte(b.IV)
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
+// encryptPayload 加密
+// 参考逻辑: https://github.com/hotlcc/MoviePilot-Plugins-Third/blob/main/plugins/mergemessagenotify/channel/custom/bark.py
+func (b *Bark) encryptPayload(payload string) (*string, *string, error) {
+	if b.CipherMode == "" {
+		return nil, nil, fmt.Errorf("加密模式不能为空")
 	}
 
-	paddedPayload := b.pkcs7Pad([]byte(payload), aes.BlockSize)
-	mode := cipher.NewCBCEncrypter(block, iv)
-	ciphertext := make([]byte, len(paddedPayload))
-	mode.CryptBlocks(ciphertext, paddedPayload)
+	plaintextBytes := []byte(payload)
+	cipherKeyBytes := []byte(b.CipherKey)
 
-	return base64.StdEncoding.EncodeToString(ciphertext), nil
+	var padded []byte
+	switch b.CipherMode {
+		case "CBC", "ECB":
+			padded = b.pkcs7Pad(plaintextBytes, aes.BlockSize)
+		case "GCM":
+			padded = plaintextBytes
+		default:
+			return nil, nil, fmt.Errorf("加密模式无效: %s", b.CipherMode)
+	}
+
+	block, err := aes.NewCipher(cipherKeyBytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("AES加密失败: %w", err)
+	}
+
+	var cipherTextBytes []byte
+	var ivStr string
+
+	switch b.CipherMode {
+		case "ECB":
+			cipherTextBytes, err = aesECBEncrypt(block, padded)
+			if err != nil {
+				return nil, nil, fmt.Errorf("AES加密失败: %w", err)
+			}
+			ivStr = ""
+		case "CBC":
+			ivStr = utils.RandomString(16)
+			ivBytes := []byte(ivStr)
+
+			cbcMode := cipher.NewCBCEncrypter(block, ivBytes)
+			cipherTextBytes = make([]byte, len(padded))
+			cbcMode.CryptBlocks(cipherTextBytes, padded)
+		case "GCM":
+			ivStr = utils.RandomString(12)
+			ivBytes := []byte(ivStr)
+
+			gcm, err := cipher.NewGCM(block)
+			if err != nil {
+				return nil, nil, fmt.Errorf("AES加密失败: %w", err)
+			}
+			cipherTextBytes = gcm.Seal(nil, ivBytes, padded, nil)
+		default:
+			return nil, nil, fmt.Errorf("加密模式无效: %s", b.CipherMode)
+	}
+
+	b64 := base64.StdEncoding.EncodeToString(cipherTextBytes)
+	return &b64, &ivStr, nil
 }
 
 func (b *Bark) pkcs7Pad(data []byte, blockSize int) []byte {
 	padding := blockSize - len(data)%blockSize
 	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
 	return append(data, padtext...)
+}
+
+func aesECBEncrypt(block cipher.Block, src []byte) ([]byte, error) {
+	if len(src)%block.BlockSize() != 0 {
+		return nil, fmt.Errorf("ECB input not multiple of block size")
+	}
+	dst := make([]byte, len(src))
+	for i := 0; i < len(src); i += block.BlockSize() {
+		block.Encrypt(dst[i:i+block.BlockSize()], src[i:i+block.BlockSize()])
+	}
+	return dst, nil
 }
 
 // getHTTPClient 获取 HTTP 客户端（含超时和代理）
