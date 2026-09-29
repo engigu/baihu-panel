@@ -84,7 +84,7 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 	
 	// Broadcast tasks to all agents because global envs changed
 	services.GetAgentWSManager().BroadcastTasksToAll()
-	
+
 	utils.Success(c, vo.ToEnvVO(envVar))
 }
 
@@ -234,8 +234,8 @@ func (ec *EnvController) UpdateEnvVar(c *gin.Context) {
 // @Param id path string true "环境变量ID"
 // @Param force query boolean false "强制删除（忽略任务关联）"
 // @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response{data=[]vo.TaskVO}
 // @Failure 404 {object} utils.Response
-// @Failure 409 {object} utils.Response{data=[]vo.TaskVO}
 // @Router /env/{id} [delete]
 func (ec *EnvController) DeleteEnvVar(c *gin.Context) {
 	id := c.Param("id")
@@ -248,11 +248,7 @@ func (ec *EnvController) DeleteEnvVar(c *gin.Context) {
 	success, associatedTasks := ec.envService.DeleteEnvVar(id, force)
 
 	if len(associatedTasks) > 0 {
-		c.JSON(200, utils.Response{
-			Code: 409,
-			Msg:  "该环境变量已被任务引用，请先在任务中删除引用或选择强制删除",
-			Data: vo.ToTaskVOListFromModels(associatedTasks),
-		})
+		utils.ErrorData(c, 400, "该环境变量已被任务引用，请先在任务中删除引用或选择强制删除", vo.ToTaskVOListFromModels(associatedTasks))
 		return
 	}
 

@@ -357,7 +357,7 @@ func (fc *FileController) RenameFile(c *gin.Context) {
 
 	// 校验：重命名禁止跨目录
 	if filepath.Dir(filepath.Clean(req.OldPath)) != filepath.Dir(filepath.Clean(req.NewPath)) {
-		utils.BadRequest(c, "禁止跨目录重命名")
+		utils.Forbidden(c, "禁止跨目录重命名")
 		return
 	}
 

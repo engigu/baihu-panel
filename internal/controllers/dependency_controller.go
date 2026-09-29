@@ -64,6 +64,7 @@ func (c *DependencyController) Create(ctx *gin.Context) {
 		return
 	}
 
+	// 同名同版本依赖命中时 service 走更新（upsert 语义），可能非新建，按规范保持 200
 	utils.Success(ctx, vo.ToDependencyVO(dep))
 }
 

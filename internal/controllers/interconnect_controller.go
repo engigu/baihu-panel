@@ -109,7 +109,7 @@ func (ic *InterconnectController) DeleteNode(c *gin.Context) {
 		return
 	}
 
-	utils.Success(c, nil)
+	utils.SuccessMsg(c, "删除成功")
 }
 
 // GetNodeStatus 获取单个子节点的状态
@@ -125,7 +125,7 @@ func (ic *InterconnectController) GetNodeStatus(c *gin.Context) {
 	if strings.HasPrefix(node.URL, "tunnel://") {
 		sess := tunnel.GetSession(node.ID)
 		if sess == nil {
-			c.JSON(200, gin.H{"code": 500, "msg": "节点离线或反向隧道未建立", "data": nil})
+			utils.ErrorData(c, http.StatusInternalServerError, "节点离线或反向隧道未建立", nil)
 			return
 		}
 
@@ -149,14 +149,14 @@ func (ic *InterconnectController) GetNodeStatus(c *gin.Context) {
 
 		resp, err := client.Do(req)
 		if err != nil {
-			c.JSON(200, gin.H{"code": 500, "msg": "与子节点逆向连接通讯失败", "data": nil})
+			utils.ErrorData(c, http.StatusInternalServerError, "与子节点逆向连接通讯失败", nil)
 			return
 		}
 		defer resp.Body.Close()
 
 		body, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode != 200 {
-			c.JSON(200, gin.H{"code": 500, "msg": "子节点检测异常", "data": string(body)})
+			utils.ErrorData(c, http.StatusInternalServerError, "子节点检测异常", string(body))
 			return
 		}
 
@@ -189,14 +189,14 @@ func (ic *InterconnectController) GetNodeStatus(c *gin.Context) {
 
 	resp, err := ic.httpClient.Do(req)
 	if err != nil {
-		c.JSON(200, gin.H{"code": 500, "msg": "节点离线或网络不可达", "data": nil})
+		utils.ErrorData(c, http.StatusInternalServerError, "节点离线或网络不可达", nil)
 		return
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
-		c.JSON(200, gin.H{"code": 500, "msg": "节点返回异常", "data": string(body)})
+		utils.ErrorData(c, http.StatusInternalServerError, "节点返回异常", string(body))
 		return
 	}
 
