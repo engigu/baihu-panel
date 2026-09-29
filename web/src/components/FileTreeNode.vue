@@ -76,7 +76,7 @@ function handleDrop(e: DragEvent) {
 <template>
   <div>
     <div :class="[
-      'flex items-center gap-1 py-0.5 px-1 rounded cursor-pointer text-xs hover:bg-muted group',
+      'flex items-center gap-1 py-0.5 px-1 rounded cursor-pointer text-xs hover:bg-muted group w-fit',
       isSelected && 'bg-accent',
       isDragOver && 'bg-blue-500/20 ring-1 ring-blue-500'
     ]" :style="{ paddingLeft: depth * 12 + 4 + 'px' }" draggable="true" @click="handleSelect"
