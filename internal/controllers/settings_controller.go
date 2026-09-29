@@ -180,6 +180,11 @@ func (sc *SettingsController) GetSiteSettings(c *gin.Context) {
 	settings["scheduler_log_max_count"] = sc.settingsService.Get(constant.SectionSystem, constant.KeySchedulerLogMaxCount)
 	settings["filter_log_days"] = sc.settingsService.Get(constant.SectionSystem, constant.KeyFilterLogDays)
 	settings["filter_log_max_count"] = sc.settingsService.Get(constant.SectionSystem, constant.KeyFilterLogMaxCount)
+	if constant.DemoMode {
+		settings["demo_mode"] = "true"
+	} else {
+		settings["demo_mode"] = "false"
+	}
 
 	utils.Success(c, settings)
 }
@@ -543,6 +548,11 @@ func (sc *SettingsController) DownloadBackup(c *gin.Context) {
 
 // RestoreBackup 恢复备份
 func (sc *SettingsController) RestoreBackup(c *gin.Context) {
+	if constant.DemoMode {
+		utils.BadRequest(c, "演示模式下禁止恢复备份数据")
+		return
+	}
+
 	file, err := c.FormFile("file")
 	if err != nil {
 		utils.BadRequest(c, "请上传备份文件")

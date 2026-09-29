@@ -859,6 +859,7 @@ export interface SiteSettings {
   scheduler_log_days?: string
   scheduler_log_max_count?: string
   active_webui?: string
+  demo_mode?: string
 }
 
 export interface SchedulerSettings {

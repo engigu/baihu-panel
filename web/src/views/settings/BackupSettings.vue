@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
@@ -13,7 +13,11 @@ import {
 } from '@/components/ui/alert-dialog'
 import { api } from '@/api'
 import { toast } from 'vue-sonner'
-import { Download, Upload, Archive } from 'lucide-vue-next'
+import { Download, Upload, Archive, ShieldAlert } from 'lucide-vue-next'
+import { useSiteSettings } from '@/composables/useSiteSettings'
+
+const { siteSettings, loadSettings } = useSiteSettings()
+const isDemoMode = computed(() => siteSettings.value.demo_mode === 'true' || (siteSettings.value as any).demo_mode === true)
 
 const hasBackup = ref(false)
 const backupTime = ref('')
@@ -49,6 +53,10 @@ function downloadBackup() {
 }
 
 function showRestoreConfirm() {
+  if (isDemoMode.value) {
+    toast.error('演示模式下禁止恢复备份数据')
+    return
+  }
   showConfirm.value = true
 }
 
@@ -85,7 +93,10 @@ async function handleFileSelect(e: Event) {
   }
 }
 
-onMounted(checkBackupStatus)
+onMounted(async () => {
+  await loadSettings()
+  await checkBackupStatus()
+})
 </script>
 
 <template>
@@ -129,17 +140,33 @@ onMounted(checkBackupStatus)
           <div class="flex items-center gap-2">
             <Upload class="w-4 h-4 text-foreground/80" />
             <h4 class="text-xs font-semibold text-foreground">数据恢复</h4>
+            <span
+              v-if="isDemoMode"
+              class="px-1.5 py-0.2 rounded text-[9px] font-semibold border border-destructive/40 bg-destructive/10 text-destructive leading-none"
+            >
+              演示模式已禁用
+            </span>
           </div>
           <p class="text-[10px] text-muted-foreground leading-relaxed">
             上传此前下载的 .zip 格式备份文件，将当前系统数据与配置恢复到当时的快照状态。
           </p>
-          <p class="text-[10px] text-destructive font-medium">
+          <p v-if="isDemoMode" class="text-[10px] text-destructive font-medium flex items-center gap-1">
+            <ShieldAlert class="w-3 h-3 shrink-0" />
+            演示模式下禁止恢复备份数据，以防止公开环境被恶意覆写。
+          </p>
+          <p v-else class="text-[10px] text-destructive font-medium">
             警告：恢复操作是不可逆的，且会完全覆盖系统现存的所有数据和配置。
           </p>
         </div>
 
         <div>
-          <Button @click="showRestoreConfirm" :disabled="restoreLoading" variant="outline" class="h-9 text-xs shadow-sm w-full sm:w-auto">
+          <Button
+            @click="showRestoreConfirm"
+            :disabled="restoreLoading || isDemoMode"
+            variant="outline"
+            class="h-9 text-xs shadow-sm w-full sm:w-auto"
+            :title="isDemoMode ? '演示模式下禁止恢复' : '恢复备份'"
+          >
             {{ restoreLoading ? '恢复中...' : '恢复备份' }}
           </Button>
           <input ref="fileInput" type="file" accept=".zip" class="hidden" @change="handleFileSelect" />

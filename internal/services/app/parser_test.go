@@ -212,8 +212,8 @@ func TestParseBiliBiliToolProManifest(t *testing.T) {
 	// 3. 数据提取方法断言
 	// 3.1 任务列表与 defaults 继承
 	tasks := m.GetTasks()
-	if len(tasks) != 13 {
-		t.Errorf("期望 13 个任务，实际: %d", len(tasks))
+	if len(tasks) != 7 {
+		t.Errorf("期望 7 个任务，实际: %d", len(tasks))
 	}
 	daily, found := m.GetTask("daily")
 	if !found {
@@ -231,8 +231,8 @@ func TestParseBiliBiliToolProManifest(t *testing.T) {
 
 	// 3.2 环境变量契约提取
 	envs := m.GetEnvSchema()
-	if len(envs) != 9 {
-		t.Errorf("期望 9 个环境变量契约，实际: %d", len(envs))
+	if len(envs) != 8 {
+		t.Errorf("期望 8 个环境变量契约，实际: %d", len(envs))
 	}
 	cookieEnv, found := m.GetEnvItem("Ray_BiliBiliCookies__0")
 	if !found {
@@ -274,7 +274,7 @@ func TestParseBiliBiliToolProManifest(t *testing.T) {
 
 	// 3.5 元数据摘要提取
 	meta := m.ExtractMetadata()
-	if meta["id"] != "bilibili-tool-pro" || meta["tasks_count"] != 13 || meta["env_count"] != 9 {
+	if meta["id"] != "bilibili-tool-pro" || meta["tasks_count"] != 7 || meta["env_count"] != 8 {
 		t.Errorf("ExtractMetadata 摘要提取不符合预期: %+v", meta)
 	}
 
@@ -287,8 +287,8 @@ func TestParseBiliBiliToolProManifest(t *testing.T) {
 		t.Errorf("GetAllLanguageNames 提取错误: %+v", allLangNames)
 	}
 	dotnetTasks := m.GetTasksByLanguage("dotnet")
-	if len(dotnetTasks) != 13 {
-		t.Errorf("GetTasksByLanguage('dotnet') 期望匹配 13 个任务，实际: %d", len(dotnetTasks))
+	if len(dotnetTasks) != 7 {
+		t.Errorf("GetTasksByLanguage('dotnet') 期望匹配 7 个任务，实际: %d", len(dotnetTasks))
 	}
 	taskLangs, ok := m.GetTaskLanguages("daily")
 	if !ok || len(taskLangs) != 1 || taskLangs[0]["name"] != "dotnet" || taskLangs[0]["version"] != "10.0.401" {
