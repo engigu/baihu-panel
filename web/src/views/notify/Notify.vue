@@ -4,7 +4,7 @@ import { Send, FileText, Link, Code } from 'lucide-vue-next'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
-import { api, type NotifyChannel, type ChannelType, type EventType, type NotifyBinding, type Task } from '@/api'
+import { api, type NotifyChannel, type ChannelType, type EventType, type NotifyBinding, type Task, type SelectItemProps } from '@/api'
 import { toast } from 'vue-sonner'
 import ChannelList from './components/ChannelList.vue'
 import EventBinding from './components/EventBinding.vue'
@@ -43,8 +43,28 @@ const deletingChannelId = ref('')
 const bindings = ref<NotifyBinding[]>([])
 const allTasks = ref<Task[]>([])
 
+// Bark加密算法可选项
+const barkCipherAlgorithmSelectItems: Array<SelectItemProps> = [
+  {value: "AES128", label: "AES128"},
+  {value: "AES192", label: "AES192"},
+  {value: "AES256", label: "AES256"},
+]
+
+// Bark加密模式可选项
+const barkCipherModeSelectItems: Array<SelectItemProps> = [
+  {value: "CBC", label: "CBC"},
+  {value: "ECB", label: "ECB"},
+  {value: "GCM", label: "GCM"},
+]
+
+// Bark加密填充可选项
+const barkCipherPaddingSelectItems: Array<SelectItemProps> = [
+  {value: "noPadding", label: "noPadding"},
+  {value: "pkcs7", label: "pkcs7"},
+]
+
 // 渠道配置模板
-const channelConfigFields: Record<string, { key: string; label: string; required: boolean; placeholder?: string; type?: string }[]> = {
+const channelConfigFields: Record<string, { key: string; label: string; required: boolean; placeholder?: string; type?: string; items?: Array<SelectItemProps> }[]> = {
   Telegram: [
     { key: 'bot_token', label: 'Bot Token', required: true, placeholder: '从 @BotFather 获取' },
     { key: 'chat_id', label: 'Chat ID', required: true, placeholder: '聊天/群组 ID' },
@@ -63,6 +83,12 @@ const channelConfigFields: Record<string, { key: string; label: string; required
     { key: 'url', label: '跳转URL', required: false },
     { key: 'copy', label: '复制内容', required: false, placeholder: '收到推送时自动复制的内容' },
     { key: 'auto_copy', label: '自动复制', required: false, placeholder: '1 表示开启' },
+    { key: 'cipher_enable', label: '推送加密', required: false, type: 'switch' },
+    { key: 'cipher_algorithm', label: '加密算法', required: false, placeholder: '请选择加密算法', type: 'select', items: barkCipherAlgorithmSelectItems },
+    { key: 'cipher_mode', label: '加密模式', required: false, placeholder: '请选择加密模式', type: 'select', items: barkCipherModeSelectItems },
+    { key: 'cipher_padding', label: '加密填充', required: false, placeholder: '请选择加密填充', type: 'select', items: barkCipherPaddingSelectItems },
+    { key: 'cipher_key', label: '加密密钥', required: false, placeholder: '加密密钥' },
+    { key: 'cipher_note', label: '加密说明', required: false, placeholder: 'AES128对应16位密钥，AES192对应24位密钥，AES256对应32位密钥', type: 'note' },
   ],
   Dtalk: [
     { key: 'access_token', label: 'Access Token', required: true, placeholder: '钉钉机器人 access_token' },

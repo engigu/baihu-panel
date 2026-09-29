@@ -1052,4 +1052,7 @@ export interface TagResourcesResponse {
   resources: TagResourceItem[]
 }
 
-
+export interface SelectItemProps {
+  value: string
+  label: string
+}
