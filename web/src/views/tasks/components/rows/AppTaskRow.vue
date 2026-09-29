@@ -11,7 +11,7 @@ import { Package, Pencil, Trash2, ListTodo, Zap, ZapOff, Play, ScrollText, Loade
 import StatusDot from '@/components/StatusDot.vue'
 import type { Task, Agent } from '@/api'
 import { TASK_TYPE, TASK_TYPE_CONFIG } from '@/constants'
-import {formatDateTime} from "@/utils/date.ts";
+import { formatDateTime } from '@/utils/date'
 
 const props = defineProps<{
   task: Task
