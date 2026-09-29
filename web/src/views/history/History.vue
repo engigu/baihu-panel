@@ -18,6 +18,7 @@ import { useSiteSettings } from '@/composables/useSiteSettings'
 import TextOverflow from '@/components/TextOverflow.vue'
 import StatusDot from '@/components/StatusDot.vue'
 import { useEventBus } from '@/composables/useEventBus'
+import { formatDateTime } from '@/utils/date'
 
 const route = useRoute()
 const { pageSize } = useSiteSettings()
@@ -557,9 +558,8 @@ watch(() => route.query, (newQuery) => {
               </code>
               <span class="w-16 text-right shrink-0 text-muted-foreground text-xs">{{ formatDuration(log.duration)
                 }}</span>
-              <span v-if="!selectedLog"
-                class="w-40 text-right shrink-0 text-muted-foreground text-xs hidden md:block">{{ log.start_time ||
-                  log.created_at }}</span>
+              <span v-if="!selectedLog" class="w-40 text-right shrink-0 text-muted-foreground text-xs hidden md:block"
+                    :title="log.start_time || log.created_at">{{ formatDateTime(log.start_time || log.created_at) }}</span>
               <span class="w-10 shrink-0 flex justify-center opacity-100">
                 <Button variant="ghost" size="icon"
                   class="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"

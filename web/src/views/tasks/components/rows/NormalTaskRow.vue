@@ -15,6 +15,7 @@ import StatusDot from '@/components/StatusDot.vue'
 import TextOverflow from '@/components/TextOverflow.vue'
 import type { Task, Agent } from '@/api'
 import { AGENT_STATUS, TRIGGER_TYPE, TASK_TYPE, TASK_TYPE_CONFIG } from '@/constants'
+import { formatDateTime } from '@/utils/date'
 
 const props = defineProps<{
   task: Task
@@ -99,6 +100,7 @@ function getShortLangName(name: string): string {
       <div class="w-44 lg:w-56 shrink-0 flex flex-col justify-center gap-0.5 overflow-hidden">
         <div class="flex items-center gap-1.5 overflow-hidden">
           <span class="font-medium truncate cursor-help flex-1 min-w-0" :title="task.name">{{ task.name }}</span>
+          <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
           <span v-if="(task.source_id || '').startsWith('app:')" class="shrink-0 inline-flex items-center rounded px-1 py-px text-[9px] font-mono border bg-emerald-500/10 text-emerald-500 border-emerald-500/20 leading-none">
             应用
           </span>
@@ -111,7 +113,6 @@ function getShortLangName(name: string): string {
           >
             {{ getShortLangName(lang.name) }}{{ lang.version ? ':' + lang.version : '' }}
           </span>
-          <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
         </div>
         <div v-if="task.tags" class="flex items-center gap-1 overflow-hidden">
           <span
@@ -141,8 +142,8 @@ function getShortLangName(name: string): string {
       </div>
 
       <div class="hidden md:flex w-28 lg:w-36 shrink-0 flex-col justify-center gap-0.5 text-[11px] text-muted-foreground tabular-nums">
-        <span class="truncate">上: {{ task.last_run || '-' }}</span>
-        <span class="truncate">下: {{ task.next_run || '-' }}</span>
+        <span class="truncate" :title="task.last_run">上: {{ formatDateTime(task.last_run) || '-' }}</span>
+        <span class="truncate" :title="task.next_run">下: {{ formatDateTime(task.next_run) || '-' }}</span>
       </div>
 
       <span class="w-12 lg:w-14 flex justify-center shrink-0 cursor-pointer group" @click="$emit('toggleTask', task, !task.enabled)">

@@ -10,16 +10,7 @@ import { toast } from 'vue-sonner'
 import { useSiteSettings } from '@/composables/useSiteSettings'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { format } from 'date-fns'
-
-function formatDate(dateStr?: string) {
-  if (!dateStr) return '-'
-  try {
-    return format(new Date(dateStr), 'yyyy-MM-dd HH:mm:ss')
-  } catch {
-    return dateStr
-  }
-}
+import { formatDateTime } from '@/utils/date'
 
 const { pageSize } = useSiteSettings()
 
@@ -332,8 +323,9 @@ onMounted(() => {
             </div>
 
             <!-- Created At -->
-            <div class="flex-1 min-w-0 text-xs text-muted-foreground truncate">
-              {{ formatDate(tag.created_at) }}
+            <div class="flex-1 min-w-0 text-xs text-muted-foreground truncate"
+                 :title="tag.created_at">
+              {{ formatDateTime(tag.created_at) }}
             </div>
 
             <!-- Actions -->
@@ -404,7 +396,7 @@ onMounted(() => {
                 0 项
               </span>
             </div>
-            <div>{{ formatDate(tag.created_at) }}</div>
+            <div :title="tag.created_at">{{ formatDateTime(tag.created_at) }}</div>
           </div>
 
           <div class="grid grid-cols-2 items-center pt-2 mt-3.5 border-t border-border/40 -mx-3.5 -mb-3.5">
