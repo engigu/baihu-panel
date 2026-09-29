@@ -75,6 +75,16 @@ func TestEnvService_FormatEnvVars_Equivalence(t *testing.T) {
 			// formatEnvVars 结果（过滤所有 Secret）
 			expectedNonSec: []string{"NORMAL=hello"},
 		},
+		{
+			name: "历史未加密明文机密需纳入脱敏列表",
+			envs: []models.EnvironmentVariable{
+				{Name: "LEGACY_PLAIN", Value: "plain-legacy-secret", Type: constant.EnvTypeSecret, Enabled: boolPtr(true)},
+			},
+			// 明文机密无法解密，但仍应作为机密注入并纳入脱敏列表，避免泄露到日志
+			expectedVars:   []string{"LEGACY_PLAIN=plain-legacy-secret"},
+			expectedSecs:   []string{"plain-legacy-secret"},
+			expectedNonSec: nil,
+		},
 	}
 
 	for _, tc := range testCases {
