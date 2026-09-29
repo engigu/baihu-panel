@@ -47,6 +47,9 @@ function flattenDirs(nodes: FileNode[], depth = 0): FlatDir[] {
   const result: FlatDir[] = []
   for (const node of nodes) {
     if (!node.isDir) continue
+    if (props.modelValue?.startsWith(node.path) && props.modelValue !== node.path) {
+      expandedDirs.value.add(node.path)
+    }
     const children = node.children?.filter(c => c.isDir) || []
     result.push({
       path: node.path,
