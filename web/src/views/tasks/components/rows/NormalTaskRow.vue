@@ -99,6 +99,7 @@ function getShortLangName(name: string): string {
       <div class="w-44 lg:w-56 shrink-0 flex flex-col justify-center gap-0.5 overflow-hidden">
         <div class="flex items-center gap-1.5 overflow-hidden">
           <span class="font-medium truncate cursor-help flex-1 min-w-0" :title="task.name">{{ task.name }}</span>
+          <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
           <span v-if="(task.source_id || '').startsWith('app:')" class="shrink-0 inline-flex items-center rounded px-1 py-px text-[9px] font-mono border bg-emerald-500/10 text-emerald-500 border-emerald-500/20 leading-none">
             应用
           </span>
@@ -111,7 +112,6 @@ function getShortLangName(name: string): string {
           >
             {{ getShortLangName(lang.name) }}{{ lang.version ? ':' + lang.version : '' }}
           </span>
-          <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
         </div>
         <div v-if="task.tags" class="flex items-center gap-1 overflow-hidden">
           <span
