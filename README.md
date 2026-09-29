@@ -782,15 +782,21 @@ location /baihu/ {
 
 ## 贡献者 ✨
 
-感谢所有为白虎面板做出贡献的开发者们！欢迎提交 Issue 和 Pull Request，大家的 Star 和贡献是持续更新的动力！
+感谢所有为白虎面板做出贡献的开发者们！大家的 Star 和 Pull Request 是项目持续迭代的动力！
 
-<a href="https://github.com/engigu/baihu-panel/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=engigu/baihu-panel" alt="Contributors" />
-</a>
+<p align="center">
+  <a href="https://github.com/engigu/baihu-panel/graphs/contributors">
+    <img src="https://contrib.rocks/image?repo=engigu/baihu-panel" alt="Contributors" />
+  </a>
+</p>
 
-<br/>
+## 社区交流 💬
 
-<img src="https://f.pz.al/pzal/2026/01/07/83be93eb4e2a3.png" width="200" />
+欢迎加入白虎面板交流社区，与开发者和用户共同探讨、交流经验与反馈建议！
+
+| 📢 社区反馈与指引 | 👥 QQ 交流群 |
+| :--- | :---: |
+| <ul><li>**问题反馈 (Bug Report)**：如果在使用中遇到问题，欢迎提交 <a href="https://github.com/engigu/baihu-panel/issues">GitHub Issues</a></li><li>**功能建议 (Feature Request)**：有新的想法或需求，随时发起讨论</li><li>**代码贡献 (Pull Request)**：非常欢迎提交 PR 参与共建</li><li>**使用文档 (Documentation)**：遇到配置与使用疑问可查阅 <a href="https://engigu.github.io/baihu-panel/">官方文档中心</a></li></ul> | <img src="https://f.pz.al/pzal/2026/01/07/83be93eb4e2a3.png" width="180" alt="baihuPanel交流群" /><br/><b>QQ 群号：468870216</b> |
 
 ## 鸣谢
 
