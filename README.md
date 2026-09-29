@@ -2,6 +2,7 @@
 
 [![Hits](https://hits.sh/github.com/engigu/baihu-panel.svg?view=today-total)](https://hits.sh/github.com/engigu/baihu-panel/)
 ![Version](https://img.shields.io/github/v/tag/engigu/baihu-panel?color=44cc11&label=docker%20version&sort=semver)
+[![Contributors](https://img.shields.io/github/contributors/engigu/baihu-panel?color=blue&label=contributors)](https://github.com/engigu/baihu-panel/graphs/contributors)
 ![Image Size](https://ghcr-badge.egpl.dev/engigu/baihu/size?color=%2344cc11&tag=latest&label=docker+image&trim=)
 ![Image pulls](https://img.shields.io/badge/dynamic/json?url=https://ghcr-badge.elias.eu.org/api/engigu/baihu-panel/baihu&query=downloadCount&style=flat&label=docker%20pulls&color=44cc11)
 
@@ -779,9 +780,15 @@ location /baihu/ {
 2. **安全责任自负**：本项目作为基础调度工具，**无法且不保证任何被执行任务的安全性**。因运行不安全、违规脚本带来的一切数据泄露、系统损坏、财产损失及法律责任等后果，均由使用者自行承担，与本项目及开发者无关。
 3. **软件按“原样”提供**：本项目为业余开源开发，按“原样”提供，**不保证不存在 Bug 或漏洞**。开发者不对因使用本项目而引起的任何直接或间接损失负责。
 
-## 贡献 
+## 贡献者 ✨
 
-欢迎提交 Issue 和 Pull Request！如果觉得本项目对你有帮助，不求大富大贵，只求顺手点个 Star，大家的 Star 是我持续更新的动力！
+感谢所有为白虎面板做出贡献的开发者们！欢迎提交 Issue 和 Pull Request，大家的 Star 和贡献是持续更新的动力！
+
+<a href="https://github.com/engigu/baihu-panel/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=engigu/baihu-panel" alt="Contributors" />
+</a>
+
+<br/>
 
 <img src="https://f.pz.al/pzal/2026/01/07/83be93eb4e2a3.png" width="200" />
 
