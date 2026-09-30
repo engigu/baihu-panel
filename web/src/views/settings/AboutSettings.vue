@@ -1,129 +1,313 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ExternalLink, TriangleAlert, History } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
+import {
+  ExternalLink,
+  TriangleAlert,
+  History,
+  Activity,
+  Cpu,
+  Clock,
+  Layers,
+  Sparkles,
+  BookOpen,
+  GitBranch,
+  ShieldCheck
+} from 'lucide-vue-next'
 import { api, type AboutInfo } from '@/api'
 import { formatDateTime } from '@/utils/date'
 
 const aboutInfo = ref<AboutInfo | null>(null)
 
 const techStack = ['Golang', 'Vue 3', 'TypeScript', 'Vite', 'Tailwind CSS', 'Shadcn/ui']
-const features = ['脚本管理', '定时任务', '多语言支持', '依赖管理', '在线终端', '执行日志', '环境变量', '消息推送', '容器部署', '备份恢复']
+const features = [
+  '脚本管理',
+  '定时任务',
+  '多语言支持',
+  '依赖管理',
+  '在线终端',
+  '执行日志',
+  '环境变量',
+  '消息推送',
+  '容器部署',
+  '备份恢复'
+]
+
+// 解析内存数字与单位
+const parsedMemory = computed(() => {
+  const val = aboutInfo.value?.mem_usage
+  if (!val) return { num: '-', unit: 'MB' }
+  const match = val.trim().match(/^([\d.]+)\s*([a-zA-Z]+)?$/)
+  if (match) {
+    return { num: match[1], unit: match[2] || 'MB' }
+  }
+  return { num: val, unit: '' }
+})
 
 async function loadAbout() {
   try {
     aboutInfo.value = await api.settings.getAbout()
-  } catch { }
+  } catch {}
 }
 
 onMounted(loadAbout)
 </script>
 
 <template>
-  <div>
-    <!-- 站点关于 -->
-    <div class="mb-8 flex flex-col lg:flex-row justify-between items-start gap-4">
-      <div class="flex-1 min-w-0 w-full">
-        <div class="flex items-start justify-between mb-1.5 gap-4">
-          <h3 class="text-xl font-bold">白虎面板 (Baihu Panel)</h3>
-          <a href="https://engigu.github.io/baihu-panel/guide/changelog.html" target="_blank"
-            class="lg:hidden inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-primary/20 bg-primary/5 text-primary text-[10px] sm:text-xs font-semibold hover:bg-primary/10 transition-all whitespace-nowrap shadow-sm">
-            <History class="h-3 w-3" />
-            更新日志
-          </a>
-        </div>
-        <p class="text-sm text-muted-foreground leading-relaxed">极致轻量、高性能的自动化任务调度平台。深度集成 Mise 运行时管理，支持多语言环境动态切换与全自动依赖管理。</p>
-      </div>
-      <a href="https://engigu.github.io/baihu-panel/guide/changelog.html" target="_blank"
-        class="hidden lg:inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-primary/20 bg-primary/5 text-primary text-xs font-semibold hover:bg-primary/10 transition-all whitespace-nowrap shadow-sm shadow-primary/5">
-        <History class="h-3.5 w-3.5" />
-        查看更新日志
-      </a>
-    </div>
+  <div class="space-y-6">
+    <!-- 左右双列平衡卡片 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+      <!-- 左列卡片：白虎面板与技术生态 -->
+      <Card class="shadow-sm flex flex-col justify-between pt-4.5 pb-5">
+        <CardHeader class="pb-2.5 pt-0 px-5">
+          <div class="flex items-start justify-between gap-4">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <CardTitle class="text-lg font-bold">白虎面板</CardTitle>
+                <span class="text-xs text-muted-foreground">Baihu Panel</span>
+                <Badge
+                  variant="secondary"
+                  class="font-mono text-[11px] px-1.5 py-0 bg-primary/10 text-primary border-primary/20"
+                >
+                  {{ aboutInfo?.version || 'dev' }}
+                </Badge>
+              </div>
+              <CardDescription class="text-xs leading-relaxed pt-0.5">
+                极致轻量、高性能的自动化任务调度平台。深度集成 Mise 运行时管理，支持多语言环境动态切换与全自动依赖管理。
+              </CardDescription>
+            </div>
 
-    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-5">
-      <!-- 左侧：技术栈和功能特性 -->
-      <div class="space-y-5">
-        <div>
-          <h4 class="text-sm font-medium mb-2">技术栈</h4>
-          <div class="flex flex-wrap gap-1.5">
-            <Badge v-for="tech in techStack" :key="tech" class="text-xs bg-primary/15 text-primary border-0">{{ tech }}
-            </Badge>
+            <a
+              href="https://engigu.github.io/baihu-panel/guide/changelog.html"
+              target="_blank"
+              class="shrink-0"
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                class="h-7.5 px-2.5 rounded-full border-primary/20 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/10 gap-1.5 shadow-none"
+              >
+                <History class="w-3.5 h-3.5" />
+                <span>更新日志</span>
+              </Button>
+            </a>
           </div>
-        </div>
+        </CardHeader>
 
-        <div>
-          <h4 class="text-sm font-medium mb-2">功能特性</h4>
-          <div class="flex flex-wrap gap-1.5">
-            <Badge v-for="feature in features" :key="feature" class="text-xs bg-accent text-accent-foreground">{{
-              feature }}</Badge>
-          </div>
-        </div>
-      </div>
+        <CardContent class="flex-1 flex flex-col justify-between px-5 pb-0 pt-0">
+          <div class="space-y-2.5">
+            <!-- 技术栈底座 -->
+            <div class="space-y-1.5">
+              <div class="text-xs font-medium text-foreground flex items-center gap-1.5">
+                <Sparkles class="w-3.5 h-3.5 text-primary" />
+                <span>技术底座</span>
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                <Badge
+                  v-for="tech in techStack"
+                  :key="tech"
+                  class="text-xs bg-primary/15 text-primary border-0 font-normal px-2.5 py-0.5"
+                >
+                  {{ tech }}
+                </Badge>
+              </div>
+            </div>
 
-      <!-- 右侧：系统信息 -->
-      <div>
-        <h4 class="text-sm font-medium mb-2">系统信息</h4>
-        <div class="space-y-2">
-          <div class="flex justify-between items-center">
-            <span class="text-muted-foreground text-sm">当前版本:</span>
-            <div class="flex items-center gap-1.5">
-              <span class="text-muted-foreground text-sm">{{ aboutInfo?.version || 'dev' }}</span>
-              <Badge v-if="aboutInfo?.remote_version && aboutInfo.remote_version === aboutInfo.version" variant="secondary"
-                class="text-[10px] h-4 px-1 bg-green-500/10 text-green-600 border-green-500/20 shadow-none">
-                最新版本
-              </Badge>
+            <!-- 核心业务特性 -->
+            <div class="space-y-1.5">
+              <div class="text-xs font-medium text-foreground flex items-center gap-1.5">
+                <Layers class="w-3.5 h-3.5 text-muted-foreground" />
+                <span>核心能力</span>
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                <Badge
+                  v-for="feature in features"
+                  :key="feature"
+                  class="text-xs bg-accent text-accent-foreground border-0 font-normal px-2.5 py-0.5"
+                >
+                  {{ feature }}
+                </Badge>
+              </div>
             </div>
           </div>
-          <div v-if="aboutInfo?.remote_version && aboutInfo.remote_version !== aboutInfo.version"
-            class="flex justify-between items-center">
-            <span class="text-muted-foreground text-sm">最新版本:</span>
-            <span class="text-muted-foreground text-sm">{{ aboutInfo.remote_version }}</span>
+
+          <!-- 卡片底部免责声明 -->
+          <div class="mt-4 p-3 rounded-xl bg-muted/30 border border-yellow-500/20 space-y-1.5">
+            <div class="text-xs font-semibold text-yellow-600 dark:text-yellow-500 flex items-center gap-1.5">
+              <TriangleAlert class="h-3.5 w-3.5 shrink-0" />
+              <span>免责声明</span>
+            </div>
+            <div class="space-y-1 text-xs text-muted-foreground leading-relaxed">
+              <p>本项目不提供、不内置任何具有实际业务逻辑的第三方脚本。</p>
+              <p><strong>请勿轻易执行任何来源不明或不可信的外部脚本。</strong></p>
+              <p>所有脚本及代码均需由用户自行添加或配置，用户须自行审核以确保其安全性。本项目仅作为基础调度工具，<strong class="text-foreground/70">无法且不保证任何被执行任务的安全性</strong>。</p>
+              <p>本项目为业余开源开发，按“原样”提供，不保证不存在 Bug 或漏洞。开发者不对因使用本项目运行不安全脚本带来的数据泄露、系统损坏及法律责任等后果负责。</p>
+            </div>
           </div>
-          <div class="flex justify-between items-center">
-            <span class="text-muted-foreground text-sm">构建时间:</span>
-            <span class="text-muted-foreground text-sm"
-                  :title="aboutInfo?.build_time || ''"
-            >{{ aboutInfo?.build_time ? formatDateTime(aboutInfo?.build_time) : '-' }}</span>
+        </CardContent>
+      </Card>
+
+      <!-- 右列卡片：系统运行状态与环境指标 -->
+      <Card class="shadow-sm flex flex-col justify-between pt-4.5 pb-5">
+        <CardHeader class="pb-2.5 pt-0 px-5">
+          <div class="flex items-center justify-between">
+            <div class="space-y-1">
+              <CardTitle class="text-base flex items-center gap-2">
+                <Activity class="w-4 h-4 text-primary" />
+                <span>系统状态与指标</span>
+              </CardTitle>
+              <CardDescription class="text-xs">当前宿主环境资源开销与持续运行状态</CardDescription>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <a
+                href="https://engigu.github.io/baihu-panel/"
+                target="_blank"
+                class="inline-flex"
+              >
+                <Button variant="ghost" size="sm" class="h-7.5 px-2 text-xs text-muted-foreground hover:text-foreground gap-1">
+                  <BookOpen class="w-3.5 h-3.5" />
+                  <span>文档</span>
+                </Button>
+              </a>
+              <a
+                href="https://github.com/engigu/baihu-panel/"
+                target="_blank"
+                class="inline-flex"
+              >
+                <Button variant="ghost" size="sm" class="h-7.5 px-2 text-xs text-muted-foreground hover:text-foreground gap-1">
+                  <ExternalLink class="w-3.5 h-3.5" />
+                  <span>GitHub</span>
+                </Button>
+              </a>
+            </div>
           </div>
-          <div class="flex justify-between items-center">
-            <span class="text-muted-foreground text-sm">内存使用:</span>
-            <span class="text-muted-foreground text-sm">{{ aboutInfo?.mem_usage || '-' }}</span>
+        </CardHeader>
+
+        <CardContent class="flex-1 flex flex-col justify-between px-5 pb-0 pt-0">
+          <div class="space-y-2.5">
+            <!-- 2x2 规整指标网格（采用 Inter 专属数字排印与精致微卡片样式） -->
+            <div class="grid grid-cols-2 gap-2.5">
+              <!-- 内存开销 -->
+              <div class="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-1 group">
+                <div class="text-xs text-muted-foreground flex items-center justify-between font-medium">
+                  <span>内存占用</span>
+                  <div class="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center text-muted-foreground/70 group-hover:text-primary transition-colors">
+                    <Cpu class="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div class="flex items-baseline gap-1 my-0.5">
+                  <span class="text-2xl font-bold tracking-tight text-foreground font-inter">
+                    {{ parsedMemory.num }}
+                  </span>
+                  <span class="text-xs font-semibold text-muted-foreground/75 font-inter">
+                    {{ parsedMemory.unit }}
+                  </span>
+                </div>
+                <span class="text-[10px] text-muted-foreground">常驻轻量内存</span>
+              </div>
+
+              <!-- 活跃协程 -->
+              <div class="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-1 group">
+                <div class="text-xs text-muted-foreground flex items-center justify-between font-medium">
+                  <span>活跃协程</span>
+                  <div class="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center text-muted-foreground/70 group-hover:text-primary transition-colors">
+                    <Layers class="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div class="flex items-baseline gap-1 my-0.5">
+                  <span class="text-2xl font-bold tracking-tight text-foreground font-inter">
+                    {{ aboutInfo?.goroutines ?? '-' }}
+                  </span>
+                  <span class="text-xs font-medium text-muted-foreground/75">个</span>
+                </div>
+                <span class="text-[10px] text-muted-foreground">高效轻量并发</span>
+              </div>
+
+              <!-- 连续运行时长 -->
+              <div class="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-1 group">
+                <div class="text-xs text-muted-foreground flex items-center justify-between font-medium">
+                  <span>运行时间</span>
+                  <div class="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center text-muted-foreground/70 group-hover:text-primary transition-colors">
+                    <Clock class="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div class="my-0.5 text-[15px] font-bold tracking-tight text-foreground truncate font-inter" :title="aboutInfo?.uptime || ''">
+                  {{ aboutInfo?.uptime || '-' }}
+                </div>
+                <span class="text-[10px] text-muted-foreground">持续稳定守护</span>
+              </div>
+
+              <!-- 当前版本 / 远端对比 -->
+              <div class="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-1 group">
+                <div class="text-xs text-muted-foreground flex items-center justify-between font-medium">
+                  <span>当前版本</span>
+                  <span class="relative flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                </div>
+                <div class="my-0.5 text-2xl font-bold tracking-tight text-foreground font-inter truncate">
+                  {{ aboutInfo?.version || 'dev' }}
+                </div>
+                <div class="text-[10px] truncate">
+                  <span
+                    v-if="aboutInfo?.remote_version && aboutInfo.remote_version !== aboutInfo.version"
+                    class="text-primary font-medium"
+                  >
+                    新版可用: {{ aboutInfo.remote_version }}
+                  </span>
+                  <span v-else class="text-muted-foreground">已是最新发布版</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 构建时间条 -->
+            <div class="p-2.5 rounded-xl border border-border/60 bg-muted/20 flex items-center justify-between text-xs text-muted-foreground">
+              <span class="flex items-center gap-1.5">
+                <GitBranch class="w-3.5 h-3.5 text-muted-foreground/70" />
+                <span>构建时间戳</span>
+              </span>
+              <span class="font-inter font-medium text-foreground/90">
+                {{ aboutInfo?.build_time ? formatDateTime(aboutInfo.build_time) : 'unknown' }}
+              </span>
+            </div>
           </div>
-          <div class="flex justify-between items-center">
-            <span class="text-muted-foreground text-sm">协程数量:</span>
-            <span class="text-muted-foreground text-sm">{{ aboutInfo?.goroutines || '-' }}</span>
+
+          <!-- 右卡片底部架构说明条 -->
+          <div class="mt-4 p-3 rounded-xl bg-muted/20 border border-border/60 text-xs text-muted-foreground leading-relaxed flex items-start gap-2.5">
+            <ShieldCheck class="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+            <div>
+              <span class="font-medium text-foreground">原生无侵入架构：</span>
+              <span>Go 纯原生单文件编译，无需笨重外部数据库，冷启动毫秒级，平稳胜任高频定时调度。</span>
+            </div>
           </div>
-          <div class="flex justify-between items-center">
-            <span class="text-muted-foreground text-sm">运行时间:</span>
-            <span class="text-muted-foreground text-sm">{{ aboutInfo?.uptime || '-' }}</span>
-          </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
 
-    <div class="mt-8 p-4 bg-muted/40 rounded-lg border border-yellow-500/20">
-      <h4 class="text-sm font-semibold text-yellow-600 dark:text-yellow-500 mb-2 flex items-center gap-1.5">
-        <TriangleAlert class="h-4 w-4" />
-        免责声明
-      </h4>
-      <div class="space-y-1.5 text-xs text-muted-foreground">
-        <p>本项目不提供、不内置任何具有实际业务逻辑的第三方脚本。</p>
-        <p><strong>请勿轻易执行任何来源不明或不可信的外部脚本。</strong></p>
-        <p>所有脚本及代码均需由用户自行添加或配置，用户须自行审核以确保其安全性。本项目仅作为基础调度工具，<strong class="text-foreground/70">无法且不保证任何被执行任务的安全性</strong>。</p>
-        <p>本项目为业余开源开发，按“原样”提供，不保证不存在 Bug 或漏洞。开发者不对因使用本项目运行不安全脚本带来的数据泄露、系统损坏及法律责任等后果负责。</p>
-      </div>
-    </div>
-
-    <!-- 底部：版权和链接 -->
-    <div class="mt-6 pt-4 border-t flex items-center justify-center gap-2 text-[10px] sm:text-sm text-muted-foreground whitespace-nowrap overflow-hidden">
-      <span>© 2025 - Present 保留所有权利。</span>
+    <!-- 底部版权声明 -->
+    <div class="pt-1 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+      <span>© 2025 - Present Baihu Panel. 保留所有权利。</span>
       <span class="opacity-20">|</span>
-      <a href="https://github.com/engigu/baihu-panel/" target="_blank"
-        class="inline-flex items-center gap-1 text-primary hover:underline">
-        <ExternalLink class="h-3 w-3" />
-        GitHub
+      <a
+        href="https://github.com/engigu/baihu-panel/"
+        target="_blank"
+        class="inline-flex items-center gap-1 text-primary hover:underline"
+      >
+        <ExternalLink class="w-3 h-3" />
+        GitHub 仓库
       </a>
     </div>
   </div>
 </template>
+
+<style scoped>
+.font-inter {
+  font-family: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  font-feature-settings: "cv05", "cv08", "cv11", "ss01", "ss03", "tnum" !important;
+  font-optical-sizing: auto;
+}
+</style>

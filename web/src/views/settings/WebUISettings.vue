@@ -1,17 +1,31 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { api, type WebUI } from '@/api'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { CheckCircle2, Trash2, MonitorPlay } from 'lucide-vue-next'
+import {
+  CheckCircle2,
+  Trash2,
+  MonitorPlay,
+  Palette,
+  UploadCloud,
+  ExternalLink,
+  Terminal,
+  Copy,
+  Check,
+  User,
+  Sparkles
+} from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-
 
 const webuis = ref<WebUI[]>([])
 const activeWebUI = ref<string>('default')
 const loading = ref(true)
 const uploading = ref(false)
+const activatingName = ref<string | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
+const copied = ref(false)
 
 // Pagination
 const currentPage = ref(1)
@@ -45,6 +59,22 @@ const handleFileUpload = async (event: Event) => {
 
   const file = target.files[0]
   if (!file) return
+  await processFile(file)
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
+
+const handleDrop = async (e: DragEvent) => {
+  e.preventDefault()
+  if (uploading.value) return
+  const file = e.dataTransfer?.files?.[0]
+  if (file) {
+    await processFile(file)
+  }
+}
+
+const processFile = async (file: File) => {
   const nameLower = file.name.toLowerCase()
   if (!nameLower.endsWith('.zip') && !nameLower.endsWith('.tar.gz') && !nameLower.endsWith('.tgz')) {
     toast.error('仅支持上传 .zip 或 .tar.gz 格式的前端包')
@@ -54,15 +84,12 @@ const handleFileUpload = async (event: Event) => {
   uploading.value = true
   try {
     await api.webui.upload(file)
-    toast.success('上传成功', { description: '新的前端包已安装' })
+    toast.success('上传成功', { description: '新的前端包已安装至系统' })
     await loadData()
   } catch (err: any) {
     toast.error('上传失败', { description: err.message })
   } finally {
     uploading.value = false
-    if (fileInput.value) {
-      fileInput.value.value = ''
-    }
   }
 }
 
@@ -71,38 +98,48 @@ const triggerUpload = () => {
 }
 
 const activateWebUI = async (name: string) => {
-  if (name === activeWebUI.value) return
+  if (name === activeWebUI.value || activatingName.value) return
   
+  activatingName.value = name
   try {
     await api.webui.setActive(name)
-    toast.success('切换成功', { description: '正在重载前端界面...' })
+    toast.success('前端界面切换成功', { description: '页面即将自动重载...' })
     activeWebUI.value = name
-    // Reload page after a short delay to apply the new UI
     setTimeout(() => {
       window.location.reload()
     }, 1000)
   } catch (err: any) {
     toast.error('切换失败', { description: err.message })
+  } finally {
+    activatingName.value = null
   }
 }
 
 const deleteWebUI = async (name: string) => {
-  if (!confirm(`确定要删除前端包 "${name}" 吗？此操作不可恢复。`)) return
+  if (!confirm(`确定要彻底删除前端包 "${name}" 吗？此操作不可恢复。`)) return
   
   try {
     await api.webui.delete(name)
     toast.success('删除成功')
     
-    // 检查删除后当前页是否为空
     if (paginatedWebuis.value.length === 1 && currentPage.value > 1) {
       currentPage.value--
     }
-    
     await loadData()
   } catch (err: any) {
     toast.error('删除失败', { description: err.message })
   }
 }
+
+const copyResetCommand = () => {
+  navigator.clipboard.writeText('baihu webui reset')
+  copied.value = true
+  toast.success('重置命令已复制到剪贴板')
+  setTimeout(() => {
+    copied.value = false
+  }, 2000)
+}
+
 defineExpose({
   triggerUpload,
   uploading
@@ -114,150 +151,236 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-4">
-    <!-- Warning Tip -->
-    <div class="rounded-md bg-yellow-500/10 border border-yellow-500/20 p-2.5 text-[10px] text-yellow-600 dark:text-yellow-400 leading-relaxed mt-2">
-      <strong>风险提示：</strong>自定义前端可能导致界面无法访问。如果不慎应用了错误或不兼容的包导致白屏，请进入终端执行 <code class="bg-yellow-500/20 px-1 py-0.5 rounded mx-0.5 font-mono">baihu webui reset</code> 一键恢复默认内置界面。
-    </div>
+  <div class="space-y-6">
+    <!-- 顶部概览与应急控制台 Card -->
+    <Card class="shadow-sm border-border/80">
+      <CardHeader class="pb-3 pt-5 px-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2.5 flex-wrap">
+              <CardTitle class="text-lg font-bold flex items-center gap-2">
+                <Palette class="w-4 h-4 text-primary" />
+                <span>自定义前端包 (WebUI)</span>
+              </CardTitle>
+              <a
+                href="https://engigu.github.io/baihu-panel/guide/webui"
+                target="_blank"
+                class="inline-flex items-center gap-1 text-xs text-primary hover:underline font-normal"
+              >
+                <span>开发规范文档</span>
+                <ExternalLink class="w-3 h-3" />
+              </a>
+            </div>
+            <CardDescription class="text-xs leading-relaxed pt-0.5">
+              完全接管系统控制台渲染，支持加载社区或编译自定义的前端静态资源包。
+            </CardDescription>
+          </div>
 
-    <!-- Hidden file input for uploading -->
-    <input 
-      type="file" 
-      ref="fileInput" 
-      class="hidden" 
-      accept=".zip,.tar.gz,.tgz" 
-      @change="handleFileUpload" 
-    />
+          <!-- 上传操作按钮 -->
+          <div class="shrink-0 flex items-center gap-2">
+            <input 
+              type="file" 
+              ref="fileInput" 
+              class="hidden" 
+              accept=".zip,.tar.gz,.tgz" 
+              @change="handleFileUpload" 
+            />
+            <Button 
+              @click="triggerUpload" 
+              :disabled="uploading" 
+              size="sm" 
+              class="h-8.5 px-3.5 text-xs font-medium gap-1.5 shadow-sm"
+              title="上传前端静态资源包"
+            >
+              <template v-if="uploading">
+                <svg class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>正在上传解压...</span>
+              </template>
+              <template v-else>
+                <UploadCloud class="w-3.5 h-3.5" />
+                <span>上传前端资源包</span>
+              </template>
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
 
-    <!-- WebUI Table / Custom List Layout -->
-    <div class="rounded-lg border bg-card overflow-hidden">
-      <!-- 表头 (仅在大屏显示) -->
-      <div class="hidden sm:flex items-center gap-4 px-4 py-1.5 border-b bg-muted/20 text-xs text-muted-foreground font-medium">
-        <span class="w-32 shrink-0 pl-1">名称</span>
-        <span class="flex-1 min-w-0">描述</span>
-        <span class="w-20 shrink-0 text-center">版本</span>
-        <span class="w-20 shrink-0">作者</span>
-        <span class="w-20 shrink-0 text-center">状态</span>
-        <span class="w-24 shrink-0 text-right pr-1">操作</span>
+      <!-- 应急恢复终端救生微条 -->
+      <CardContent class="px-5 pb-5 pt-1">
+        <div class="p-3 rounded-xl bg-muted/30 border border-border/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-2 text-muted-foreground">
+            <Terminal class="w-4 h-4 text-amber-500 shrink-0" />
+            <span>防白屏救生：若不慎应用异常前端包导致页面白屏，可在服务器终端执行一键重置：</span>
+          </div>
+          <div class="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            <code class="px-2.5 py-1 rounded-md bg-background/80 border border-border/80 font-mono text-[11px] text-foreground font-semibold">
+              baihu webui reset
+            </code>
+            <Button
+              variant="outline"
+              size="sm"
+              class="h-7 px-2 text-[11px] gap-1 hover:bg-accent"
+              @click="copyResetCommand"
+              title="复制重置命令"
+            >
+              <Check v-if="copied" class="w-3 h-3 text-emerald-500" />
+              <Copy v-else class="w-3 h-3" />
+              <span>{{ copied ? '已复制' : '复制' }}</span>
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- 前端包画廊网格 (Theme Grid) -->
+    <div class="space-y-4">
+      <div class="flex items-center justify-between px-0.5">
+        <span class="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+          <Sparkles class="w-3.5 h-3.5 text-primary" />
+          <span>可用前端界面包 ({{ webuis.length }})</span>
+        </span>
       </div>
 
-      <!-- 列表内容 -->
-      <div class="divide-y text-sm">
-        <template v-if="loading">
-          <!-- Skeleton rows -->
-          <div v-for="i in 3" :key="i" class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 px-4 py-3 sm:py-2 hover:bg-muted/30 transition-colors">
-            <div class="w-full sm:w-32 shrink-0 sm:pl-1 flex justify-between"><div class="h-4 bg-muted rounded w-20 animate-pulse"></div></div>
-            <div class="w-full sm:flex-1 min-w-0"><div class="h-4 bg-muted rounded w-full animate-pulse"></div></div>
-            <div class="hidden sm:block w-20 shrink-0"><div class="h-4 bg-muted rounded w-10 mx-auto animate-pulse"></div></div>
-            <div class="hidden sm:block w-20 shrink-0"><div class="h-4 bg-muted rounded w-12 animate-pulse"></div></div>
-            <div class="hidden sm:block w-20 shrink-0"><div class="h-4 bg-muted rounded w-12 mx-auto animate-pulse"></div></div>
-            <div class="w-full sm:w-24 shrink-0 sm:pr-1 flex justify-end"><div class="h-7 bg-muted rounded w-16 animate-pulse"></div></div>
-          </div>
-        </template>
-        <template v-else>
-          <div v-if="webuis.length === 0" class="text-center py-12 text-muted-foreground text-xs">
-            暂无前端资源包
-          </div>
-          <div v-for="item in paginatedWebuis" :key="item.name"
-            class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 py-3 sm:py-1.5 hover:bg-muted/30 transition-colors">
-            <!-- 名称与移动端状态 -->
-            <div class="w-full sm:w-32 shrink-0 sm:pl-1 font-medium flex items-center justify-between sm:justify-start gap-2 overflow-hidden">
-              <div class="flex items-center gap-2 overflow-hidden">
-                <MonitorPlay class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                <span class="truncate" :title="item.name">{{ item.name }}</span>
-              </div>
-              <!-- 移动端状态展示 -->
-              <div class="sm:hidden shrink-0 flex items-center">
-                <Badge v-if="activeWebUI === item.name" variant="default" class="bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 font-normal py-0 h-5 text-[10px]">
-                  <CheckCircle2 class="w-3 h-3 mr-1" /> 使用中
-                </Badge>
-              </div>
-            </div>
-            <!-- 描述 -->
-            <div class="w-full sm:flex-1 min-w-0 text-muted-foreground text-xs truncate" :title="item.description || '无描述'">
-              {{ item.description || '无描述' }}
-            </div>
-            <!-- 移动端：版本与作者；PC端：分成两列 -->
-            <div class="flex items-center justify-between sm:contents mt-1 sm:mt-0 text-xs text-muted-foreground">
-              <div class="flex items-center gap-4 sm:contents">
-                <div class="flex items-center gap-1 sm:w-20 shrink-0 sm:justify-center">
-                  <span class="sm:hidden text-muted-foreground/70">版本:</span>
-                  <Badge variant="outline" class="font-mono text-[9px] px-1 py-0 h-4">v{{ item.version || '1.0' }}</Badge>
-                </div>
-                <div class="flex items-center gap-1 sm:w-20 shrink-0 truncate" :title="item.author || 'Unknown'">
-                  <span class="sm:hidden text-muted-foreground/70">作者:</span>
-                  <span class="truncate">{{ item.author || 'Unknown' }}</span>
-                </div>
-              </div>
-              
-              <!-- 移动端的操作按钮（放在这里与版本同行） -->
-              <div class="sm:hidden flex items-center gap-2">
-                <Button 
-                  v-if="activeWebUI !== item.name" 
-                  variant="outline" 
-                  size="sm"
-                  class="h-6 text-[10px] px-2 py-0"
-                  @click="activateWebUI(item.name)"
+      <!-- 加载中骨架屏 -->
+      <div v-if="loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4.5">
+        <div v-for="i in 3" :key="i" class="p-5 rounded-xl border border-border/60 bg-muted/20 h-44 animate-pulse space-y-3">
+          <div class="h-5 bg-muted rounded w-28"></div>
+          <div class="h-4 bg-muted rounded w-3/4"></div>
+          <div class="h-8 bg-muted rounded w-full mt-6"></div>
+        </div>
+      </div>
+
+      <!-- 实际卡片网格 -->
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4.5">
+        <!-- 主题包卡片 -->
+        <Card
+          v-for="item in paginatedWebuis"
+          :key="item.name"
+          :class="[
+            'shadow-sm transition-all rounded-xl flex flex-col justify-between p-4.5 border',
+            activeWebUI === item.name
+              ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/20'
+              : 'border-border/70 hover:border-border hover:shadow-md bg-card'
+          ]"
+        >
+          <div class="space-y-3">
+            <!-- 头部：图标、名称、版本、激活徽章 -->
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <div
+                  :class="[
+                    'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border',
+                    item.name === 'default'
+                      ? 'bg-primary/10 border-primary/20 text-primary'
+                      : 'bg-muted/50 border-border text-foreground/80'
+                  ]"
                 >
-                  启用
-                </Button>
-                <Button 
-                  v-if="item.name !== 'default' && activeWebUI !== item.name" 
-                  variant="ghost" 
-                  size="icon" 
-                  class="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
-                  @click="deleteWebUI(item.name)"
-                >
-                  <Trash2 class="w-3 h-3" />
-                </Button>
+                  <MonitorPlay v-if="item.name === 'default'" class="w-4 h-4" />
+                  <Palette v-else class="w-4 h-4" />
+                </div>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-bold text-sm text-foreground truncate" :title="item.name">
+                      {{ item.name }}
+                    </span>
+                    <Badge variant="outline" class="font-mono text-[9px] px-1 py-0 h-4 border-border/80 shrink-0">
+                      v{{ item.version || '1.0' }}
+                    </Badge>
+                  </div>
+                  <div class="text-[11px] text-muted-foreground flex items-center gap-1 pt-0.5 truncate">
+                    <User class="w-3 h-3 shrink-0" />
+                    <span class="truncate">{{ item.author || 'Baihu' }}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-            <!-- PC端状态 -->
-            <div class="hidden sm:flex w-20 shrink-0 justify-center">
-              <Badge v-if="activeWebUI === item.name" variant="default" class="bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 font-normal py-0 h-5 text-[10px]">
-                <CheckCircle2 class="w-3 h-3 mr-1" /> 使用中
+
+              <!-- 生效指示徽标 -->
+              <Badge
+                v-if="activeWebUI === item.name"
+                class="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px] px-1.5 py-0.5 font-normal shadow-none shrink-0 flex items-center gap-1"
+              >
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>当前使用</span>
               </Badge>
-              <span v-else class="text-muted-foreground text-xs">-</span>
             </div>
-            <!-- PC端操作 -->
-            <div class="hidden sm:flex w-24 shrink-0 pr-1 justify-end items-center gap-2">
-              <Button 
-                v-if="activeWebUI !== item.name" 
-                variant="outline" 
-                size="sm"
-                class="h-7 text-xs px-2 py-0"
-                @click="activateWebUI(item.name)"
-              >
-                启用
-              </Button>
-              <Button 
-                v-else 
-                variant="outline" 
-                disabled 
-                size="sm"
-                class="h-7 text-xs px-2 py-0 opacity-50"
-              >
-                已激活
-              </Button>
-              
-              <Button 
-                v-if="item.name !== 'default' && activeWebUI !== item.name" 
-                variant="ghost" 
-                size="icon" 
-                class="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+
+            <!-- 描述文字 -->
+            <p class="text-xs text-muted-foreground line-clamp-2 leading-relaxed min-h-[2.25rem]">
+              {{ item.description || '无详细描述说明' }}
+            </p>
+          </div>
+
+          <!-- 底部操作栏 -->
+          <div class="pt-4 border-t border-border/50 flex items-center justify-between gap-2 mt-2">
+            <div class="text-[11px] text-muted-foreground">
+              <span v-if="item.name === 'default'" class="text-muted-foreground/70">系统内置</span>
+              <span v-else class="text-muted-foreground/70">自定义包</span>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <!-- 删除按钮（仅非内置且非当前激活的主题可删除） -->
+              <Button
+                v-if="item.name !== 'default' && activeWebUI !== item.name"
+                variant="ghost"
+                size="icon"
+                class="h-7.5 w-7.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                 @click="deleteWebUI(item.name)"
-                title="删除此包"
+                title="删除此前端包"
               >
                 <Trash2 class="w-3.5 h-3.5" />
               </Button>
-              <div v-else class="w-7 shrink-0"></div>
+
+              <!-- 切换/激活按钮 -->
+              <Button
+                v-if="activeWebUI !== item.name"
+                variant="outline"
+                size="sm"
+                class="h-7.5 px-3 text-xs font-medium hover:bg-primary hover:text-primary-foreground transition-all"
+                :disabled="activatingName === item.name"
+                @click="activateWebUI(item.name)"
+              >
+                {{ activatingName === item.name ? '切换中...' : '启用' }}
+              </Button>
+
+              <Button
+                v-else
+                variant="secondary"
+                size="sm"
+                disabled
+                class="h-7.5 px-3 text-xs font-medium opacity-80 cursor-default"
+              >
+                <CheckCircle2 class="w-3.5 h-3.5 mr-1 text-emerald-500" />
+                已生效
+              </Button>
             </div>
           </div>
-        </template>
+        </Card>
+
+        <!-- 虚线交互式上传引导卡片 -->
+        <div
+          @click="triggerUpload"
+          @dragover.prevent
+          @dragenter.prevent
+          @drop="handleDrop"
+          class="border-2 border-dashed border-border/70 hover:border-primary/50 bg-muted/15 hover:bg-muted/25 rounded-xl transition-all cursor-pointer flex flex-col items-center justify-center p-6 text-center group min-h-[170px]"
+        >
+          <div class="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2.5 group-hover:scale-105 transition-transform">
+            <UploadCloud class="w-5 h-5" />
+          </div>
+          <div class="text-xs font-semibold text-foreground">
+            上传并安装前端包
+          </div>
+          <p class="text-[11px] text-muted-foreground pt-1">
+            点击或将 .zip / .tar.gz 拖拽至此处
+          </p>
+        </div>
       </div>
     </div>
 
-    <!-- Pagination Controls -->
+    <!-- 分页控件 -->
     <div v-if="totalPages > 1" class="flex items-center justify-between pt-2">
       <p class="text-xs text-muted-foreground">
         共 {{ webuis.length }} 个前端包
@@ -268,6 +391,7 @@ onMounted(() => {
           size="sm" 
           :disabled="currentPage === 1" 
           @click="currentPage--"
+          class="h-7.5 text-xs"
         >
           上一页
         </Button>
@@ -279,6 +403,7 @@ onMounted(() => {
           size="sm" 
           :disabled="currentPage === totalPages" 
           @click="currentPage++"
+          class="h-7.5 text-xs"
         >
           下一页
         </Button>
