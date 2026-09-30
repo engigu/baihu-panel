@@ -1,7 +1,7 @@
 import { format, differenceInCalendarDays } from 'date-fns'
 
 
-export function formatDate(date: Date | string | number | undefined): string {
+export function formatDate(date: Date | string | number | undefined, formatString: string | undefined = undefined): string {
     if (!date) return ''
     const targetDate = new Date(date)
     if (isNaN(targetDate.getTime())) {
@@ -24,23 +24,29 @@ export function formatDate(date: Date | string | number | undefined): string {
     if (diffDays === -2) {
         return '后天'
     }
+    if (!formatString) {
+        formatString = "yyyy-MM-dd"
+    }
     try {
-        return format(targetDate, 'yyyy-MM-dd')
+        return format(targetDate, formatString)
     } catch {
         return typeof date === 'string' ? date : ''
     }
 }
 
 
-export function formatDateTime(date: Date | string | number | undefined): string {
+export function formatDateTime(date: Date | string | number | undefined, dateFormatString: string | undefined = undefined, timeFormatString: string | undefined = undefined): string {
     if (!date) return ''
     const targetDate = new Date(date)
     if (isNaN(targetDate.getTime())) {
         return typeof date === 'string' ? date : ''
     }
-    const dateStr = formatDate(targetDate)
+    const dateStr = formatDate(targetDate, dateFormatString)
+    if (!timeFormatString) {
+        timeFormatString = "HH:mm:ss"
+    }
     try {
-        const timeStr = format(targetDate, 'HH:mm:ss')
+        const timeStr = format(targetDate, timeFormatString)
         return `${dateStr} ${timeStr}`
     } catch {
         return dateStr

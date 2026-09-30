@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import StatusDot from '@/components/StatusDot.vue'
 import { RefreshCw, Cpu, MemoryStick, HardDrive, Activity, LayoutDashboard } from 'lucide-vue-next'
+import { formatDateTime } from '@/utils/date'
 
 import {
   Chart as ChartJS,
@@ -469,7 +470,7 @@ const schedulerChartData = computed(() => ({
             <CardContent>
               <dl class="space-y-1 text-sm">
                 <div class="flex justify-between border-b border-border/50 pb-1"><dt class="text-muted-foreground">下次 GC目标 (NextGC)</dt><dd class="font-medium">{{ formatBytes(stats.gc.next_gc) }}</dd></div>
-                <div class="flex justify-between border-b border-border/50 pb-1"><dt class="text-muted-foreground">上次 GC时间 (LastGC)</dt><dd class="font-medium">{{ stats.gc.last_gc ? new Date(stats.gc.last_gc / 1000000).toLocaleString() : '-' }}</dd></div>
+                <div class="flex justify-between border-b border-border/50 pb-1"><dt class="text-muted-foreground">上次 GC时间 (LastGC)</dt><dd class="font-medium">{{ stats.gc.last_gc ? formatDateTime(new Date(stats.gc.last_gc / 1000000)) : '-' }}</dd></div>
                 <div class="flex justify-between border-b border-border/50 pb-1"><dt class="text-muted-foreground">GC停顿总时 (PauseTotal)</dt><dd class="font-medium">{{ formatNs(stats.gc.pause_total_ns) }}</dd></div>
                 <div class="flex justify-between border-b border-border/50 pb-1"><dt class="text-muted-foreground">执行次数 (NumGC)</dt><dd class="font-medium">{{ stats.gc.num_gc }}</dd></div>
               </dl>
