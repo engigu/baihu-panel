@@ -15,6 +15,7 @@ import { api } from '@/api'
 import { toast } from 'vue-sonner'
 import { Download, Upload, Archive, ShieldAlert } from 'lucide-vue-next'
 import { useSiteSettings } from '@/composables/useSiteSettings'
+import { formatDateTime } from '@/utils/date'
 
 const { siteSettings, loadSettings } = useSiteSettings()
 const isDemoMode = computed(() => siteSettings.value.demo_mode === 'true' || (siteSettings.value as any).demo_mode === true)
@@ -138,7 +139,7 @@ onMounted(async () => {
         <div class="space-y-2">
           <div v-if="hasBackup && backupTime && !isDemoMode" class="text-[10px] text-muted-foreground flex items-center gap-1.5">
             <span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0"></span>
-            备份生成时间: {{ backupTime }}
+            备份生成时间: <span :title="backupTime">{{ formatDateTime(backupTime) }}</span>
           </div>
           <div class="flex flex-wrap gap-2.5">
             <Button

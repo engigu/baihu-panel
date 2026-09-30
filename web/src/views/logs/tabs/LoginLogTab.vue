@@ -9,6 +9,7 @@ import { useSiteSettings } from '@/composables/useSiteSettings'
 import { useEventBus } from '@/composables/useEventBus'
 import { LOG_EVENTS } from '@/constants'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
+import { formatDateTime } from '@/utils/date'
 
 const props = defineProps<{
     username: string
@@ -54,7 +55,6 @@ const selectedIp = ref('')
 
 async function showIpInfo(ip: string) {
     selectedIp.value = ip
-    ipDialogOpen.value = true
     ipGeoLoading.value = true
     ipGeoInfo.value = null
 
@@ -62,7 +62,9 @@ async function showIpInfo(ip: string) {
         const res = await fetch(`https://api.ip.sb/geoip/${ip}`)
         if (!res.ok) throw new Error('请求失败')
         ipGeoInfo.value = await res.json()
-    } catch {
+        ipDialogOpen.value = true
+    } catch (e) {
+        ipDialogOpen.value = false
         toast.error('获取 IP 信息失败')
     } finally {
         ipGeoLoading.value = false
@@ -160,7 +162,9 @@ defineExpose({
                         </div>
                         <div class="flex items-center gap-3">
                             <span class="w-8 shrink-0 font-medium opacity-70">时间:</span>
-                            <span class="text-[10px] text-muted-foreground">{{ log.created_at }}</span>
+                            <span class="text-[10px] text-muted-foreground"
+                                  :title="log.created_at"
+                            >{{ formatDateTime(log.created_at) }}</span>
                         </div>
                     </div>
                 </div>
@@ -178,8 +182,10 @@ defineExpose({
                     <span class="flex-1 min-w-0 text-xs text-muted-foreground line-clamp-1">
                         {{ log.user_agent || '-' }}
                     </span>
-                    <span class="w-40 shrink-0 text-right text-xs text-muted-foreground tabular-nums opacity-60">
-                        {{ log.created_at }}
+                    <span class="w-40 shrink-0 text-right text-xs text-muted-foreground tabular-nums opacity-60"
+                          :title="log.created_at"
+                    >
+                        {{ formatDateTime(log.created_at) }}
                     </span>
                 </div>
 
@@ -198,7 +204,9 @@ defineExpose({
                     <span class="flex-1 min-w-0 text-[13px] text-muted-foreground truncate">
                         <TextOverflow :text="log.user_agent || '-'" title="User Agent" />
                     </span>
-                    <span class="w-40 shrink-0 text-right text-[13px] text-muted-foreground tabular-nums opacity-60">{{ log.created_at }}</span>
+                    <span class="w-40 shrink-0 text-right text-[13px] text-muted-foreground tabular-nums opacity-60"
+                          :title="log.created_at"
+                    >{{ formatDateTime(log.created_at) }}</span>
                 </div>
             </div>
             <!-- 分页 -->

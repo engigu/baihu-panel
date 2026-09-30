@@ -7,6 +7,7 @@ import type { NotifyChannel, ChannelType } from '@/api'
 import { ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { copyToClipboard } from '@/utils/clipboard'
+import { formatDate } from '@/utils/date'
 
 defineProps<{
   channels: NotifyChannel[]
@@ -65,7 +66,7 @@ function handleCopy(text: string, blockId: string) {
           class="flex flex-col p-4 rounded-xl border bg-card hover:bg-accent/30 hover:shadow-md transition-all group relative overflow-hidden">
           <!-- 装饰性背景序号 -->
           <div
-            class="absolute -right-2 -top-4 text-6xl font-bold text-primary/5 select-none transition-colors group-hover:text-primary/10">
+            class="absolute right-3 top-2 text-5xl font-bold text-primary/5 select-none transition-colors group-hover:text-primary/20">
             {{ index + 1 }}
           </div>
 
@@ -92,7 +93,7 @@ function handleCopy(text: string, blockId: string) {
           <div class="mt-auto pt-4 border-t flex items-center justify-between">
             <div v-if="ch.created_at" class="flex items-center gap-1 text-[10px] text-muted-foreground opacity-60">
               <Calendar class="w-3 h-3" />
-              <span>{{ ch.created_at.split(' ')[0] }}</span>
+              <span :title="ch.created_at.split(' ')[0]">{{ formatDate(ch.created_at) }}</span>
             </div>
             <div class="flex items-center gap-1">
               <Button variant="ghost" size="icon"

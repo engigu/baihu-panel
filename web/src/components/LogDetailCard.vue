@@ -9,6 +9,7 @@ import LogContent from './LogContent.vue'
 import StatusBadge from './StatusBadge.vue'
 import { TASK_STATUS } from '@/constants'
 import type { TaskLog } from '@/api'
+import { formatDateTime } from '@/utils/date'
 
 interface Props {
   log: TaskLog | null
@@ -179,11 +180,15 @@ watch(() => props.log, (newLog) => {
       </div>
       <div class="flex justify-between items-center gap-4 min-h-6 py-0.5">
         <span class="text-sm font-normal text-muted-foreground shrink-0">开始时间</span>
-        <span class="text-xs font-normal text-muted-foreground">{{ log.start_time || '-' }}</span>
+        <span class="text-xs font-normal text-muted-foreground"
+              :title="log.start_time || ''"
+        >{{ log.start_time ? formatDateTime(log.start_time) : '-' }}</span>
       </div>
       <div class="flex justify-between items-center gap-4 min-h-6 py-0.5">
         <span class="text-sm font-normal text-muted-foreground shrink-0">结束时间</span>
-        <span class="text-xs font-normal text-muted-foreground">{{ log.end_time || '-' }}</span>
+        <span class="text-xs font-normal text-muted-foreground"
+              :title="log.end_time || ''"
+        >{{ log.end_time ? formatDateTime(log.end_time) : '-' }}</span>
       </div>
       <div class="pt-1.5 pb-1">
         <span class="text-sm font-normal text-muted-foreground block mb-1">执行命令</span>

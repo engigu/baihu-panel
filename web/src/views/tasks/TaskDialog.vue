@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 import { api, type Task, type EnvVar, type Agent } from '@/api'
 import { PATHS, TRIGGER_TYPE, TASK_TYPE, normalizeScriptPath, resolveScriptPath } from '@/constants'
 import { toast } from 'vue-sonner'
+import { formatDateTime } from '@/utils/date'
 
 import TaskNotificationConfig from './components/TaskNotificationConfig.vue'
 import TaskAdvancedConfig from './components/TaskAdvancedConfig.vue'
@@ -589,7 +590,7 @@ async function save() {
         <div class="flex items-center justify-between px-6 py-4 bg-muted/20 border-t shrink-0 backdrop-blur-sm">
           <div class="text-[10px] text-muted-foreground/40 italic flex flex-col leading-tight select-none pointer-events-none">
             <span>最后编辑于:</span>
-            <span>{{ isEdit ? (form.updated_at || '刚才') : '现在' }}</span>
+            <span :title="form.updated_at || ''">{{ isEdit ? (form.updated_at ? formatDateTime(form.updated_at) : '刚才') : '现在' }}</span>
           </div>
           <div class="flex gap-3">
             <Button variant="ghost" size="sm" class="hover:bg-muted font-medium text-xs px-6" @click="emit('update:open', false)">取消</Button>
