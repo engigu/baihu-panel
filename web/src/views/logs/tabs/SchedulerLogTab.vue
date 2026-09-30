@@ -9,10 +9,10 @@ import { Badge } from '@/components/ui/badge'
 import Pagination from '@/components/Pagination.vue'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
 import { toast } from 'vue-sonner'
-import { format } from 'date-fns'
 import { useSiteSettings } from '@/composables/useSiteSettings'
 import { useEventBus } from '@/composables/useEventBus'
 import { LOG_EVENTS } from '@/constants'
+import { formatDateTime } from '@/utils/date'
 
 const props = defineProps<{
     filters: {
@@ -129,15 +129,6 @@ function getLevelIcon(level: string) {
     }
 }
 
-function formatDate(dateStr: string) {
-    if (!dateStr) return '-'
-    try {
-        return format(new Date(dateStr), 'yyyy-MM-dd HH:mm:ss')
-    } catch {
-        return dateStr
-    }
-}
-
 function onDialogClose(open: boolean) {
     if (!open) {
         selectedLogId.value = null
@@ -211,7 +202,9 @@ function onDialogClose(open: boolean) {
                         </div>
                         <div class="flex items-center gap-3">
                             <span class="w-8 shrink-0 font-medium opacity-70">时间:</span>
-                            <span class="text-[10px] text-muted-foreground">{{ formatDate(log.created_at) }}</span>
+                            <span class="text-[10px] text-muted-foreground"
+                                  :title="log.created_at"
+                            >{{ formatDateTime(log.created_at) }}</span>
                         </div>
                     </div>
                 </div>
@@ -229,8 +222,10 @@ function onDialogClose(open: boolean) {
                     <span class="flex-1 min-w-0 text-sm text-muted-foreground line-clamp-1" :title="log.content">
                         {{ log.content || '-' }}
                     </span>
-                    <span class="w-40 shrink-0 text-right text-xs text-muted-foreground tabular-nums opacity-60">
-                        {{ formatDate(log.created_at) }}
+                    <span class="w-40 shrink-0 text-right text-xs text-muted-foreground tabular-nums opacity-60"
+                          :title="log.created_at"
+                    >
+                        {{ formatDateTime(log.created_at) }}
                     </span>
                 </div>
 
@@ -248,8 +243,10 @@ function onDialogClose(open: boolean) {
                         :title="log.content">
                         {{ log.content || '-' }}
                     </span>
-                    <span class="w-40 shrink-0 text-right text-[13px] text-muted-foreground tabular-nums opacity-60">
-                        {{ formatDate(log.created_at) }}
+                    <span class="w-40 shrink-0 text-right text-[13px] text-muted-foreground tabular-nums opacity-60"
+                          :title="log.created_at"
+                    >
+                        {{ formatDateTime(log.created_at) }}
                     </span>
                 </div>
             </div>
@@ -269,7 +266,9 @@ function onDialogClose(open: boolean) {
                             <span>{{ selectedLog.level === LOG_LEVEL.INFO ? '信息' : selectedLog.level === LOG_LEVEL.WARNING ? '警告' : '错误' }}</span>
                         </div>
                     </Badge>
-                    <span class="hidden sm:inline text-[10px] text-muted-foreground font-mono">{{ selectedLog ? formatDate(selectedLog.created_at) : '-' }}</span>
+                    <span class="hidden sm:inline text-[10px] text-muted-foreground font-mono"
+                          :title="selectedLog ? selectedLog.created_at : ''"
+                    >{{ selectedLog ? formatDateTime(selectedLog.created_at) : '-' }}</span>
                 </div>
             </template>
 
@@ -291,8 +290,11 @@ function onDialogClose(open: boolean) {
                     </div>
 
                     <!-- 移动端/小屏下在右下角展示时间 -->
-                    <div v-if="selectedLog" class="sm:hidden flex justify-end text-[10px] text-muted-foreground font-mono opacity-80 pt-1">
-                        {{ formatDate(selectedLog.created_at) }}
+                    <div v-if="selectedLog"
+                         class="sm:hidden flex justify-end text-[10px] text-muted-foreground font-mono opacity-80 pt-1"
+                         :title="selectedLog.created_at"
+                    >
+                        {{ formatDateTime(selectedLog.created_at) }}
                     </div>
                 </div>
             </div>
