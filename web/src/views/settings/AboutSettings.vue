@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { Badge } from '@/components/ui/badge'
 import { ExternalLink, TriangleAlert, History } from 'lucide-vue-next'
 import { api, type AboutInfo } from '@/api'
+import { formatDateTime } from '@/utils/date'
 
 const aboutInfo = ref<AboutInfo | null>(null)
 
@@ -81,7 +82,9 @@ onMounted(loadAbout)
           </div>
           <div class="flex justify-between items-center">
             <span class="text-muted-foreground text-sm">构建时间:</span>
-            <span class="text-muted-foreground text-sm">{{ aboutInfo?.build_time || '-' }}</span>
+            <span class="text-muted-foreground text-sm"
+                  :title="aboutInfo?.build_time || ''"
+            >{{ aboutInfo?.build_time ? formatDateTime(aboutInfo?.build_time) : '-' }}</span>
           </div>
           <div class="flex justify-between items-center">
             <span class="text-muted-foreground text-sm">内存使用:</span>
