@@ -9,8 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -28,20 +30,57 @@ const (
 	mbIconQuestion    = 0x00000020
 	mbIconWarning     = 0x00000030
 	mbIconError       = 0x00000010
-	idYes             = 6
 	idOK              = 1
+	idCancel          = 2
+	idYes             = 6
+	idNo              = 7
 
 	niifInfo = 0x00000001
 	nifInfo  = 0x00000010
+
+	// 窗口与控件样式常量
+	wsCaption        = 0x00C00000
+	wsSysMenu        = 0x00080000
+	wsVisible        = 0x10000000
+	wsChild          = 0x40000000
+	wsTabStop        = 0x00010000
+	wsVScroll        = 0x00200000
+	wsExClientEdge   = 0x00000200
+	wsExTopmost      = 0x00000008
+	esMultiline      = 0x0004
+	esAutoVScroll    = 0x0040
+	esReadOnly       = 0x0800
+	bsPushButton     = 0x0000
+	bsDefPushButton  = 0x0001
+	wmClose          = 0x0010
+	wmSetFont        = 0x0030
+	emSetSel         = 0x00B1
+	swShow           = 5
+	smCxScreen       = 0
+	smCyScreen       = 1
+	colorWindow      = 5
 )
 
 var (
-	messageBox = user32.NewProc("MessageBoxW")
+	gdi32            = syscall.NewLazyDLL("gdi32.dll")
+	messageBox       = user32.NewProc("MessageBoxW")
+	getSystemMetrics = user32.NewProc("GetSystemMetrics")
+	showWindow       = user32.NewProc("ShowWindow")
+	updateWindow     = user32.NewProc("UpdateWindow")
+	sendMessage      = user32.NewProc("SendMessageW")
+	setFocus         = user32.NewProc("SetFocus")
+	isDialogMessage  = user32.NewProc("IsDialogMessageW")
+	createFont       = gdi32.NewProc("CreateFontW")
+	deleteObject     = gdi32.NewProc("DeleteObject")
 
 	isDownloadingUpdate = false
 	hasNewVersion       = false
 	latestReleaseInfo   *githubRelease
 	latestAssetInfo     *githubAsset
+
+	updateDlgOnce   sync.Once
+	updateDlgHwnd   syscall.Handle
+	updateDlgResult uint32
 )
 
 type githubAsset struct {
@@ -63,6 +102,189 @@ func showMessage(title, text string, style uint32) uint32 {
 	mPtr, _ := syscall.UTF16PtrFromString(text)
 	ret, _, _ := messageBox.Call(uintptr(hwnd), uintptr(unsafe.Pointer(mPtr)), uintptr(unsafe.Pointer(tPtr)), uintptr(style))
 	return uint32(ret)
+}
+
+func updateDlgWndProc(hDlg syscall.Handle, msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case wmCommand:
+		id := uint32(wparam & 0xFFFF)
+		if id == idYes || id == idNo || id == idCancel {
+			updateDlgResult = id
+			destroyWindow.Call(uintptr(hDlg))
+			return 0
+		}
+	case wmClose:
+		updateDlgResult = idNo
+		destroyWindow.Call(uintptr(hDlg))
+		return 0
+	case wmDestroy:
+		postQuitMessage.Call(0)
+		return 0
+	}
+	ret, _, _ := defWindowProc.Call(uintptr(hDlg), uintptr(msg), wparam, lparam)
+	return ret
+}
+
+// showUpdateDialog 弹出带可滚动文本框的更新确认窗口，支持完整浏览全部更新日志
+func showUpdateDialog(currVer, newVer, changelog string) bool {
+	if updateDlgHwnd != 0 {
+		setForegroundWindow.Call(uintptr(updateDlgHwnd))
+		return false
+	}
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	className, _ := syscall.UTF16PtrFromString("BaihuUpdateDialogClass")
+	updateDlgOnce.Do(func() {
+		var wc wndClassEx
+		wc.Size = uint32(unsafe.Sizeof(wc))
+		wc.WndProc = syscall.NewCallback(updateDlgWndProc)
+		wc.ClassName = className
+		wc.Background = syscall.Handle(colorWindow + 1)
+		wc.Icon = nid.Icon
+		wc.IconSm = nid.Icon
+		registerClassEx.Call(uintptr(unsafe.Pointer(&wc)))
+	})
+
+	dlgW, dlgH := uintptr(560), uintptr(460)
+	screenW, _, _ := getSystemMetrics.Call(smCxScreen)
+	screenH, _, _ := getSystemMetrics.Call(smCyScreen)
+	posX := (screenW - dlgW) / 2
+	posY := (screenH - dlgH) / 2
+
+	titlePtr, _ := syscall.UTF16PtrFromString(fmt.Sprintf("发现新版本 %s", newVer))
+	hDlgRet, _, _ := createWindowEx.Call(
+		wsExTopmost,
+		uintptr(unsafe.Pointer(className)),
+		uintptr(unsafe.Pointer(titlePtr)),
+		wsOverlapped|wsCaption|wsSysMenu|wsVisible,
+		posX, posY, dlgW, dlgH,
+		0, 0, 0, 0,
+	)
+	if hDlgRet == 0 {
+		return false
+	}
+	hDlg := syscall.Handle(hDlgRet)
+	updateDlgHwnd = hDlg
+	updateDlgResult = idNo
+	defer func() {
+		updateDlgHwnd = 0
+		trimWorkingSet()
+	}()
+
+	// 创建微软雅黑字体
+	fontName, _ := syscall.UTF16PtrFromString("Microsoft YaHei UI")
+	hFont, _, _ := createFont.Call(
+		uintptr(^uint32(14)+1), // -15 像素字高
+		0, 0, 0,
+		400, // FW_NORMAL
+		0, 0, 0,
+		1, // DEFAULT_CHARSET
+		0, 0,
+		5, // CLEARTYPE_QUALITY
+		0,
+		uintptr(unsafe.Pointer(fontName)),
+	)
+	if hFont != 0 {
+		defer deleteObject.Call(hFont)
+	}
+
+	staticClass, _ := syscall.UTF16PtrFromString("STATIC")
+	editClass, _ := syscall.UTF16PtrFromString("EDIT")
+	btnClass, _ := syscall.UTF16PtrFromString("BUTTON")
+
+	headerText := fmt.Sprintf("发现白虎面板新版本 %s！\r\n当前版本：%s      最新版本：%s\r\n\r\n【更新日志】", newVer, currVer, newVer)
+	headerPtr, _ := syscall.UTF16PtrFromString(headerText)
+	hStatic, _, _ := createWindowEx.Call(
+		0,
+		uintptr(unsafe.Pointer(staticClass)),
+		uintptr(unsafe.Pointer(headerPtr)),
+		wsChild|wsVisible,
+		18, 14, 510, 68,
+		 uintptr(hDlg), 0, 0, 0,
+	)
+
+	// 规范化换行符为 Windows EDIT 控件所需的 \r\n
+	normalizedLog := strings.ReplaceAll(strings.TrimSpace(changelog), "\r\n", "\n")
+	normalizedLog = strings.ReplaceAll(normalizedLog, "\n", "\r\n")
+	if normalizedLog == "" {
+		normalizedLog = "暂无详细更新说明。"
+	}
+	logPtr, _ := syscall.UTF16PtrFromString(normalizedLog)
+	hEdit, _, _ := createWindowEx.Call(
+		wsExClientEdge,
+		uintptr(unsafe.Pointer(editClass)),
+		uintptr(unsafe.Pointer(logPtr)),
+		wsChild|wsVisible|wsVScroll|wsTabStop|esMultiline|esAutoVScroll|esReadOnly,
+		18, 86, 510, 275,
+		uintptr(hDlg), 100, 0, 0,
+	)
+
+	askPtr, _ := syscall.UTF16PtrFromString("是否立即下载并升级？")
+	hAsk, _, _ := createWindowEx.Call(
+		0,
+		uintptr(unsafe.Pointer(staticClass)),
+		uintptr(unsafe.Pointer(askPtr)),
+		wsChild|wsVisible,
+		18, 380, 260, 24,
+		uintptr(hDlg), 0, 0, 0,
+	)
+
+	yesPtr, _ := syscall.UTF16PtrFromString("立即升级(&Y)")
+	hBtnYes, _, _ := createWindowEx.Call(
+		0,
+		uintptr(unsafe.Pointer(btnClass)),
+		uintptr(unsafe.Pointer(yesPtr)),
+		wsChild|wsVisible|wsTabStop|bsDefPushButton,
+		316, 374, 100, 32,
+		uintptr(hDlg), idYes, 0, 0,
+	)
+
+	noPtr, _ := syscall.UTF16PtrFromString("暂不升级(&N)")
+	hBtnNo, _, _ := createWindowEx.Call(
+		0,
+		uintptr(unsafe.Pointer(btnClass)),
+		uintptr(unsafe.Pointer(noPtr)),
+		wsChild|wsVisible|wsTabStop|bsPushButton,
+		428, 374, 100, 32,
+		uintptr(hDlg), idNo, 0, 0,
+	)
+
+	if hFont != 0 {
+		for _, ctrl := range []uintptr{hStatic, hEdit, hAsk, hBtnYes, hBtnNo} {
+			sendMessage.Call(ctrl, wmSetFont, hFont, 1)
+		}
+	}
+
+	// 取消 EDIT 控件默认的全文高亮选中并将焦点置于“立即升级”按钮
+	sendMessage.Call(hEdit, emSetSel, 0, 0)
+	setFocus.Call(hBtnYes)
+
+	showWindow.Call(uintptr(hDlg), swShow)
+	updateWindow.Call(uintptr(hDlg))
+	setForegroundWindow.Call(uintptr(hDlg))
+
+	var msg struct {
+		Hwnd    syscall.Handle
+		Message uint32
+		Wparam  uintptr
+		Lparam  uintptr
+		Time    uint32
+		Pt      point
+	}
+	for {
+		ret, _, _ := getMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
+		if int32(ret) <= 0 {
+			break
+		}
+		if isDlg, _, _ := isDialogMessage.Call(uintptr(hDlg), uintptr(unsafe.Pointer(&msg))); isDlg == 0 {
+			translateMessage.Call(uintptr(unsafe.Pointer(&msg)))
+			dispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
+		}
+	}
+
+	return updateDlgResult == idYes
 }
 
 // showBalloonNotification 弹出 Windows 任务栏原生托盘气球通知
@@ -356,19 +578,7 @@ func checkAndTriggerUpdate(manual bool) {
 
 	// 发现新版本
 	if manual {
-		tipText := fmt.Sprintf("发现白虎面板新版本 %s！\n\n当前版本：%s\n最新版本：%s\n\n是否立即下载并升级？",
-			rel.TagName, currVer, rel.TagName)
-		if strings.TrimSpace(rel.Body) != "" {
-			// 附带更新日志前 300 字符
-			logSnippet := strings.TrimSpace(rel.Body)
-			if len(logSnippet) > 300 {
-				logSnippet = logSnippet[:300] + "..."
-			}
-			tipText += fmt.Sprintf("\n\n【更新日志】\n%s", logSnippet)
-		}
-
-		ret := showMessage("发现新版本", tipText, mbYesNo|mbIconQuestion)
-		if ret == idYes {
+		if showUpdateDialog(currVer, rel.TagName, rel.Body) {
 			if asset != nil && asset.BrowserDownloadURL != "" {
 				go executeUpdate(asset.BrowserDownloadURL, rel.TagName)
 			}
