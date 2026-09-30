@@ -12,7 +12,6 @@ import {
   Smartphone,
   CheckCircle2,
   Lock,
-  QrCode,
   Shield,
   Fingerprint
 } from 'lucide-vue-next'

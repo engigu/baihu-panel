@@ -22,7 +22,6 @@ import {
   TriangleAlert,
   ShieldAlert,
   Clock,
-  CheckCircle2,
   FileArchive,
   Info
 } from 'lucide-vue-next'
