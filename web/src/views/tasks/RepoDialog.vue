@@ -17,6 +17,7 @@ import { api, type Task, type RepoConfig, type Agent } from '@/api'
 import { TASK_TYPE } from '@/constants'
 import { toast } from 'vue-sonner'
 import { cn } from '@/lib/utils'
+import { formatDateTime } from '@/utils/date'
 
 import { parseBaihuCommand, parseQlCommand } from '@/utils/repo-parser'
 import { copyToClipboard } from '@/utils/clipboard'
@@ -746,7 +747,10 @@ async function save() {
         </ScrollArea>
 
         <div class="flex items-center justify-between px-6 py-4 bg-muted/30 border-t shrink-0">
-          <p class="text-[10px] text-muted-foreground">最后编辑于: {{ isEdit ? (form.updated_at || '刚才') : '现在' }}</p>
+          <div class="text-[10px] text-muted-foreground/40 italic flex flex-col leading-tight select-none pointer-events-none">
+            <span>最后编辑于:</span>
+            <span :title="form.updated_at || ''">{{ isEdit ? (form.updated_at ? formatDateTime(form.updated_at) : '刚才') : '现在' }}</span>
+          </div>
           <div class="flex gap-3">
             <Button variant="ghost" size="sm" class="hover:bg-muted font-medium text-xs px-6" @click="emit('update:open', false)">取消</Button>
             <Button size="sm" class="px-8 font-semibold text-xs shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90" @click="save">
