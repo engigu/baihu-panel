@@ -55,7 +55,6 @@ const selectedIp = ref('')
 
 async function showIpInfo(ip: string) {
     selectedIp.value = ip
-    ipDialogOpen.value = true
     ipGeoLoading.value = true
     ipGeoInfo.value = null
 
@@ -63,7 +62,9 @@ async function showIpInfo(ip: string) {
         const res = await fetch(`https://api.ip.sb/geoip/${ip}`)
         if (!res.ok) throw new Error('请求失败')
         ipGeoInfo.value = await res.json()
-    } catch {
+        ipDialogOpen.value = true
+    } catch (e) {
+        ipDialogOpen.value = false
         toast.error('获取 IP 信息失败')
     } finally {
         ipGeoLoading.value = false
