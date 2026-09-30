@@ -23,20 +23,7 @@ import { api, type MarketplaceApp } from '@/api'
 import ApplyDialog from './ApplyDialog.vue'
 import { toast } from 'vue-sonner'
 import { useRouter } from 'vue-router'
-
-function formatDate(dateStr?: string) {
-  if (!dateStr) return ''
-  try {
-    const d = new Date(dateStr)
-    if (isNaN(d.getTime())) return dateStr
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  } catch {
-    return dateStr
-  }
-}
+import { formatDateTime, formatDate } from '@/utils/date'
 
 
 const router = useRouter()
@@ -191,7 +178,7 @@ function handleApplySuccess() {
           </span>
           <span v-if="marketplaceBuildTime" class="hidden sm:inline text-border/60">|</span>
           <span v-if="marketplaceBuildTime" class="text-[11px] text-muted-foreground/90 flex items-center gap-1 font-mono" :title="`应用源全量构建时间 (东八区): ${marketplaceBuildTime}`">
-            <Clock class="w-3 h-3 text-amber-500/80 shrink-0" /> 构建于 {{ marketplaceBuildTime }}
+            <Clock class="w-3 h-3 text-amber-500/80 shrink-0" /> 构建于 <span :title="marketplaceBuildTime">{{ formatDateTime(marketplaceBuildTime) }}</span>
           </span>
         </p>
       </div>
