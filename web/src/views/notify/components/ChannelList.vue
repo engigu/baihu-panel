@@ -65,7 +65,7 @@ function handleCopy(text: string, blockId: string) {
           class="flex flex-col p-4 rounded-xl border bg-card hover:bg-accent/30 hover:shadow-md transition-all group relative overflow-hidden">
           <!-- 装饰性背景序号 -->
           <div
-            class="absolute -right-2 -top-4 text-6xl font-bold text-primary/5 select-none transition-colors group-hover:text-primary/10">
+            class="absolute right-3 top-2 text-5xl font-bold text-primary/5 select-none transition-colors group-hover:text-primary/20">
             {{ index + 1 }}
           </div>
 
