@@ -25,6 +25,14 @@ type Message struct {
 	AtUserIds []string       `json:"at_user_ids"`
 	AtAll     bool           `json:"at_all"`
 	Extra     map[string]any `json:"extra"`
+	Options   map[string]any `json:"options"`
+}
+
+func (m *Message) GetOptions() map[string]any {
+	if m.Options != nil {
+		return m.Options
+	}
+	return m.Extra
 }
 
 func (m *Message) HasText() bool     { return m.Text != "" }

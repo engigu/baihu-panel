@@ -56,7 +56,7 @@ type Bark struct {
 	CipherKey       string // 加密密钥
 }
 
-func (b *Bark) Request(title, content string) ([]byte, error) {
+func (b *Bark) Request(title, content string, options map[string]any) ([]byte, error) {
 	data := map[string]interface{}{
 		"device_key": b.PushKey,
 		"title":      title,
@@ -88,6 +88,11 @@ func (b *Bark) Request(title, content string) ([]byte, error) {
 	}
 	if b.AutoCopy != "" {
 		data["autoCopy"] = b.AutoCopy
+	}
+
+	err := acceptOptions(data, options)
+	if err != nil {
+		return nil, fmt.Errorf("accept options failed: %v", err)
 	}
 
 	server := b.Server
@@ -298,4 +303,19 @@ func (b *Bark) createSOCKS5Dialer(proxyURL *url.URL) (proxy.ContextDialer, error
 	}
 
 	return contextDialer, nil
+}
+
+// acceptOptions 接受额外 Options 参数并注入到 Bark 请求体中
+func acceptOptions(data map[string]interface{}, options map[string]any) error {
+	if data == nil || options == nil {
+		return nil
+	}
+
+	keys := []string{"isArchive", "group", "sound", "icon", "level", "url", "badge", "copy", "autoCopy"}
+	for _, key := range keys {
+		if val, ok := options[key]; ok && val != nil && val != "" {
+			data[key] = val
+		}
+	}
+	return nil
 }

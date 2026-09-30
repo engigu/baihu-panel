@@ -19,7 +19,7 @@ from .task import (
     get_last_results
 )
 
-def notify(title, text):
+def notify(title, text, options=None, **kwargs):
     """
     发送内建通知。
     会在调用时校验环境变量：BHPKG_NOTIFY_TOKEN, BHPKG_NOTIFY_CHANNEL
@@ -35,7 +35,7 @@ def notify(title, text):
         error_msg = f"缺少必要的环境变量以使用 baihu 模块: {', '.join(missing)}。请在白虎面板的任务设置中配置指定的 Key。"
         raise RuntimeError(error_msg)
     
-    return _notify(title, text)
+    return _notify(title, text, options=options, **kwargs)
 
 __all__ = [
     'notify',
