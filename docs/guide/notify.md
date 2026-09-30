@@ -72,8 +72,17 @@ baihu.notify("任务标题", "**加粗内容**", format='markdown')
 # 指定渠道
 baihu.notify("任务标题", "正文", channel_id='ch-xxx')
 
-# 完整参数
-baihu.notify("任务标题", "<b>粗体</b>", format='html', channel_id='ch-xxx')
+# 推荐写法：通过 options 字典下发控制格式与 Bark 等渠道的个性化参数 (如 group, icon, sound, url 等)
+baihu.notify("打卡完成", "今日 B站任务已全量完成！", 
+    channel_id='ch-bark-01',
+    options={
+        'format': 'markdown',
+        'group': 'B站自动化',                    # Bark 消息分组
+        'icon': 'https://example.com/logo.png', # Bark 自定义图标
+        'sound': 'glass',                      # Bark 提示音
+        'url': 'https://bilibili.com'           # Bark 点击跳转链接
+    }
+)
 
 # 环境变量与任务管理（详细用法见内置库示例）
 envs = baihu.get_envs()
@@ -93,8 +102,17 @@ baihu.notify("任务标题", "**加粗内容**", { format: "markdown" });
 // 指定渠道
 baihu.notify("任务标题", "正文", { channel_id: "ch-xxx" });
 
-// 完整参数
-baihu.notify("任务标题", "<b>粗体</b>", { format: "html", channel_id: "ch-xxx" });
+// 推荐写法：通过 options 对象统一传递控制格式与 Bark 等渠道个性化参数
+baihu.notify("打卡完成", "今日 B站任务已全量完成！", {
+    channel_id: "ch-bark-01",
+    options: {
+        format: "markdown",
+        group: "B站自动化",                     // Bark 消息分组
+        icon: "https://example.com/logo.png",  // Bark 自定义图标
+        sound: "glass",                        // Bark 提示音
+        url: "https://bilibili.com"            // Bark 点击跳转链接
+    }
+});
 
 // 环境变量与任务管理（详细用法见内置库示例）
 (async () => {
