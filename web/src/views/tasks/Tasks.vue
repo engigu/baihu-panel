@@ -73,6 +73,7 @@ const editingTask = ref<Partial<Task>>({})
 const editingMarketApp = ref<any>(null)
 const isEdit = ref(false)
 const deleteTaskId = ref<string | null>(null)
+const isDeleting = ref(false)
 const exportCommandText = ref('')
 const terminalCmd = ref('')
 const executingTaskId = ref<string | null>(null)
@@ -370,26 +371,31 @@ function confirmBatchDelete() {
   showBatchDeleteDialog.value = true
 }
 
-async function deleteTask(deleteFiles: boolean) {
-  if (!deleteTaskId.value) return
+async function deleteTask(deleteFiles: boolean, cleanEnvs: boolean = true) {
+  if (!deleteTaskId.value || isDeleting.value) return
+  isDeleting.value = true
   const targetTask = tasks.value.find(t => t.id === deleteTaskId.value)
   try {
     if (targetTask && targetTask.type === TASK_TYPE.APP) {
-      await api.apps.remove(targetTask.id, true)
-      toast.success('应用及其本地文件夹与关联任务已成功卸载')
+      await api.apps.remove(targetTask.id, deleteFiles, cleanEnvs)
+      toast.success('应用及其关联资源已成功卸载')
     } else {
       await api.tasks.delete(deleteTaskId.value, { delete_files: deleteFiles })
       toast.success('任务已删除')
     }
-    loadTasks()
+    await loadTasks()
+    showDeleteDialog.value = false
+    deleteTaskId.value = null
   } catch (err: any) {
     toast.error('操作失败: ' + (err.message || '未知错误'))
+  } finally {
+    isDeleting.value = false
   }
-  showDeleteDialog.value = false
-  deleteTaskId.value = null
 }
 
 async function batchDeleteTasks() {
+  if (isDeleting.value) return
+  isDeleting.value = true
   try {
     const res = await api.tasks.batchDeleteByQuery({
       name: filterName.value || undefined,
@@ -398,11 +404,13 @@ async function batchDeleteTasks() {
       agent_id: filterAgentId.value || undefined
     })
     toast.success(`成功删除 ${res.count} 个任务`)
-    loadTasks()
+    await loadTasks()
+    showBatchDeleteDialog.value = false
   } catch {
     toast.error('批量删除失败')
+  } finally {
+    isDeleting.value = false
   }
-  showBatchDeleteDialog.value = false
 }
 
 async function runTask(id: string) {
@@ -875,6 +883,7 @@ watch(() => route.query.type, (newVal: any) => {
       v-model:open-delete="showDeleteDialog"
       v-model:open-batch-delete="showBatchDeleteDialog"
       :target-task="tasks.find(t => t.id === deleteTaskId)"
+      :loading="isDeleting"
       @confirm-delete="deleteTask"
       @confirm-batch-delete="batchDeleteTasks"
     />

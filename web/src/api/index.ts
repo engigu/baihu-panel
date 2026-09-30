@@ -537,7 +537,12 @@ export const api = {
     apply: (data: ApplyAppPayload) => request<{ result: any; log: string }>('/apps/apply', { method: 'POST', body: JSON.stringify(data) }),
     switchScenario: (id: string, scenario_id: string) => request<{ id: string; scenario_id: string; log: string }>(`/apps/${id}/switch`, { method: 'POST', body: JSON.stringify({ scenario_id }) }),
     rebuild: (id: string) => request<{ result: any; log: string }>(`/apps/${id}/rebuild`, { method: 'POST' }),
-    remove: (id: string, cleanData?: boolean) => request<{ log: string }>(`/apps/${id}${cleanData ? '?clean_data=true' : ''}`, { method: 'DELETE' }),
+    remove: (id: string, cleanData: boolean = true, cleanEnvs: boolean = true) => {
+      const query = new URLSearchParams()
+      query.set('clean_data', String(cleanData))
+      query.set('clean_envs', String(cleanEnvs))
+      return request<{ log: string }>(`/apps/${id}?${query.toString()}`, { method: 'DELETE' })
+    },
     marketplace: () => request<{ source: string; apps: MarketplaceApp[] }>('/apps/store')
   }
 }

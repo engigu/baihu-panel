@@ -73,7 +73,7 @@ func RegisterControllers() *Controllers {
 		Interconnect: controllers.NewInterconnectController(interconnectService),
 		Data:         controllers.NewDataController(taskController, envController),
 		Tag:          controllers.NewTagController(services.NewTagService()),
-		App:          controllers.NewAppController(app.DefaultAppService),
+		App:          controllers.NewAppController(app.DefaultAppService, executorService),
 	}
 }
 

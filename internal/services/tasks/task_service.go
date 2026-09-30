@@ -254,7 +254,10 @@ func (ts *TaskService) DeleteTask(id string) bool {
 	var targetTask models.Task
 	if err := database.DB.Where("id = ?", id).Limit(1).Find(&targetTask).Error; err == nil && targetTask.ID != "" {
 		if targetTask.Type == constant.TaskTypeApp {
-			_ = app.CleanAppTaskAndData(&targetTask, true, nil)
+			_, _ = app.CleanAppTaskAndData(&targetTask, app.AppRemoveOptions{
+				CleanData: true,
+				CleanEnvs: true,
+			}, nil)
 			return true
 		}
 	}
@@ -269,14 +272,41 @@ func (ts *TaskService) DeleteTask(id string) bool {
 }
 
 func (ts *TaskService) BatchDeleteTasks(ids []string) int64 {
-	// 同时删除关联的通知推送设置
-	database.DB.Where("type = ? AND data_id IN ?", constant.BindingTypeTask, ids).Delete(&models.NotifyBinding{})
-	database.DB.Where("type = ? AND data_id IN ?", constant.RelationTypeTaskTag, ids).Delete(&models.DataRelation{})
-	database.DB.Where("type = ? AND data_id IN ?", constant.RelationTypeTaskEnv, ids).Delete(&models.DataRelation{})
+	if len(ids) == 0 {
+		return 0
+	}
 
-	result := database.DB.Where("id IN ?", ids).Delete(&models.Task{})
-	return result.RowsAffected
+	var tasks []models.Task
+	database.DB.Where("id IN ?", ids).Find(&tasks)
+
+	var normalIDs []string
+	var deletedCount int64
+	for i := range tasks {
+		t := &tasks[i]
+		if t.Type == constant.TaskTypeApp {
+			_, _ = app.CleanAppTaskAndData(t, app.AppRemoveOptions{
+				CleanData: true,
+				CleanEnvs: true,
+			}, nil)
+			deletedCount++
+		} else {
+			normalIDs = append(normalIDs, t.ID)
+		}
+	}
+
+	if len(normalIDs) > 0 {
+		// 同时删除关联的通知推送设置与孤儿标签
+		database.DB.Where("type = ? AND data_id IN ?", constant.BindingTypeTask, normalIDs).Delete(&models.NotifyBinding{})
+		relation.DataRelation.CleanRelationsBatch(normalIDs, constant.RelationTypeTaskTag)
+		relation.DataRelation.CleanRelationsBatch(normalIDs, constant.RelationTypeTaskEnv)
+
+		result := database.DB.Unscoped().Where("id IN ?", normalIDs).Delete(&models.Task{})
+		deletedCount += result.RowsAffected
+	}
+
+	return deletedCount
 }
+
 
 // BatchUpdateTasks 批量更新任务配置及环境版本
 func (ts *TaskService) BatchUpdateTasks(req vo.TaskBatchUpdateReq) (int64, []string, error) {

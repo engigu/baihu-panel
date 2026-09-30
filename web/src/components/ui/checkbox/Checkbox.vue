@@ -5,10 +5,13 @@ import { Check } from "lucide-vue-next"
 import { CheckboxIndicator, CheckboxRoot } from "reka-ui"
 import { cn } from "@/lib/utils"
 
-const props = defineProps<CheckboxRootProps & {
+const props = withDefaults(defineProps<CheckboxRootProps & {
   class?: HTMLAttributes["class"]
   checked?: boolean | 'indeterminate'
-}>()
+}>(), {
+  checked: undefined,
+  modelValue: undefined,
+})
 
 const emits = defineEmits<{
   (e: 'update:modelValue', val: boolean | 'indeterminate'): void

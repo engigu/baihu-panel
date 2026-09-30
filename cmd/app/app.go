@@ -191,7 +191,9 @@ func runSwitch(args []string) {
 func runRemove(args []string) {
 	fs := flag.NewFlagSet("app remove", flag.ExitOnError)
 	var cleanData bool
-	fs.BoolVar(&cleanData, "clean-data", false, "同时删除应用所占用的数据及代码目录")
+	var cleanEnvs bool
+	fs.BoolVar(&cleanData, "clean-data", true, "同时删除应用所占用的数据及代码目录")
+	fs.BoolVar(&cleanEnvs, "clean-envs", true, "同时删除应用关联的环境变量与凭证")
 
 	normArgs := normalizeArgs(args)
 	if err := fs.Parse(normArgs); err != nil {
@@ -201,12 +203,15 @@ func runRemove(args []string) {
 	parsedArgs := fs.Args()
 	if len(parsedArgs) == 0 {
 		fmt.Fprintln(os.Stderr, "错误: 必须提供要卸载的应用 ID")
-		fmt.Fprintln(os.Stderr, "用法: baihu app remove <app-id> [--clean-data]")
+		fmt.Fprintln(os.Stderr, "用法: baihu app remove <app-id> [--clean-data] [--clean-envs=false]")
 		os.Exit(1)
 	}
 
 	appID := parsedArgs[0]
-	if err := app.DefaultAppService.RemoveApp(appID, cleanData, os.Stdout); err != nil {
+	if _, err := app.DefaultAppService.RemoveAppWithOptions(appID, app.AppRemoveOptions{
+		CleanData: cleanData,
+		CleanEnvs: cleanEnvs,
+	}, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "卸载失败: %v\n", err)
 		os.Exit(1)
 	}

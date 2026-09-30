@@ -8,7 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/services/relation"
 )
 
 func TestRunSetup_FailFastOnIntermediateError(t *testing.T) {
@@ -175,4 +178,130 @@ func TestOrchestrateTask_MultiLanguagesParsing(t *testing.T) {
 		t.Errorf("golang 解析错误: %+v", taskLangs[3])
 	}
 }
+
+func TestRemoveApp_CleanEnvsAndOrphanTags(t *testing.T) {
+	tempDBFile, err := os.CreateTemp("", "baihu-app-uninstall-test-*.db")
+	if err != nil {
+		t.Fatalf("创建临时数据库失败: %v", err)
+	}
+	tempDBPath := tempDBFile.Name()
+	tempDBFile.Close()
+	defer os.RemoveAll(tempDBPath)
+
+	if err := database.Init(&database.Config{
+		Type: "sqlite",
+		Path: tempDBPath,
+	}); err != nil {
+		t.Fatalf("初始化 sqlite 失败: %v", err)
+	}
+	if err := database.AutoMigrate(
+		&models.Task{},
+		&models.EnvironmentVariable{},
+		&models.DataStorage{},
+		&models.DataRelation{},
+		&models.NotifyBinding{},
+	); err != nil {
+		t.Fatalf("迁移表结构失败: %v", err)
+	}
+
+	rawYAML := `spec_version: "v1"
+id: "demo-clean-app"
+name: "卸载清理测试应用"
+version: "1.0.0"
+author: "tester"
+category: "系统工具"
+template:
+  - tag: "DemoCleanTag"
+  - mise_languages: "node@23"
+setup:
+  install: "echo ok"
+env_schema:
+  - key: "DEMO_EXCLUSIVE_TOKEN"
+    label: "专属Token"
+    type: "string"
+    default: "123456"
+  - key: "DEMO_SHARED_COOKIE"
+    label: "共享Cookie"
+    type: "string"
+    default: "shared_val"
+tasks:
+  - id: "sub1"
+    name: "子任务1"
+    command: "node index.js"
+    default_cron: "0 0 8 * * *"
+    enabled: true
+`
+	manifest, err := ParseManifestFromYAML([]byte(rawYAML))
+	if err != nil {
+		t.Fatalf("解析 manifest 失败: %v", err)
+	}
+
+	var out bytes.Buffer
+	res, err := DefaultApplier.Apply(manifest, []byte(rawYAML), ApplyOptions{
+		SkipSetup: true,
+		SkipSync:  true,
+		LogWriter: &out,
+	})
+	if err != nil {
+		t.Fatalf("部署应用失败: %v", err)
+	}
+
+	// 验证安装后存在主任务、子任务、2个环境变量、以及 task_tag 和 env_tag (DemoCleanTag)
+	var taskTagCount, envTagCount, envCount int64
+	database.DB.Model(&models.DataStorage{}).Where("type = ? AND name = ?", constant.RelationTypeTaskTag, "DemoCleanTag").Count(&taskTagCount)
+	database.DB.Model(&models.DataStorage{}).Where("type = ? AND name = ?", constant.RelationTypeEnvTag, "DemoCleanTag").Count(&envTagCount)
+	database.DB.Model(&models.EnvironmentVariable{}).Count(&envCount)
+	if taskTagCount != 1 || envTagCount != 1 || envCount != 2 {
+		t.Fatalf("安装后数据断言失败: taskTag=%d, envTag=%d, envCount=%d", taskTagCount, envTagCount, envCount)
+	}
+
+	// 模拟另一个独立任务绑定了 DEMO_SHARED_COOKIE
+	var sharedEnv models.EnvironmentVariable
+	database.DB.Where("name = ?", "DEMO_SHARED_COOKIE").First(&sharedEnv)
+	relation.DataRelation.SaveRelations("other-standalone-task-id", constant.RelationTypeTaskEnv, sharedEnv.ID)
+
+	// 执行卸载（开启 CleanData 和 CleanEnvs）
+	deletedIDs, err := DefaultAppService.RemoveAppWithOptions(res.ID, AppRemoveOptions{
+		CleanData: true,
+		CleanEnvs: true,
+	}, &out)
+	if err != nil {
+		t.Fatalf("卸载应用失败: %v", err)
+	}
+	if len(deletedIDs) != 2 {
+		t.Fatalf("预期返回 2 个被删除任务 ID (1 主 + 1 子)，实际得到: %v", deletedIDs)
+	}
+
+	// 1. 验证任务与子任务全部清空
+	var remainingTasks int64
+	database.DB.Model(&models.Task{}).Count(&remainingTasks)
+	if remainingTasks != 0 {
+		t.Errorf("预期任务全部清空，剩余: %d", remainingTasks)
+	}
+
+	// 2. 验证 task_tag (DemoCleanTag) 已被自动回收
+	database.DB.Model(&models.DataStorage{}).Where("type = ? AND name = ?", constant.RelationTypeTaskTag, "DemoCleanTag").Count(&taskTagCount)
+	if taskTagCount != 0 {
+		t.Errorf("预期孤儿 task_tag 'DemoCleanTag' 被自动回收，实际剩余: %d", taskTagCount)
+	}
+
+	// 3. 验证专属环境变量 DEMO_EXCLUSIVE_TOKEN 被删除，而共享变量 DEMO_SHARED_COOKIE 被安全保留
+	var exclusiveCount, sharedCount int64
+	database.DB.Model(&models.EnvironmentVariable{}).Where("name = ?", "DEMO_EXCLUSIVE_TOKEN").Count(&exclusiveCount)
+	database.DB.Model(&models.EnvironmentVariable{}).Where("name = ?", "DEMO_SHARED_COOKIE").Count(&sharedCount)
+	if exclusiveCount != 0 {
+		t.Errorf("预期专属环境变量 DEMO_EXCLUSIVE_TOKEN 被删除，实际剩余: %d", exclusiveCount)
+	}
+	if sharedCount != 1 {
+		t.Errorf("预期被其他任务引用的共享环境变量 DEMO_SHARED_COOKIE 被保留，实际剩余: %d", sharedCount)
+	}
+
+	// 4. 如果再把 DEMO_SHARED_COOKIE 删除，验证 env_tag (DemoCleanTag) 也会被自动回收
+	relation.DataRelation.CleanRelations(sharedEnv.ID, constant.RelationTypeEnvTag)
+	database.DB.Model(&models.DataStorage{}).Where("type = ? AND name = ?", constant.RelationTypeEnvTag, "DemoCleanTag").Count(&envTagCount)
+	if envTagCount != 0 {
+		t.Errorf("预期当所有关联环境变量移除后 env_tag 'DemoCleanTag' 自动回收，实际剩余: %d", envTagCount)
+	}
+}
+
 

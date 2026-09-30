@@ -377,8 +377,9 @@ func (es *EnvService) GetAllEnvTags() ([]string, error) {
 	return relation.DataRelation.GetAllTags(constant.RelationTypeEnvTag)
 }
 
-// CleanEnvTags 删除环境变量时清理关联标签记录
+// CleanEnvTags 删除环境变量时清理关联标签记录及孤儿标签
 func (es *EnvService) CleanEnvTags(id string) {
-	database.DB.Where("data_id = ? AND type = ?", id, constant.RelationTypeEnvTag).Delete(&models.DataRelation{})
+	relation.DataRelation.CleanRelations(id, constant.RelationTypeEnvTag)
 }
+
 

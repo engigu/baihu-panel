@@ -570,6 +570,16 @@ func (tc *TaskController) DeleteTask(c *gin.Context) {
 	tc.executorService.RemoveCronTask(id)
 	tc.executorService.GetScheduler().StopTask(id)
 
+	// 如果是声明式应用主任务，同时停止并移除所有受控子任务的 Cron 调度
+	if task.Type == constant.TaskTypeApp {
+		var childTaskIDs []string
+		database.DB.Model(&models.Task{}).Where("source_id = ? AND type = ?", id, constant.TaskTypeNormal).Pluck("id", &childTaskIDs)
+		for _, cid := range childTaskIDs {
+			tc.executorService.RemoveCronTask(cid)
+			tc.executorService.GetScheduler().StopTask(cid)
+		}
+	}
+
 	success := tc.taskService.DeleteTask(id)
 	if !success {
 		utils.NotFound(c, "任务不存在")
@@ -711,6 +721,14 @@ func (tc *TaskController) BatchDeleteTasks(c *gin.Context) {
 			if task.AgentID != nil && *task.AgentID != "" {
 				agentIDs[*task.AgentID] = struct{}{}
 			}
+			if task.Type == constant.TaskTypeApp {
+				var childTaskIDs []string
+				database.DB.Model(&models.Task{}).Where("source_id = ? AND type = ?", id, constant.TaskTypeNormal).Pluck("id", &childTaskIDs)
+				for _, cid := range childTaskIDs {
+					tc.executorService.RemoveCronTask(cid)
+					tc.executorService.GetScheduler().StopTask(cid)
+				}
+			}
 		}
 
 		// 移除 cron 调度
@@ -766,6 +784,14 @@ func (tc *TaskController) BatchDeleteByQuery(c *gin.Context) {
 		ids = append(ids, task.ID)
 		if task.AgentID != nil && *task.AgentID != "" {
 			agentIDs[*task.AgentID] = struct{}{}
+		}
+		if task.Type == constant.TaskTypeApp {
+			var childTaskIDs []string
+			database.DB.Model(&models.Task{}).Where("source_id = ? AND type = ?", task.ID, constant.TaskTypeNormal).Pluck("id", &childTaskIDs)
+			for _, cid := range childTaskIDs {
+				tc.executorService.RemoveCronTask(cid)
+				tc.executorService.GetScheduler().StopTask(cid)
+			}
 		}
 		// 移除 cron 调度
 		tc.executorService.RemoveCronTask(task.ID)

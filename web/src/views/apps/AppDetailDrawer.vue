@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Select,
@@ -66,6 +68,8 @@ const runningTaskId = ref<string | null>(null)
 // 卸载状态
 const showUninstallConfirm = ref(false)
 const uninstalling = ref(false)
+const cleanAppData = ref(true)
+const cleanAppEnvs = ref(true)
 
 // 环境变量表单状态
 const envForm = ref<Record<string, string>>({})
@@ -186,7 +190,7 @@ async function handleUninstall() {
   if (!appData.value || uninstalling.value) return
   uninstalling.value = true
   try {
-    await api.apps.remove(appData.value.app.id, true)
+    await api.apps.remove(appData.value.app.id, cleanAppData.value, cleanAppEnvs.value)
     toast.success('应用已成功卸载！')
     showUninstallConfirm.value = false
     emit('update:open', false)
@@ -432,7 +436,21 @@ async function handleUninstall() {
                 <div class="flex items-start gap-2 text-xs text-destructive">
                   <AlertTriangle class="w-4 h-4 shrink-0 mt-0.5" />
                   <div class="leading-relaxed font-medium">
-                    卸载应用将彻底删除<b>本地代码文件夹</b>以及<b>所有关联的受控任务与配置</b>，该操作无法撤销。
+                    卸载应用将移除<b>主应用与所有受控子任务</b>，并自动回收无其他引用的专属标签，该操作无法撤销。
+                  </div>
+                </div>
+                <div class="space-y-2 pt-1 pl-6">
+                  <div class="flex items-center gap-2">
+                    <Checkbox id="drawer-clean-app-data" v-model:checked="cleanAppData" />
+                    <Label for="drawer-clean-app-data" class="text-xs font-medium text-foreground cursor-pointer select-none">
+                      同时删除本地代码与产物文件夹
+                    </Label>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Checkbox id="drawer-clean-app-envs" v-model:checked="cleanAppEnvs" />
+                    <Label for="drawer-clean-app-envs" class="text-xs font-medium text-foreground cursor-pointer select-none">
+                      同时删除应用关联的环境变量与凭证
+                    </Label>
                   </div>
                 </div>
                 <div class="flex items-center gap-2 justify-end pt-1">

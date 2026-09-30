@@ -121,9 +121,64 @@ func (s *DataRelationService) LoadRelations(dataIDs []string, relType string) ma
 	return resultMap
 }
 
-// CleanRelations 删除某种类型的所有关联映射
+// CleanRelations 删除某种类型的所有关联映射，并在关联关系归零时自动清理孤儿标签 (DataStorage)
 func (s *DataRelationService) CleanRelations(dataID string, relType string) {
-	database.DB.Where("data_id = ? AND type = ?", dataID, relType).Delete(&models.DataRelation{})
+	if dataID == "" {
+		return
+	}
+	s.CleanRelationsBatch([]string{dataID}, relType)
+}
+
+// CleanRelationsBatch 批量删除多个 dataID 在指定类型下的关联映射，并自动回收变成 0 引用的孤儿标签 (DataStorage)
+func (s *DataRelationService) CleanRelationsBatch(dataIDs []string, relType string) {
+	if len(dataIDs) == 0 {
+		return
+	}
+
+	var relateIDs []string
+	database.DB.Model(&models.DataRelation{}).
+		Where("data_id IN ? AND type = ?", dataIDs, relType).
+		Distinct("relate_id").
+		Pluck("relate_id", &relateIDs)
+
+	database.DB.Where("data_id IN ? AND type = ?", dataIDs, relType).Delete(&models.DataRelation{})
+
+	if len(relateIDs) > 0 {
+		s.CleanOrphanStoragesByIDs(relType, relateIDs)
+	}
+}
+
+// CleanOrphanStoragesByIDs 检查指定的 DataStorage ID 列表，若在 DataRelation 中已无任何关联记录，则物理删除该孤儿标签
+func (s *DataRelationService) CleanOrphanStoragesByIDs(relType string, storageIDs []string) {
+	if len(storageIDs) == 0 {
+		return
+	}
+	for _, id := range storageIDs {
+		if id == "" {
+			continue
+		}
+		var count int64
+		database.DB.Model(&models.DataRelation{}).Where("relate_id = ? AND type = ?", id, relType).Count(&count)
+		if count == 0 {
+			database.DB.Where("id = ? AND type = ?", id, relType).Delete(&models.DataStorage{})
+		}
+	}
+}
+
+// CleanOrphanTagsByNames 检查指定名称的标签，若在对应 relType 下已无任何关联记录，则物理删除该标签
+func (s *DataRelationService) CleanOrphanTagsByNames(relType string, tagNames []string) {
+	if len(tagNames) == 0 {
+		return
+	}
+	var storages []models.DataStorage
+	database.DB.Where("type = ? AND name IN ?", relType, tagNames).Find(&storages)
+	for _, st := range storages {
+		var count int64
+		database.DB.Model(&models.DataRelation{}).Where("relate_id = ? AND type = ?", st.ID, relType).Count(&count)
+		if count == 0 {
+			database.DB.Where("id = ?", st.ID).Delete(&models.DataStorage{})
+		}
+	}
 }
 
 // GetAllTags 获取全局范围内某种类型的所有的 Tag Name
@@ -139,3 +194,4 @@ func (s *DataRelationService) GetAllTags(relType string) ([]string, error) {
 	}
 	return tags, nil
 }
+

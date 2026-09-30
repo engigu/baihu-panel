@@ -118,12 +118,14 @@ const filteredMarketplaceApps = computed(() => {
 
 // 打开应用市场安装弹窗
 function openMarketApply(app: MarketplaceApp) {
+  ;(document.activeElement as HTMLElement)?.blur()
   selectedMarketApp.value = app
   showApplyDialog.value = true
 }
 
 // 打开自定义导入弹窗
 function openCustomApply() {
+  ;(document.activeElement as HTMLElement)?.blur()
   selectedMarketApp.value = null
   showApplyDialog.value = true
 }

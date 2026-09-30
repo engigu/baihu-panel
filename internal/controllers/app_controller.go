@@ -14,20 +14,43 @@ import (
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/services/app"
+	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/engigu/baihu-panel/internal/utils"
 	"github.com/gin-gonic/gin"
 )
 
 type AppController struct {
-	appService *app.AppService
+	appService      *app.AppService
+	executorService *tasks.ExecutorService
 }
 
-func NewAppController(appService *app.AppService) *AppController {
+func NewAppController(appService *app.AppService, executorService ...*tasks.ExecutorService) *AppController {
 	if appService == nil {
 		appService = app.DefaultAppService
 	}
+	var es *tasks.ExecutorService
+	if len(executorService) > 0 {
+		es = executorService[0]
+	}
 	return &AppController{
-		appService: appService,
+		appService:      appService,
+		executorService: es,
+	}
+}
+
+// syncAppCronTasks 同步指定主应用及其所有受控子任务在 CronManager 中的调度状态
+func (ac *AppController) syncAppCronTasks(masterTaskID string) {
+	if ac.executorService == nil || masterTaskID == "" {
+		return
+	}
+	var appTasks []models.Task
+	database.DB.Where("id = ? OR (source_id = ? AND type = ?)", masterTaskID, masterTaskID, constant.TaskTypeNormal).Find(&appTasks)
+	var ids []string
+	for _, t := range appTasks {
+		ids = append(ids, t.ID)
+	}
+	if len(ids) > 0 {
+		ac.executorService.SyncRepoTasks(ids, nil)
 	}
 }
 
@@ -227,6 +250,10 @@ func (ac *AppController) ApplyApp(c *gin.Context) {
 		return
 	}
 
+	if err == nil && res != nil {
+		ac.syncAppCronTasks(res.ID)
+	}
+
 	if isStream {
 		if err != nil {
 			errObj, _ := json.Marshal(gin.H{"error": err.Error(), "log": buf.String()})
@@ -287,6 +314,8 @@ func (ac *AppController) SwitchScenario(c *gin.Context) {
 		return
 	}
 
+	ac.syncAppCronTasks(id)
+
 	utils.Success(c, gin.H{
 		"id":          id,
 		"scenario_id": req.ScenarioID,
@@ -341,6 +370,8 @@ func (ac *AppController) RebuildApp(c *gin.Context) {
 		return
 	}
 
+	ac.syncAppCronTasks(id)
+
 	utils.Success(c, gin.H{
 		"result": res,
 		"log":    buf.String(),
@@ -361,12 +392,23 @@ func (ac *AppController) RemoveApp(c *gin.Context) {
 	}
 
 	cleanData := c.Query("clean_data") != "false" && c.Query("clean_data") != "0"
+	cleanEnvs := c.Query("clean_envs") != "false" && c.Query("clean_envs") != "0"
 
 	var buf bytes.Buffer
-	err := ac.appService.RemoveApp(taskID, cleanData, &buf)
+	deletedTaskIDs, err := ac.appService.RemoveAppWithOptions(taskID, app.AppRemoveOptions{
+		CleanData: cleanData,
+		CleanEnvs: cleanEnvs,
+	}, &buf)
 	if err != nil {
 		utils.BadRequest(c, "卸载失败: "+err.Error())
 		return
+	}
+
+	if ac.executorService != nil {
+		for _, tid := range deletedTaskIDs {
+			ac.executorService.RemoveCronTask(tid)
+			ac.executorService.GetScheduler().StopTask(tid)
+		}
 	}
 
 	utils.Success(c, gin.H{

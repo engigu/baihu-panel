@@ -146,10 +146,17 @@ func (s *AppService) buildAppDTOFromTask(task *models.Task, taskCount int) *AppD
 	return dto
 }
 
-// CleanAppTaskAndData 物理清理应用主任务、关联受控子任务及本地磁盘代码目录
-func CleanAppTaskAndData(masterTask *models.Task, cleanData bool, out io.Writer) error {
+// AppRemoveOptions 应用卸载控制选项
+type AppRemoveOptions struct {
+	CleanData bool // 是否清理本地代码与产物目录
+	CleanEnvs bool // 是否同时清理应用关联的环境变量
+}
+
+// CleanAppTaskAndData 物理清理应用主任务、关联受控子任务、关联环境变量、孤儿标签及本地磁盘代码目录
+// 返回所有被删除的任务 ID 列表（包含主任务 ID 与所有受控子任务 ID），便于外层调度器移除 Cron 计划任务
+func CleanAppTaskAndData(masterTask *models.Task, opts AppRemoveOptions, out io.Writer) ([]string, error) {
 	if masterTask == nil || masterTask.Type != constant.TaskTypeApp {
-		return nil
+		return nil, nil
 	}
 
 	log := func(format string, args ...interface{}) {
@@ -163,12 +170,51 @@ func CleanAppTaskAndData(masterTask *models.Task, cleanData bool, out io.Writer)
 		out.Write([]byte(msg))
 	}
 
+	// 解析 Manifest 与关联 Tag 列表
+	var manifest *AppManifest
+	var candidateTags []string
+	addCandidateTag := func(tag string) {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			return
+		}
+		for _, existing := range candidateTags {
+			if existing == tag {
+				return
+			}
+		}
+		candidateTags = append(candidateTags, tag)
+	}
+
+	if appCfg := masterTask.GetAppConfig(); appCfg != nil {
+		if appCfg.Template != nil && appCfg.Template.Tag != "" {
+			addCandidateTag(appCfg.Template.Tag)
+		}
+		if appCfg.ID != "" {
+			addCandidateTag(appCfg.ID)
+		}
+		if appCfg.ManifestRaw != "" {
+			if m, err := ParseManifestFromYAML([]byte(appCfg.ManifestRaw)); err == nil {
+				manifest = m
+				addCandidateTag(m.GetTemplateTag())
+				addCandidateTag(m.ID)
+			}
+		}
+	}
+	// 同时把主任务在数据库中实际绑定的 task_tag 纳入候选集
+	loadedMasterTags := relation.DataRelation.LoadTags([]string{masterTask.ID}, constant.RelationTypeTaskTag)
+	for _, t := range loadedMasterTags[masterTask.ID] {
+		addCandidateTag(t)
+	}
+
+	deletedTaskIDs := []string{masterTask.ID}
 
 	// 1. 清理所有受控子任务 (source_id = masterTask.ID)
 	var childTasks []models.Task
 	if err := database.DB.Where("source_id = ? AND type = ?", masterTask.ID, constant.TaskTypeNormal).Find(&childTasks).Error; err == nil {
 		for _, t := range childTasks {
 			log("  - 清理受控子任务: %s (%s)", t.Name, t.ID)
+			deletedTaskIDs = append(deletedTaskIDs, t.ID)
 			database.DB.Where("type = ? AND data_id = ?", constant.BindingTypeTask, t.ID).Delete(&models.NotifyBinding{})
 			relation.DataRelation.CleanRelations(t.ID, constant.RelationTypeTaskTag)
 			relation.DataRelation.CleanRelations(t.ID, constant.RelationTypeTaskEnv)
@@ -182,28 +228,160 @@ func CleanAppTaskAndData(masterTask *models.Task, cleanData bool, out io.Writer)
 	relation.DataRelation.CleanRelations(masterTask.ID, constant.RelationTypeTaskEnv)
 	database.DB.Unscoped().Where("id = ?", masterTask.ID).Delete(&models.Task{})
 
-	// 3. 清理磁盘本地代码与数据文件夹 (data/scripts/apps/{author}-{id})
+	// 3. 按需清理应用关联的环境变量 (opts.CleanEnvs)
+	if opts.CleanEnvs {
+		cleanAppEnvironments(manifest, candidateTags, deletedTaskIDs, log)
+	}
+
+	// 4. 兜底检查并清理残留的孤儿标签 (task_tag 与 env_tag)
+	if len(candidateTags) > 0 {
+		relation.DataRelation.CleanOrphanTagsByNames(constant.RelationTypeTaskTag, candidateTags)
+		relation.DataRelation.CleanOrphanTagsByNames(constant.RelationTypeEnvTag, candidateTags)
+	}
+
+	// 5. 清理磁盘本地代码与数据文件夹 (data/scripts/apps/{author}-{id})
 	manifestID := masterTask.GetManifestID()
 	author := masterTask.GetAppAuthor()
-	if cleanData && manifestID != "" {
+	if opts.CleanData && manifestID != "" {
 		absScriptsDir := utils.ResolveAbsScriptsDir()
 		appDir := masterTask.WorkDir
+		if appDir != "" {
+			appDir = constant.ResolveScriptPath(appDir)
+		}
 		if appDir == "" || !strings.Contains(appDir, filepath.Join(absScriptsDir, "apps")) {
 			appDir = GetAppDir(absScriptsDir, author, manifestID)
 		}
 		if appDir != "" && strings.Contains(appDir, filepath.Join(absScriptsDir, "apps")) {
 			if _, err := os.Stat(appDir); err == nil {
+				// 如果 Manifest 声明了 setup.uninstall，先在 appDir 下执行卸载清理钩子
+				if manifest != nil && strings.TrimSpace(manifest.Setup.Uninstall) != "" {
+					uninstallScript := strings.ReplaceAll(manifest.Setup.Uninstall, "{app_dir}", appDir)
+					log(">> 正在执行应用卸载清理脚本 (setup.uninstall)...")
+					uninstallCmd := utils.NewShellCommandCmd(uninstallScript)
+					uninstallCmd.Dir = appDir
+					uninstallCmd.Env = append(os.Environ(), "APP_DIR="+appDir, "CURR_APP_DIR="+appDir)
+					_ = uninstallCmd.Run()
+				}
 				log(">> 正在清理应用数据目录: %s", appDir)
 				_ = os.RemoveAll(appDir)
 			}
 		}
 	}
 
-	return nil
+	return deletedTaskIDs, nil
 }
 
-// RemoveApp 卸载已安装应用：根据应用 TaskID 物理清理主应用记录、关联受控子任务及本地代码目录
+// cleanAppEnvironments 清理属于该应用的环境变量（安全校验未被其他任务或非本应用标签占用）
+func cleanAppEnvironments(manifest *AppManifest, candidateTags []string, deletedTaskIDs []string, log func(string, ...interface{})) {
+	candidateEnvIDs := make(map[string]bool)
+	var candidateEnvs []models.EnvironmentVariable
+
+	// A. 通过应用关联的 env_tag 查找环境变量
+	if len(candidateTags) > 0 {
+		var storageIDs []string
+		database.DB.Model(&models.DataStorage{}).
+			Where("type = ? AND name IN ?", constant.RelationTypeEnvTag, candidateTags).
+			Pluck("id", &storageIDs)
+
+		if len(storageIDs) > 0 {
+			var relEnvIDs []string
+			database.DB.Model(&models.DataRelation{}).
+				Where("type = ? AND relate_id IN ?", constant.RelationTypeEnvTag, storageIDs).
+				Pluck("data_id", &relEnvIDs)
+
+			if len(relEnvIDs) > 0 {
+				var taggedEnvs []models.EnvironmentVariable
+				database.DB.Where("id IN ?", relEnvIDs).Find(&taggedEnvs)
+				for _, e := range taggedEnvs {
+					if !candidateEnvIDs[e.ID] {
+						candidateEnvIDs[e.ID] = true
+						candidateEnvs = append(candidateEnvs, e)
+					}
+				}
+			}
+		}
+	}
+
+	// B. 通过 Manifest.EnvSchema 中声明的 key 查找环境变量
+	if manifest != nil && len(manifest.EnvSchema) > 0 {
+		var schemaKeys []string
+		for _, item := range manifest.EnvSchema {
+			if k := strings.TrimSpace(item.Key); k != "" {
+				schemaKeys = append(schemaKeys, k)
+			}
+		}
+		if len(schemaKeys) > 0 {
+			var keyEnvs []models.EnvironmentVariable
+			database.DB.Where("name IN ?", schemaKeys).Find(&keyEnvs)
+			for _, e := range keyEnvs {
+				if !candidateEnvIDs[e.ID] {
+					candidateEnvIDs[e.ID] = true
+					candidateEnvs = append(candidateEnvs, e)
+				}
+			}
+		}
+	}
+
+	if len(candidateEnvs) == 0 {
+		return
+	}
+
+	candidateTagSet := make(map[string]bool)
+	for _, t := range candidateTags {
+		candidateTagSet[strings.ToLower(t)] = true
+	}
+
+	for _, env := range candidateEnvs {
+		// 1. 检查是否被系统中的其他任务显式绑定 (task_env)
+		var otherTaskRefCount int64
+		tx := database.DB.Model(&models.DataRelation{}).Where("type = ? AND relate_id = ?", constant.RelationTypeTaskEnv, env.ID)
+		if len(deletedTaskIDs) > 0 {
+			tx = tx.Where("data_id NOT IN ?", deletedTaskIDs)
+		}
+		tx.Count(&otherTaskRefCount)
+		if otherTaskRefCount > 0 {
+			log("  ~ 保留环境变量 %s (仍被其他 %d 个任务绑定引用)", env.Name, otherTaskRefCount)
+			continue
+		}
+
+		// 2. 检查该环境变量是否还绑定了其他非本应用的 env_tag
+		envTagsMap := relation.DataRelation.LoadTags([]string{env.ID}, constant.RelationTypeEnvTag)
+		envTags := envTagsMap[env.ID]
+		hasOtherAppTag := false
+		var remainingTags []string
+		for _, et := range envTags {
+			if !candidateTagSet[strings.ToLower(et)] {
+				hasOtherAppTag = true
+				remainingTags = append(remainingTags, et)
+			}
+		}
+		if hasOtherAppTag {
+			// 如果带有其他标签，仅解绑当前应用的标签，保留环境变量本体
+			relation.DataRelation.SaveTags(env.ID, constant.RelationTypeEnvTag, strings.Join(remainingTags, ","))
+			relation.DataRelation.CleanOrphanTagsByNames(constant.RelationTypeEnvTag, candidateTags)
+			log("  ~ 保留共享环境变量 %s (带有其他标签: %s)", env.Name, strings.Join(remainingTags, ","))
+			continue
+		}
+
+		// 3. 安全物理删除该环境变量及其关联的 env_tag / task_env（并自动回收变成 0 引用的孤儿 env_tag）
+		log("  - 清理应用环境变量: %s", env.Name)
+		relation.DataRelation.CleanRelations(env.ID, constant.RelationTypeEnvTag)
+		database.DB.Where("type = ? AND relate_id = ?", constant.RelationTypeTaskEnv, env.ID).Delete(&models.DataRelation{})
+		database.DB.Unscoped().Where("id = ?", env.ID).Delete(&models.EnvironmentVariable{})
+	}
+}
+
+// RemoveApp 卸载已安装应用：根据应用 TaskID 物理清理主应用记录、关联受控子任务、环境变量、标签及本地代码目录
 func (s *AppService) RemoveApp(taskID string, cleanData bool, out io.Writer) error {
+	_, err := s.RemoveAppWithOptions(taskID, AppRemoveOptions{
+		CleanData: cleanData,
+		CleanEnvs: true,
+	}, out)
+	return err
+}
+
+// RemoveAppWithOptions 使用完整卸载选项卸载已安装应用，并返回所有被清理的任务 ID 列表
+func (s *AppService) RemoveAppWithOptions(taskID string, opts AppRemoveOptions, out io.Writer) ([]string, error) {
 	if out == nil {
 		out = os.Stdout
 	}
@@ -217,20 +395,24 @@ func (s *AppService) RemoveApp(taskID string, cleanData bool, out io.Writer) err
 
 	log(">> 正在卸载应用 [%s]...", taskID)
 
-	// 1. 使用 taskID 查找主应用任务实体
+	// 1. 使用 taskID 查找主应用任务实体（同时兼容传入 manifestID 的 CLI 场景）
 	var masterTask models.Task
 	if err := database.DB.Where("id = ? AND type = ?", taskID, constant.TaskTypeApp).First(&masterTask).Error; err != nil {
-		return fmt.Errorf("未找到应用记录: %s", taskID)
+		if err2 := database.DB.Where("source_id = ? AND type = ?", "app:"+taskID, constant.TaskTypeApp).First(&masterTask).Error; err2 != nil {
+			return nil, fmt.Errorf("未找到应用记录: %s", taskID)
+		}
 	}
 
 	// 2. 调用公共逻辑执行清理
-	if err := CleanAppTaskAndData(&masterTask, cleanData, out); err != nil {
-		return err
+	deletedTaskIDs, err := CleanAppTaskAndData(&masterTask, opts, out)
+	if err != nil {
+		return nil, err
 	}
 
-	log(">> ✓ 应用 [%s] 卸载与关联任务清理完成！", taskID)
-	return nil
+	log(">> ✓ 应用 [%s] 卸载与关联资源清理完成！", masterTask.Name)
+	return deletedTaskIDs, nil
 }
+
 
 // SwitchScenario 切换应用场景预设
 func (s *AppService) SwitchScenario(appID string, scenarioID string, out io.Writer) error {
