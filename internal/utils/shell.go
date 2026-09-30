@@ -11,23 +11,40 @@ import (
 )
 
 var (
-	defaultShell string
-	defaultArgs  []string
-	shellOnce    sync.Once
+	defaultShell            string
+	defaultArgs             []string
+	shellOnce               sync.Once
+	allowPowerShellFallback bool
 )
+
+// SetAllowPowerShellFallback 设置在 Windows 下找不到 pwsh 时是否允许降级回退至系统自带的 powershell.exe（仅限 Agent 模式开启）
+func SetAllowPowerShellFallback(allow bool) {
+	allowPowerShellFallback = allow
+}
 
 // GetShell 返回当前操作系统的 shell 和参数
 func GetShell() (shell string, args []string) {
 	shellOnce.Do(func() {
 		if windows.IsWindows() {
+			// 1. 优先使用 PowerShell 7+ (pwsh.exe)
 			if path, ok := windows.FindPwsh(); ok {
 				defaultShell = path
 				defaultArgs = []string{}
 				return
 			}
+			// 2. 仅当显式允许降级时（Agent 模式），回退使用系统自带的 Windows PowerShell (powershell.exe)
+			if allowPowerShellFallback {
+				if path, ok := windows.FindPowerShell(); ok {
+					defaultShell = path
+					defaultArgs = []string{}
+					return
+				}
+				defaultShell = "powershell.exe"
+				defaultArgs = []string{}
+				return
+			}
 			panic("Windows 系统上需要安装 PowerShell 7+ (pwsh.exe)，但在环境变量 PATH 中未找到，请先安装它。")
 		}
-
 		// 1. 优先在 PATH 中查找 bash
 		if path, err := exec.LookPath("bash"); err == nil {
 			defaultShell = path

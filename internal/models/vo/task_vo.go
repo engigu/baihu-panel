@@ -1,6 +1,7 @@
 package vo
 
 import (
+	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/executor"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/utils"
@@ -162,6 +163,10 @@ func ToTaskVO(task *models.Task) *TaskVO {
 	if task == nil {
 		return nil
 	}
+	workDir := task.WorkDir
+	if task.AgentID != nil && *task.AgentID != "" {
+		workDir = constant.CleanAgentWorkDir(workDir)
+	}
 	return &TaskVO{
 		ID:            task.ID,
 		Name:          task.Name,
@@ -175,7 +180,7 @@ func ToTaskVO(task *models.Task) *TaskVO {
 		UnifiedConfig: string(task.UnifiedConfig),
 		Schedule:      task.Schedule,
 		Timeout:       task.Timeout,
-		WorkDir:       task.WorkDir,
+		WorkDir:       workDir,
 		CleanConfig:   task.CleanConfig,
 		Envs:          string(task.Envs),
 		Languages:     task.Languages,

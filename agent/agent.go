@@ -542,6 +542,7 @@ func (a *Agent) handleExecute(data json.RawMessage) {
 		Command     string   `json:"command"`
 		PreCommand  string   `json:"pre_command"`
 		PostCommand string   `json:"post_command"`
+		WorkDir     *string  `json:"work_dir"`
 	}
 	if err := json.Unmarshal(data, &req); err != nil {
 		logger.Errorf("解析立即执行请求失败: %v", err)
@@ -580,6 +581,12 @@ func (a *Agent) handleExecute(data json.RawMessage) {
 		postCommand = req.PostCommand
 	}
 
+	workDir := task.WorkDir
+	if req.WorkDir != nil {
+		workDir = *req.WorkDir
+	}
+	workDir = constant.CleanAgentWorkDir(workDir)
+
 	execReq := &executor.ExecutionRequest{
 		TaskID:      task.ID,
 		LogID:       req.LogID,
@@ -587,7 +594,7 @@ func (a *Agent) handleExecute(data json.RawMessage) {
 		Command:     command,
 		PreCommand:  preCommand,
 		PostCommand: postCommand,
-		WorkDir:     task.WorkDir,
+		WorkDir:     workDir,
 		Envs:        executor.ParseEnvVars(envs),
 		Secrets:     req.Secrets,
 		Timeout:     task.Timeout,
@@ -733,6 +740,7 @@ func (a *Agent) updateTasks(tasks []AgentTask) {
 
 	newTasks := make(map[string]*AgentTask)
 	for i := range tasks {
+		tasks[i].WorkDir = constant.CleanAgentWorkDir(tasks[i].WorkDir)
 		newTasks[tasks[i].ID] = &tasks[i]
 	}
 
@@ -753,16 +761,18 @@ func (a *Agent) updateTasks(tasks []AgentTask) {
 			oldTask.Enabled != task.Enabled || oldTask.Timeout != task.Timeout ||
 			oldTask.WorkDir != task.WorkDir || oldTask.Envs != task.Envs ||
 			oldTask.RandomRange != task.RandomRange {
-			if task.Enabled {
+			if task.Enabled && task.GetSchedule() != "" {
 				err := a.cronManager.AddTask(task)
 				if err != nil {
 					logger.Errorf("添加调度任务 #%s 失败: %v", id, err)
-					continue
+				} else {
+					logger.Infof("已添加调度任务 #%s %s [类型: %s, Cron: %s]", id, task.Name, task.Type, task.GetSchedule())
 				}
-				logger.Infof("已添加调度任务 #%s %s [类型: %s, Cron: %s]", id, task.Name, task.Type, task.GetSchedule())
 			} else {
 				a.cronManager.RemoveTask(id)
-				logger.Infof("调度任务 #%s 已禁用", id)
+				if !task.Enabled {
+					logger.Infof("调度任务 #%s 已禁用", id)
+				}
 			}
 			a.tasks[id] = task
 		}

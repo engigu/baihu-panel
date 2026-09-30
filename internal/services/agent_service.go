@@ -316,7 +316,7 @@ func (s *AgentService) Heartbeat(token, ip, version, buildTime, hostname, osType
 // GetTasks 获取 Agent 的任务列表
 func (s *AgentService) GetTasks(agentID string) []models.AgentTask {
 	var tasksList []models.Task
-	database.DB.Where("agent_id = ? AND enabled = ?", agentID, true).Find(&tasksList)
+	database.DB.Where("agent_id = ?", agentID).Find(&tasksList)
 
 	// 装载关联的变量信息
 	if len(tasksList) > 0 {
@@ -357,7 +357,7 @@ func (s *AgentService) GetTasks(agentID string) []models.AgentTask {
 		command := string(task.Command)
 		preCommand := string(task.PreCommand)
 		postCommand := string(task.PostCommand)
-		workDir := task.WorkDir
+		workDir := constant.CleanAgentWorkDir(task.WorkDir)
 
 		// 仓库同步任务特殊处理：将配置转换为 reposync 命令行
 		if task.Type == constant.TaskTypeRepo {

@@ -27,3 +27,22 @@ func TestPathNormalizeAndResolve(t *testing.T) {
 		t.Errorf("ResolveScriptPath fallback(%q) = %q; want %q", relPath, resolvedFallback, expectedResolved)
 	}
 }
+
+func TestCleanAgentWorkDir(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"", ""},
+		{"$SCRIPTS_DIR$", ""},
+		{"$SCRIPTS_DIR$/C:\\Sentinel-windows-amd64", "C:\\Sentinel-windows-amd64"},
+		{"C:\\Sentinel-windows-amd64", "C:\\Sentinel-windows-amd64"},
+		{"/opt/sentinel", "/opt/sentinel"},
+	}
+
+	for _, c := range cases {
+		if got := CleanAgentWorkDir(c.in); got != c.want {
+			t.Errorf("CleanAgentWorkDir(%q) = %q; want %q", c.in, got, c.want)
+		}
+	}
+}

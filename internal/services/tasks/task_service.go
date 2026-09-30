@@ -66,6 +66,10 @@ func (ts *TaskService) CreateTask(p *TaskParam) *models.Task {
 	if p.PinType == "" {
 		p.PinType = constant.PinTypeNone
 	}
+	workDir := constant.NormalizeScriptPath(p.WorkDir)
+	if p.AgentID != nil && *p.AgentID != "" {
+		workDir = constant.CleanAgentWorkDir(p.WorkDir)
+	}
 	task := &models.Task{
 		ID:            utils.GenerateID(),
 		Name:          p.Name,
@@ -80,7 +84,7 @@ func (ts *TaskService) CreateTask(p *TaskParam) *models.Task {
 		UnifiedConfig: models.BigText(p.UnifiedConfig),
 		Schedule:      p.Schedule,
 		Timeout:       p.Timeout,
-		WorkDir:       constant.NormalizeScriptPath(p.WorkDir),
+		WorkDir:       workDir,
 		CleanConfig:   p.CleanConfig,
 		Envs:          models.BigText(p.Envs),
 		Languages:     p.Languages,
@@ -207,7 +211,11 @@ func (ts *TaskService) UpdateTask(id string, p *TaskParam) *models.Task {
 	task.PinType = p.PinType
 	task.Schedule = p.Schedule
 	task.Timeout = p.Timeout
-	task.WorkDir = constant.NormalizeScriptPath(p.WorkDir)
+	if p.AgentID != nil && *p.AgentID != "" {
+		task.WorkDir = constant.CleanAgentWorkDir(p.WorkDir)
+	} else {
+		task.WorkDir = constant.NormalizeScriptPath(p.WorkDir)
+	}
 	task.CleanConfig = p.CleanConfig
 	task.Enabled = &p.Enabled
 	task.AgentID = p.AgentID
@@ -405,6 +413,12 @@ func (ts *TaskService) BatchUpdateTasks(req vo.TaskBatchUpdateReq) (int64, []str
 		if fields.AgentID != nil {
 			task.AgentID = fields.AgentID
 			selectCols = append(selectCols, "AgentID")
+			if *fields.AgentID != "" {
+				task.WorkDir = constant.CleanAgentWorkDir(task.WorkDir)
+			} else {
+				task.WorkDir = constant.NormalizeScriptPath(task.WorkDir)
+			}
+			selectCols = append(selectCols, "WorkDir")
 		}
 
 		// 6. 更新标签

@@ -1134,6 +1134,7 @@ func (es *ExecutorService) ExecuteRemoteForScheduler(ctx context.Context, task *
 		"command":      task.Command,
 		"pre_command":  task.PreCommand,
 		"post_command": task.PostCommand,
+		"work_dir":     constant.CleanAgentWorkDir(task.WorkDir),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("发送执行命令失败: %v", err)

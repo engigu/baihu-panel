@@ -158,7 +158,7 @@ watch(() => props.open, async (val: boolean) => {
     selectedTriggerType.value = props.task?.trigger_type || TRIGGER_TYPE.CRON
     // 初始化工作目录缓存，将当前任务的工作目录保存到对应的执行位置
     workDirCache.value = {
-      [agentId]: props.task?.work_dir || ''
+      [agentId]: agentId === 'local' ? (props.task?.work_dir || '') : cleanAgentWorkDir(props.task?.work_dir)
     }
     envSearchQuery.value = ''
     // 加载数据
@@ -166,7 +166,7 @@ watch(() => props.open, async (val: boolean) => {
     workDirCache.value = {
       [agentId]: agentId === 'local'
         ? normalizeLocalWorkDirForDisplay(props.task?.work_dir)
-        : (props.task?.work_dir || '')
+        : cleanAgentWorkDir(props.task?.work_dir)
     }
 
     // 加载通知配置
@@ -239,6 +239,16 @@ function normalizeLocalWorkDirForDisplay(workDir?: string | null): string {
   return workDir
 }
 
+function cleanAgentWorkDir(workDir?: string | null): string {
+  if (!workDir) return ''
+  const trimmed = workDir.trim()
+  if (!trimmed || trimmed === PATHS.SCRIPTS_DIR_PLACEHOLDER) return ''
+  if (trimmed.startsWith(PATHS.SCRIPTS_DIR_PLACEHOLDER)) {
+    return trimmed.slice(PATHS.SCRIPTS_DIR_PLACEHOLDER.length).replace(/^[/\\]+/, '')
+  }
+  return trimmed
+}
+
 function encodeLocalWorkDir(workDir?: string | null): string {
   if (!workDir || !workDir.trim()) return PATHS.SCRIPTS_DIR_PLACEHOLDER
   return normalizeScriptPath(workDir, scriptsDir.value)
@@ -278,7 +288,7 @@ async function save() {
     // 保存当前选择的执行位置对应的工作目录
     form.value.work_dir = selectedAgentId.value === 'local'
       ? encodeLocalWorkDir(currentWorkDir.value)
-      : currentWorkDir.value
+      : cleanAgentWorkDir(currentWorkDir.value)
 
     if (props.isBatch) {
       const update_fields: any = {}

@@ -57,6 +57,39 @@ func ResolveScriptsDir(rootDir string) string {
 	return filepath.Clean(defaultScriptsDir)
 }
 
+// isCrossPlatformAbs 判断路径是否为绝对路径（兼容跨平台场景，如在 Linux 服务端识别 Windows 盘符路径 C:\xxx，或在 Windows 识别 /xxx）
+func isCrossPlatformAbs(p string) bool {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return false
+	}
+	if filepath.IsAbs(p) {
+		return true
+	}
+	if strings.HasPrefix(p, "/") || strings.HasPrefix(p, "\\") {
+		return true
+	}
+	if len(p) >= 3 && ((p[0] >= 'a' && p[0] <= 'z') || (p[0] >= 'A' && p[0] <= 'Z')) && p[1] == ':' && (p[2] == '/' || p[2] == '\\') {
+		return true
+	}
+	return false
+}
+
+// CleanAgentWorkDir 清理并还原 Agent 任务的工作目录（移除意外混入的 $SCRIPTS_DIR$ 占位符前缀，保留原始路径格式）
+func CleanAgentWorkDir(rawPath string) string {
+	rawPath = strings.TrimSpace(rawPath)
+	if rawPath == "" || rawPath == ScriptsDirPlaceholder {
+		return ""
+	}
+	if strings.HasPrefix(rawPath, ScriptsDirPlaceholder) {
+		rel := strings.TrimPrefix(rawPath, ScriptsDirPlaceholder)
+		rel = strings.TrimPrefix(rel, "/")
+		rel = strings.TrimPrefix(rel, "\\")
+		return strings.TrimSpace(rel)
+	}
+	return rawPath
+}
+
 // NormalizeScriptPath 将任意路径归一化为以 $SCRIPTS_DIR$ 开头的逻辑路径
 // 逻辑：如果路径在当前系统的 ScriptsWorkDir (data/scripts) 目录下，归一化为 $SCRIPTS_DIR$/xxx；
 // 如果是相对路径（如 apps/xxx/bin），自动补全 $SCRIPTS_DIR$ 占位符前缀归一化存库；
@@ -67,8 +100,14 @@ func NormalizeScriptPath(rawPath string) string {
 		return ScriptsDirPlaceholder
 	}
 
-	// 如果本身已经是 $SCRIPTS_DIR$ 开头，统一斜杠后返回
+	// 如果本身已经是 $SCRIPTS_DIR$ 开头，检查是否误拼接了跨平台绝对路径（如 $SCRIPTS_DIR$/C:\xxx）
 	if strings.HasPrefix(rawPath, ScriptsDirPlaceholder) {
+		rel := strings.TrimPrefix(rawPath, ScriptsDirPlaceholder)
+		rel = strings.TrimPrefix(rel, "/")
+		rel = strings.TrimPrefix(rel, "\\")
+		if isCrossPlatformAbs(rel) {
+			return filepath.ToSlash(rel)
+		}
 		return filepath.ToSlash(filepath.Clean(rawPath))
 	}
 
@@ -85,7 +124,7 @@ func NormalizeScriptPath(rawPath string) string {
 	}
 
 	// 如果传入的是相对路径（如 apps/xxx/bin），自动补全 $SCRIPTS_DIR$ 占位符前缀归一化存库
-	if !filepath.IsAbs(cleanRaw) {
+	if !isCrossPlatformAbs(rawPath) {
 		return filepath.ToSlash(filepath.Join(ScriptsDirPlaceholder, cleanRaw))
 	}
 
@@ -110,11 +149,14 @@ func ResolveScriptPath(logicPath string) string {
 		if rel == "" {
 			return ScriptsWorkDir
 		}
+		if isCrossPlatformAbs(rel) {
+			return rel
+		}
 		return filepath.Clean(filepath.Join(ScriptsWorkDir, rel))
 	}
 
 	// 若不含 $SCRIPTS_DIR$ 占位符且为相对路径（非绝对路径），自动基于脚本根目录拼接还原
-	if !filepath.IsAbs(logicPath) {
+	if !isCrossPlatformAbs(logicPath) {
 		return filepath.Clean(filepath.Join(ScriptsWorkDir, logicPath))
 	}
 

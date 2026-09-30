@@ -111,10 +111,12 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		}
 	}
 
-	// 转换为绝对路径（Agent 任务保持原样）
+	// 转换为绝对路径（Agent 任务保持原样并清理可能混入的占位符）
 	workDir := req.WorkDir
 	if req.AgentID == nil || *req.AgentID == "" {
 		workDir = resolveWorkDir(req.WorkDir)
+	} else {
+		workDir = constant.CleanAgentWorkDir(req.WorkDir)
 	}
 
 	var sourceID string
@@ -394,10 +396,12 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		}
 	}
 
-	// 转换为绝对路径（Agent 任务保持原样）
+	// 转换为绝对路径（Agent 任务保持原样并清理可能混入的占位符）
 	workDir := req.WorkDir
 	if req.AgentID == nil || *req.AgentID == "" {
 		workDir = resolveWorkDir(req.WorkDir)
+	} else {
+		workDir = constant.CleanAgentWorkDir(req.WorkDir)
 	}
 
 	var sourceID string

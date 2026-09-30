@@ -58,6 +58,27 @@ func FindPwsh() (string, bool) {
 	return "", false
 }
 
+// FindPowerShell 尝试查找 Windows 系统自带的 powershell.exe（作为未安装 pwsh 时的回退方案，如在轻量 Agent 节点上）
+func FindPowerShell() (string, bool) {
+	if !IsWindows() {
+		return "", false
+	}
+	if path, err := exec.LookPath("powershell"); err == nil {
+		return path, true
+	}
+
+	sysRoot := os.Getenv("SystemRoot")
+	if sysRoot == "" {
+		sysRoot = `C:\Windows`
+	}
+	cand := filepath.Join(sysRoot, `System32\WindowsPowerShell\v1.0\powershell.exe`)
+	if fi, err := os.Stat(cand); err == nil && !fi.IsDir() {
+		return cand, true
+	}
+
+	return "", false
+}
+
 // VerifyPwsh checks if pwsh.exe is installed on Windows.
 // If it is not found, it calls logger.Fatalf and terminates the application.
 func VerifyPwsh() {

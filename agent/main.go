@@ -37,6 +37,8 @@ var (
 func main() {
 	// 强制设置全局时区为东八区
 	time.Local = systime.CST
+	// Agent 模式下允许 Windows 在未安装 pwsh 时降级使用系统自带的 powershell.exe
+	utils.SetAllowPowerShellFallback(true)
 	exePath, _ := os.Executable()
 	exeDir := filepath.Dir(exePath)
 	os.Chdir(exeDir)
