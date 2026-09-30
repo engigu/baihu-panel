@@ -30,9 +30,10 @@ type NotifyChannel struct {
 
 // NotifyMessage 通知消息
 type NotifyMessage struct {
-	Title   string `json:"title"`
-	Content string `json:"content"`
-	Format  string `json:"format"` // text/markdown/html，为空则按 text 处理
+	Title   string         `json:"title"`
+	Content string         `json:"content"`
+	Format  string         `json:"format"` // text/markdown/html，为空则按 text 处理
+	Options map[string]any `json:"options"`
 }
 
 // NotifyResult 发送结果
@@ -254,7 +255,7 @@ func (s *NotificationService) GetBindingsByEvent(bindingType, event, dataID stri
 
 // SendToChannel 使用 messenger SDK 发送通知到指定渠道
 func (s *NotificationService) SendToChannel(channel NotifyChannel, msg *NotifyMessage) *NotifyResult {
-	m := &messenger.Message{Title: msg.Title}
+	m := &messenger.Message{Title: msg.Title, Options: msg.Options}
 	switch msg.Format {
 	case "html":
 		m.HTML = msg.Content

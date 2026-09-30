@@ -171,18 +171,32 @@ func (nc *NotificationController) BatchSaveBindings(c *gin.Context) {
 // SendNotification API 发送通知（供脚本调用）
 func (nc *NotificationController) SendNotification(c *gin.Context) {
 	var req struct {
-		ChannelID string `json:"channel_id"`
-		Title     string `json:"title"`
-		Text      string `json:"text"`
-		Content   string `json:"content"`
-		Format    string `json:"format"`
+		ChannelID string         `json:"channel_id"`
+		Title     string         `json:"title"`
+		Text      string         `json:"text"`
+		Content   string         `json:"content"`
+		Options   map[string]any `json:"options"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
 
-	if req.ChannelID == "" || req.Title == "" {
+	opts := req.Options
+	if opts == nil {
+		opts = make(map[string]any)
+	}
+
+	channelID := req.ChannelID
+	if channelID == "" {
+		if cid, ok := opts["channel_id"].(string); ok && cid != "" {
+			channelID = cid
+		}
+	}
+
+	formatVal, _ := opts["format"].(string)
+
+	if channelID == "" || req.Title == "" {
 		utils.BadRequest(c, "channel_id 和 title 不能为空")
 		return
 	}
@@ -193,10 +207,11 @@ func (nc *NotificationController) SendNotification(c *gin.Context) {
 		body = req.Text
 	}
 
-	result := nc.notifyService.SendByChannelID(req.ChannelID, &services.NotifyMessage{
+	result := nc.notifyService.SendByChannelID(channelID, &services.NotifyMessage{
 		Title:   req.Title,
 		Content: body,
-		Format:  req.Format,
+		Format:  formatVal,
+		Options: opts,
 	})
 
 	utils.Success(c, result)

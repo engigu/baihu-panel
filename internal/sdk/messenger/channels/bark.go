@@ -46,7 +46,7 @@ func (c *BarkChannel) Send(config ChannelConfig, msg *Message) (*Result, error) 
 		CipherKey: config.GetString("cipher_key"),
 	}
 
-	res, err := cli.Request(msg.Title, msg.Text)
+	res, err := cli.Request(msg.Title, msg.Text, msg.GetOptions())
 	if err != nil {
 		return ErrorResult(string(res), err), nil
 	}
