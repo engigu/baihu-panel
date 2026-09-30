@@ -5,6 +5,21 @@
 ## 最近更新概览
 
 
+### 2026.09.30 - 远程 Agent 工作目录解析修复、Windows Agent Shell 免依赖回退、Bark 动态参数覆盖与安全加固 (v1.4.1)
+- **远程 Agent 任务工作目录解析修复与执行优化 (Fix & Agent)**：
+  - **消除 `$SCRIPTS_DIR$` 占位符污染**：修复 Agent 远程任务在创建、更新及切换启用开关时工作目录被错误归一化为面板本地 `$SCRIPTS_DIR$` 占位符（导致远程节点启动进程报错 `no such file or directory`）的缺陷，并对数据库历史存量脏数据实现全链路自动清洗与无损还原；
+  - **跨平台盘符路径精准识别**：新增跨平台绝对路径识别（`isCrossPlatformAbs`），修复 Linux 服务端向 Windows Agent 下发盘符路径（如 `C:\...`）时被误判为相对路径并错误拼接 `$SCRIPTS_DIR$/` 前缀的问题；
+  - **禁用任务手动触发与实时目录透传**：修复禁用状态或未配置 Cron 表达式的 Agent 任务无法通过面板点击“立即运行”的问题，并在下发立即执行指令时实时透传最新工作目录。
+- **Windows Agent Shell 免依赖降级回退支持 (Feature & Agent)**：
+  - **自动回退内置 PowerShell**：针对 Windows 远程 Agent 节点开放 Shell 降级策略（`SetAllowPowerShellFallback`），当受控机器未安装 PowerShell 7 (`pwsh.exe`) 时自动回退使用系统自带的 `powershell.exe`，实现单二进制零依赖开箱即用（主面板服务端仍保持 `pwsh` 强校验）。
+- **Bark 推送动态参数覆盖与内置 SDK 增强 (Feature)**：
+  - **发送级个性化参数覆盖**：Bark 通知渠道支持在调用发送接口时通过 `options` 动态传入额外参数（如 `group`、`icon`、`url`、`sound`、`level`、`badge` 等），按需灵活覆盖渠道全局默认配置（[#179](https://github.com/engigu/baihu-panel/pull/179)）；
+  - **多语言内置 SDK 同步升级**：同步更新内置 Python (`notify.py`) 与 Node.js (`notify.js`) 通知助手库及使用文档，无缝支持透传渠道扩展参数。
+- **演示模式备份安全加固与界面细节体验优化 (Security, UI & Docs)**：
+  - **演示模式严禁备份导出**：在演示模式下（`BH_DEMO_MODE=true`）全面拦截并禁止创建与下载系统备份文件，防止公共演示环境数据或配置通过备份接口外泄；
+  - **全局时间显示统一与交互细节打磨**：统一应用市场、任务编辑、运行日志、通知渠道、系统监控及备份列表的时间友好度格式化；禁用状态的任务隐藏无意义的“下次运行时间”展示；登录日志查询 IP 归属地失败时静默处理不再弹出错误提示（[#180](https://github.com/engigu/baihu-panel/pull/180)）；
+  - **文档与 README 视觉排版优化**：重构 README 排版结构，采用 GitHub 原生告警块与轻量矢量徽章，新增贡献者头像墙与社区交流群入口。
+
 ### 2026.09.29 - RESTful 状态码与业务码双轨对齐、Bark 端到端加密推送、任务深层目录展开、安全防护与体验全面升级 (v1.4.0)
 - **HTTP 状态码与业务码双轨对齐规范 (Architecture & API)**：
   - **双轨标准化对齐**：全面重构系统响应信封，彻底消除冗余嵌套，统一收敛至 7 大核心标准 HTTP 状态码（200 OK、201 Created、204 No Content、400 Bad Request、401 Unauthorized、403 Forbidden、500 Internal Server Error），使得 HTTP 层面的传输状态与 JSON 信封内的业务业务码严格一致（[#174](https://github.com/engigu/baihu-panel/pull/174)）；

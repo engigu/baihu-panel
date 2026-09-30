@@ -18,16 +18,17 @@
 ## 更新日志
 
 > [!NOTE]
-> **最新版本**：[v1.4.0](https://github.com/engigu/baihu-panel/releases/tag/v1.4.0) (2026.09.29)
+> **最新版本**：[v1.4.1](https://github.com/engigu/baihu-panel/releases/tag/v1.4.1) (2026.09.30)
 
-* **RESTful 状态码与业务码双轨对齐**：API 响应消除冗余嵌套，统一收敛至 7 大标准 HTTP 状态码并规范错误回传 ([#174](https://github.com/engigu/baihu-panel/pull/174))。
-* **Bark 端到端加密推送**：支持 AES (CBC/ECB/GCM) 高强度加密通道与随机安全 IV，通知配置弹窗新增开关与下拉动态表单控件 ([#177](https://github.com/engigu/baihu-panel/pull/177))。
-* **任务编辑目录层级深层展开与体验优化**：任务编辑工作目录支持上级节点自动展开定位 ([#178](https://github.com/engigu/baihu-panel/pull/178))，修复通知时机选择 ([#176](https://github.com/engigu/baihu-panel/pull/176))，优化长目录显示与时间排版。
-* **安全加固与演示模式防护**：演示模式下禁止恢复备份数据；历史明文机密全量脱敏防泄露 ([#175](https://github.com/engigu/baihu-panel/pull/175))；避免管理员重复初始化 ([#172](https://github.com/engigu/baihu-panel/pull/172))；禁用环境变量彻底跳过注入。
+* **远程 Agent 工作目录解析修复与执行优化**：彻底修复 Agent 任务工作目录被污染为 `$SCRIPTS_DIR$` 及跨平台 Windows 盘符路径误判问题，自动清洗历史脏数据，并支持禁用状态任务手动立即运行。
+* **Windows Agent Shell 免依赖降级回退**：Windows 远程 Agent 在未安装 `pwsh.exe` 的机器上自动回退使用系统内置 `powershell.exe`，实现零依赖开箱即用。
+* **Bark 动态参数覆盖与 SDK 增强**：支持发送时通过 `options` 动态覆盖 Bark 渠道参数（`group`、`icon`、`sound` 等），同步升级内置 Python / Node.js 通知 SDK ([#179](https://github.com/engigu/baihu-panel/pull/179))。
+* **演示模式备份加固与界面细节优化**：演示模式下禁止创建和下载备份文件；统一全局时间友好度显示并隐藏禁用任务的下次运行时间 ([#180](https://github.com/engigu/baihu-panel/pull/180))；全面升级 README 排版与社区展示。
 
 <details>
 <summary><b>点击展开查看近期历史版本日志</b></summary>
 
+- **2026.09.29 (v1.4.0)** - RESTful 状态码双轨对齐、Bark 端到端加密推送、任务深层目录展开。
 - **2026.09.23 (v1.3.0)** - 机密端到端安全解密 (ECDH+AES-GCM)、日志冗余任务名、文档体验升级。
 - **2026.09.22 (v1.2.0)** - 声明式应用引擎与应用市场、2FA 备份恢复修复、跨平台路径升级。
 - **2026.09.11 (v1.1.30)** - 标签关联资源穿透跳转、输入法回车丢失修复、调度引擎调优。
