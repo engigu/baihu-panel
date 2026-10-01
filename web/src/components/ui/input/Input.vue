@@ -3,15 +3,20 @@ import { ref, type HTMLAttributes } from "vue"
 import { useVModel } from "@vueuse/core"
 import { cn } from "@/lib/utils"
 
-const props = defineProps<{
-  defaultValue?: string | number
-  modelValue?: string | number
-  class?: HTMLAttributes["class"]
-  readonly?: boolean
-  autocomplete?: string
-  name?: string
-  type?: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    defaultValue?: string | number
+    modelValue?: string | number
+    class?: HTMLAttributes["class"]
+    readonly?: boolean
+    autocomplete?: string
+    name?: string
+    type?: string
+    ignorePasswordManager?: boolean // 忽略密码管理器
+  }>(), {
+    ignorePasswordManager: true
+  }
+)
 
 const emits = defineEmits<{
   (e: "update:modelValue", payload: string | number): void
@@ -90,9 +95,9 @@ defineExpose({
     autocorrect="off"
     autocapitalize="off"
     spellcheck="false"
-    data-lpignore="true"
-    data-1p-ignore="true"
-    data-bwignore="true"
+    :data-lpignore="props.ignorePasswordManager || null"
+    :data-1p-ignore="props.ignorePasswordManager || null"
+    :data-bwignore="props.ignorePasswordManager || null"
     data-form-type="other"
     :class="cn(
       'file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
