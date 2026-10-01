@@ -167,8 +167,9 @@ onUnmounted(() => {
             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loading }" />
           </Button>
 
-          <Button variant="outline" class="h-9 px-3 shrink-0 shadow-sm" @click="openDownloadDialog">
-            <Download class="h-4 w-4 md:mr-2" /> <span class="hidden md:inline">下载 Agent</span>
+          <Button variant="outline" class="h-9 px-3 shrink-0 shadow-sm gap-1.5" @click="openDownloadDialog">
+            <Download class="h-4 w-4" />
+            <span class="hidden md:inline">下载 Agent</span>
           </Button>
         </div>
 

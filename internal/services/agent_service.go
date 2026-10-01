@@ -502,10 +502,13 @@ func (s *AgentService) GetAvailablePlatforms() []map[string]string {
 
 	for _, f := range files {
 		name := f.Name()
-		// baihu-agent-linux-amd64.tar.gz
-		if strings.HasPrefix(name, "baihu-agent-") && strings.HasSuffix(name, ".tar.gz") {
-			// 去掉 .tar.gz 后缀
-			baseName := strings.TrimSuffix(name, ".tar.gz")
+		// baihu-agent-linux-amd64.tar.gz 或 baihu-agent-windows-amd64.zip
+		if strings.HasPrefix(name, "baihu-agent-") && (strings.HasSuffix(name, ".tar.gz") || strings.HasSuffix(name, ".zip")) {
+			ext := ".tar.gz"
+			if strings.HasSuffix(name, ".zip") {
+				ext = ".zip"
+			}
+			baseName := strings.TrimSuffix(name, ext)
 			parts := strings.Split(baseName, "-")
 			if len(parts) >= 4 {
 				platforms = append(platforms, map[string]string{
@@ -522,21 +525,24 @@ func (s *AgentService) GetAvailablePlatforms() []map[string]string {
 
 // GetAgentBinary 获取 Agent 压缩包
 func (s *AgentService) GetAgentBinary(osType, arch string) ([]byte, string, error) {
-	filename := fmt.Sprintf("baihu-agent-%s-%s.tar.gz", osType, arch)
+	// 尝试 .zip 与 .tar.gz 两种可能的后缀
+	suffixes := []string{".zip", ".tar.gz"}
+	if osType != "windows" {
+		suffixes = []string{".tar.gz", ".zip"}
+	}
 
-	// 优先从 /opt/agent 读取（容器内）
-	filePath := filepath.Join("/opt/agent", filename)
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		// 回退到 data/agent（本地开发）
-		filePath = filepath.Join("data/agent", filename)
-		data, err = os.ReadFile(filePath)
-		if err != nil {
-			return nil, "", &ServiceError{Message: "未找到对应平台的 Agent 程序"}
+	dirs := []string{"/opt/agent", "data/agent"}
+	for _, dir := range dirs {
+		for _, ext := range suffixes {
+			filename := fmt.Sprintf("baihu-agent-%s-%s%s", osType, arch, ext)
+			filePath := filepath.Join(dir, filename)
+			if data, err := os.ReadFile(filePath); err == nil {
+				return data, filename, nil
+			}
 		}
 	}
 
-	return data, filename, nil
+	return nil, "", &ServiceError{Message: "未找到对应平台的 Agent 程序"}
 }
 
 // SetForceUpdate 设置强制更新标志
