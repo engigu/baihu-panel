@@ -61,22 +61,17 @@ onMounted(loadAbout)
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
       <!-- 左列卡片：白虎面板与技术生态 -->
       <Card class="shadow-sm flex flex-col justify-between pt-4.5 pb-5">
-        <CardHeader class="pb-2.5 pt-0 px-5">
-          <div class="flex items-start justify-between gap-4">
-            <div class="space-y-1">
-              <div class="flex items-center gap-2 flex-wrap">
-                <CardTitle class="text-lg font-bold">白虎面板</CardTitle>
-                <span class="text-xs text-muted-foreground">Baihu Panel</span>
-                <Badge
-                  variant="secondary"
-                  class="font-mono text-[11px] px-1.5 py-0 bg-primary/10 text-primary border-primary/20"
-                >
-                  {{ aboutInfo?.version || 'dev' }}
-                </Badge>
-              </div>
-              <CardDescription class="text-xs leading-relaxed pt-0.5">
-                极致轻量、高性能的自动化任务调度平台。深度集成 Mise 运行时管理，支持多语言环境动态切换与全自动依赖管理。
-              </CardDescription>
+        <CardHeader class="pb-3 pt-0 px-5 space-y-2">
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2 flex-wrap min-w-0">
+              <CardTitle class="text-base sm:text-lg font-bold">白虎面板</CardTitle>
+              <span class="text-xs text-muted-foreground">Baihu Panel</span>
+              <Badge
+                variant="secondary"
+                class="font-mono text-[10px] sm:text-[11px] px-1.5 py-0 bg-primary/10 text-primary border-primary/20 shrink-0"
+              >
+                {{ aboutInfo?.version || 'dev' }}
+              </Badge>
             </div>
 
             <a
@@ -87,13 +82,17 @@ onMounted(loadAbout)
               <Button
                 variant="outline"
                 size="sm"
-                class="h-7.5 px-2.5 rounded-full border-primary/20 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/10 gap-1.5 shadow-none"
+                class="h-7 px-2.5 rounded-full border-primary/20 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/10 gap-1.5 shadow-none"
               >
                 <History class="w-3.5 h-3.5" />
                 <span>更新日志</span>
               </Button>
             </a>
           </div>
+
+          <CardDescription class="text-xs text-muted-foreground leading-relaxed pt-0.5">
+            极致轻量、高性能自动化任务调度平台。深度集成 Mise 运行时，支持多语言环境动态切换与依赖全自动管理。
+          </CardDescription>
         </CardHeader>
 
         <CardContent class="flex-1 flex flex-col justify-between px-5 pb-0 pt-0">
