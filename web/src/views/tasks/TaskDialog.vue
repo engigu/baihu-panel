@@ -573,7 +573,7 @@ async function save() {
                         </ScrollArea>
                       </PopoverContent>
                     </Popover>
-                    <div v-if="selectedEnvs.length > 0" class="flex flex-wrap gap-2 p-3 rounded-xl bg-muted/10 border border-muted-foreground/10 min-h-12"><div v-for="env in selectedEnvs" :key="env?.id" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background border border-muted-foreground/15 text-[11px] font-mono font-medium">{{ env?.name }}<X class="h-2.5 w-2.5 cursor-pointer" @click="removeEnv(env!.id)" /></div></div>
+                    <div v-if="selectedEnvs.length > 0" class="flex flex-wrap gap-2 p-3 rounded-xl bg-muted/10 border border-muted-foreground/10 min-h-12"><div v-for="env in selectedEnvs" :key="env?.id" :title="env?.remark" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background border border-muted-foreground/15 text-[11px] font-mono font-medium">{{ env?.name }}<X class="h-2.5 w-2.5 cursor-pointer" @click="removeEnv(env!.id)" /></div></div>
                   </div>
                 </div>
               </div>
