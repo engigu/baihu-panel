@@ -249,7 +249,7 @@ onMounted(loadAbout)
                     <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </span>
                 </div>
-                <div class="my-0.5 text-2xl font-bold tracking-tight text-foreground font-inter truncate">
+                <div class="my-0.5 text-[15px] font-bold tracking-tight text-foreground truncate font-inter" :title="aboutInfo?.version || ''">
                   {{ aboutInfo?.version || 'dev' }}
                 </div>
                 <div class="text-[10px] truncate">
@@ -288,17 +288,17 @@ onMounted(loadAbout)
       </Card>
     </div>
 
-    <!-- 底部版权声明 -->
-    <div class="pt-1 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+    <!-- 底部版权声明（单行内不换行） -->
+    <div class="pt-2 text-center text-[10px] sm:text-xs text-muted-foreground flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap">
       <span>© 2025 - Present Baihu Panel. 保留所有权利。</span>
       <span class="opacity-20">|</span>
       <a
         href="https://github.com/engigu/baihu-panel/"
         target="_blank"
-        class="inline-flex items-center gap-1 text-primary hover:underline"
+        class="inline-flex items-center gap-1 text-primary hover:underline shrink-0"
       >
         <ExternalLink class="w-3 h-3" />
-        GitHub 仓库
+        <span>GitHub 仓库</span>
       </a>
     </div>
   </div>

@@ -209,36 +209,36 @@ onMounted(loadSettings)
 
         <!-- 模块 2: OpenAPI 开放接口能力 -->
         <Card class="shadow-sm">
-          <CardHeader class="pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <CardTitle class="flex items-center gap-2 text-base">
-                <Code2 class="w-4 h-4 text-sky-500" />
-                <span>OpenAPI 接口与集成</span>
-                <Badge variant="secondary" class="font-normal text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20">
+          <CardHeader class="pb-4 space-y-2">
+            <div class="flex items-center justify-between gap-3">
+              <CardTitle class="flex items-center gap-2 text-sm sm:text-base font-semibold min-w-0">
+                <Code2 class="w-4 h-4 text-sky-500 shrink-0" />
+                <span class="truncate">OpenAPI 接口与集成</span>
+                <Badge variant="secondary" class="font-normal text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 shrink-0">
                   推荐接入
                 </Badge>
               </CardTitle>
-              <CardDescription class="mt-1">通过 Bearer Token 实现外部系统调用</CardDescription>
+              <div class="flex items-center gap-2 shrink-0">
+                <Switch v-model="form.openapi_enabled" id="openapi-enabled" />
+                <Label for="openapi-enabled" class="text-xs cursor-pointer">开启</Label>
+              </div>
             </div>
-            <div class="flex items-center gap-3 shrink-0">
+            <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span class="truncate">通过 Bearer Token 实现外部系统调用</span>
               <a
                 href="#"
                 @click.prevent="openSwaggerDocs"
-                class="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                class="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline shrink-0"
               >
                 文档
                 <ExternalLink class="w-3 h-3" />
               </a>
-              <div class="flex items-center gap-2">
-                <Switch v-model="form.openapi_enabled" id="openapi-enabled" />
-                <Label for="openapi-enabled" class="text-xs cursor-pointer">开启</Label>
-              </div>
             </div>
           </CardHeader>
           <CardContent class="space-y-4">
             <p class="text-xs text-muted-foreground leading-relaxed">
               外部请求时需携带请求头
-              <code class="bg-muted px-1.5 py-0.5 rounded text-[11px] font-mono select-all">Authorization: Bearer &lt;Token&gt;</code>。
+              <code class="bg-muted px-1.5 py-0.5 rounded text-[11px] font-mono select-all inline-block break-all">Authorization: Bearer &lt;Token&gt;</code>。
             </p>
 
             <div class="space-y-3">
@@ -247,8 +247,8 @@ onMounted(loadSettings)
                 <div class="flex items-center space-x-2">
                   <Input
                     v-model="form.openapi_token"
-                    placeholder="点击右侧按钮生成 32 位 Token"
-                    class="text-sm h-9 font-mono"
+                    placeholder="点击生成 32 位 Token"
+                    class="text-xs sm:text-sm h-9 font-mono flex-1 min-w-0"
                     :disabled="!form.openapi_enabled"
                   />
                   <Button
@@ -281,7 +281,7 @@ onMounted(loadSettings)
                 <Input
                   v-model="form.openapi_token_expire"
                   type="date"
-                  class="w-full dark:[color-scheme:dark] h-9"
+                  class="w-full dark:[color-scheme:dark] h-9 text-xs sm:text-sm"
                   :disabled="!form.openapi_enabled"
                 />
                 <p class="text-[10px] text-muted-foreground">超过此日期后 Token 将失效，置空代表永不过期</p>
@@ -302,10 +302,10 @@ onMounted(loadSettings)
             <CardDescription>按保留天数与条数双维度监控，定期自动清理历史过期数据</CardDescription>
           </CardHeader>
           <CardContent class="space-y-4">
-            <!-- 4 大日志清理条目（单列行式，横向舒展不拥挤） -->
+            <!-- 4 大日志清理条目（响应式单列/双行适配，小屏下自动折行不挤压） -->
             <div class="space-y-2.5">
               <!-- 系统通知 -->
-              <div class="p-3 rounded-xl border bg-muted/20 flex items-center justify-between gap-3">
+              <div class="p-3 rounded-xl border bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div class="flex items-center gap-2.5 min-w-0">
                   <div class="p-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
                     <Bell class="w-4 h-4" />
@@ -315,8 +315,8 @@ onMounted(loadSettings)
                     <div class="text-[10px] text-muted-foreground truncate">站内消息通知及系统公告</div>
                   </div>
                 </div>
-                <div class="flex items-center gap-2 shrink-0">
-                  <div class="relative w-24">
+                <div class="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
+                  <div class="relative flex-1 sm:w-24">
                     <Input
                       v-model="form.system_notice_days"
                       type="number"
@@ -325,7 +325,7 @@ onMounted(loadSettings)
                     />
                     <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">天</span>
                   </div>
-                  <div class="relative w-32">
+                  <div class="relative flex-1 sm:w-32">
                     <Input
                       v-model="form.system_notice_max_count"
                       type="number"
@@ -338,7 +338,7 @@ onMounted(loadSettings)
               </div>
 
               <!-- 推送日志 -->
-              <div class="p-3 rounded-xl border bg-muted/20 flex items-center justify-between gap-3">
+              <div class="p-3 rounded-xl border bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div class="flex items-center gap-2.5 min-w-0">
                   <div class="p-1.5 rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400 shrink-0">
                     <Send class="w-4 h-4" />
@@ -348,8 +348,8 @@ onMounted(loadSettings)
                     <div class="text-[10px] text-muted-foreground truncate">通道消息分发与推送结果</div>
                   </div>
                 </div>
-                <div class="flex items-center gap-2 shrink-0">
-                  <div class="relative w-24">
+                <div class="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
+                  <div class="relative flex-1 sm:w-24">
                     <Input
                       v-model="form.push_log_days"
                       type="number"
@@ -358,7 +358,7 @@ onMounted(loadSettings)
                     />
                     <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">天</span>
                   </div>
-                  <div class="relative w-32">
+                  <div class="relative flex-1 sm:w-32">
                     <Input
                       v-model="form.push_log_max_count"
                       type="number"
@@ -371,7 +371,7 @@ onMounted(loadSettings)
               </div>
 
               <!-- 登录日志 -->
-              <div class="p-3 rounded-xl border bg-muted/20 flex items-center justify-between gap-3">
+              <div class="p-3 rounded-xl border bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div class="flex items-center gap-2.5 min-w-0">
                   <div class="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
                     <ShieldCheck class="w-4 h-4" />
@@ -381,8 +381,8 @@ onMounted(loadSettings)
                     <div class="text-[10px] text-muted-foreground truncate">用户登录认证与安全审计</div>
                   </div>
                 </div>
-                <div class="flex items-center gap-2 shrink-0">
-                  <div class="relative w-24">
+                <div class="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
+                  <div class="relative flex-1 sm:w-24">
                     <Input
                       v-model="form.login_log_days"
                       type="number"
@@ -391,7 +391,7 @@ onMounted(loadSettings)
                     />
                     <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">天</span>
                   </div>
-                  <div class="relative w-32">
+                  <div class="relative flex-1 sm:w-32">
                     <Input
                       v-model="form.login_log_max_count"
                       type="number"
@@ -404,7 +404,7 @@ onMounted(loadSettings)
               </div>
 
               <!-- 调度日志 -->
-              <div class="p-3 rounded-xl border bg-muted/20 flex items-center justify-between gap-3">
+              <div class="p-3 rounded-xl border bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div class="flex items-center gap-2.5 min-w-0">
                   <div class="p-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
                     <CalendarClock class="w-4 h-4" />
@@ -414,8 +414,8 @@ onMounted(loadSettings)
                     <div class="text-[10px] text-muted-foreground truncate">定时任务触发与运行记录</div>
                   </div>
                 </div>
-                <div class="flex items-center gap-2 shrink-0">
-                  <div class="relative w-24">
+                <div class="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
+                  <div class="relative flex-1 sm:w-24">
                     <Input
                       v-model="form.scheduler_log_days"
                       type="number"
@@ -424,7 +424,7 @@ onMounted(loadSettings)
                     />
                     <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">天</span>
                   </div>
-                  <div class="relative w-32">
+                  <div class="relative flex-1 sm:w-32">
                     <Input
                       v-model="form.scheduler_log_max_count"
                       type="number"
@@ -457,24 +457,28 @@ onMounted(loadSettings)
           </CardContent>
         </Card>
 
-        <!-- 模块 4: 配置保存与生效面板（高度精确对齐左侧） -->
-        <Card class="shadow-sm">
-          <CardContent class="p-4 space-y-3">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
+        <!-- 模块 4: 配置保存与生效面板 -->
+        <Card class="shadow-sm flex flex-col justify-between pt-4.5 pb-5">
+          <CardHeader class="pb-3 pt-0 px-5">
+            <div class="space-y-1">
+              <CardTitle class="text-base flex items-center gap-2">
                 <Save class="w-4 h-4 text-emerald-500" />
-                <span class="text-sm font-semibold text-foreground">保存与应用配置</span>
-              </div>
+                <span>保存与应用配置</span>
+              </CardTitle>
+              <CardDescription class="text-xs leading-relaxed pt-0.5">
+                提交并持久化当前设置，站点品牌、会话参数、日志清理策略及全局 OpenAPI 访问凭据将立即同步生效。
+              </CardDescription>
+            </div>
+          </CardHeader>
+
+          <CardContent class="px-5 pb-0 pt-0">
+            <!-- 底部操作按钮栏 -->
+            <div class="pt-3 border-t border-border/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <span class="text-[11px] text-muted-foreground flex items-center gap-1.5">
                 <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse"></span>
-                即时生效
+                修改提交后全站配置即时同步生效
               </span>
-            </div>
-            <p class="text-xs text-muted-foreground leading-relaxed">
-              提交并持久化当前设置，站点品牌、会话参数、日志清理策略及全局 OpenAPI 访问凭据将立即同步生效。
-            </p>
-            <div class="flex justify-end pt-0.5">
-              <Button @click="saveSettings" :disabled="loading" class="shadow-sm px-6 h-9">
+              <Button @click="saveSettings" :disabled="loading" class="h-8.5 px-5 text-xs font-medium shadow-sm w-full sm:w-auto justify-center">
                 {{ loading ? '保存中...' : '保存站点配置' }}
               </Button>
             </div>

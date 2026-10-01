@@ -215,27 +215,32 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- 底部操作按钮组 -->
-          <div class="pt-2 flex flex-wrap items-center gap-2.5">
-            <Button
-              @click="createBackup"
-              :disabled="backupLoading || isDemoMode"
-              class="h-8.5 px-4 text-xs font-medium shadow-sm gap-1.5"
-              :title="isDemoMode ? '演示模式下禁止创建备份' : '创建备份'"
-            >
-              <Archive class="w-3.5 h-3.5" />
-              <span>{{ backupLoading ? '备份生成中...' : '创建新备份' }}</span>
-            </Button>
+          <!-- 底部操作按钮栏 -->
+          <div class="pt-3 border-t border-border/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-1">
+            <span class="text-[11px] text-muted-foreground">
+              打包归档当前系统完整配置与任务快照
+            </span>
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+              <Button
+                @click="createBackup"
+                :disabled="backupLoading || isDemoMode"
+                class="h-8.5 px-4 text-xs font-medium shadow-sm gap-1.5 w-full sm:w-auto justify-center"
+                :title="isDemoMode ? '演示模式下禁止创建备份' : '创建备份'"
+              >
+                <Archive class="w-3.5 h-3.5" />
+                <span>{{ backupLoading ? '备份生成中...' : '创建新备份' }}</span>
+              </Button>
 
-            <Button
-              v-if="hasBackup && !isDemoMode"
-              @click="downloadBackup"
-              variant="outline"
-              class="h-8.5 px-3.5 text-xs font-medium shadow-sm gap-1.5 hover:bg-accent"
-            >
-              <Download class="w-3.5 h-3.5" />
-              <span>下载备份包 (.zip)</span>
-            </Button>
+              <Button
+                v-if="hasBackup && !isDemoMode"
+                @click="downloadBackup"
+                variant="outline"
+                class="h-8.5 px-3.5 text-xs font-medium shadow-sm gap-1.5 hover:bg-accent w-full sm:w-auto justify-center"
+              >
+                <Download class="w-3.5 h-3.5" />
+                <span>下载备份包 (.zip)</span>
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -301,19 +306,24 @@ onMounted(async () => {
           </div>
 
           <!-- 隐藏文件输入框与动作触发区 -->
-          <div class="pt-2">
-            <input
-              ref="fileInput"
-              type="file"
-              accept=".zip"
-              class="hidden"
-              @change="handleFileSelect"
-            />
+          <input
+            ref="fileInput"
+            type="file"
+            accept=".zip"
+            class="hidden"
+            @change="handleFileSelect"
+          />
+
+          <!-- 底部操作按钮栏 -->
+          <div class="pt-3 border-t border-border/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-1">
+            <span class="text-[11px] text-muted-foreground">
+              导入并覆写全量快照归档数据
+            </span>
             <Button
               @click="showRestoreConfirm"
               :disabled="restoreLoading || isDemoMode"
               variant="outline"
-              class="h-8.5 px-4 text-xs font-medium shadow-sm w-full sm:w-auto gap-1.5"
+              class="h-8.5 px-4 text-xs font-medium shadow-sm w-full sm:w-auto gap-1.5 justify-center"
               :title="isDemoMode ? '演示模式下禁止恢复' : '选择备份文件并恢复'"
             >
               <UploadCloud class="w-3.5 h-3.5" />
