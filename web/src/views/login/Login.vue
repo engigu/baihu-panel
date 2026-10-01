@@ -193,19 +193,19 @@ onMounted(loadSiteSettings)
               <div v-if="!requireOtp" class="space-y-4">
                 <div class="space-y-2">
                   <Label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 ml-1">用户名</Label>
-                  <Input v-model="username" placeholder="请输入用户名"
+                  <Input v-model="username" name="username" autocomplete="username" :ignore-password-manager="false" placeholder="请输入用户名"
                     class="h-12 text-base rounded-2xl bg-background/50 border-white/50 dark:border-white/5 focus:ring-4 focus:ring-primary/10 transition-all" />
                 </div>
                 <div class="space-y-2">
                   <Label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 ml-1">密码</Label>
-                  <Input v-model="password" type="password" placeholder="请输入密码"
+                  <Input v-model="password" name="password" autocomplete="current-password" :ignore-password-manager="false" type="password" placeholder="请输入密码"
                     class="h-12 text-base rounded-2xl bg-background/50 border-white/50 dark:border-white/5 focus:ring-4 focus:ring-primary/10 transition-all" />
                 </div>
               </div>
               <div v-else class="space-y-4">
                 <div class="space-y-2">
                   <Label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 ml-1">两步验证码 (OTP)</Label>
-                  <Input v-model="otpCode" placeholder="请输入 6 位验证码" autocomplete="one-time-code" maxlength="6"
+                  <Input v-model="otpCode" name="otp" placeholder="请输入 6 位验证码" autocomplete="one-time-code" :ignore-password-manager="false" maxlength="6"
                     class="h-12 text-base rounded-2xl bg-background/50 border-white/50 dark:border-white/5 focus:ring-4 focus:ring-primary/10 transition-all text-center tracking-[0.5em]" />
                 </div>
               </div>
