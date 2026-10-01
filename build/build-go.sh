@@ -288,8 +288,8 @@ build_ci_artifacts() {
     build_server linux amd64 "${base_output}/bin/linux-amd64/baihu"
     build_server linux arm64 "${base_output}/bin/linux-arm64/baihu"
 
-    # 编译全平台客户端 Agent
-    build_agents "${base_output}/agent" false
+    # 编译全平台客户端 Agent（包含 Windows）
+    build_agents "${base_output}/agent" true
 
     log_step "CI 制品装配完毕，产物清单概览:"
     find "${base_output}" -type f -exec ls -lh {} + | awk '{print "   " $9 " (" $5 ")"}'
