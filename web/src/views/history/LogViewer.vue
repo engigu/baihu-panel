@@ -67,7 +67,10 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-0 sm:p-4">
+    <div v-if="open"
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-0 sm:p-4"
+         @click.self="close"
+    >
       <div
         :class="[
           'bg-background shadow-2xl flex flex-col transition-all duration-300 overflow-hidden',
