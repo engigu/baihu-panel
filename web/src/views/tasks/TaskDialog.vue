@@ -603,7 +603,7 @@ async function save() {
             <span :title="form.updated_at || ''">{{ isEdit ? (form.updated_at ? formatDateTime(form.updated_at) : '刚才') : '现在' }}</span>
           </div>
           <div class="flex gap-3">
-            <Button variant="ghost" size="sm" class="hover:bg-muted font-medium text-xs px-6" @click="emit('update:open', false)">取消</Button>
+            <Button variant="outline" size="sm" class="hover:bg-muted font-medium text-xs px-6" @click="emit('update:open', false)">取消</Button>
             <Button size="sm" class="px-8 font-semibold text-xs shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90" @click="save">确定保存</Button>
           </div>
         </div>
