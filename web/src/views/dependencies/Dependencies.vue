@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Trash2, Package, Search, RefreshCw, Loader2, Download, FileText, RotateCw, ChevronLeft, FileUp, Terminal as TerminalIcon } from 'lucide-vue-next'
+import {Trash2, Package, Search, RefreshCw, Loader2, Download, FileText, RotateCw, ChevronLeft, FileUp, FileDown, Terminal as TerminalIcon} from 'lucide-vue-next'
 import { api, type Dependency } from '@/api'
 import TextOverflow from '@/components/TextOverflow.vue'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -315,6 +315,64 @@ async function handleImportManifest() {
   }
 }
 
+// 清单导出
+const showExportDialog = ref(false)
+const exportFileContent = ref('')
+const exportFileName = ref('')
+
+function generateExportContent() {
+  if (!deps.value || deps.value.length <= 0 || !language.value) {
+    return
+  }
+  const lang = language.value.toLowerCase()
+  if (lang === "python") {
+    exportFileName.value = "requirements.txt"
+    exportFileContent.value = deps.value
+        .slice()
+        .sort((dep1, dep2) => dep1.created_at.localeCompare(dep2.created_at))
+        .map((data, _) => {
+          let line = data.name
+          if (data.version) {
+            line += `==${data.version}`
+          }
+          if (data.remark) {
+            line += ` # ${data.remark}`
+          }
+          return line
+        })
+        .join('\n')
+  } else if (lang === "node") {
+    exportFileName.value = "package.json"
+    const dependencies: Record<string, string> = {}
+    deps.value
+        .sort((dep1, dep2) => dep1.created_at.localeCompare(dep2.created_at))
+        .filter((data, _) => data.name && data.version)
+        .forEach((data, _) => {
+          dependencies[data.name] = `^${data.version}`
+        })
+    exportFileContent.value = JSON.stringify({
+      dependencies: dependencies
+    }, null, 2)
+  } else {
+    toast.error("不支持该语言的导出")
+  }
+}
+
+function openExportDialog() {
+  generateExportContent()
+  showExportDialog.value = true
+}
+
+function handleExportContent() {
+  const  blob = new Blob([exportFileContent.value], {type: 'text/plain;charset=utf-8'})
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = exportFileName.value
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 function getTypeLabel(type: string) {
   const labels: Record<string, string> = {
     python: 'Python',
@@ -397,10 +455,15 @@ onMounted(async () => {
               <RotateCw class="h-3.5 w-3.5 mr-1" :class="{ 'animate-spin': reinstallingAll }" /> 
               <span>全部重装</span>
             </Button>
-            <Button variant="outline" size="sm" class="h-9 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0 shadow-sm" @click="openImportDialog"
+            <Button variant="outline" size="sm" class="h-9 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0 shadow-sm hidden sm:flex" @click="openImportDialog"
               :disabled="activeTab !== 'python' && activeTab !== 'node'">
               <FileUp class="h-3.5 w-3.5 mr-1" /> 
               <span>导入清单</span>
+            </Button>
+            <Button variant="outline" size="sm" class="h-9 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0 shadow-sm hidden sm:flex" @click="openExportDialog"
+              :disabled="activeTab !== 'python' && activeTab !== 'node'">
+              <FileDown class="h-3.5 w-3.5 mr-1" />
+              <span>导出清单</span>
             </Button>
             <Button size="sm" class="h-9 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0 shadow-sm font-semibold" @click="openInstallDialog">
               <Download class="h-3.5 w-3.5 mr-1" /> 
@@ -558,6 +621,33 @@ onMounted(async () => {
               <Loader2 v-if="importingManifest" class="h-4 w-4 mr-2 animate-spin" />
               <FileUp v-else class="h-4 w-4 mr-2" />
               解析并执行安装
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <!-- 导出描述清单文件对话框 -->
+      <Dialog v-model:open="showExportDialog">
+        <DialogContent class="sm:max-w-[500px]" @openAutoFocus.prevent>
+          <DialogHeader>
+            <DialogTitle>导出依赖描述清单</DialogTitle>
+            <DialogDescription>
+              支持导出 Python requirements.txt 或 Node.js package.json 的文本内容。
+            </DialogDescription>
+          </DialogHeader>
+          <div class="grid gap-4 py-2">
+            <div class="flex flex-col gap-2">
+              <Label class="text-sm font-semibold">清单内容</Label>
+              <Textarea v-model="exportFileContent" rows="10" readonly
+                class="text-xs font-mono bg-muted/40 placeholder:font-sans placeholder:text-muted-foreground resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" @click="showExportDialog = false">取消</Button>
+            <Button @click="handleExportContent" :disabled="!exportFileContent">
+              <FileDown class="h-4 w-4 mr-2" />
+              导出
             </Button>
           </DialogFooter>
         </DialogContent>

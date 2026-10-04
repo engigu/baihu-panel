@@ -752,8 +752,8 @@ async function save() {
             <span :title="form.updated_at || ''">{{ isEdit ? (form.updated_at ? formatDateTime(form.updated_at) : '刚才') : '现在' }}</span>
           </div>
           <div class="flex gap-3">
-            <Button variant="ghost" size="sm" class="hover:bg-muted font-medium text-xs px-6" @click="emit('update:open', false)">取消</Button>
-            <Button size="sm" class="px-8 font-semibold text-xs shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90" @click="save">
+            <Button variant="outline" size="sm" class="hover:bg-muted font-medium text-xs px-6" @click="emit('update:open', false)">取消</Button>
+            <Button size="sm" class="px-6 font-semibold text-xs shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90" @click="save">
               确定保存
             </Button>
           </div>
@@ -782,7 +782,7 @@ async function save() {
       </div>
       
       <DialogFooter class="px-6 pb-6 pt-2">
-        <Button variant="outline" size="sm" @click="showQlImportDialog = false" class="border-border/40 hover:bg-muted/30">
+        <Button variant="outline" size="sm" @click="showQlImportDialog = false" class="hover:bg-muted/30">
           取消
         </Button>
         <Button size="sm" @click="submitQlImport" class="shadow-sm">
@@ -833,7 +833,7 @@ async function save() {
       </div>
       
       <DialogFooter class="px-6 pb-6 pt-2 flex gap-2">
-        <Button variant="ghost" size="sm" @click="showBaihuImportDialog = false" class="flex-1 h-9 rounded-md font-medium text-xs">
+        <Button variant="outline" size="sm" @click="showBaihuImportDialog = false" class="flex-1 h-9 rounded-md font-medium text-xs">
           取消
         </Button>
         <Button size="sm" @click="submitBaihuImport" class="flex-1 h-9 rounded-md font-bold text-xs shadow-sm bg-primary hover:bg-primary/90">

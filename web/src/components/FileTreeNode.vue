@@ -99,23 +99,23 @@ function handleDrop(e: DragEvent) {
         </Tooltip>
       </TooltipProvider>
       <div v-if="!node.isDir"
-        class="opacity-0 group-hover:opacity-100 flex items-center gap-1 ml-auto shrink-0 pr-1 transition-opacity">
-        <span @click.stop="$emit('duplicate', node.path)" class="cursor-pointer text-blue-500 hover:text-blue-500/80"
+        class="opacity-0 group-hover:opacity-100 flex items-center gap-1 ml-5 shrink-0 pr-1 transition-opacity">
+        <span @click.stop="$emit('duplicate', node.path)" class="cursor-pointer text-blue-500 hover:text-blue-500/80 ml-1"
           title="复制">
           <CopyIcon class="h-3 w-3" />
         </span>
-        <span @click.stop="$emit('delete', node.path)" class="cursor-pointer text-destructive hover:text-destructive/80"
+        <span @click.stop="$emit('delete', node.path)" class="cursor-pointer text-destructive hover:text-destructive/80 ml-1"
           title="删除">
           <Trash2 class="h-3 w-3" />
         </span>
       </div>
       <div v-else
-        class="opacity-0 group-hover:opacity-100 flex items-center gap-1 ml-auto shrink-0 pr-1 transition-opacity">
-        <span @click.stop="$emit('downloadZip', node.path)" class="cursor-pointer text-blue-500 hover:text-blue-500/80"
+        class="opacity-0 group-hover:opacity-100 flex items-center gap-1 ml-5 shrink-0 pr-1 transition-opacity">
+        <span @click.stop="$emit('downloadZip', node.path)" class="cursor-pointer text-blue-500 hover:text-blue-500/80 ml-1"
           title="下载为压缩包">
           <Download class="h-3 w-3" />
         </span>
-        <span @click.stop="$emit('delete', node.path)" class="cursor-pointer text-destructive hover:text-destructive/80"
+        <span @click.stop="$emit('delete', node.path)" class="cursor-pointer text-destructive hover:text-destructive/80 ml-1"
           title="删除">
           <Trash2 class="h-3 w-3" />
         </span>

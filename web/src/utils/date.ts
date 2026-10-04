@@ -1,4 +1,4 @@
-import { format, differenceInCalendarDays } from 'date-fns'
+import { format, differenceInCalendarDays, isSameYear } from 'date-fns'
 
 
 export function formatDate(date: Date | string | number | undefined, formatString: string | undefined = undefined): string {
@@ -25,7 +25,7 @@ export function formatDate(date: Date | string | number | undefined, formatStrin
         return '后天'
     }
     if (!formatString) {
-        formatString = "yyyy-MM-dd"
+        formatString = isSameYear(now, targetDate) ? "MM-dd" : "yyyy-MM-dd"
     }
     try {
         return format(targetDate, formatString)
