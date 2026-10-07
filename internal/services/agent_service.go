@@ -234,6 +234,16 @@ func (s *AgentService) GetByID(id string) *models.Agent {
 	return &agent
 }
 
+// GetByName 根据 Name 获取 Agent
+func (s *AgentService) GetByName(name string) *models.Agent {
+	var agent models.Agent
+	res := database.DB.Where("name = ?", name).Limit(1).Find(&agent)
+	if res.Error != nil || res.RowsAffected == 0 {
+		return nil
+	}
+	return &agent
+}
+
 // GetByToken 根据 Token 获取 Agent
 func (s *AgentService) GetByToken(token string) *models.Agent {
 	var agent models.Agent
@@ -316,7 +326,7 @@ func (s *AgentService) Heartbeat(token, ip, version, buildTime, hostname, osType
 // GetTasks 获取 Agent 的任务列表
 func (s *AgentService) GetTasks(agentID string) []models.AgentTask {
 	var tasksList []models.Task
-	database.DB.Where("agent_id = ?", agentID).Find(&tasksList)
+	database.DB.Where("agent_id = ? AND type != ?", agentID, constant.TaskTypeAgentSyncScript).Find(&tasksList)
 
 	// 装载关联的变量信息
 	if len(tasksList) > 0 {

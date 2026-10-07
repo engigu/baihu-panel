@@ -1,7 +1,11 @@
 package services
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -10,6 +14,8 @@ import (
 	"github.com/engigu/baihu-panel/internal/executor"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/services/tasks"
+	"github.com/engigu/baihu-panel/internal/utils"
 
 	"github.com/gorilla/websocket"
 )
@@ -34,13 +40,14 @@ const (
 
 // AgentConnection Agent WebSocket 连接
 type AgentConnection struct {
-	AgentID  string
-	IP       string
-	Conn     *websocket.Conn
-	Send     chan []byte
-	LastPing time.Time
-	closed   bool
-	mu       sync.Mutex
+	AgentID      string
+	IP           string
+	Conn         *websocket.Conn
+	Send         chan []byte
+	LastPing     time.Time
+	Capabilities []string
+	closed       bool
+	mu           sync.Mutex
 }
 
 // WSMessage WebSocket 消息结构
@@ -64,6 +71,8 @@ const (
 	WSTypeTaskLog       = constant.WSTypeTaskLog
 	WSTypeExecute       = constant.WSTypeExecute
 	WSTypeTaskHeartbeat = constant.WSTypeTaskHeartbeat
+	WSTypeSyncRequest   = constant.WSTypeSyncRequest
+	WSTypeSyncResult    = constant.WSTypeSyncResult
 )
 
 var agentWSManager *AgentWSManager
@@ -142,7 +151,7 @@ func (m *AgentWSManager) RecordConnectSuccess(ip string) {
 }
 
 // Register 注册连接
-func (m *AgentWSManager) Register(agentID string, conn *websocket.Conn, ip string) *AgentConnection {
+func (m *AgentWSManager) Register(agentID string, conn *websocket.Conn, ip string, rawCapabilities ...string) *AgentConnection {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -157,20 +166,241 @@ func (m *AgentWSManager) Register(agentID string, conn *websocket.Conn, ip strin
 		old.Close()
 	}
 
+	var caps []string
+	if len(rawCapabilities) > 0 && rawCapabilities[0] != "" {
+		parts := strings.Split(rawCapabilities[0], ",")
+		for _, p := range parts {
+			trimmed := strings.TrimSpace(p)
+			if trimmed != "" {
+				caps = append(caps, trimmed)
+			}
+		}
+	}
+
 	ac := &AgentConnection{
-		AgentID:  agentID,
-		IP:       ip,
-		Conn:     conn,
-		Send:     make(chan []byte, 256),
-		LastPing: time.Now(),
+		AgentID:      agentID,
+		IP:           ip,
+		Conn:         conn,
+		Send:         make(chan []byte, 256),
+		LastPing:     time.Now(),
+		Capabilities: caps,
 	}
 	m.connections[agentID] = ac
 
 	// 增加 IP 连接计数
 	m.ipConnections[ip]++
 
-	logger.Infof("[AgentWS] Agent #%s 已连接 (%s)", agentID, ip)
+	logger.Infof("[AgentWS] Agent #%s 已连接 (%s, 能力: %v)", agentID, ip, caps)
 	return ac
+}
+
+// HasCapability 检查 Agent 连接是否具有指定能力
+func (c *AgentConnection) HasCapability(capName string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, item := range c.Capabilities {
+		if item == capName {
+			return true
+		}
+	}
+	return false
+}
+
+// PushAgentSync 向指定 Agent 推送目录或脚本同步任务
+func (m *AgentWSManager) PushAgentSync(agentID string, task *models.Task, logID string) (*executor.Result, error) {
+	conn := m.GetConnection(agentID)
+	if conn == nil {
+		return nil, fmt.Errorf("目标 Agent (#%s) 离线，无法推送脚本", agentID)
+	}
+
+	tl := tasks.GetActiveLog(logID)
+	var logBuf bytes.Buffer
+	writeLog := func(format string, a ...interface{}) {
+		msg := fmt.Sprintf(format, a...)
+		if !strings.HasPrefix(msg, "=") && !strings.HasPrefix(msg, "-") {
+			timestamp := time.Now().Format("2006-01-02 15:04:05")
+			msg = fmt.Sprintf("[%s] %s", timestamp, msg)
+		}
+		if !strings.HasSuffix(msg, "\n") {
+			msg += "\n"
+		}
+		logBuf.WriteString(msg)
+		if tl != nil {
+			_, _ = tl.WriteString(msg)
+		}
+	}
+
+	syncConfig := task.GetAgentSync()
+	if syncConfig == nil || len(syncConfig.DirMappings) == 0 {
+		errMsg := "任务未配置 AgentSync 映射目录"
+		writeLog("[AgentSync 错误] %s", errMsg)
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+
+	writeLog("====================================================================================================")
+	writeLog("  Agent 脚本与目录同步任务开始")
+	writeLog("====================================================================================================")
+	writeLog(">> 任务信息: %s (ID: %s)", task.Name, task.ID)
+	writeLog(">> 目标节点: Agent #%s (IP: %s)", agentID, conn.IP)
+	writeLog(">> 清理策略: 清空目标目录 = %t", syncConfig.CleanTarget)
+	if syncConfig.SyncMode != "" {
+		writeLog(">> 同步模式: %s (防抖延迟: %d秒)", syncConfig.SyncMode, syncConfig.DebounceDelay)
+	}
+	if len(syncConfig.IgnoreRules) > 0 {
+		writeLog(">> 排除过滤: %s", strings.Join(syncConfig.IgnoreRules, ", "))
+	}
+	writeLog(">> 映射编排 (%d 条):", len(syncConfig.DirMappings))
+	for idx, mapping := range syncConfig.DirMappings {
+		remark := ""
+		if mapping.Remark != "" {
+			remark = fmt.Sprintf(" (%s)", mapping.Remark)
+		}
+		writeLog("   [%d] 本地源: %s => Agent目标: %s%s", idx+1, mapping.SourcePath, mapping.TargetPath, remark)
+	}
+	writeLog("----------------------------------------------------------------------------------------------------")
+
+	// 1. 转换并打包映射目录
+	var tarMappings []utils.TarMapping
+	for _, mapping := range syncConfig.DirMappings {
+		srcAbs := constant.ResolveScriptPath(mapping.SourcePath)
+		tarMappings = append(tarMappings, utils.TarMapping{
+			SourcePath: srcAbs,
+			TargetPath: mapping.TargetPath,
+		})
+	}
+
+	// 函数执行完毕后，延迟触发一次物理内存回收，确保大对象占用彻底归还给 OS
+	defer func() {
+		go func() {
+			time.Sleep(600 * time.Millisecond)
+			utils.FreeMemory()
+		}()
+	}()
+
+	writeLog("[AgentSync] 正在扫描源目录并生成增量归档压缩包...")
+	start := time.Now()
+	var buf bytes.Buffer
+	if err := utils.CreateTarGzWithMappings(&buf, tarMappings, syncConfig.IgnoreRules); err != nil {
+		errMsg := fmt.Sprintf("打包同步目录失败: %v", err)
+		writeLog("[AgentSync 错误] %s", errMsg)
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+
+	archiveSize := buf.Len()
+	archiveBase64 := base64.StdEncoding.EncodeToString(buf.Bytes())
+	// 立即清空并释放二进制压缩缓冲区内存
+	buf.Reset()
+
+	packDuration := time.Since(start).Round(time.Millisecond)
+	writeLog("[AgentSync] 本地归档打包完成 (大小: %d 字节, 耗时: %v), 正在通过 WebSocket 推送至 Agent...", archiveSize, packDuration)
+	logger.Infof("[AgentSync] 任务 #%s (LogID: %s) 打包完毕: 归档大小 %d 字节, 过滤规则 %d 条, 开始下发至 Agent #%s",
+		task.ID, logID, archiveSize, len(syncConfig.IgnoreRules), agentID)
+
+	// 2. 注册等待远程结果
+	waiterID := logID
+	if waiterID == "" {
+		waiterID = fmt.Sprintf("sync_%d", time.Now().UnixNano())
+	}
+	resultChan := m.RegisterRemoteWaiter(waiterID)
+	defer m.UnregisterRemoteWaiter(waiterID)
+
+	// 3. 发送同步请求消息
+	reqData := map[string]interface{}{
+		"task_id":      task.ID,
+		"log_id":       waiterID,
+		"clean_target": syncConfig.CleanTarget,
+		"mappings":     syncConfig.DirMappings,
+		"archive_data": archiveBase64,
+	}
+
+	if err := m.SendToAgent(agentID, constant.WSTypeSyncRequest, reqData); err != nil {
+		errMsg := fmt.Sprintf("向 Agent 下发同步请求失败: %v", err)
+		writeLog("[AgentSync 错误] %s", errMsg)
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+
+	// 下发完成后立即解除对 Base64 编码大对象的引用，并立即触发一次主动内存回收与物理工作集裁剪
+	reqData["archive_data"] = nil
+	reqData = nil
+	archiveBase64 = ""
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		utils.FreeMemory()
+	}()
+
+	writeLog("[AgentSync] 归档数据包下发完毕，正在等待目标 Agent 节点解包部署与落盘校验...")
+
+	// 4. 等待结果或超时
+	timeoutMinutes := task.Timeout
+	if timeoutMinutes <= 0 {
+		timeoutMinutes = 10
+	}
+	timeoutChan := time.After(time.Duration(timeoutMinutes) * time.Minute)
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case agentResult := <-resultChan:
+			end := time.Now()
+			duration := agentResult.Duration
+			if duration <= 0 {
+				duration = end.Sub(start).Milliseconds()
+			}
+			if agentResult.Status == constant.TaskStatusSuccess {
+				writeLog("----------------------------------------------------------------------------------------------------")
+				writeLog("[AgentSync 成功] 目标 Agent 已完成解压与写入！总耗时: %v", (time.Duration(duration) * time.Millisecond).Round(time.Millisecond))
+				writeLog("====================================================================================================")
+			} else {
+				writeLog("----------------------------------------------------------------------------------------------------")
+				writeLog("[AgentSync 失败] Agent 报错: %s", agentResult.Error)
+				writeLog("====================================================================================================")
+			}
+			finalOutput := agentResult.Output
+			if finalOutput == "" {
+				finalOutput = logBuf.String()
+			}
+			return &executor.Result{
+				Output:    finalOutput,
+				Error:     agentResult.Error,
+				Status:    agentResult.Status,
+				Duration:  duration,
+				ExitCode:  agentResult.ExitCode,
+				StartTime: start,
+				EndTime:   end,
+			}, nil
+
+		case <-timeoutChan:
+			end := time.Now()
+			errMsg := "等待 Agent 同步结果超时"
+			writeLog("[AgentSync 超时] %s", errMsg)
+			return &executor.Result{
+				Output:    logBuf.String(),
+				Status:    constant.TaskStatusFailed,
+				Error:     errMsg,
+				Duration:  end.Sub(start).Milliseconds(),
+				ExitCode:  -1,
+				StartTime: start,
+				EndTime:   end,
+			}, fmt.Errorf("%s", errMsg)
+
+		case <-ticker.C:
+			if !m.IsAgentOnline(agentID) {
+				end := time.Now()
+				errMsg := "Agent 离线，同步被迫终止"
+				writeLog("[AgentSync 中断] %s", errMsg)
+				return &executor.Result{
+					Output:    logBuf.String(),
+					Status:    constant.TaskStatusFailed,
+					Error:     errMsg,
+					Duration:  end.Sub(start).Milliseconds(),
+					ExitCode:  -1,
+					StartTime: start,
+					EndTime:   end,
+				}, fmt.Errorf("%s", errMsg)
+			}
+		}
+	}
 }
 
 // Unregister 注销连接（只注销指定的连接实例）

@@ -30,6 +30,7 @@ type AgentWSManager interface {
 	UnregisterRemoteWaiter(logID string)
 	SendToAgent(agentID string, msgType string, data interface{}) error
 	IsAgentOnline(agentID string) bool
+	PushAgentSync(agentID string, task *models.Task, logID string) (*executor.Result, error)
 }
 
 // SettingsService 接口定义（避免循环依赖）
@@ -251,6 +252,8 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 		if err != nil {
 			logger.Errorf("[Executor] 压缩任务 #%s 日志失败: %v", task.ID, err)
 			output = "[System Error] 日志处理失败: " + err.Error()
+		} else if (output == "raw:" || output == "") && result.Output != "" {
+			output, _ = utils.CompressToBase64(result.Output)
 		}
 	} else {
 		output, _ = utils.CompressToBase64(result.Output)
@@ -508,6 +511,20 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 	// 组合指令逻辑已移至 executor.ExecuteWithHooks 中，此处不再处理
 	// 以避免指令被重复组合。
 
+	// 特殊处理 Agent 同步任务
+	if task.Type == constant.TaskTypeAgentSyncScript {
+		agentID := ""
+		if task.AgentID != nil && *task.AgentID != "" {
+			agentID = *task.AgentID
+		} else if syncCfg := task.GetAgentSync(); syncCfg != nil {
+			agentID = syncCfg.AgentID
+		}
+		if agentID == "" {
+			return nil, fmt.Errorf("AgentSync 任务缺少目标 Agent")
+		}
+		return es.agentWSManager.PushAgentSync(agentID, task, req.LogID)
+	}
+
 	// 远程任务
 	if task.AgentID != nil && *task.AgentID != "" {
 		// 将请求中已包含的环境变量（已合并）传递给 Agent
@@ -618,8 +635,14 @@ func (es *ExecutorService) loadCronTasks() {
 				es.ExecuteTask(t.ID, nil)
 			}(task)
 		} else if task.TriggerType == constant.TriggerTypeCron {
-			if task.Schedule == "" || (task.AgentID != nil && *task.AgentID != "") {
+			if task.Schedule == "" || (task.AgentID != nil && *task.AgentID != "" && task.Type != constant.TaskTypeAgentSyncScript) {
 				continue
+			}
+			// 如果是 Agent 同步任务，纯实时模式 (realtime) 无需注册 Cron 定时调度
+			if task.Type == constant.TaskTypeAgentSyncScript {
+				if syncCfg := task.GetAgentSync(); syncCfg != nil && syncCfg.SyncMode == constant.SyncModeRealtime {
+					continue
+				}
 			}
 			err := es.AddCronTask(&task)
 			if err != nil {
@@ -728,6 +751,17 @@ func (es *ExecutorService) CreateExecutionRequest(task *models.Task, triggerType
 			preCommand = ""
 			postCommand = ""
 		}
+	} else if task.Type == constant.TaskTypeAgentSyncScript {
+		syncCmd, syncWorkDir := es.BuildAgentSyncCommand(task)
+		if syncCmd != "" {
+			command = syncCmd
+			if syncWorkDir != "" {
+				workDir = syncWorkDir
+			}
+		}
+		preCommand = ""
+		postCommand = ""
+		useMise = false
 	}
 
 	// 3. 统一脱敏处理
@@ -1404,6 +1438,96 @@ func BuildAppCommand(task *models.Task) (string, string, string) {
 		cmdStr = "& " + cmdStr
 	}
 	return cmdStr, filepath.Dir(exePath), tempYmlPath
+}
+
+// BuildAgentSyncCommand 构建 Agent 脚本同步任务的标准命令行
+func (es *ExecutorService) BuildAgentSyncCommand(task *models.Task) (string, string) {
+	return BuildAgentSyncCommand(task)
+}
+
+// BuildAgentSyncCommand 构建 Agent 脚本同步任务的标准命令行（独立函数）
+func BuildAgentSyncCommand(task *models.Task) (string, string) {
+	if task == nil {
+		return "", ""
+	}
+	syncCfg := task.GetAgentSync()
+	agentID := ""
+	if task.AgentID != nil && *task.AgentID != "" {
+		agentID = *task.AgentID
+	} else if syncCfg != nil {
+		agentID = syncCfg.AgentID
+	}
+
+	exePath := utils.GetBaihuExecutable()
+
+	args := []string{"agentsync"}
+	if task.ID != "" {
+		args = append(args, "--task-id", task.ID)
+	}
+	if agentID != "" {
+		args = append(args, "--agent", agentID)
+	}
+	if syncCfg != nil {
+		for _, m := range syncCfg.DirMappings {
+			src := m.SourcePath
+			dst := m.TargetPath
+			if src != "" && dst != "" {
+				args = append(args, "--mapping", fmt.Sprintf("%s:%s", src, dst))
+			}
+		}
+		if syncCfg.CleanTarget {
+			args = append(args, "--clean-target")
+		}
+		if len(syncCfg.IgnoreRules) > 0 {
+			args = append(args, "--ignore", strings.Join(syncCfg.IgnoreRules, ","))
+		}
+	}
+
+	quotedArgs := make([]string, len(args))
+	for i, arg := range args {
+		quotedArgs[i] = utils.QuotePath(arg)
+	}
+
+	cmdStr := utils.QuotePath(exePath) + " " + strings.Join(quotedArgs, " ")
+	if windows.IsWindows() {
+		cmdStr = "& " + cmdStr
+	}
+	return cmdStr, filepath.Dir(exePath)
+}
+
+// FormatAgentSyncCLI 格式化生成可读的 CLI 命令（用于展示与前端回显）
+func FormatAgentSyncCLI(task *models.Task) string {
+	if task == nil {
+		return ""
+	}
+	syncCfg := task.GetAgentSync()
+	agentID := ""
+	if task.AgentID != nil && *task.AgentID != "" {
+		agentID = *task.AgentID
+	} else if syncCfg != nil {
+		agentID = syncCfg.AgentID
+	}
+
+	args := []string{"baihu", "agentsync"}
+	if agentID != "" {
+		args = append(args, "--agent", agentID)
+	}
+	if syncCfg != nil {
+		for _, m := range syncCfg.DirMappings {
+			src := m.SourcePath
+			dst := m.TargetPath
+			if src != "" && dst != "" {
+				args = append(args, "--mapping", utils.QuotePath(fmt.Sprintf("%s:%s", src, dst)))
+			}
+		}
+		if syncCfg.CleanTarget {
+			args = append(args, "--clean-target")
+		}
+		if len(syncCfg.IgnoreRules) > 0 {
+			args = append(args, "--ignore", utils.QuotePath(strings.Join(syncCfg.IgnoreRules, ",")))
+		}
+	}
+	return strings.Join(args, " ")
 }
 
 // loadEnvVars 加载环境变量和掩码信息，支持全局注入及重名合并

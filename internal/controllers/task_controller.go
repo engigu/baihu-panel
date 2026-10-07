@@ -98,8 +98,8 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		return
 	}
 
-	// 普通任务需要命令
-	if req.Type != constant.TaskTypeRepo && req.Command == "" {
+	// 普通任务需要命令 (仓库同步和Agent同步任务除外)
+	if req.Type != constant.TaskTypeRepo && req.Type != constant.TaskTypeAgentSyncScript && req.Command == "" {
 		utils.BadRequest(c, "命令不能为空")
 		return
 	}
@@ -180,6 +180,14 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		Enabled:       true,
 	}
 
+	if param.Type == constant.TaskTypeAgentSyncScript && (param.Command == "" || strings.HasPrefix(param.Command, "[AgentSync]")) {
+		tempTask := &models.Task{
+			AgentID:       param.AgentID,
+			UnifiedConfig: models.BigText(param.UnifiedConfig),
+		}
+		param.Command = tasks.FormatAgentSyncCLI(tempTask)
+	}
+
 	var task *models.Task
 	// 去重逻辑：如果已存在相同 SourceID 的仓库任务，则改为更新
 	if sourceID != "" {
@@ -193,11 +201,18 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		task = tc.taskService.CreateTask(&param)
 	}
 
-	// 如果是 Agent 任务，通知 Agent；否则添加到本地 cron
-	if task.AgentID != nil && *task.AgentID != "" {
+	// 如果是 Agent 任务，通知 Agent；否则添加到本地 cron (AgentSync 任务由主控本地调度)
+	if task.AgentID != nil && *task.AgentID != "" && task.Type != constant.TaskTypeAgentSyncScript {
 		tc.agentWSManager.BroadcastTasks(*task.AgentID)
 	} else {
-		tc.executorService.AddCronTask(task)
+		if task.Type == constant.TaskTypeAgentSyncScript {
+			tasks.GetSyncWatcherService().RegisterTask(task)
+			if syncCfg := task.GetAgentSync(); syncCfg == nil || syncCfg.SyncMode != constant.SyncModeRealtime {
+				tc.executorService.AddCronTask(task)
+			}
+		} else {
+			tc.executorService.AddCronTask(task)
+		}
 	}
 
 	utils.Success(c, vo.ToTaskVO(task))
@@ -503,6 +518,15 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		Enabled:       req.Enabled,
 	}
 
+	if param.Type == constant.TaskTypeAgentSyncScript && (param.Command == "" || strings.HasPrefix(param.Command, "[AgentSync]")) {
+		tempTask := &models.Task{
+			ID:            id,
+			AgentID:       param.AgentID,
+			UnifiedConfig: models.BigText(param.UnifiedConfig),
+		}
+		param.Command = tasks.FormatAgentSyncCLI(tempTask)
+	}
+
 	task := tc.taskService.UpdateTask(id, &param)
 	if task == nil {
 		utils.NotFound(c, "任务不存在")
@@ -510,7 +534,7 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 	}
 
 	// 处理任务调度
-	if task.AgentID != nil && *task.AgentID != "" {
+	if task.AgentID != nil && *task.AgentID != "" && task.Type != constant.TaskTypeAgentSyncScript {
 		// Agent 任务：从本地 cron 移除，通知 Agent
 		tc.executorService.RemoveCronTask(task.ID)
 		tc.agentWSManager.BroadcastTasks(*task.AgentID)
@@ -519,10 +543,22 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 			tc.agentWSManager.BroadcastTasks(*oldAgentID)
 		}
 	} else {
-		// 本地任务
+		// 本地任务 (包含主控向 Agent 发起的 AgentSync 同步任务)
 		if utils.DerefBool(task.Enabled, true) {
-			tc.executorService.AddCronTask(task)
+			if task.Type == constant.TaskTypeAgentSyncScript {
+				tasks.GetSyncWatcherService().RegisterTask(task)
+				if syncCfg := task.GetAgentSync(); syncCfg == nil || syncCfg.SyncMode != constant.SyncModeRealtime {
+					tc.executorService.AddCronTask(task)
+				} else {
+					tc.executorService.RemoveCronTask(task.ID)
+				}
+			} else {
+				tc.executorService.AddCronTask(task)
+			}
 		} else {
+			if task.Type == constant.TaskTypeAgentSyncScript {
+				tasks.GetSyncWatcherService().UnregisterTask(task.ID)
+			}
 			tc.executorService.RemoveCronTask(task.ID)
 		}
 		// 如果之前是 agent 任务，通知旧 agent 移除
@@ -569,6 +605,7 @@ func (tc *TaskController) DeleteTask(c *gin.Context) {
 
 	tc.executorService.RemoveCronTask(id)
 	tc.executorService.GetScheduler().StopTask(id)
+	tasks.GetSyncWatcherService().UnregisterTask(id)
 
 	// 如果是声明式应用主任务，同时停止并移除所有受控子任务的 Cron 调度
 	if task.Type == constant.TaskTypeApp {
@@ -929,16 +966,26 @@ func (tc *TaskController) ToggleTask(c *gin.Context) {
 	}
 
 	// 处理调度器更新
-	if updatedTask.AgentID != nil && *updatedTask.AgentID != "" {
+	if updatedTask.AgentID != nil && *updatedTask.AgentID != "" && updatedTask.Type != constant.TaskTypeAgentSyncScript {
 		tc.executorService.RemoveCronTask(updatedTask.ID)
 		tc.agentWSManager.BroadcastTasks(*updatedTask.AgentID)
 	} else {
 		if req.Enabled {
-			tc.executorService.AddCronTask(updatedTask)
+			if updatedTask.Type == constant.TaskTypeAgentSyncScript {
+				tasks.GetSyncWatcherService().RegisterTask(updatedTask)
+				if syncCfg := updatedTask.GetAgentSync(); syncCfg == nil || syncCfg.SyncMode != constant.SyncModeRealtime {
+					tc.executorService.AddCronTask(updatedTask)
+				}
+			} else {
+				tc.executorService.AddCronTask(updatedTask)
+			}
 		} else {
+			if updatedTask.Type == constant.TaskTypeAgentSyncScript {
+				tasks.GetSyncWatcherService().UnregisterTask(updatedTask.ID)
+			}
 			tc.executorService.RemoveCronTask(updatedTask.ID)
 		}
-		if oldAgentID != nil && *oldAgentID != "" {
+		if oldAgentID != nil && *oldAgentID != "" && updatedTask.Type != constant.TaskTypeAgentSyncScript {
 			tc.agentWSManager.BroadcastTasks(*oldAgentID)
 		}
 	}

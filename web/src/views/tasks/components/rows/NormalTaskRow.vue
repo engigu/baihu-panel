@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Play, Pencil, Trash2, ScrollText, Terminal, Monitor, Loader2, Wifi, WifiOff,
-  Zap, ZapOff, Copy, Pin, PinOff, MoreHorizontal, Wrench, Package
+  Zap, ZapOff, Copy, Pin, PinOff, MoreHorizontal, Wrench, Package, FolderSync
 } from 'lucide-vue-next'
 import StatusDot from '@/components/StatusDot.vue'
 import TextOverflow from '@/components/TextOverflow.vue'
@@ -48,6 +48,15 @@ function getExecutorStatus(task: Task): 'local' | 'online' | 'offline' {
   if (!task.agent_id) return 'local'
   const agent = props.agentMap[task.agent_id]
   return agent?.status === AGENT_STATUS.ONLINE ? 'online' : 'offline'
+}
+
+function getSyncMode(task: Task): string {
+  try {
+    const cfg = JSON.parse(task.unified_config || '{}')
+    return cfg?.agent_sync_script?.sync_mode || 'cron'
+  } catch {
+    return 'cron'
+  }
 }
 
 function getLangBadgeClass(name: string) {
@@ -92,8 +101,9 @@ function getShortLangName(name: string): string {
         #{{ total - (currentPage - 1) * pageSize - index }}
       </div>
 
-      <span class="w-8 shrink-0 flex justify-center" title="普通脚本任务">
+      <span class="w-8 shrink-0 flex justify-center" :title="task.type === TASK_TYPE.AGENT_SYNC_SCRIPT ? 'Agent 脚本同步' : '普通脚本任务'">
         <Package v-if="(task.source_id || '').startsWith('app:')" class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.APP]?.color" />
+        <FolderSync v-else-if="task.type === TASK_TYPE.AGENT_SYNC_SCRIPT" class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.AGENT_SYNC_SCRIPT]?.color" />
         <Terminal v-else class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.NORMAL]?.color" />
       </span>
 
@@ -103,6 +113,10 @@ function getShortLangName(name: string): string {
           <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
           <span v-if="(task.source_id || '').startsWith('app:')" class="shrink-0 inline-flex items-center rounded px-1 py-px text-[9px] font-mono border bg-emerald-500/10 text-emerald-500 border-emerald-500/20 leading-none">
             应用
+          </span>
+          <span v-else-if="task.type === TASK_TYPE.AGENT_SYNC_SCRIPT" class="shrink-0 inline-flex items-center gap-0.5 rounded px-1 py-px text-[9px] font-mono border bg-amber-500/10 text-amber-500 border-amber-500/20 leading-none">
+            <Zap v-if="getSyncMode(task) === 'realtime' || getSyncMode(task) === 'hybrid'" class="w-2.5 h-2.5 shrink-0" />
+            <span>{{ getSyncMode(task) === 'realtime' ? '实时同步' : (getSyncMode(task) === 'hybrid' ? '混合同步' : '定时同步') }}</span>
           </span>
           <span
             v-for="lang in task.languages"
@@ -199,8 +213,13 @@ function getShortLangName(name: string): string {
             :state="task.running_status === 'running' ? 'running' : (task.running_status === 'queued' || task.running_status === 'pending' ? 'pending' : 'none')"
           />
           <span class="text-[10px] text-muted-foreground tabular-nums shrink-0">#{{ total - (currentPage - 1) * pageSize - index }}</span>
-          <Terminal class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.NORMAL]?.color" />
+          <FolderSync v-if="task.type === TASK_TYPE.AGENT_SYNC_SCRIPT" class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.AGENT_SYNC_SCRIPT]?.color" />
+          <Terminal v-else class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.NORMAL]?.color" />
           <span class="font-bold text-sm text-foreground truncate">{{ task.name }}</span>
+          <span v-if="task.type === TASK_TYPE.AGENT_SYNC_SCRIPT" class="shrink-0 inline-flex items-center gap-0.5 rounded px-1 py-px text-[9px] font-mono border bg-amber-500/10 text-amber-500 border-amber-500/20 leading-none">
+            <Zap v-if="getSyncMode(task) === 'realtime' || getSyncMode(task) === 'hybrid'" class="w-2.5 h-2.5 shrink-0" />
+            <span>{{ getSyncMode(task) === 'realtime' ? '实时' : (getSyncMode(task) === 'hybrid' ? '混合' : '定时') }}</span>
+          </span>
           <Pin v-if="task.pin_type === 'top'" class="h-3 w-3 text-primary fill-primary shrink-0 rotate-45" />
         </div>
         <span @click="$emit('toggleTask', task, !task.enabled)" class="cursor-pointer shrink-0">

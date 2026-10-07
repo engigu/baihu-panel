@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
-import { Bell } from 'lucide-vue-next'
+import { Bell, BellOff, CheckCircle2, XCircle, Clock, FileText } from 'lucide-vue-next'
 import { api, type NotifyChannel, type NotifyBinding } from '@/api'
-import { cn } from '@/lib/utils'
 
 const props = defineProps<{
   taskId?: string
@@ -19,6 +18,16 @@ const notifyOnFailure = ref(false)
 const notifyOnTimeout = ref(false)
 const notifyIncludeLog = ref(false)
 const notifyLogLimit = ref(1000)
+
+const currentChannel = computed(() => {
+  if (notifyWayId.value === 'none') return null
+  return notifyChannels.value.find(c => c.id === notifyWayId.value) || null
+})
+
+const currentChannelName = computed(() => {
+  if (notifyWayId.value === 'none') return '不启用通知'
+  return currentChannel.value ? currentChannel.value.name : '已配置渠道'
+})
 
 onMounted(async () => {
   try {
@@ -131,60 +140,146 @@ defineExpose({
     </div>
 
     <div class="grid gap-5 pl-3 border-l border-muted">
-      <div class="grid grid-cols-1 sm:grid-cols-4 items-center gap-3">
-        <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold">通知渠道</Label>
+      <!-- 通知渠道 (通栏左文右控卡片) -->
+      <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
+        <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold pt-2.5">通知渠道</Label>
         <div class="sm:col-span-3">
-          <Select v-model="notifyWayId">
-            <SelectTrigger class="h-9 bg-muted/20 border-muted-foreground/15 transition-all focus:bg-background/50">
-              <SelectValue placeholder="不启用通知" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">不启用通知</SelectItem>
-              <SelectItem v-for="ch in notifyChannels" :key="ch.id" :value="ch.id">
-                {{ ch.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+          <div class="p-3 rounded-xl bg-muted/15 border border-muted-foreground/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="space-y-0.5">
+              <div class="flex items-center gap-2">
+                <Bell v-if="notifyWayId !== 'none'" class="h-4 w-4 text-primary shrink-0" />
+                <BellOff v-else class="h-4 w-4 text-muted-foreground shrink-0" />
+                <span class="text-xs font-bold text-foreground">
+                  {{ currentChannelName }}
+                </span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded font-medium" :class="notifyWayId !== 'none' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'">
+                  {{ notifyWayId !== 'none' ? '已配置推送' : '未启用' }}
+                </span>
+              </div>
+              <p class="text-[11px] text-muted-foreground">
+                {{ notifyWayId !== 'none' ? '任务运行状态变化时，将向该渠道发送推送通知' : '当前不向外部推送任何执行结果通知' }}
+              </p>
+            </div>
+            <div class="self-start sm:self-auto shrink-0">
+              <Select v-model="notifyWayId">
+                <SelectTrigger class="w-48 h-8 bg-background border-muted-foreground/15 px-2.5 text-xs">
+                  <SelectValue placeholder="选择通知渠道..." class="truncate">
+                    <div class="flex items-center gap-1.5 truncate">
+                      <div class="w-1.5 h-1.5 rounded-full" :class="notifyWayId !== 'none' ? 'bg-primary' : 'bg-muted-foreground/40'" />
+                      <span>{{ currentChannelName }}</span>
+                    </div>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none" class="text-xs">
+                    <div class="flex items-center gap-2">
+                      <div class="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
+                      <span>不启用通知</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem v-for="ch in notifyChannels" :key="ch.id" :value="ch.id" class="text-xs">
+                    <div class="flex items-center gap-2">
+                      <div class="w-1.5 h-1.5 rounded-full" :class="ch.enabled ? 'bg-emerald-500' : 'bg-muted-foreground'" />
+                      <span class="font-medium">{{ ch.name }}</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
       </div>
 
       <template v-if="notifyWayId !== 'none'">
+        <!-- 通知时机 -->
         <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
           <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold pt-2.5">通知时机</Label>
-          <div class="sm:col-span-3 space-y-3">
-            <div class="flex flex-wrap gap-4 p-3 rounded-lg bg-muted/20 border border-muted-foreground/10 items-center transition-all hover:bg-muted/30">
-              <div class="flex items-center gap-2 group">
-                <Checkbox :id="`ns-${taskId || 'new'}`" :checked="notifyOnSuccess" @update:checked="notifyOnSuccess = $event as boolean" class="border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary" />
-                <label :for="`ns-${taskId || 'new'}`" class="text-xs font-medium shrink-0 cursor-pointer group-hover:text-primary transition-colors text-foreground/80">成功时</label>
+          <div class="sm:col-span-3 space-y-2.5">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <!-- 成功时 -->
+              <div
+                class="p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between select-none"
+                :class="notifyOnSuccess
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 shadow-xs'
+                  : 'border-muted-foreground/15 bg-muted/10 hover:bg-muted/20 text-muted-foreground'"
+                @click="notifyOnSuccess = !notifyOnSuccess"
+              >
+                <div class="flex items-center gap-2 min-w-0">
+                  <CheckCircle2 class="h-4 w-4 shrink-0" :class="notifyOnSuccess ? 'text-emerald-500' : 'text-muted-foreground/60'" />
+                  <span class="text-xs font-semibold">执行成功</span>
+                </div>
+                <Checkbox :checked="notifyOnSuccess" class="pointer-events-none data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500" />
               </div>
-              <div class="flex items-center gap-2 group">
-                <Checkbox :id="`nf-${taskId || 'new'}`" :checked="notifyOnFailure" @update:checked="notifyOnFailure = $event as boolean" class="border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary" />
-                <label :for="`nf-${taskId || 'new'}`" class="text-xs font-medium shrink-0 cursor-pointer group-hover:text-primary transition-colors text-foreground/80">失败时</label>
+
+              <!-- 失败时 -->
+              <div
+                class="p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between select-none"
+                :class="notifyOnFailure
+                  ? 'border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300 shadow-xs'
+                  : 'border-muted-foreground/15 bg-muted/10 hover:bg-muted/20 text-muted-foreground'"
+                @click="notifyOnFailure = !notifyOnFailure"
+              >
+                <div class="flex items-center gap-2 min-w-0">
+                  <XCircle class="h-4 w-4 shrink-0" :class="notifyOnFailure ? 'text-rose-500' : 'text-muted-foreground/60'" />
+                  <span class="text-xs font-semibold">执行失败</span>
+                </div>
+                <Checkbox :checked="notifyOnFailure" class="pointer-events-none data-[state=checked]:bg-rose-500 data-[state=checked]:border-rose-500" />
               </div>
-              <div class="flex items-center gap-2 group">
-                <Checkbox :id="`nt-${taskId || 'new'}`" :checked="notifyOnTimeout" @update:checked="notifyOnTimeout = $event as boolean" class="border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary" />
-                <label :for="`nt-${taskId || 'new'}`" class="text-xs font-medium shrink-0 cursor-pointer group-hover:text-primary transition-colors text-foreground/80">超时时</label>
+
+              <!-- 超时时 -->
+              <div
+                class="p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between select-none"
+                :class="notifyOnTimeout
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 shadow-xs'
+                  : 'border-muted-foreground/15 bg-muted/10 hover:bg-muted/20 text-muted-foreground'"
+                @click="notifyOnTimeout = !notifyOnTimeout"
+              >
+                <div class="flex items-center gap-2 min-w-0">
+                  <Clock class="h-4 w-4 shrink-0" :class="notifyOnTimeout ? 'text-amber-500' : 'text-muted-foreground/60'" />
+                  <span class="text-xs font-semibold">执行超时</span>
+                </div>
+                <Checkbox :checked="notifyOnTimeout" class="pointer-events-none data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500" />
               </div>
             </div>
+          </div>
+        </div>
 
-            <div class="p-3 rounded-xl bg-primary/5 border border-primary/10 space-y-3 transition-all hover:bg-primary/10">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2 text-xs font-bold text-foreground/90">
-                  <Bell :class="cn('h-3.5 w-3.5 transition-colors', notifyIncludeLog ? 'text-primary' : 'text-muted-foreground/50')" />
-                  附带执行日志
-                </div>
-                <Switch v-model="notifyIncludeLog" class="data-[state=checked]:bg-primary" />
-              </div>
-              
-              <div v-if="notifyIncludeLog" class="flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200 pl-5">
-                <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/80 border border-primary/20 shadow-sm transition-all focus-within:ring-2 focus-within:ring-primary/20">
-                  <span class="text-[10px] text-foreground/60 font-medium whitespace-nowrap uppercase tracking-tighter">长度限制</span>
-                  <div class="h-3 w-[1px] bg-muted-foreground/20" />
-                  <div class="flex items-center gap-1">
-                    <input type="text" inputmode="numeric" :value="notifyLogLimit" @input="(e: any) => notifyLogLimit = Number(e.target.value.replace(/\D/g, ''))" 
-                      class="w-16 h-4 text-center text-[11px] font-bold font-mono bg-transparent border-none outline-none focus:ring-0 p-0 text-primary" />
-                    <span class="text-[10px] text-foreground/40 font-bold">字</span>
+        <!-- 消息内容 -->
+        <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
+          <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold pt-2.5">消息内容</Label>
+          <div class="sm:col-span-3">
+            <div class="p-3 rounded-xl bg-muted/15 border border-muted-foreground/10 space-y-3">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="space-y-0.5">
+                  <div class="flex items-center gap-2">
+                    <FileText class="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span class="text-xs font-bold text-foreground">附带运行日志</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded font-medium" :class="notifyIncludeLog ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'">
+                      {{ notifyIncludeLog ? '已包含' : '仅基础信息' }}
+                    </span>
                   </div>
+                  <p class="text-[11px] text-muted-foreground">
+                    在推送的消息中附加该任务末尾的运行日志输出
+                  </p>
+                </div>
+                <div class="self-start sm:self-auto shrink-0">
+                  <Switch v-model="notifyIncludeLog" class="data-[state=checked]:bg-primary" />
+                </div>
+              </div>
+
+              <!-- 开启日志后的字数设置 -->
+              <div v-if="notifyIncludeLog" class="pt-2.5 border-t border-muted-foreground/10 flex items-center justify-between animate-in fade-in slide-in-from-top-1 duration-200">
+                <span class="text-xs text-muted-foreground">日志截取长度限制</span>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs text-muted-foreground font-medium">保留末尾</span>
+                  <input
+                    type="text"
+                    inputmode="numeric"
+                    :value="notifyLogLimit"
+                    @input="(e: any) => notifyLogLimit = Number(e.target.value.replace(/\D/g, ''))"
+                    class="w-20 h-8 text-xs font-semibold text-center bg-background rounded-md border border-muted-foreground/20 focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <span class="text-xs text-muted-foreground font-medium">字</span>
                 </div>
               </div>
             </div>

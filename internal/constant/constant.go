@@ -118,6 +118,8 @@ const (
 	WSTypeFetchTasks    = "fetch_tasks"
 	WSTypeTaskHeartbeat = "task_heartbeat"
 	WSTypeStop          = "stop"
+	WSTypeSyncRequest   = "sync_request"
+	WSTypeSyncResult    = "sync_result"
 
 	// 任务状态
 	TaskStatusSuccess   = "success"
@@ -129,9 +131,19 @@ const (
 	TaskStatusQueued    = "queued"
 
 	// 任务类型
-	TaskTypeNormal = "task"
-	TaskTypeRepo   = "repo"
-	TaskTypeApp    = "app"
+	TaskTypeNormal          = "task"
+	TaskTypeRepo            = "repo"
+	TaskTypeApp             = "app"
+	TaskTypeAgentSyncScript = "agent_sync_script"
+
+	// Agent 同步模式
+	SyncModeCron     = "cron"     // 定时计划同步
+	SyncModeRealtime = "realtime" // 实时监听变动同步
+	SyncModeHybrid   = "hybrid"   // 混合模式 (实时变动 + 定时全量兜底)
+
+	// Agent 能力标志
+	CapabilityYamux = "yamux"
+	CapabilitySync  = "sync"
 
 	// 应用状态
 	AppStatusInstalled = "installed"

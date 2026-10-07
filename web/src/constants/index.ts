@@ -83,6 +83,7 @@ export const TASK_TYPE = {
   NORMAL: 'task',
   APP: 'app',
   REPO: 'repo',
+  AGENT_SYNC_SCRIPT: 'agent_sync_script',
 } as const
 
 export interface TaskTypeConfigItem {
@@ -118,6 +119,12 @@ export const TASK_TYPE_CONFIG = {
     bgColor: 'bg-emerald-500/10',
     borderColor: 'border-emerald-500/20',
   },
+  [TASK_TYPE.AGENT_SYNC_SCRIPT]: {
+    label: 'Agent同步',
+    color: 'text-amber-500 dark:text-amber-400',
+    bgColor: 'bg-amber-500/10',
+    borderColor: 'border-amber-500/20',
+  },
 } as const
 
 export function getTaskTypeConfig(type?: string): TaskTypeConfigItem {
@@ -129,6 +136,13 @@ export function getTaskTypeConfig(type?: string): TaskTypeConfigItem {
 export const TRIGGER_TYPE = {
   CRON: 'cron',
   BAIHU_STARTUP: 'baihu_startup',
+} as const
+
+// Agent 同步模式
+export const AGENT_SYNC_MODE = {
+  CRON: 'cron',
+  REALTIME: 'realtime',
+  HYBRID: 'hybrid',
 } as const
 
 // Agent 状态

@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -456,7 +457,8 @@ func (c *AgentController) WSConnect(ctx *gin.Context) {
 	c.wsManager.RecordConnectSuccess(ip)
 
 	// 注册连接
-	ac := c.wsManager.Register(agent.ID, conn, ip)
+	capabilities := ctx.Query("capabilities")
+	ac := c.wsManager.Register(agent.ID, conn, ip, capabilities)
 
 	// 更新 Agent 状态
 	c.agentService.Heartbeat(token, ip, "", "", "", "", "")
@@ -476,6 +478,9 @@ func (c *AgentController) WSConnect(ctx *gin.Context) {
 	// 启动读写协程
 	go c.wsWritePump(ac)
 	go c.wsReadPump(ac, agent)
+
+	// 触发 Agent 重新上线时的文件同步检测
+	go tasks.GetSyncWatcherService().OnAgentOnline(agent.ID)
 
 	// 主动推送任务列表
 	go c.wsManager.BroadcastTasks(agent.ID)
@@ -566,6 +571,9 @@ func (c *AgentController) handleWSMessage(ac *services.AgentConnection, agent *m
 		c.handleHeartbeat(ac, agent, msg.Data)
 
 	case services.WSTypeTaskResult:
+		c.handleTaskResult(agent, msg.Data)
+
+	case services.WSTypeSyncResult:
 		c.handleTaskResult(agent, msg.Data)
 
 	case services.WSTypeTaskLog:
@@ -743,4 +751,86 @@ func getIntSetting(s *services.SettingsService, section, key string, defaultVal 
 		return result
 	}
 	return defaultVal
+}
+
+// DirectSync 接收 CLI 或内部直接同步请求并调用 wsManager 执行同步
+func (c *AgentController) DirectSync(ctx *gin.Context) {
+	var req struct {
+		AgentID     string   `json:"agent_id" binding:"required"`
+		CleanTarget bool     `json:"clean_target"`
+		Mappings    []string `json:"mappings" binding:"required"`
+		IgnoreRules []string `json:"ignore_rules"`
+		Timeout     int      `json:"timeout"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(ctx, "参数错误: "+err.Error())
+		return
+	}
+
+	// 智能解析目标 Agent：支持传入 ID 或 Name
+	targetAgent := c.agentService.GetByID(req.AgentID)
+	if targetAgent == nil {
+		targetAgent = c.agentService.GetByName(req.AgentID)
+	}
+	if targetAgent == nil {
+		utils.BadRequest(ctx, fmt.Sprintf("找不到目标 Agent 节点 [%s]", req.AgentID))
+		return
+	}
+
+	if !c.wsManager.IsAgentOnline(targetAgent.ID) {
+		utils.BadRequest(ctx, fmt.Sprintf("目标 Agent 节点 [%s] 当前处于离线状态", targetAgent.Name))
+		return
+	}
+
+	var dirMappings []models.AgentSyncMapping
+	for _, m := range req.Mappings {
+		parts := strings.SplitN(m, ":", 2)
+		if len(parts) == 2 {
+			src := strings.TrimSpace(parts[0])
+			dst := strings.TrimSpace(parts[1])
+			if src != "" && dst != "" {
+				dirMappings = append(dirMappings, models.AgentSyncMapping{
+					SourcePath: src,
+					TargetPath: dst,
+				})
+			}
+		}
+	}
+
+	if len(dirMappings) == 0 {
+		utils.BadRequest(ctx, "未解析到有效的路径映射 (格式需为 source:target)")
+		return
+	}
+
+	// 构造虚拟 Task 对象执行推送
+	fakeTask := &models.Task{
+		ID:      "direct_sync",
+		Name:    "CLI 直接同步至 " + targetAgent.Name,
+		Timeout: req.Timeout,
+		AgentID: &targetAgent.ID,
+	}
+	fakeTask.SetAgentSync(&models.AgentSyncConfig{
+		AgentID:     targetAgent.ID,
+		CleanTarget: req.CleanTarget,
+		IgnoreRules: req.IgnoreRules,
+		DirMappings: dirMappings,
+	})
+
+	res, err := c.wsManager.PushAgentSync(targetAgent.ID, fakeTask, "")
+	if err != nil {
+		utils.ServerError(ctx, "同步失败: "+err.Error())
+		return
+	}
+
+	output := res.Output
+	if output == "" && res.Error != "" {
+		output = res.Error
+	}
+
+	utils.Success(ctx, gin.H{
+		"success":  res.Status == constant.TaskStatusSuccess,
+		"duration": res.Duration,
+		"output":   output,
+	})
 }

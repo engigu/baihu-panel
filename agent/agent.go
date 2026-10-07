@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -16,6 +18,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/executor"
 	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/utils"
 	"github.com/gorilla/websocket"
 )
@@ -35,6 +38,8 @@ const (
 	WSTypeExecute       = constant.WSTypeExecute
 	WSTypeTaskHeartbeat = constant.WSTypeTaskHeartbeat
 	WSTypeStop          = constant.WSTypeStop
+	WSTypeSyncRequest   = constant.WSTypeSyncRequest
+	WSTypeSyncResult    = constant.WSTypeSyncResult
 )
 
 type WSMessage struct {
@@ -325,7 +330,7 @@ func (a *Agent) connectWS() error {
 	serverURL := a.config.ServerURL
 	wsURL := strings.Replace(serverURL, "http://", "ws://", 1)
 	wsURL = strings.Replace(wsURL, "https://", "wss://", 1)
-	wsURL = fmt.Sprintf("%s/api/agent/ws?token=%s&machine_id=%s", wsURL, url.QueryEscape(a.config.Token), url.QueryEscape(a.machineID))
+	wsURL = fmt.Sprintf("%s/api/agent/ws?token=%s&machine_id=%s&capabilities=%s", wsURL, url.QueryEscape(a.config.Token), url.QueryEscape(a.machineID), "yamux,sync")
 
 	logger.Infof("正在连接 WebSocket: %s", wsURL)
 	logger.Infof("Token: %s..., MachineID: %s...", a.config.Token[:8], a.machineID[:16])
@@ -420,6 +425,8 @@ func (a *Agent) handleWSMessage(msg *WSMessage) {
 		a.handleExecute(msg.Data)
 	case WSTypeStop:
 		a.handleStop(msg.Data)
+	case WSTypeSyncRequest:
+		go a.handleSyncRequest(msg.Data)
 	}
 }
 
@@ -622,6 +629,130 @@ func (a *Agent) handleStop(data json.RawMessage) {
 	} else {
 		logger.Warnf("[Agent] 任务执行 #%s 停止失败（可能已完成或不在运行队列中）", req.LogID)
 	}
+}
+
+// handleSyncRequest 处理主控下发的脚本/多目录同步请求
+func (a *Agent) handleSyncRequest(data json.RawMessage) {
+	var req struct {
+		TaskID      string                    `json:"task_id"`
+		LogID       string                    `json:"log_id"`
+		CleanTarget bool                      `json:"clean_target"`
+		Mappings    []models.AgentSyncMapping `json:"mappings"`
+		ArchiveData string                    `json:"archive_data"`
+	}
+	if err := json.Unmarshal(data, &req); err != nil {
+		logger.Errorf("[AgentSync] 解析同步请求失败: %v", err)
+		return
+	}
+
+	start := time.Now()
+	logger.Infof("[AgentSync] 收到脚本同步请求: TaskID=%s, LogID=%s, 映射项=%d", req.TaskID, req.LogID, len(req.Mappings))
+
+	logToMaster := func(format string, args ...interface{}) {
+		timestamp := time.Now().Format("2006-01-02 15:04:05")
+		line := fmt.Sprintf("[%s] ", timestamp) + fmt.Sprintf(format, args...)
+		if !strings.HasSuffix(line, "\n") {
+			line += "\n"
+		}
+		_ = a.sendWSMessage(WSTypeTaskLog, map[string]interface{}{
+			"log_id":  req.LogID,
+			"content": line,
+		})
+	}
+
+	sendResult := func(status, output, errMsg string, exitCode int) {
+		res := &TaskResult{
+			TaskID:    req.TaskID,
+			LogID:     req.LogID,
+			Command:   "[AgentSync] 同步脚本/目录",
+			Output:    output,
+			Error:     errMsg,
+			Status:    status,
+			Duration:  time.Since(start).Milliseconds(),
+			ExitCode:  exitCode,
+			StartTime: start.Unix(),
+			EndTime:   time.Now().Unix(),
+		}
+		if err := a.sendWSMessage(WSTypeSyncResult, res); err != nil {
+			logger.Warnf("[AgentSync] 发送同步结果失败: %v", err)
+		}
+	}
+
+	logToMaster("[Agent] 收到主控下发的脚本同步数据包 (映射项: %d, CleanTarget: %t)", len(req.Mappings), req.CleanTarget)
+
+	if req.ArchiveData == "" {
+		errMsg := "同步请求缺少归档数据"
+		logger.Errorf("[AgentSync] %s", errMsg)
+		logToMaster("[Agent 错误] %s", errMsg)
+		sendResult(constant.TaskStatusFailed, "", errMsg, 1)
+		return
+	}
+
+	// 1. 解码归档数据
+	defer func() {
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			utils.FreeMemory()
+		}()
+	}()
+
+	logToMaster("[Agent] 正在解码 Base64 归档数据...")
+	archiveBytes, err := base64.StdEncoding.DecodeString(req.ArchiveData)
+	// 解码完成后立即释放原始 Base64 字符串
+	req.ArchiveData = ""
+	if err != nil {
+		errMsg := fmt.Sprintf("解码归档 Base64 数据失败: %v", err)
+		logger.Errorf("[AgentSync] %s", errMsg)
+		logToMaster("[Agent 错误] %s", errMsg)
+		sendResult(constant.TaskStatusFailed, "", errMsg, 1)
+		return
+	}
+
+	// 2. 目标基础目录定位 (默认 data/scripts)
+	baseDest := filepath.Join("data", "scripts")
+	if err := os.MkdirAll(baseDest, 0755); err != nil {
+		errMsg := fmt.Sprintf("创建目标目录 %s 失败: %v", baseDest, err)
+		logger.Errorf("[AgentSync] %s", errMsg)
+		logToMaster("[Agent 错误] %s", errMsg)
+		sendResult(constant.TaskStatusFailed, "", errMsg, 1)
+		return
+	}
+
+	// 3. 若设置了 clean_target，安全清空指定映射的目标目录
+	if req.CleanTarget {
+		for _, m := range req.Mappings {
+			target := strings.TrimSpace(m.TargetPath)
+			if target != "" && target != "." && target != "/" {
+				fullTarget := filepath.Join(baseDest, target)
+				if absDest, err1 := filepath.Abs(baseDest); err1 == nil {
+					if absTarget, err2 := filepath.Abs(fullTarget); err2 == nil && strings.HasPrefix(absTarget, absDest) && absTarget != absDest {
+						logger.Infof("[AgentSync] 清空目标目录: %s", fullTarget)
+						logToMaster("[Agent] 正在清空目标目录: %s", target)
+						_ = os.RemoveAll(fullTarget)
+					}
+				}
+			}
+		}
+	}
+
+	// 4. 流式解包落盘
+	archiveLen := len(archiveBytes)
+	logToMaster("[Agent] 正在解压数据包至 %s (归档大小: %d 字节)...", baseDest, archiveLen)
+	if err := utils.ExtractTarGzStream(bytes.NewReader(archiveBytes), baseDest); err != nil {
+		errMsg := fmt.Sprintf("解压归档文件失败: %v", err)
+		logger.Errorf("[AgentSync] %s", errMsg)
+		logToMaster("[Agent 错误] %s", errMsg)
+		sendResult(constant.TaskStatusFailed, "", errMsg, 1)
+		return
+	}
+
+	// 解压完成后立即解除对字节切片的引用
+	archiveBytes = nil
+
+	msg := fmt.Sprintf("脚本同步成功：归档大小 %d 字节，已解压至 %s", archiveLen, baseDest)
+	logger.Infof("[AgentSync] %s", msg)
+	logToMaster("[Agent] %s", msg)
+	sendResult(constant.TaskStatusSuccess, msg, "", 0)
 }
 
 // RealTimeLogWriter 实时日志写入器，通过 WebSocket 发送日志
