@@ -59,7 +59,7 @@ func InitBasic() *App {
 		windows.VerifyPwsh()
 
 		app := &App{}
-		utils.InitRuntime()
+		memopt.Init()
 		utils.InitSecretKey()
 
 		// 自动加载配置 (内部会自动处理 BH_CONFIG_PATH 环境变量与默认路径的优先级)

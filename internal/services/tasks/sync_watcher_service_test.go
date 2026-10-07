@@ -219,7 +219,7 @@ func TestSyncWatcher_MassiveFilesAndDirs_MemoryUsage(t *testing.T) {
 	memopt.Free()
 
 	afterCleanRSS, afterCleanHeap, _ := getMemStats()
-	t.Logf("【触发 FreeMemory 物理回收后】RSS=%.2f MB (回落: -%.2f MB), HeapAlloc=%.2f MB",
+	t.Logf("【触发 memopt.Free 物理回收后】RSS=%.2f MB (回落: -%.2f MB), HeapAlloc=%.2f MB",
 		float64(afterCleanRSS)/1024/1024,
 		float64(afterModRSS-afterCleanRSS)/1024/1024,
 		float64(afterCleanHeap)/1024/1024,
