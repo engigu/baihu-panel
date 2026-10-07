@@ -64,9 +64,32 @@ func (lc *LogSSEController) StreamLog(c *gin.Context) {
 	// 2. 未结束或未找到记录，尝试从 TinyLogManager 获取
 	tl := tasks.GetActiveLog(logID)
 	if tl == nil {
+		// 二次防抖查库：防止任务刚执行结束并注销 TinyLog，但数据库已落盘完成的瞬间并发窗口
+		var finalCheck models.TaskLog
+		if checkRes := database.DB.Where("id = ?", logID).Limit(1).Find(&finalCheck); checkRes.Error == nil && checkRes.RowsAffected > 0 && finalCheck.Status != "running" {
+			content, err := utils.DecompressFromBase64(string(finalCheck.Output))
+			if err != nil {
+				content = "解压日志失败: " + err.Error()
+			}
+			endTimeStr := ""
+			if finalCheck.EndTime != nil {
+				endTimeStr = finalCheck.EndTime.Time().Format("2006-01-02 15:04:05")
+			}
+			c.SSEvent("message", gin.H{
+				"type":      "finish",
+				"text":      content,
+				"status":    finalCheck.Status,
+				"duration":  finalCheck.Duration,
+				"end_time":  endTimeStr,
+				"exit_code": finalCheck.ExitCode,
+			})
+			c.Writer.Flush()
+			return
+		}
+
 		c.SSEvent("message", gin.H{
-			"type": "finish",
-			"text": "未找到正在运行的任务日志",
+			"type":   "finish",
+			"text":   "[System] 未找到正在运行的任务日志\r\n",
 			"status": "failed",
 		})
 		c.Writer.Flush()
