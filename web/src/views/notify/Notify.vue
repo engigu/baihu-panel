@@ -173,6 +173,12 @@ const channelConfigFields: Record<string, { key: string; label: string; required
     { key: 'topic_ids', label: 'TopicIDs', required: false, placeholder: '主题 ID，多个用逗号分隔' },
     { key: 'verify_pay_type', label: '付费验证', required: false, placeholder: '0:不验证, 1:仅付费, 2:仅未订阅/过期' },
   ],
+  ServerChan: [
+    { key: 'sendkey', label: 'SendKey', required: true, placeholder: 'SCTxxxxxxxx 或 SCUxxxx' },
+    { key: 'channel', label: '动态通道', required: false, placeholder: '可选，如 9 (微信模板消息) 或 18 (企业微信应用)' },
+    { key: 'openid', label: '指定 OpenID', required: false, placeholder: '可选，多用户接收时填' },
+    { key: 'api_url', label: '自定义 API 地址', required: false, placeholder: '留空使用官方: https://sctapi.ftqq.com/' },
+  ],
 }
 
 // 加载数据

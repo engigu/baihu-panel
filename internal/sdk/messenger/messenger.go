@@ -63,6 +63,7 @@ const (
 	ChannelVoceChat        = channels.ChannelVoceChat
 	ChannelWxPusher        = channels.ChannelWxPusher
 	ChannelQyWeiXinApp     = channels.ChannelQyWeiXinApp
+	ChannelServerChan      = channels.ChannelServerChan
 )
 
 // 重导出辅助函数
@@ -98,6 +99,7 @@ func init() {
 	RegisterChannel(ChannelVoceChat, func() Channel { return channels.NewVoceChatChannel() })
 	RegisterChannel(ChannelWxPusher, func() Channel { return channels.NewWxPusherChannel() })
 	RegisterChannel(ChannelQyWeiXinApp, func() Channel { return channels.NewQyWeiXinAppChannel() })
+	RegisterChannel(ChannelServerChan, func() Channel { return channels.NewServerChanChannel() })
 }
 
 // RegisterChannel 注册自定义渠道（可用于扩展）

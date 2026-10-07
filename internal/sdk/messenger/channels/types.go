@@ -96,4 +96,5 @@ const (
 	ChannelVoceChat        = "VoceChat"
 	ChannelWxPusher        = "WxPusher"
 	ChannelQyWeiXinApp     = "QyWeiXinApp"
+	ChannelServerChan      = "ServerChan"
 )
