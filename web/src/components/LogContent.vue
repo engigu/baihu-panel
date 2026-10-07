@@ -42,6 +42,22 @@ function getTheme() {
   }
 }
 
+// 适配并重新计算列宽，若列宽变化或要求强制重排，则以新尺寸重新渲染以消除错误折行
+function fitAndRefresh(forceRefresh = false) {
+  if (!terminal || !fitAddon || !terminalRef.value) return
+  try {
+    const oldCols = terminal.cols
+    fitAddon.fit()
+    if ((terminal.cols !== oldCols || forceRefresh) && props.content) {
+      const formattedContent = props.content.replace(/\r?\n/g, '\r\n')
+      terminal.clear()
+      terminal.write(formattedContent)
+      lastContentLength = props.content.length
+      lastContent = props.content
+    }
+  } catch (e) {}
+}
+
 function initTerminal() {
   if (!terminalRef.value) return
 
@@ -103,15 +119,25 @@ function initTerminal() {
     return true
   })
 
-  requestAnimationFrame(() => {
-    try {
-      fitAddon?.fit()
-    } catch (e) {}
-  })
+  // 尝试立即计算尺寸
+  try {
+    fitAddon.fit()
+  } catch (e) {}
 
   if (props.content) {
     writeContent(props.content)
   }
+
+  // 多阶段延迟适配：确保在侧边栏 CSS 弹性盒或动画稳定展开后，按真实的列数重新展开平铺
+  requestAnimationFrame(() => {
+    fitAndRefresh(true)
+  })
+  setTimeout(() => {
+    fitAndRefresh(true)
+  }, 50)
+  setTimeout(() => {
+    fitAndRefresh(true)
+  }, 150)
 }
 
 function writeContent(content: string) {
@@ -120,7 +146,6 @@ function writeContent(content: string) {
   if (content.length > lastContentLength && content.substring(0, lastContentLength) === lastContent) {
     // 增量更新：只截取新的部分
     const diff = content.substring(lastContentLength)
-    // 替换换行符，因为 xterm 需要 \r\n 才能回到行首
     const formattedDiff = diff.replace(/\r?\n/g, '\r\n')
     terminal.write(formattedDiff)
   } else {
@@ -156,9 +181,7 @@ watch(() => props.content, (newContent) => {
 onMounted(() => {
   if (terminalRef.value) {
     resizeObserver = new ResizeObserver(() => {
-      try {
-        fitAddon?.fit()
-      } catch (e) {}
+      fitAndRefresh(false)
     })
     resizeObserver.observe(terminalRef.value)
   }
@@ -170,16 +193,23 @@ onUnmounted(() => {
   }
   terminal?.dispose()
   terminal = null
+  fitAddon = null
 })
 
 // 当不显示 loading 且有 content 时，初始化 terminal
 watch(
   () => (!props.loading && props.content && props.content.trim()), 
   (shouldShow) => {
-    if (shouldShow && !terminal) {
-      nextTick(() => {
-        initTerminal()
-      })
+    if (shouldShow) {
+      if (!terminal) {
+        nextTick(() => {
+          initTerminal()
+        })
+      } else {
+        nextTick(() => {
+          fitAndRefresh(false)
+        })
+      }
     }
   },
   { immediate: true }
@@ -187,7 +217,7 @@ watch(
 </script>
 
 <template>
-  <div class="flex-1 flex flex-col h-full w-full relative min-h-0 lg:min-h-full">
+  <div class="flex-1 flex flex-col h-full w-full relative min-h-0 lg:min-h-full min-w-0">
     <!-- 加载状态 -->
     <template v-if="loading">
       <div class="flex-1 flex flex-col items-center justify-center p-4 select-none text-center">
@@ -212,16 +242,26 @@ watch(
     <!-- 正常内容 -->
     <div 
       v-show="!loading && content && content.trim()" 
-      class="flex-1 w-full p-2 overflow-hidden h-[200px] lg:h-full lg:min-h-0"
+      class="flex-1 w-full min-w-0 p-2 overflow-hidden h-[200px] lg:h-full lg:min-h-0"
     >
-      <div ref="terminalRef" class="w-full h-full log-terminal"></div>
+      <div ref="terminalRef" class="w-full h-full min-w-0 log-terminal"></div>
     </div>
   </div>
 </template>
 
 <style scoped>
+.log-terminal {
+  min-width: 0;
+}
+
 .log-terminal :deep(.xterm) {
   padding: 0.5rem;
+  width: 100%;
+  height: 100%;
+}
+
+.log-terminal :deep(.xterm-screen) {
+  width: 100% !important;
 }
 
 .log-terminal :deep(.xterm-viewport) {
