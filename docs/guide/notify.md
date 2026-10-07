@@ -5,7 +5,7 @@
 ## 消息通道
 
 - **企业 IM**：支持集成 **企业微信** (WeCom)、**钉钉** (DingTalk)、**飞书** (Lark)。
-- **个人推送到位**：支持 **Telegram** Bot、**Bark** (支持自建)、**VoceChat** (支持自建) 以及基于 **Wpush** 的推送服务。
+- **个人推送到位**：支持 **Telegram** Bot、**Bark** (支持自建)、**Server酱** (ServerChan Turbo/SCKEY)、**VoceChat** (支持自建) 以及基于 **WxPusher** / **PushPlus** / **PushMe** 等服务。
 - **公共渠道**：标准的 **SMTP 邮件** 及 **Webhook** 回调。
 
 ## 事件通知规则

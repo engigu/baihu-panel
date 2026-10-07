@@ -60,6 +60,7 @@ var SupportedChannelTypes = []map[string]string{
 	{"type": messenger.ChannelPushPlus, "label": "PushPlus"},
 	{"type": messenger.ChannelVoceChat, "label": "VoceChat"},
 	{"type": messenger.ChannelWxPusher, "label": "WxPusher"},
+	{"type": messenger.ChannelServerChan, "label": "Server酱"},
 }
 
 // SupportedEvents 支持的事件类型

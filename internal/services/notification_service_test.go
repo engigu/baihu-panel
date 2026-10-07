@@ -9,6 +9,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/eventbus"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/sdk/messenger"
 	"github.com/engigu/baihu-panel/internal/systime"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -163,4 +164,29 @@ func TestNotificationFilterRules(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("Verify ServerChan channel registration", func(t *testing.T) {
+		ch, err := messenger.GetChannel(messenger.ChannelServerChan)
+		if err != nil {
+			t.Fatalf("无法获取 ServerChan 渠道: %v", err)
+		}
+		if ch == nil {
+			t.Fatalf("ServerChan 渠道实例为空")
+		}
+
+		found := false
+		for _, ct := range SupportedChannelTypes {
+			if ct["type"] == messenger.ChannelServerChan {
+				found = true
+				if ct["label"] != "Server酱" {
+					t.Errorf("ServerChan 标签不匹配: got %s, want Server酱", ct["label"])
+				}
+				break
+			}
+		}
+		if !found {
+			t.Errorf("SupportedChannelTypes 中未找到 ServerChan 渠道类型")
+		}
+	})
 }
+
