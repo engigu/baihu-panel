@@ -11,6 +11,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/executor"
 	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/memopt"
 	"github.com/engigu/baihu-panel/internal/router"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/tunnel"
@@ -38,8 +39,11 @@ func New() *App {
 	// 启动系统级后台定时任务调度器
 	executor.InitSysCron()
 
-	// 初始化完成后回收一次内存
-	utils.FreeMemory()
+	// 启动静默期后台物理内存守护协程 (暂时保留注释)
+	// memopt.StartDaemon(30 * time.Minute)
+
+	// 初始化完成阶段检查点：释放启动临时对象并收缩物理常驻内存
+	memopt.Checkpoint("system_ready")
 
 	return app
 }
@@ -145,6 +149,9 @@ func (a *App) initDatabase() {
 	migrateDuration := time.Since(migrateStart)
 	logger.Infof("[Database] 表结构同步完成, 耗时: %v", migrateDuration)
 	logger.Infof("[Database] 数据库总初始化耗时: %v", time.Since(startTime))
+
+	// 阶段性内存释放：数据库迁移与模型反射会分配大量临时堆对象，及时释放防止启动高水位叠加
+	memopt.Checkpoint("db_migrate")
 }
 
 func (a *App) initRouter() {

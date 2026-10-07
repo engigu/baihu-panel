@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/memopt"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/utils"
 	"github.com/shirou/gopsutil/v3/process"
@@ -215,7 +216,7 @@ func TestSyncWatcher_MassiveFilesAndDirs_MemoryUsage(t *testing.T) {
 
 	// 4. 等待防抖计时结束并执行主动工作集回收
 	time.Sleep(1200 * time.Millisecond)
-	utils.FreeMemory()
+	memopt.Free()
 
 	afterCleanRSS, afterCleanHeap, _ := getMemStats()
 	t.Logf("【触发 FreeMemory 物理回收后】RSS=%.2f MB (回落: -%.2f MB), HeapAlloc=%.2f MB",
@@ -231,7 +232,7 @@ func TestSyncWatcher_MassiveFilesAndDirs_MemoryUsage(t *testing.T) {
 	svc.Stop()
 
 	// 彻底回收
-	utils.FreeMemory()
+	memopt.Free()
 	finalRSS, finalHeap, finalGoroutines := getMemStats()
 	t.Logf("【注销退出休眠后】RSS=%.2f MB, HeapAlloc=%.2f MB, 协程数=%d (残留已彻底释放)",
 		float64(finalRSS)/1024/1024, float64(finalHeap)/1024/1024, finalGoroutines)

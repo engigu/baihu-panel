@@ -1,6 +1,8 @@
 package router
 
 import (
+	"time"
+
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/controllers"
 	"github.com/engigu/baihu-panel/internal/logger"
@@ -46,12 +48,16 @@ func RegisterControllers() *Controllers {
 	// 启动计划任务
 	executorService.StartCron()
 
-	// 启动全局文件监听服务 (支持 Agent 实时热同步)
+	// 启动全局文件监听服务 (支持 Agent 实时热同步，异步延迟预热以降低冷启动堆峰值)
 	syncWatcher := tasks.GetSyncWatcherService()
 	syncWatcher.SetExecutorService(executorService)
-	if err := syncWatcher.Start(); err != nil {
-		logger.Warnf("启动文件同步监听服务失败: %v", err)
-	}
+	go func() {
+		// 稍微错开系统启动并发高峰，平滑预热文件监听
+		time.Sleep(2 * time.Second)
+		if err := syncWatcher.Start(); err != nil {
+			logger.Warnf("启动文件同步监听服务失败: %v", err)
+		}
+	}()
 
 	// 初始化所有关注系统总线的服务
 	setupEventHandlers(appLogService, notifyService, loginLogService, systemWSManager, executorService)

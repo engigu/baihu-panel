@@ -13,6 +13,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/executor"
 	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/memopt"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/engigu/baihu-panel/internal/utils"
@@ -273,7 +274,7 @@ func (m *AgentWSManager) PushAgentSync(agentID string, task *models.Task, logID 
 	defer func() {
 		go func() {
 			time.Sleep(600 * time.Millisecond)
-			utils.FreeMemory()
+			memopt.Free()
 		}()
 	}()
 
@@ -325,7 +326,7 @@ func (m *AgentWSManager) PushAgentSync(agentID string, task *models.Task, logID 
 	archiveBase64 = ""
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		utils.FreeMemory()
+		memopt.Free()
 	}()
 
 	writeLog("[AgentSync] 归档数据包下发完毕，正在等待目标 Agent 节点解包部署与落盘校验...")

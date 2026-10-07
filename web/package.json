@@ -36,7 +36,7 @@
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.18",
     "vaul-vue": "^0.4.1",
-    "vue": "^3.5.24",
+    "vue": "^3.5.43",
     "vue-chartjs": "^5.3.3",
     "vue-router": "^4.6.4",
     "vue-sonner": "^2.0.9",
@@ -63,8 +63,9 @@
       "vite": "$vite"
     },
     "esbuild": "^0.28.1",
-    "brace-expansion": "^5.0.9",
-    "fast-uri": "^3.1.5",
-    "nanoid": "^5.1.16"
+    "brace-expansion": "^5.0.12",
+    "fast-uri": "^3.1.8",
+    "nanoid": "^3.3.20",
+    "source-map-js": "^1.2.2"
   }
 }
