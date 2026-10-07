@@ -1,17 +1,21 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/services/relation"
 	"github.com/engigu/baihu-panel/internal/utils"
+	"gopkg.in/yaml.v3"
 )
 
 // AppDTO 已安装应用的综合数据传输实体（从 baihu_tasks 表中的 App 主任务记录及其 Config 动态反序列化）
@@ -440,3 +444,174 @@ func (s *AppService) SwitchScenario(appID string, scenarioID string, out io.Writ
 	_, err = DefaultApplier.Apply(manifest, []byte(appDTO.ManifestRaw), opts)
 	return err
 }
+
+// MarketplaceResult 应用市场数据载荷
+type MarketplaceResult struct {
+	Source          string                   `json:"source"`
+	Apps            []map[string]interface{} `json:"apps"`
+	GeneratedAtUTC8 string                   `json:"generated_at_utc8,omitempty"`
+	BuildTime       string                   `json:"build_time,omitempty"`
+	GeneratedAt     string                   `json:"generated_at,omitempty"`
+}
+
+// FetchMarketplace 从官方/镜像源矩阵拉取白虎应用市场索引并完成数据修饰
+func (s *AppService) FetchMarketplace() (*MarketplaceResult, error) {
+	branch := strings.TrimSpace(os.Getenv("BH_APPSTORE_BRANCH"))
+	if branch == "" {
+		branch = "main"
+	}
+
+	remoteCandidates := []string{
+		"https://engigu.github.io/baihu-appstore/apps.json",
+		fmt.Sprintf("https://ghproxy.net/https://raw.githubusercontent.com/engigu/baihu-appstore/%s/apps.json", branch),
+		fmt.Sprintf("https://ghp.ci/https://raw.githubusercontent.com/engigu/baihu-appstore/%s/apps.json", branch),
+		fmt.Sprintf("https://raw.githubusercontent.com/engigu/baihu-appstore/%s/apps.json", branch),
+		fmt.Sprintf("https://cdn.jsdelivr.net/gh/engigu/baihu-appstore@%s/apps.json", branch),
+	}
+
+	client := &http.Client{Timeout: 8 * time.Second}
+	var resp *http.Response
+	var err error
+	nowTs := time.Now().Unix()
+
+	for _, targetURL := range remoteCandidates {
+		fetchURL := fmt.Sprintf("%s?t=%d", targetURL, nowTs)
+		resp, err = client.Get(fetchURL)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			break
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}
+
+	if err != nil || resp == nil || resp.StatusCode != http.StatusOK {
+		return &MarketplaceResult{
+			Source: "none",
+			Apps:   []map[string]interface{}{},
+		}, nil
+	}
+
+	defer resp.Body.Close()
+	body, rErr := io.ReadAll(resp.Body)
+	if rErr != nil {
+		return nil, fmt.Errorf("读取应用市场响应失败: %w", rErr)
+	}
+
+	var rawJSON interface{}
+	if err := json.Unmarshal(body, &rawJSON); err != nil {
+		return nil, fmt.Errorf("解析应用市场 JSON 失败: %w", err)
+	}
+
+	var appList []interface{}
+	var rawMap map[string]interface{}
+	if m, ok := rawJSON.(map[string]interface{}); ok {
+		rawMap = m
+		if arr, exists := m["apps"].([]interface{}); exists {
+			appList = arr
+		}
+	} else if arr, ok := rawJSON.([]interface{}); ok {
+		appList = arr
+	}
+
+	EnrichMarketplaceApps(appList)
+
+	resultApps := make([]map[string]interface{}, 0, len(appList))
+	for _, it := range appList {
+		if m, ok := it.(map[string]interface{}); ok {
+			resultApps = append(resultApps, m)
+		}
+	}
+
+	res := &MarketplaceResult{
+		Source: "remote",
+		Apps:   resultApps,
+	}
+	if rawMap != nil {
+		if v, ok := rawMap["generated_at_utc8"].(string); ok {
+			res.GeneratedAtUTC8 = v
+		}
+		if v, ok := rawMap["build_time"].(string); ok {
+			res.BuildTime = v
+		}
+		if v, ok := rawMap["generated_at"].(string); ok {
+			res.GeneratedAt = v
+		}
+	}
+
+	return res, nil
+}
+
+// EnrichMarketplaceApps 遍历应用列表，统一提取并注入结构化的 template 与规范契约
+func EnrichMarketplaceApps(appList []interface{}) {
+	for _, rawItem := range appList {
+		appMap, isMap := rawItem.(map[string]interface{})
+		if !isMap {
+			continue
+		}
+
+		var manifest *AppManifest
+		if rawYAML, hasYAML := appMap["manifest_raw"].(string); hasYAML && rawYAML != "" {
+			manifest, _ = ParseManifestFromYAML([]byte(rawYAML))
+		} else if tmpl, hasTmpl := appMap["template"]; hasTmpl {
+			manifest = &AppManifest{Template: tmpl}
+		}
+
+		if manifest != nil {
+			tplCfg := manifest.GetTypedTemplateConfig()
+			if tplCfg != nil {
+				appMap["template"] = tplCfg
+			}
+		}
+
+		delete(appMap, "tag")
+		delete(appMap, "languages")
+	}
+}
+
+// GetMarketplaceApp 从应用市场拉取并获取指定 appID 的结构化 AppManifest 及原始属性字典
+func (s *AppService) GetMarketplaceApp(appID string) (*AppManifest, map[string]interface{}, error) {
+	appID = strings.TrimSpace(strings.ToLower(appID))
+	if appID == "" {
+		return nil, nil, fmt.Errorf("应用 ID 不能为空")
+	}
+
+	market, err := s.FetchMarketplace()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, appMap := range market.Apps {
+		curID, _ := appMap["id"].(string)
+		if strings.EqualFold(strings.TrimSpace(curID), appID) {
+			rawYAMLBytes, err := yaml.Marshal(appMap)
+			if err != nil {
+				return nil, nil, fmt.Errorf("序列化应用定义失败: %w", err)
+			}
+			processedBytes, pErr := PreprocessYAMLTemplate(rawYAMLBytes)
+			if pErr == nil {
+				rawYAMLBytes = processedBytes
+			}
+			manifest, mErr := ParseManifestFromYAML(rawYAMLBytes)
+			if mErr != nil {
+				return nil, nil, fmt.Errorf("解析应用定义失败: %w", mErr)
+			}
+			return manifest, appMap, nil
+		}
+	}
+
+	return nil, nil, fmt.Errorf("应用市场中未找到应用: %s", appID)
+}
+
+// ApplyMarketplaceApp 从应用市场一键直接部署安装指定应用
+func (s *AppService) ApplyMarketplaceApp(appID string, opts ApplyOptions) (*ApplyResult, error) {
+	manifest, appMap, err := s.GetMarketplaceApp(appID)
+	if err != nil {
+		return nil, err
+	}
+
+	rawYAMLBytes, _ := yaml.Marshal(appMap)
+	opts.ManifestPath = fmt.Sprintf("marketplace:%s", manifest.ID)
+	return DefaultApplier.Apply(manifest, rawYAMLBytes, opts)
+}
+

@@ -2,12 +2,15 @@ package tasks
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/systime"
 	"github.com/engigu/baihu-panel/internal/utils"
 )
@@ -172,6 +175,23 @@ func (s *TaskLogService) CleanTaskLogs(taskID string) {
 	}
 }
 
+// ClearLogs 按任务ID或天数清空历史日志 (days <= 0 表示不限时间全量清空)
+func (s *TaskLogService) ClearLogs(taskID string, days int) (int64, error) {
+	query := database.DB.Model(&models.TaskLog{})
+	if taskID != "" {
+		query = query.Where("task_id = ?", taskID)
+	}
+	if days > 0 {
+		cutoff := systime.InCST(time.Now()).AddDate(0, 0, -days)
+		query = query.Where("created_at < ?", cutoff)
+	}
+	if taskID == "" && days <= 0 {
+		query = query.Where("1 = 1")
+	}
+	res := query.Delete(&models.TaskLog{})
+	return res.RowsAffected, res.Error
+}
+
 // ProcessTaskCompletion 处理任务完成后的所有操作（保存日志、更新统计、清理旧日志）
 func (s *TaskLogService) ProcessTaskCompletion(taskLog *models.TaskLog) error {
 	// 1. 保存/更新日志
@@ -277,3 +297,166 @@ func (s *TaskLogService) CreateTaskLogFromLocalExecution(taskID string, command,
 
 	return taskLog, nil
 }
+
+const (
+	DeletedTaskPrefix      = "[已删除] "
+	DeletedTaskPlaceholder = "[已删除任务]"
+)
+
+// ResolveTaskLogInfo 解析任务日志的显示名称、类型与已删除状态
+func ResolveTaskLogInfo(task *models.Task, log *models.TaskLog) (displayName string, taskType string, taskDeleted bool) {
+	taskType = "task"
+	if task != nil && task.ID != "" {
+		if task.Type != "" {
+			taskType = task.Type
+		}
+		if task.Name != "" {
+			return task.Name, taskType, false
+		}
+		if log != nil && log.TaskName != "" {
+			return log.TaskName, taskType, false
+		}
+		return "", taskType, false
+	}
+
+	// 任务记录不存在，判定为已删除
+	taskDeleted = true
+	if log != nil && log.TaskName != "" {
+		displayName = DeletedTaskPrefix + log.TaskName
+	} else {
+		displayName = DeletedTaskPlaceholder
+	}
+	return displayName, taskType, taskDeleted
+}
+
+// GetLogsWithPagination 分页查询任务执行历史记录列表
+func (s *TaskLogService) GetLogsWithPagination(page, pageSize int, taskID, taskName, status, date string) ([]vo.TaskLogVO, int64) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	query := database.DB.Model(&models.TaskLog{})
+	if taskID != "" {
+		query = query.Where("task_id = ?", taskID)
+	}
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if date == "today" {
+		now := time.Now()
+		startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		endOfDay := startOfDay.Add(24 * time.Hour)
+		query = query.Where("created_at >= ? AND created_at < ?", startOfDay, endOfDay)
+	} else if date != "" {
+		if t, err := time.ParseInLocation("2006-01-02", date, time.Local); err == nil {
+			startOfDay := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+			endOfDay := startOfDay.Add(24 * time.Hour)
+			query = query.Where("created_at >= ? AND created_at < ?", startOfDay, endOfDay)
+		}
+	}
+
+	// 按任务名称过滤
+	if taskName != "" {
+		trimmedName := strings.TrimSpace(taskName)
+		if trimmedName == "[已删除]" || trimmedName == "已删除" || trimmedName == ":deleted" {
+			var activeIDs []string
+			database.DB.Model(&models.Task{}).Pluck("id", &activeIDs)
+			if len(activeIDs) > 0 {
+				query = query.Where("task_id NOT IN ?", activeIDs)
+			}
+		} else if strings.HasPrefix(trimmedName, "[已删除]") {
+			keyword := strings.TrimSpace(strings.TrimPrefix(trimmedName, "[已删除]"))
+			var activeIDs []string
+			database.DB.Model(&models.Task{}).Pluck("id", &activeIDs)
+			if len(activeIDs) > 0 {
+				query = query.Where("task_id NOT IN ?", activeIDs)
+			}
+			if keyword != "" {
+				query = query.Where("task_name LIKE ?", "%"+keyword+"%")
+			}
+		} else {
+			var taskIDs []string
+			database.DB.Model(&models.Task{}).Where("name LIKE ?", "%"+trimmedName+"%").Pluck("id", &taskIDs)
+			if len(taskIDs) > 0 {
+				query = query.Where("(task_id IN ? OR task_name LIKE ?)", taskIDs, "%"+trimmedName+"%")
+			} else {
+				query = query.Where("task_name LIKE ?", "%"+trimmedName+"%")
+			}
+		}
+	}
+
+	var total int64
+	query.Count(&total)
+
+	var logs []models.TaskLog
+	offset := (page - 1) * pageSize
+	query.Omit("output", "error").Order("id DESC").Offset(offset).Limit(pageSize).Find(&logs)
+
+	taskIDList := make([]string, 0, len(logs))
+	for _, log := range logs {
+		taskIDList = append(taskIDList, log.TaskID)
+	}
+
+	var tasksList []models.Task
+	if len(taskIDList) > 0 {
+		database.DB.Select("id", "name", "type").Where("id IN ?", taskIDList).Find(&tasksList)
+	}
+	taskMap := make(map[string]models.Task)
+	for _, t := range tasksList {
+		taskMap[t.ID] = t
+	}
+
+	result := make([]vo.TaskLogVO, len(logs))
+	for i, log := range logs {
+		var taskPtr *models.Task
+		if t, exists := taskMap[log.TaskID]; exists {
+			taskPtr = &t
+		}
+		displayName, taskType, taskDeleted := ResolveTaskLogInfo(taskPtr, &log)
+
+		result[i] = vo.TaskLogVO{
+			ID:          log.ID,
+			TaskID:      log.TaskID,
+			TaskName:    displayName,
+			TaskDeleted: taskDeleted,
+			TaskType:    taskType,
+			AgentID:     log.AgentID,
+			Command:     string(log.Command),
+			Status:      log.Status,
+			Duration:    log.Duration,
+			StartTime:   log.StartTime,
+			EndTime:     log.EndTime,
+			CreatedAt:   log.CreatedAt,
+		}
+	}
+
+	return result, total
+}
+
+// GetLogDetailByID 根据 ID 获取日志详情
+func (s *TaskLogService) GetLogDetailByID(id string) (*vo.TaskLogVO, error) {
+	var log models.TaskLog
+	res := database.DB.Where("id = ?", id).Limit(1).Find(&log)
+	if res.Error != nil || res.RowsAffected == 0 {
+		return nil, fmt.Errorf("日志不存在")
+	}
+
+	logVO := vo.ToTaskLogVO(&log)
+	if logVO != nil {
+		var task models.Task
+		var taskPtr *models.Task
+		if taskRes := database.DB.Where("id = ?", log.TaskID).Limit(1).Find(&task); taskRes.Error == nil && taskRes.RowsAffected > 0 {
+			taskPtr = &task
+		}
+		displayName, taskType, taskDeleted := ResolveTaskLogInfo(taskPtr, &log)
+		logVO.TaskName = displayName
+		logVO.TaskType = taskType
+		logVO.TaskDeleted = taskDeleted
+	}
+
+	return logVO, nil
+}
+

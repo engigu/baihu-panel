@@ -1,26 +1,27 @@
 package controllers
 
 import (
-	"strings"
-	"time"
-
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
-	"github.com/engigu/baihu-panel/internal/models/vo"
+	"github.com/engigu/baihu-panel/internal/services"
+	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/engigu/baihu-panel/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
 
-const (
-	DeletedTaskPrefix      = "[已删除] "
-	DeletedTaskPlaceholder = "[已删除任务]"
-)
+type LogController struct {
+	taskLogService *tasks.TaskLogService
+}
 
-type LogController struct{}
-
-func NewLogController() *LogController {
-	return &LogController{}
+func NewLogController(taskLogService ...*tasks.TaskLogService) *LogController {
+	var svc *tasks.TaskLogService
+	if len(taskLogService) > 0 && taskLogService[0] != nil {
+		svc = taskLogService[0]
+	} else {
+		svc = tasks.NewTaskLogService(services.NewSendStatsService())
+	}
+	return &LogController{taskLogService: svc}
 }
 
 // GetLogs 获取任务日志列表
@@ -45,102 +46,7 @@ func (lc *LogController) GetLogs(c *gin.Context) {
 	status := c.DefaultQuery("status", "")
 	date := c.DefaultQuery("date", "")
 
-	var logs []models.TaskLog
-	var total int64
-
-	query := database.DB.Model(&models.TaskLog{})
-	if taskID != "" {
-		query = query.Where("task_id = ?", taskID)
-	}
-	if status != "" {
-		query = query.Where("status = ?", status)
-	}
-	if date == "today" {
-		now := time.Now()
-		startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		endOfDay := startOfDay.Add(24 * time.Hour)
-		query = query.Where("created_at >= ? AND created_at < ?", startOfDay, endOfDay)
-	} else if date != "" {
-		if t, err := time.ParseInLocation("2006-01-02", date, time.Local); err == nil {
-			startOfDay := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
-			endOfDay := startOfDay.Add(24 * time.Hour)
-			query = query.Where("created_at >= ? AND created_at < ?", startOfDay, endOfDay)
-		}
-	}
-
-	// 按任务名称过滤（支持明确标记检索已删除任务，不使用空字符代表已删除）
-	if taskName != "" {
-		trimmedName := strings.TrimSpace(taskName)
-		if trimmedName == "[已删除]" || trimmedName == "已删除" || trimmedName == ":deleted" {
-			// 优化：提取当前存活任务 ID 列表，走 task_id 索引常数扫描，避免 NOT IN (subquery) 慢查询
-			var activeIDs []string
-			database.DB.Model(&models.Task{}).Pluck("id", &activeIDs)
-			if len(activeIDs) > 0 {
-				query = query.Where("task_id NOT IN ?", activeIDs)
-			}
-		} else if strings.HasPrefix(trimmedName, "[已删除]") {
-			// 支持带 [已删除] 前缀的组合搜索
-			keyword := strings.TrimSpace(strings.TrimPrefix(trimmedName, "[已删除]"))
-			var activeIDs []string
-			database.DB.Model(&models.Task{}).Pluck("id", &activeIDs)
-			if len(activeIDs) > 0 {
-				query = query.Where("task_id NOT IN ?", activeIDs)
-			}
-			if keyword != "" {
-				query = query.Where("task_name LIKE ?", "%"+keyword+"%")
-			}
-		} else {
-			var taskIDs []string
-			database.DB.Model(&models.Task{}).Where("name LIKE ?", "%"+trimmedName+"%").Pluck("id", &taskIDs)
-			if len(taskIDs) > 0 {
-				query = query.Where("(task_id IN ? OR task_name LIKE ?)", taskIDs, "%"+trimmedName+"%")
-			} else {
-				query = query.Where("task_name LIKE ?", "%"+trimmedName+"%")
-			}
-		}
-	}
-
-	query.Count(&total)
-	query.Omit("output", "error").Order("id DESC").Offset(p.Offset()).Limit(p.PageSize).Find(&logs)
-
-	taskIDList := make([]string, 0)
-	for _, log := range logs {
-		taskIDList = append(taskIDList, log.TaskID)
-	}
-
-	var tasks []models.Task
-	if len(taskIDList) > 0 {
-		database.DB.Select("id", "name", "type").Where("id IN ?", taskIDList).Find(&tasks)
-	}
-	taskMap := make(map[string]models.Task)
-	for _, t := range tasks {
-		taskMap[t.ID] = t
-	}
-
-	result := make([]vo.TaskLogVO, len(logs))
-	for i, log := range logs {
-		var taskPtr *models.Task
-		if t, exists := taskMap[log.TaskID]; exists {
-			taskPtr = &t
-		}
-		displayName, taskType, taskDeleted := resolveTaskLogInfo(taskPtr, &log)
-
-		result[i] = vo.TaskLogVO{
-			ID:          log.ID,
-			TaskID:      log.TaskID,
-			TaskName:    displayName,
-			TaskDeleted: taskDeleted,
-			TaskType:    taskType,
-			AgentID:     log.AgentID,
-			Command:     string(log.Command),
-			Status:      log.Status,
-			Duration:    log.Duration,
-			StartTime:   log.StartTime,
-			EndTime:     log.EndTime,
-			CreatedAt:   log.CreatedAt,
-		}
-	}
-
+	result, total := lc.taskLogService.GetLogsWithPagination(p.Page, p.PageSize, taskID, taskName, status, date)
 	utils.PaginatedResponse(c, result, total, p)
 }
 
@@ -162,53 +68,13 @@ func (lc *LogController) GetLogDetail(c *gin.Context) {
 		return
 	}
 
-	var log models.TaskLog
-	res := database.DB.Where("id = ?", id).Limit(1).Find(&log)
-	if res.Error != nil || res.RowsAffected == 0 {
-		utils.NotFound(c, "日志不存在")
+	logVO, err := lc.taskLogService.GetLogDetailByID(id)
+	if err != nil {
+		utils.NotFound(c, err.Error())
 		return
 	}
 
-	logVO := vo.ToTaskLogVO(&log)
-	if logVO != nil {
-		var task models.Task
-		var taskPtr *models.Task
-		if taskRes := database.DB.Where("id = ?", log.TaskID).Limit(1).Find(&task); taskRes.Error == nil && taskRes.RowsAffected > 0 {
-			taskPtr = &task
-		}
-		displayName, taskType, taskDeleted := resolveTaskLogInfo(taskPtr, &log)
-		logVO.TaskName = displayName
-		logVO.TaskType = taskType
-		logVO.TaskDeleted = taskDeleted
-	}
-
 	utils.Success(c, logVO)
-}
-
-// resolveTaskLogInfo 解析任务日志的显示名称、类型与已删除状态
-func resolveTaskLogInfo(task *models.Task, log *models.TaskLog) (displayName string, taskType string, taskDeleted bool) {
-	taskType = "task"
-	if task != nil && task.ID != "" {
-		if task.Type != "" {
-			taskType = task.Type
-		}
-		if task.Name != "" {
-			return task.Name, taskType, false
-		}
-		if log != nil && log.TaskName != "" {
-			return log.TaskName, taskType, false
-		}
-		return "", taskType, false
-	}
-
-	// 任务记录不存在，判定为已删除
-	taskDeleted = true
-	if log != nil && log.TaskName != "" {
-		displayName = DeletedTaskPrefix + log.TaskName
-	} else {
-		displayName = DeletedTaskPlaceholder
-	}
-	return displayName, taskType, taskDeleted
 }
 
 // ClearLogs 清空日志
@@ -222,14 +88,13 @@ func (lc *LogController) ClearLogs(c *gin.Context) {
 		return
 	}
 
-	query := database.DB.Model(&models.TaskLog{})
-	if req.TaskID != nil && *req.TaskID != "" {
-		query = query.Where("task_id = ?", *req.TaskID)
-	} else {
-		query = query.Where("1 = 1") // Allow delete all without GORM safety block
+	targetTaskID := ""
+	if req.TaskID != nil {
+		targetTaskID = *req.TaskID
 	}
 
-	if err := query.Delete(&models.TaskLog{}).Error; err != nil {
+	_, err := lc.taskLogService.ClearLogs(targetTaskID, 0)
+	if err != nil {
 		utils.ServerError(c, "清空日志失败")
 		return
 	}

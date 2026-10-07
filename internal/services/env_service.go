@@ -382,4 +382,61 @@ func (es *EnvService) CleanEnvTags(id string) {
 	relation.DataRelation.CleanRelations(id, constant.RelationTypeEnvTag)
 }
 
+// CreateEnvVarWithTags 创建环境变量并保存标签，同时广播通知所有在线 Agent
+func (es *EnvService) CreateEnvVarWithTags(name, value, remark, envType string, hidden, enabled bool, userID string, tags string) *models.EnvironmentVariable {
+	envVar := es.CreateEnvVar(name, value, remark, envType, hidden, enabled, userID)
+	if envVar != nil {
+		relation.DataRelation.SaveTags(envVar.ID, constant.RelationTypeEnvTag, tags)
+		envVar.Tags = tags
+		GetAgentWSManager().BroadcastTasksToAll()
+	}
+	return envVar
+}
+
+// UpdateEnvVarWithTags 更新环境变量并保存标签，同时广播通知所有在线 Agent
+func (es *EnvService) UpdateEnvVarWithTags(id, name, value, remark, envType string, hidden, enabled bool, tags string) *models.EnvironmentVariable {
+	envVar := es.UpdateEnvVar(id, name, value, remark, envType, hidden, enabled)
+	if envVar != nil {
+		relation.DataRelation.SaveTags(envVar.ID, constant.RelationTypeEnvTag, tags)
+		envVar.Tags = tags
+		GetAgentWSManager().BroadcastTasksToAll()
+	}
+	return envVar
+}
+
+// DeleteEnvVarWithBroadcast 删除环境变量并广播通知所有在线 Agent
+func (es *EnvService) DeleteEnvVarWithBroadcast(id string, force bool) (bool, []models.Task) {
+	success, tasks := es.DeleteEnvVar(id, force)
+	if success {
+		GetAgentWSManager().BroadcastTasksToAll()
+	}
+	return success, tasks
+}
+
+// GetDefaultAdminUserID 获取默认管理员用户 ID
+func (es *EnvService) GetDefaultAdminUserID() string {
+	var adminUser models.User
+	res := database.DB.Where("role = ?", constant.AdminRole).Limit(1).Find(&adminUser)
+	if res.Error == nil && res.RowsAffected > 0 {
+		return adminUser.ID
+	}
+	return "admin"
+}
+
+// SetOrUpdateEnvVar 智能设置环境变量：如果存在同名变量则更新，否则自动创建，且自动保存标签并广播通知 Agent
+func (es *EnvService) SetOrUpdateEnvVar(name, value, remark, envType string, hidden, enabled bool, userID string, tags string) (*models.EnvironmentVariable, bool) {
+	if userID == "" {
+		userID = es.GetDefaultAdminUserID()
+	}
+	var existing models.EnvironmentVariable
+	res := database.DB.Where("name = ? AND user_id = ?", name, userID).Limit(1).Find(&existing)
+	if res.Error == nil && res.RowsAffected > 0 {
+		updated := es.UpdateEnvVarWithTags(existing.ID, name, value, remark, envType, hidden, enabled, tags)
+		return updated, false // false 表示是更新
+	}
+	created := es.CreateEnvVarWithTags(name, value, remark, envType, hidden, enabled, userID, tags)
+	return created, true // true 表示是新建
+}
+
+
 

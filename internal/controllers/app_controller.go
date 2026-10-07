@@ -40,17 +40,8 @@ func NewAppController(appService *app.AppService, executorService ...*tasks.Exec
 
 // syncAppCronTasks 同步指定主应用及其所有受控子任务在 CronManager 中的调度状态
 func (ac *AppController) syncAppCronTasks(masterTaskID string) {
-	if ac.executorService == nil || masterTaskID == "" {
-		return
-	}
-	var appTasks []models.Task
-	database.DB.Where("id = ? OR (source_id = ? AND type = ?)", masterTaskID, masterTaskID, constant.TaskTypeNormal).Find(&appTasks)
-	var ids []string
-	for _, t := range appTasks {
-		ids = append(ids, t.ID)
-	}
-	if len(ids) > 0 {
-		ac.executorService.SyncRepoTasks(ids, nil)
+	if ac.executorService != nil {
+		ac.executorService.SyncAppTasks(masterTaskID)
 	}
 }
 
@@ -418,114 +409,33 @@ func (ac *AppController) RemoveApp(c *gin.Context) {
 
 // GetMarketplace 获取应用市场列表
 func (ac *AppController) GetMarketplace(c *gin.Context) {
-	// 2. 从官方远程源拉取应用市场索引（实时性优先 + 容灾加速矩阵）
-	// 第1级: GitHub Pages 官方节点 (实时更新)
-	// 第2级: 国内 GitHub 镜像代理加速 (ghproxy / ghp.ci)
-	// 第3级: GitHub Raw 原生直连
-	// 第4级: jsDelivr 备用 CDN
-	remoteCandidates := []string{
-		"https://engigu.github.io/baihu-appstore/apps.json",
-		"https://ghproxy.net/https://raw.githubusercontent.com/engigu/baihu-appstore/main/apps.json",
-		"https://ghp.ci/https://raw.githubusercontent.com/engigu/baihu-appstore/main/apps.json",
-		"https://raw.githubusercontent.com/engigu/baihu-appstore/main/apps.json",
-		"https://cdn.jsdelivr.net/gh/engigu/baihu-appstore@main/apps.json",
-	}
-
-	client := &http.Client{Timeout: 8 * time.Second}
-	var resp *http.Response
-	var err error
-	nowTs := time.Now().Unix()
-	for _, targetURL := range remoteCandidates {
-		fetchURL := fmt.Sprintf("%s?t=%d", targetURL, nowTs)
-		resp, err = client.Get(fetchURL)
-		if err == nil && resp.StatusCode == http.StatusOK {
-			break
-		}
-		if resp != nil {
-			resp.Body.Close()
-		}
-	}
-
-	if err == nil && resp.StatusCode == http.StatusOK {
-		defer resp.Body.Close()
-		body, rErr := io.ReadAll(resp.Body)
-		if rErr == nil {
-				var rawJSON interface{}
-				if err := json.Unmarshal(body, &rawJSON); err == nil {
-					var appList interface{} = rawJSON
-					var rawMap map[string]interface{}
-					if m, ok := rawJSON.(map[string]interface{}); ok {
-						rawMap = m
-						if arr, exists := m["apps"]; exists {
-							appList = arr
-						}
-					}
-
-					// 统一提取并注入结构化的 template、tag 与 languages 契约列表
-					enrichMarketplaceApps(appList)
-
-					// 后台异步上报应用市场浏览 PV +1 (防阻塞)
-					reportMarketplacePVTelemetry()
-
-					respData := gin.H{
-						"source": "remote",
-						"apps":   appList,
-					}
-					if rawMap != nil {
-						if v, ok := rawMap["generated_at_utc8"]; ok {
-							respData["generated_at_utc8"] = v
-						}
-						if v, ok := rawMap["build_time"]; ok {
-							respData["build_time"] = v
-						}
-						if v, ok := rawMap["generated_at"]; ok {
-							respData["generated_at"] = v
-						}
-					}
-
-					utils.Success(c, respData)
-					return
-				}
-		}
-	}
-
-	// 3. 兜底返回空列表
-	utils.Success(c, gin.H{
-		"source": "none",
-		"apps":   []interface{}{},
-	})
-}
-
-// enrichMarketplaceApps 遍历应用列表，由 Go 后端统一提取并注入结构化的 template、tag 与 languages 契约
-func enrichMarketplaceApps(appList interface{}) {
-	appsArr, ok := appList.([]interface{})
-	if !ok {
+	market, err := ac.appService.FetchMarketplace()
+	if err != nil || market == nil || len(market.Apps) == 0 {
+		utils.Success(c, gin.H{
+			"source": "none",
+			"apps":   []interface{}{},
+		})
 		return
 	}
-	for _, rawItem := range appsArr {
-		appMap, isMap := rawItem.(map[string]interface{})
-		if !isMap {
-			continue
-		}
 
-		var manifest *app.AppManifest
-		if rawYAML, hasYAML := appMap["manifest_raw"].(string); hasYAML && rawYAML != "" {
-			manifest, _ = app.ParseManifestFromYAML([]byte(rawYAML))
-		} else if tmpl, hasTmpl := appMap["template"]; hasTmpl {
-			manifest = &app.AppManifest{Template: tmpl}
-		}
+	// 后台异步上报应用市场浏览 PV +1 (防阻塞)
+	reportMarketplacePVTelemetry()
 
-		if manifest != nil {
-			tplCfg := manifest.GetTypedTemplateConfig()
-			if tplCfg != nil {
-				appMap["template"] = tplCfg
-			}
-		}
-
-		// 彻底清理外层平铺的冗余字段，统一且仅保留 template 结构
-		delete(appMap, "tag")
-		delete(appMap, "languages")
+	respData := gin.H{
+		"source": market.Source,
+		"apps":   market.Apps,
 	}
+	if market.GeneratedAtUTC8 != "" {
+		respData["generated_at_utc8"] = market.GeneratedAtUTC8
+	}
+	if market.BuildTime != "" {
+		respData["build_time"] = market.BuildTime
+	}
+	if market.GeneratedAt != "" {
+		respData["generated_at"] = market.GeneratedAt
+	}
+
+	utils.Success(c, respData)
 }
 
 // reportMarketplacePVTelemetry 异步上报应用市场浏览 PV (+1)

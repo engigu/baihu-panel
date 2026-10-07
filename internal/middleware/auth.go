@@ -137,19 +137,19 @@ func OpenapiRequired() gin.HandlerFunc {
 // checkOpenapiToken 校验 OpenAPI Token
 // 返回 true 表示校验通过并已放行请求
 func checkOpenapiToken(c *gin.Context, settingsSvc *services.SettingsService) bool {
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" {
-		return false
-	}
-
-	// 提取 token：支持 "Bearer <token>" 和直接 "<token>" 两种格式
 	var openapiToken string
-	if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
-		// 标准格式：Bearer <token>
-		openapiToken = authHeader[7:]
-	} else {
-		// 直接使用 token
-		openapiToken = authHeader
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" {
+		// 提取 token：支持 "Bearer <token>" 和直接 "<token>" 两种格式
+		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			// 标准格式：Bearer <token>
+			openapiToken = authHeader[7:]
+		} else {
+			// 直接使用 token
+			openapiToken = authHeader
+		}
+	} else if tokenQuery := c.Query("token"); tokenQuery != "" {
+		openapiToken = tokenQuery
 	}
 
 	// Token 不能为空
