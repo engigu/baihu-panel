@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Search, Tag, ChevronDown, RefreshCw, Wrench, Plus, GitBranch, Terminal, Package,
-  Sparkles, Trash2, Pin, X, Server, Loader2, Layers
+  Sparkles, Trash2, Pin, X, Server, Loader2, Layers, FolderSync
 } from 'lucide-vue-next'
 import { TASK_TYPE, TASK_TYPE_CONFIG } from '@/constants'
 import type { TaskView } from '../Tasks.vue'
@@ -41,6 +41,7 @@ const emit = defineEmits<{
   'openBatchUpdate': []
   'confirmBatchDelete': []
   'openCreateTask': []
+  'openCreateAgentSync': []
   'openCreateRepo': []
   'applyView': [view: TaskView]
   'toggleDefaultView': [index: number]
@@ -59,6 +60,12 @@ function handleSaveView() {
   newViewName.value = ''
   isSavingView.value = false
 }
+
+function blurActive() {
+  if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur()
+  }
+}
 </script>
 
 <template>
@@ -69,7 +76,7 @@ function handleSaveView() {
         <PopoverTrigger as-child>
           <div class="flex items-center gap-2 cursor-pointer group w-fit">
             <h2 class="text-xl sm:text-2xl font-bold tracking-tight">
-              {{ filterType === TASK_TYPE.REPO ? '仓库同步' : (filterType === TASK_TYPE.APP ? '已装应用' : '调度实体') }}
+              {{ filterType === TASK_TYPE.REPO ? '仓库同步' : (filterType === TASK_TYPE.APP ? '已装应用' : (filterType === TASK_TYPE.AGENT_SYNC_SCRIPT ? 'Agent 脚本同步' : '调度实体')) }}
             </h2>
             <div class="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted/50 group-hover:bg-primary/10 transition-colors border border-transparent group-hover:border-primary/20">
               <span class="text-[10px] font-bold text-muted-foreground group-hover:text-primary uppercase tracking-wider">视图</span>
@@ -184,12 +191,12 @@ function handleSaveView() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" class="w-40">
-            <DropdownMenuItem class="cursor-pointer gap-2" @click="$emit('openBatchUpdate')">
+            <DropdownMenuItem class="cursor-pointer gap-2" @select="(e: Event) => { e.preventDefault(); blurActive(); $emit('openBatchUpdate'); }">
               <Sparkles class="h-4 w-4 text-primary" />
               <span>批量修改配置</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem class="cursor-pointer gap-2 text-destructive focus:text-destructive" @click="$emit('confirmBatchDelete')">
+            <DropdownMenuItem class="cursor-pointer gap-2 text-destructive focus:text-destructive" @select="(e: Event) => { e.preventDefault(); blurActive(); $emit('confirmBatchDelete'); }">
               <Trash2 class="h-4 w-4" />
               <span>批量删除任务</span>
             </DropdownMenuItem>
@@ -205,27 +212,34 @@ function handleSaveView() {
               <ChevronDown class="h-3.5 w-3.5 opacity-75" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" class="w-52 p-1">
-            <DropdownMenuItem class="cursor-pointer gap-2.5 py-2" @click="$emit('openCreateTask')">
+          <DropdownMenuContent align="end" class="w-56 p-1">
+            <DropdownMenuItem class="cursor-pointer gap-2.5 py-2" @select="(e: Event) => { e.preventDefault(); blurActive(); $emit('openCreateTask'); }">
               <Terminal class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.NORMAL]?.color" />
               <div class="flex flex-col min-w-0">
-                <span class="font-medium text-sm leading-none mb-1">新建脚本任务</span>
-                <span class="text-[11px] text-muted-foreground leading-none">自定义单次 / 定时 CLI 任务</span>
+                <span class="font-medium text-sm leading-none mb-1 whitespace-nowrap">新建脚本任务</span>
+                <span class="text-[11px] text-muted-foreground leading-none whitespace-nowrap">自定义单次 / 定时 CLI 任务</span>
               </div>
             </DropdownMenuItem>
-            <DropdownMenuItem class="cursor-pointer gap-2.5 py-2" @click="$emit('openCreateRepo')">
+            <DropdownMenuItem class="cursor-pointer gap-2.5 py-2" @select="(e: Event) => { e.preventDefault(); blurActive(); $emit('openCreateRepo'); }">
               <GitBranch class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.REPO]?.color" />
               <div class="flex flex-col min-w-0">
-                <span class="font-medium text-sm leading-none mb-1">添加仓库同步</span>
-                <span class="text-[11px] text-muted-foreground leading-none">自动同步 Git / 远程代码仓库</span>
+                <span class="font-medium text-sm leading-none mb-1 whitespace-nowrap">添加仓库同步</span>
+                <span class="text-[11px] text-muted-foreground leading-none whitespace-nowrap">自动同步 Git / 远程代码仓库</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem class="cursor-pointer gap-2.5 py-2" @select="() => { blurActive(); router.push('/apps'); }">
+              <Package class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.APP]?.color" />
+              <div class="flex flex-col min-w-0">
+                <span class="font-medium text-sm leading-none mb-1 whitespace-nowrap">从应用市场安装</span>
+                <span class="text-[11px] text-muted-foreground leading-none whitespace-nowrap">探索并一键部署预装应用</span>
               </div>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem class="cursor-pointer gap-2.5 py-2" @click="router.push('/apps')">
-              <Package class="h-4 w-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.APP]?.color" />
+            <DropdownMenuItem class="cursor-pointer gap-2.5 py-2" @select="(e: Event) => { e.preventDefault(); blurActive(); $emit('openCreateAgentSync'); }">
+              <FolderSync class="h-4 w-4 shrink-0 text-amber-500" />
               <div class="flex flex-col min-w-0">
-                <span class="font-medium text-sm leading-none mb-1">从应用市场安装</span>
-                <span class="text-[11px] text-muted-foreground leading-none">探索并一键部署预装应用</span>
+                <span class="font-medium text-sm leading-none mb-1 whitespace-nowrap">新建 Agent 脚本同步</span>
+                <span class="text-[11px] text-muted-foreground leading-none whitespace-nowrap">分发面板脚本至远程 Agent</span>
               </div>
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -233,40 +247,47 @@ function handleSaveView() {
 
         <!-- 调度实体类型切换下拉框 -->
         <Select :model-value="filterType" @update:model-value="$emit('update:filterType', String($event)); $emit('typeChange')">
-          <SelectTrigger class="h-9 flex-1 sm:flex-none sm:w-[128px] px-2.5 text-sm font-medium bg-muted/20 border-muted-foreground/20 shadow-xs gap-1.5 justify-between">
+          <SelectTrigger class="h-9 flex-1 sm:flex-none sm:w-[152px] px-2.5 text-sm font-medium bg-muted/20 border-muted-foreground/20 shadow-xs gap-1.5 justify-between">
             <SelectValue placeholder="全部类型">
               <div class="flex items-center gap-2 min-w-0 text-sm">
                 <Layers v-if="filterType === 'all'" class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG['all']?.color" />
                 <Terminal v-else-if="filterType === TASK_TYPE.NORMAL || filterType?.startsWith('app:')" class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.NORMAL]?.color" />
                 <GitBranch v-else-if="filterType === TASK_TYPE.REPO" class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.REPO]?.color" />
                 <Package v-else-if="filterType === TASK_TYPE.APP" class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.APP]?.color" />
-                <span class="truncate">{{ filterType === 'all' ? '全部类型' : (filterType === TASK_TYPE.REPO ? '仓库同步' : (filterType === TASK_TYPE.APP ? '已装应用' : '脚本任务')) }}</span>
+                <FolderSync v-else-if="filterType === TASK_TYPE.AGENT_SYNC_SCRIPT" class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.AGENT_SYNC_SCRIPT]?.color" />
+                <span class="truncate whitespace-nowrap">{{ filterType === 'all' ? '全部类型' : (filterType === TASK_TYPE.REPO ? '仓库同步' : (filterType === TASK_TYPE.APP ? '已装应用' : (filterType === TASK_TYPE.AGENT_SYNC_SCRIPT ? 'Agent 同步' : '脚本任务'))) }}</span>
               </div>
             </SelectValue>
           </SelectTrigger>
-          <SelectContent align="end" class="w-[132px] min-w-[132px] p-1 text-sm font-medium">
-            <SelectItem value="all" class="py-1.5 pl-2 pr-6 text-sm">
-              <div class="flex items-center gap-2">
+          <SelectContent align="end" class="w-[152px] min-w-[152px] p-1 text-sm font-medium">
+            <SelectItem value="all" class="py-1.5 pl-2.5 pr-8 text-sm">
+              <div class="flex items-center gap-2 whitespace-nowrap">
                 <Layers class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG['all']?.color" />
                 <span>全部类型</span>
               </div>
             </SelectItem>
-            <SelectItem :value="TASK_TYPE.NORMAL" class="py-1.5 pl-2 pr-6 text-sm">
-              <div class="flex items-center gap-2">
+            <SelectItem :value="TASK_TYPE.NORMAL" class="py-1.5 pl-2.5 pr-8 text-sm">
+              <div class="flex items-center gap-2 whitespace-nowrap">
                 <Terminal class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.NORMAL]?.color" />
                 <span>脚本任务</span>
               </div>
             </SelectItem>
-            <SelectItem :value="TASK_TYPE.REPO" class="py-1.5 pl-2 pr-6 text-sm">
-              <div class="flex items-center gap-2">
+            <SelectItem :value="TASK_TYPE.REPO" class="py-1.5 pl-2.5 pr-8 text-sm">
+              <div class="flex items-center gap-2 whitespace-nowrap">
                 <GitBranch class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.REPO]?.color" />
                 <span>仓库同步</span>
               </div>
             </SelectItem>
-            <SelectItem :value="TASK_TYPE.APP" class="py-1.5 pl-2 pr-6 text-sm">
-              <div class="flex items-center gap-2">
+            <SelectItem :value="TASK_TYPE.APP" class="py-1.5 pl-2.5 pr-8 text-sm">
+              <div class="flex items-center gap-2 whitespace-nowrap">
                 <Package class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.APP]?.color" />
                 <span>已装应用</span>
+              </div>
+            </SelectItem>
+            <SelectItem :value="TASK_TYPE.AGENT_SYNC_SCRIPT" class="py-1.5 pl-2.5 pr-8 text-sm">
+              <div class="flex items-center gap-2 whitespace-nowrap">
+                <FolderSync class="w-4 h-4 shrink-0" :class="TASK_TYPE_CONFIG[TASK_TYPE.AGENT_SYNC_SCRIPT]?.color" />
+                <span>Agent 同步</span>
               </div>
             </SelectItem>
           </SelectContent>

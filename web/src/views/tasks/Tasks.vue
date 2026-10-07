@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import Pagination from '@/components/Pagination.vue'
 import TaskDialog from './TaskDialog.vue'
 import RepoDialog from './RepoDialog.vue'
+import AgentSyncDialog from './AgentSyncDialog.vue'
 import ApplyDialog from '@/views/apps/ApplyDialog.vue'
 import LogViewer from '@/views/history/LogViewer.vue'
 import XTerminal from '@/components/XTerminal.vue'
@@ -56,6 +57,7 @@ const taskViews = ref<TaskView[]>([])
 
 // 弹窗状态
 const showTaskDialog = ref(false)
+const showAgentSyncDialog = ref(false)
 const showRepoDialog = ref(false)
 const showApplyDialog = ref(false)
 const showDeleteDialog = ref(false)
@@ -190,18 +192,86 @@ function clearAgentFilter() {
   loadTasks()
 }
 
+function blurActiveElement() {
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur()
+  }
+}
+
 function openCreate() {
+  blurActiveElement()
   showBatchUpdateDialog.value = false
-  editingTask.value = { name: '', remark: '', command: '', type: TASK_TYPE.NORMAL, schedule: '0 * * * * *', timeout: 30, work_dir: '', enabled: true, clean_config: '', envs: '', random_range: 0 }
+  editingTask.value = {
+    name: '',
+    remark: '',
+    command: '',
+    type: TASK_TYPE.NORMAL,
+    schedule: '0 * * * * *',
+    timeout: 30,
+    work_dir: '',
+    enabled: true,
+    clean_config: JSON.stringify({ type: 'count', keep: 30 }),
+    envs: '',
+    random_range: 0,
+    unified_config: JSON.stringify({ common: { task_concurrency: 0 } })
+  }
   isEdit.value = false
-  showTaskDialog.value = true
+  setTimeout(() => {
+    showTaskDialog.value = true
+  }, 0)
+}
+
+function openCreateAgentSync() {
+  blurActiveElement()
+  showBatchUpdateDialog.value = false
+  editingTask.value = {
+    name: '',
+    remark: '',
+    type: TASK_TYPE.AGENT_SYNC_SCRIPT,
+    schedule: '0 0 4 * * *',
+    timeout: 30,
+    agent_id: undefined,
+    enabled: true,
+    clean_config: JSON.stringify({ type: 'count', keep: 30 }),
+    envs: '',
+    random_range: 0,
+    unified_config: JSON.stringify({
+      common: { task_concurrency: 0 },
+      agent_sync_script: {
+        clean_target: false,
+        sync_mode: 'hybrid',
+        debounce_delay: 8,
+        sync_on_online: true,
+        ignore_rules: ['.git/', 'node_modules/', '__pycache__/', '.idea/', '.vscode/', '*.log', '.DS_Store'],
+        dir_mappings: [{ source_path: '', target_path: '', remark: '' }]
+      }
+    })
+  }
+  isEdit.value = false
+  setTimeout(() => {
+    showAgentSyncDialog.value = true
+  }, 0)
 }
 
 function openCreateRepo() {
+  blurActiveElement()
   showBatchUpdateDialog.value = false
-  editingTask.value = { name: '', remark: '', type: TASK_TYPE.REPO, schedule: '0 0 0 * * *', timeout: 30, enabled: true, clean_config: '', envs: '', random_range: 0 }
+  editingTask.value = {
+    name: '',
+    remark: '',
+    type: TASK_TYPE.REPO,
+    schedule: '0 0 0 * * *',
+    timeout: 30,
+    enabled: true,
+    clean_config: JSON.stringify({ type: 'count', keep: 30 }),
+    envs: '',
+    random_range: 0,
+    unified_config: JSON.stringify({ common: { task_concurrency: 0 } })
+  }
   isEdit.value = false
-  showRepoDialog.value = true
+  setTimeout(() => {
+    showRepoDialog.value = true
+  }, 0)
 }
 
 function openEdit(task: Task) {
@@ -210,6 +280,8 @@ function openEdit(task: Task) {
   isEdit.value = true
   if (task.type === TASK_TYPE.REPO) {
     showRepoDialog.value = true
+  } else if (task.type === TASK_TYPE.AGENT_SYNC_SCRIPT) {
+    showAgentSyncDialog.value = true
   } else {
     showTaskDialog.value = true
   }
@@ -304,6 +376,8 @@ function duplicateTask(task: Task) {
   isEdit.value = false
   if (task.type === TASK_TYPE.REPO) {
     showRepoDialog.value = true
+  } else if (task.type === TASK_TYPE.AGENT_SYNC_SCRIPT) {
+    showAgentSyncDialog.value = true
   } else {
     showTaskDialog.value = true
   }
@@ -753,7 +827,7 @@ onMounted(async () => {
   const keywordParam = route.query.keyword || route.query.name
   if (keywordParam) filterName.value = String(keywordParam)
   const typeParam = route.query.type
-  if (typeParam && (typeParam === 'all' || typeParam === TASK_TYPE.NORMAL || typeParam === TASK_TYPE.REPO || typeParam === TASK_TYPE.APP || String(typeParam).startsWith('app:'))) {
+  if (typeParam && (typeParam === 'all' || typeParam === TASK_TYPE.NORMAL || typeParam === TASK_TYPE.REPO || typeParam === TASK_TYPE.APP || typeParam === TASK_TYPE.AGENT_SYNC_SCRIPT || String(typeParam).startsWith('app:'))) {
     filterType.value = String(typeParam)
   }
   const tagParam = route.query.tag
@@ -796,7 +870,7 @@ watch(() => route.query.enabled, (newVal: any) => {
 })
 
 watch(() => route.query.type, (newVal: any) => {
-  if (newVal && (newVal === 'all' || newVal === TASK_TYPE.NORMAL || newVal === TASK_TYPE.REPO || newVal === TASK_TYPE.APP || String(newVal).startsWith('app:'))) {
+  if (newVal && (newVal === 'all' || newVal === TASK_TYPE.NORMAL || newVal === TASK_TYPE.REPO || newVal === TASK_TYPE.APP || newVal === TASK_TYPE.AGENT_SYNC_SCRIPT || String(newVal).startsWith('app:'))) {
     filterType.value = String(newVal)
   } else if (!newVal) {
     filterType.value = 'all'
@@ -824,6 +898,7 @@ watch(() => route.query.type, (newVal: any) => {
       @open-batch-update="openBatchUpdate"
       @confirm-batch-delete="confirmBatchDelete"
       @open-create-task="openCreate"
+      @open-create-agent-sync="openCreateAgentSync"
       @open-create-repo="openCreateRepo"
       @apply-view="applyView"
       @toggle-default-view="toggleDefaultView"
@@ -863,6 +938,9 @@ watch(() => route.query.type, (newVal: any) => {
 
     <!-- 普通任务弹窗 -->
     <TaskDialog v-model:open="showTaskDialog" :task="editingTask" :is-edit="isEdit" :is-batch="showBatchUpdateDialog" @saved="loadTasks" />
+
+    <!-- Agent 脚本同步弹窗 -->
+    <AgentSyncDialog v-model:open="showAgentSyncDialog" :task="editingTask" :is-edit="isEdit" @saved="loadTasks" />
 
     <!-- 仓库同步弹窗 -->
     <RepoDialog v-model:open="showRepoDialog" :task="editingTask" :is-edit="isEdit" :is-batch="showBatchUpdateDialog" @saved="loadTasks" />

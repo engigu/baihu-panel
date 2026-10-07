@@ -135,10 +135,7 @@ func NormalizeScriptPath(rawPath string) string {
 // ResolveScriptPath 将以 $SCRIPTS_DIR$ 开头的逻辑路径还原为当前系统的真实物理绝对路径
 func ResolveScriptPath(logicPath string) string {
 	logicPath = strings.TrimSpace(logicPath)
-	if logicPath == "" {
-		return ""
-	}
-	if logicPath == ScriptsDirPlaceholder {
+	if logicPath == "" || logicPath == ScriptsDirPlaceholder {
 		return ScriptsWorkDir
 	}
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import DirTreeSelect from '@/components/DirTreeSelect.vue'
-import { Plus, X, ChevronDown, Search, AlertCircle, Terminal, Zap, Lock, Variable, Wrench } from 'lucide-vue-next'
+import { Plus, X, ChevronDown, Search, AlertCircle, Terminal, Zap, Lock, Variable, Wrench, Clock, Rocket, Laptop, Server } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { api, type Task, type EnvVar, type Agent } from '@/api'
@@ -36,8 +36,6 @@ const emit = defineEmits<{
   'saved': []
 }>()
 
-
-
 const form = ref<Partial<Task>>({})
 const allEnvVars = ref<EnvVar[]>([])
 const allAgents = ref<Agent[]>([])
@@ -53,9 +51,6 @@ const selectedBatchTaskIds = ref<string[]>([])
 const taskSearchQuery = ref('')
 const allEnvsEnabled = ref(false)
 const scriptsDir = ref<string>(PATHS.SCRIPTS_DIR)
-
-
-
 
 function onAllEnvsChange(val: boolean) {
   allEnvsEnabled.value = val
@@ -354,6 +349,9 @@ async function save() {
           <DialogTitle class="text-xl font-bold py-2">
             {{ isBatch ? '批量修改配置与环境' : (isEdit ? '编辑任务' : '新建任务') }}
           </DialogTitle>
+          <DialogDescription class="sr-only">
+            配置与管理普通脚本任务参数与调度策略
+          </DialogDescription>
         </DialogHeader>
 
         <ScrollArea class="flex-1 min-h-0 px-6">
@@ -435,41 +433,105 @@ async function save() {
                   </div>
                 </template>
                 <TaskTagsConfig v-model="form.tags" />
-                <!-- 执行位置与触发方式 (大屏保持原样，小屏并排展示优化) -->
-                <div class="grid grid-cols-2 sm:grid-cols-1 gap-2.5 sm:gap-5">
-                  <div class="grid sm:grid-cols-4 items-center gap-1 sm:gap-3 min-w-0">
-                    <Label class="sm:text-right text-[11px] sm:text-xs text-foreground/70 uppercase tracking-wider font-semibold truncate">执行位置</Label>
-                    <div class="sm:col-span-3 min-w-0">
-                      <Select v-model="selectedAgentId">
-                        <SelectTrigger class="h-9 bg-muted/20 border-muted-foreground/15 px-2 sm:px-3 text-[11px] sm:text-sm min-w-0">
-                          <SelectValue placeholder="选择..." class="truncate" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="local" class="text-xs sm:text-sm"><div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-blue-500" /><span>本地执行</span></div></SelectItem>
-                          <SelectItem v-for="agent in onlineAgents" :key="agent.id" :value="String(agent.id)" class="text-xs sm:text-sm"><div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full" :class="agent.status === 'online' ? 'bg-green-500' : 'bg-muted-foreground'" /><span>{{ agent.name }}</span></div></SelectItem>
-                        </SelectContent>
-                      </Select>
+                <!-- 执行位置 -->
+                <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold pt-2.5">执行位置</Label>
+                  <div class="sm:col-span-3">
+                    <div class="p-3 rounded-xl bg-muted/15 border border-muted-foreground/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div class="space-y-0.5">
+                        <div class="flex items-center gap-2">
+                          <Laptop v-if="selectedAgentId === 'local'" class="h-4 w-4 text-blue-500 shrink-0" />
+                          <Server v-else class="h-4 w-4 text-emerald-500 shrink-0" />
+                          <span class="text-xs font-bold text-foreground">
+                            {{ selectedAgentId === 'local' ? '本地面板服务' : '远程 Agent 节点' }}
+                          </span>
+                          <span class="text-[10px] px-1.5 py-0.5 rounded font-medium" :class="selectedAgentId === 'local' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'">
+                            {{ selectedAgentId === 'local' ? '本地' : '远程' }}
+                          </span>
+                        </div>
+                        <p class="text-[11px] text-muted-foreground">
+                          指定任务在白虎面板本地环境运行，或下发至远程 Agent 节点执行
+                        </p>
+                      </div>
+                      <div class="self-start sm:self-auto shrink-0">
+                        <Select v-model="selectedAgentId">
+                          <SelectTrigger class="w-44 h-8 bg-background border-muted-foreground/15 px-2.5 text-xs">
+                            <SelectValue placeholder="选择执行节点..." class="truncate" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="local" class="text-xs">
+                              <div class="flex items-center gap-2">
+                                <div class="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                <span class="font-medium">本地执行</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem v-for="agent in onlineAgents" :key="agent.id" :value="String(agent.id)" class="text-xs">
+                              <div class="flex items-center gap-2">
+                                <div class="w-1.5 h-1.5 rounded-full" :class="agent.status === 'online' ? 'bg-green-500' : 'bg-muted-foreground'" />
+                                <span class="font-medium">{{ agent.name }}</span>
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
-                  <div class="grid sm:grid-cols-4 items-center gap-1 sm:gap-3 min-w-0">
-                    <Label class="sm:text-right text-[11px] sm:text-xs text-foreground/70 uppercase tracking-wider font-semibold truncate">触发方式</Label>
-                    <div class="sm:col-span-3 min-w-0">
-                      <Select v-model="selectedTriggerType">
-                        <SelectTrigger class="h-9 bg-muted/20 border-muted-foreground/15 px-2 sm:px-3 text-[11px] sm:text-sm min-w-0">
-                          <SelectValue class="truncate" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem :value="TRIGGER_TYPE.CRON" class="text-xs sm:text-sm">⏳ 定时周期</SelectItem>
-                          <SelectItem :value="TRIGGER_TYPE.BAIHU_STARTUP" class="text-xs sm:text-sm">🚀 系统启动</SelectItem>
-                        </SelectContent>
-                      </Select>
+                </div>
+
+                <!-- 触发方式 -->
+                <div class="grid grid-cols-1 sm:grid-cols-4 items-start gap-3">
+                  <Label class="sm:text-right text-xs text-foreground/70 uppercase tracking-wider font-bold pt-2.5">触发方式</Label>
+                  <div class="sm:col-span-3">
+                    <div class="p-3 rounded-xl bg-muted/15 border border-muted-foreground/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div class="space-y-0.5">
+                        <div class="flex items-center gap-2">
+                          <Clock v-if="selectedTriggerType === TRIGGER_TYPE.CRON" class="h-4 w-4 text-primary shrink-0" />
+                          <Rocket v-else class="h-4 w-4 text-amber-500 shrink-0" />
+                          <span class="text-xs font-bold text-foreground">
+                            {{ selectedTriggerType === TRIGGER_TYPE.CRON ? '周期调度' : '随服务自启' }}
+                          </span>
+                          <span class="text-[10px] px-1.5 py-0.5 rounded font-medium" :class="selectedTriggerType === TRIGGER_TYPE.CRON ? 'bg-primary/10 text-primary' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'">
+                            {{ selectedTriggerType === TRIGGER_TYPE.CRON ? 'Cron 计划' : '启动自启' }}
+                          </span>
+                        </div>
+                        <p class="text-[11px] text-muted-foreground">
+                          {{ selectedTriggerType === TRIGGER_TYPE.CRON ? '遵循标准 Cron 表达式进行周期性自动化计划触发' : '在白虎面板系统服务启动时自动触发执行一次' }}
+                        </p>
+                      </div>
+                      <div class="self-start sm:self-auto shrink-0">
+                        <Select v-model="selectedTriggerType">
+                          <SelectTrigger class="w-44 h-8 bg-background border-muted-foreground/15 px-2.5 text-xs">
+                            <SelectValue class="truncate">
+                              <div class="flex items-center gap-1.5 truncate">
+                                <Clock v-if="selectedTriggerType === TRIGGER_TYPE.CRON" class="h-3.5 w-3.5 text-primary shrink-0" />
+                                <Rocket v-else-if="selectedTriggerType === TRIGGER_TYPE.BAIHU_STARTUP" class="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                <span>{{ selectedTriggerType === TRIGGER_TYPE.BAIHU_STARTUP ? '系统启动' : '定时周期' }}</span>
+                              </div>
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem :value="TRIGGER_TYPE.CRON" class="text-xs">
+                              <div class="flex items-center gap-2">
+                                <Clock class="h-3.5 w-3.5 text-primary shrink-0" />
+                                <span>定时周期</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem :value="TRIGGER_TYPE.BAIHU_STARTUP" class="text-xs">
+                              <div class="flex items-center gap-2">
+                                <Rocket class="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                <span>系统启动</span>
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </section>
 
-            <!-- 执行配置 Section -->
+            <!-- 执行配置 Section (普通任务模式) -->
             <section class="space-y-4">
               <div class="flex items-center gap-2 mb-2">
                 <div class="h-4 w-1 bg-primary rounded-full shadow-sm shadow-primary/20" />

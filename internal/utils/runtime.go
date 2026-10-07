@@ -34,8 +34,10 @@ func InitRuntime() {
 // FreeMemory 显式触发内存回收，释放物理资源给 OS
 // 仅建议在执行了超大批量任务或处理了大型文件后调用
 func FreeMemory() {
-	// 触发 GC
+	// 1. 触发 GC 标记并清理堆不可达对象
 	runtime.GC()
-	// 尽可能将内存归还 OS
+	// 2. 尽可能将虚拟内存归还 OS (Decommit)
 	debug.FreeOSMemory()
+	// 3. 针对 OS (如 Windows) 主动收缩物理常驻内存工作集 (RSS)
+	trimWorkingSet()
 }

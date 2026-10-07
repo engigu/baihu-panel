@@ -49,11 +49,32 @@ type CommonConfig struct {
 	AllEnvs     bool `json:"task_all_envs"`    // 开启则注入全部环境变量
 }
 
-// UnifiedTaskConfig 统一配置结构体，包含 common, repo, app 分区 map/struct 映射
+// AgentSyncMapping 单个目录或文件映射
+type AgentSyncMapping struct {
+	ID         string `json:"id,omitempty"`
+	SourceType string `json:"source_type,omitempty"` // "local_dir" 或 "local_file"
+	SourcePath string `json:"source_path"`           // 源路径 (支持 $SCRIPTS_DIR$ 或相对路径)
+	TargetPath string `json:"target_path"`           // Agent 目标路径 (绝对路径或相对路径)
+	Remark     string `json:"remark,omitempty"`
+}
+
+// AgentSyncConfig Agent 脚本同步配置
+type AgentSyncConfig struct {
+	AgentID       string             `json:"agent_id,omitempty"`
+	CleanTarget   bool               `json:"clean_target,omitempty"`   // 同步时是否先清理目标目录
+	IgnoreRules   []string           `json:"ignore_rules,omitempty"`   // 排除/过滤规则 (基于 gitignore 语法)
+	DirMappings   []AgentSyncMapping `json:"dir_mappings,omitempty"`
+	SyncMode      string             `json:"sync_mode,omitempty"`      // "cron"(仅定时) | "realtime"(仅实时) | "hybrid"(混合模式)
+	DebounceDelay int                `json:"debounce_delay,omitempty"` // 实时监听防抖等待时间 (秒, 默认 8)
+	SyncOnOnline  bool               `json:"sync_on_online,omitempty"` // 目标 Agent 重新上线时是否自动补发同步
+}
+
+// UnifiedTaskConfig 统一配置结构体，包含 common, repo, app, agent_sync_script 分区
 type UnifiedTaskConfig struct {
-	Common *CommonConfig  `json:"common,omitempty"`
-	Repo   *RepoConfig    `json:"repo,omitempty"`
-	App    *AppTaskConfig `json:"app,omitempty"`
+	Common          *CommonConfig    `json:"common,omitempty"`
+	Repo            *RepoConfig      `json:"repo,omitempty"`
+	App             *AppTaskConfig   `json:"app,omitempty"`
+	AgentSyncScript *AgentSyncConfig `json:"agent_sync_script,omitempty"`
 }
 
 // ToJSON 将 UnifiedTaskConfig 序列化为 JSON 字符串
@@ -84,6 +105,11 @@ func (c UnifiedTaskConfig) GetRepo() *RepoConfig {
 // GetApp 快捷获取 App 配置
 func (c UnifiedTaskConfig) GetApp() *AppTaskConfig {
 	return c.App
+}
+
+// GetAgentSync 快捷获取 AgentSync 配置
+func (c UnifiedTaskConfig) GetAgentSync() *AgentSyncConfig {
+	return c.AgentSyncScript
 }
 
 // RepoConfig 仓库同步配置
@@ -340,6 +366,19 @@ func (t *Task) GetRepoConfig() *RepoConfig {
 func (t *Task) GetAppConfig() *AppTaskConfig {
 	cfg := t.GetUnifiedConfig()
 	return cfg.App
+}
+
+// GetAgentSync 快捷获取当前 Task 的 AgentSyncConfig 配置
+func (t *Task) GetAgentSync() *AgentSyncConfig {
+	cfg := t.GetUnifiedConfig()
+	return cfg.GetAgentSync()
+}
+
+// SetAgentSync 快捷设置 AgentSyncConfig 到 UnifiedConfig
+func (t *Task) SetAgentSync(cfg *AgentSyncConfig) {
+	u := t.GetUnifiedConfig()
+	u.AgentSyncScript = cfg
+	t.UnifiedConfig = BigText(u.ToJSON())
 }
 
 // GetManifestID 快捷从 UnifiedConfig 获取声明式 App 的 Manifest ID

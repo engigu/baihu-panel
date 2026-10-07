@@ -2,11 +2,12 @@ package constant
 
 // CommandSpec 定义了系统级 CLI 命令的统一元数据、子命令及选项接口
 type CommandSpec struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	SubCommands map[string]string `json:"sub_commands,omitempty"`
-	Flags       []string          `json:"flags,omitempty"`
-	Args        []string          `json:"args,omitempty"`
+	Name        string              `json:"name"`
+	Description string              `json:"description"`
+	SubCommands map[string]string   `json:"sub_commands,omitempty"`
+	SubFlags    map[string][]string `json:"sub_flags,omitempty"`
+	Flags       []string            `json:"flags,omitempty"`
+	Args        []string            `json:"args,omitempty"`
 }
 
 // CommandInfo 别名保持兼容
@@ -30,6 +31,10 @@ var Commands = []CommandSpec{
 			"enable":  "快速启用指定任务",
 			"disable": "快速禁用指定任务",
 		},
+		SubFlags: map[string][]string{
+			"list":    {"--name", "--type", "--page", "--size", "-name", "-type", "-page", "-size"},
+			"history": {"--limit", "-limit"},
+		},
 	},
 	{
 		Name:        "app",
@@ -41,7 +46,19 @@ var Commands = []CommandSpec{
 			"switch": "一键切换应用的运行场景预设",
 			"remove": "卸载应用并清理受控任务",
 		},
+		SubFlags: map[string][]string{
+			"apply":  {"--scenario", "--skip-setup", "--skip-sync", "--clean-data"},
+			"switch": {"--scenario"},
+			"remove": {"--clean-data"},
+		},
 		Flags: []string{"--scenario", "--skip-setup", "--skip-sync", "--clean-data"},
+	},
+	{
+		Name:        "agentsync",
+		Description: "同步本地脚本与目录至远程 Agent 节点",
+		Flags: []string{
+			"--task-id", "--agent", "--mapping", "--mappings", "--clean-target", "--ignore", "--timeout",
+		},
 	},
 	{
 		Name:        "reposync",
@@ -51,6 +68,8 @@ var Commands = []CommandSpec{
 			"--path", "--single-file", "--proxy", "--proxy-url",
 			"--auth-token", "--http-proxy", "--whitelist-paths",
 			"--blacklist", "--dependence", "--extensions", "--commenttotask",
+			"--pre-command", "--post-command", "--repo-name",
+			"--task-id", "--task-timeout", "--task-langs",
 		},
 	},
 	{
@@ -76,6 +95,6 @@ var Commands = []CommandSpec{
 	{
 		Name:        "completion",
 		Description: "生成当前 Shell (PowerShell/Bash/Zsh) 的 Tab 自动补全脚本",
-		Args:        []string{"powershell", "bash", "zsh"},
+		Args:        []string{"powershell", "pwsh", "bash", "zsh"},
 	},
 }

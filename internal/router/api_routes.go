@@ -41,6 +41,7 @@ func initPublicAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 		internalAPI.POST("/tasks/sync-repo-status", c.Task.SyncRepoTasks)
 		internalAPI.POST("/tasks/execute/:id", c.Executor.ExecuteTask)
 		internalAPI.POST("/tasks/toggle/:id", c.Task.ToggleTask)
+		internalAPI.POST("/agents/sync-direct", c.Agent.DirectSync)
 	}
 }
 
