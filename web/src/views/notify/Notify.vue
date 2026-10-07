@@ -175,9 +175,7 @@ const channelConfigFields: Record<string, { key: string; label: string; required
   ],
   ServerChan: [
     { key: 'sendkey', label: 'SendKey', required: true, placeholder: 'SCTxxxxxxxx 或 SCUxxxx' },
-    { key: 'channel', label: '动态通道', required: false, placeholder: '可选，如 9 (微信模板消息) 或 18 (企业微信应用)' },
-    { key: 'openid', label: '指定 OpenID', required: false, placeholder: '可选，多用户接收时填' },
-    { key: 'api_url', label: '自定义 API 地址', required: false, placeholder: '留空使用官方: https://sctapi.ftqq.com/' },
+    { key: 'api_url', label: 'API 地址', required: false, placeholder: '留空使用官方: https://sctapi.ftqq.com/' },
   ],
 }
 
