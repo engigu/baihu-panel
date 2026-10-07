@@ -18,6 +18,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/executor"
 	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/memopt"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/utils"
 	"github.com/gorilla/websocket"
@@ -692,7 +693,7 @@ func (a *Agent) handleSyncRequest(data json.RawMessage) {
 	defer func() {
 		go func() {
 			time.Sleep(500 * time.Millisecond)
-			utils.FreeMemory()
+			memopt.Free()
 		}()
 	}()
 

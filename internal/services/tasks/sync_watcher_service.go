@@ -12,6 +12,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/memopt"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/utils"
 	"github.com/engigu/baihu-panel/internal/windows"
@@ -162,7 +163,7 @@ func (s *SyncWatcherService) stopWatcherLocked() {
 	logger.Infof("[SyncWatcher] 当前无活跃实时同步任务，监听服务已进入完全休眠，释放所有协程与系统句柄")
 
 	// 异步释放内存给 OS
-	go utils.FreeMemory()
+	go memopt.Free()
 }
 
 // Stop 彻底停止文件监听服务
@@ -605,6 +606,6 @@ func (s *SyncWatcherService) loadActiveRealtimeTasks() {
 	logger.Infof("[SyncWatcher] 初始化完成，已加载 %d 个实时同步任务", count)
 
 	// 启动加载完成后主动调用一次内存释放，释放初始化产生的大量瞬时堆分配
-	utils.FreeMemory()
+	memopt.Checkpoint("sync_watcher_init")
 }
 
