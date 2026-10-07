@@ -3,9 +3,11 @@ import { ref, onMounted, computed, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
-import { RefreshCw, FolderPlus, FilePlus, Save } from 'lucide-vue-next'
+import { RefreshCw, FolderPlus, FilePlus, Save, Folder, File, Loader2, SlidersHorizontal } from 'lucide-vue-next'
 import { api, type FileNode } from '@/api'
 import { VueMonacoEditor } from '@guolao/vue-monaco-editor'
 import FileTreeNode from '@/components/FileTreeNode.vue'
@@ -21,6 +23,47 @@ const fileTree = ref<FileNode[]>([])
 const expandedDirs = ref<Set<string>>(new Set())
 const tempSearchQuery = ref('')
 const searchQuery = ref('')
+const isSearching = ref(false)
+const searchResults = ref<FileNode[]>([])
+
+// 搜索配置
+interface SearchConfig {
+  limit: number
+  onlyFiles: boolean
+}
+
+const searchConfig = ref<SearchConfig>({
+  limit: 100,
+  onlyFiles: false
+})
+
+function updateSearchConfig(patch: Partial<SearchConfig>) {
+  searchConfig.value = { ...searchConfig.value, ...patch }
+  try {
+    localStorage.setItem('file_search_config', JSON.stringify(searchConfig.value))
+  } catch {}
+  if (searchQuery.value) {
+    performSearch(searchQuery.value)
+  }
+}
+
+async function performSearch(query: string) {
+  const q = query.trim()
+  if (!q) {
+    searchResults.value = []
+    isSearching.value = false
+    return
+  }
+  isSearching.value = true
+  try {
+    const res = await api.files.search(q, searchConfig.value.limit, searchConfig.value.onlyFiles)
+    searchResults.value = res
+  } catch {
+    searchResults.value = []
+  } finally {
+    isSearching.value = false
+  }
+}
 
 let debounceTimeout: number | undefined
 watch(tempSearchQuery, (newVal) => {
@@ -29,76 +72,26 @@ watch(tempSearchQuery, (newVal) => {
   }
   if (!newVal.trim()) {
     searchQuery.value = ''
+    searchResults.value = []
+    isSearching.value = false
     return
   }
   debounceTimeout = window.setTimeout(() => {
     searchQuery.value = newVal
+    performSearch(newVal)
   }, 250)
 })
 
 function clearSearch() {
   tempSearchQuery.value = ''
   searchQuery.value = ''
+  searchResults.value = []
+  isSearching.value = false
   if (debounceTimeout) {
     clearTimeout(debounceTimeout)
   }
 }
 
-const filteredFileTree = computed(() => {
-  if (!searchQuery.value.trim()) return fileTree.value
-
-  const query = searchQuery.value.toLowerCase().trim()
-
-  const filterNodes = (nodes: FileNode[]): FileNode[] => {
-    const result: FileNode[] = []
-    for (const node of nodes) {
-      const nodeCopy = { ...node }
-      if (nodeCopy.isDir && nodeCopy.children) {
-        const filteredChildren = filterNodes(nodeCopy.children)
-        if (nodeCopy.name.toLowerCase().includes(query) || filteredChildren.length > 0) {
-          nodeCopy.children = filteredChildren
-          result.push(nodeCopy)
-        }
-      } else {
-        if (nodeCopy.name.toLowerCase().includes(query)) {
-          result.push(nodeCopy)
-        }
-      }
-    }
-    return result
-  }
-
-  return filterNodes(fileTree.value)
-})
-
-const computedExpandedDirs = computed(() => {
-  if (!searchQuery.value.trim()) return expandedDirs.value
-
-  const expanded = new Set(expandedDirs.value)
-  const query = searchQuery.value.toLowerCase().trim()
-  
-  const collectPaths = (nodes: FileNode[]) => {
-    for (const node of nodes) {
-      if (node.isDir && node.children) {
-        const hasMatchingDescendant = (n: FileNode): boolean => {
-          if (n.name.toLowerCase().includes(query)) return true
-          if (n.children) {
-            return n.children.some(hasMatchingDescendant)
-          }
-          return false
-        }
-        
-        if (node.children.some(hasMatchingDescendant)) {
-          expanded.add(node.path)
-        }
-        collectPaths(node.children)
-      }
-    }
-  }
-  
-  collectPaths(fileTree.value)
-  return expanded
-})
 
 const selectedFile = ref<string | null>(null)
 const selectedDir = ref<string | null>(null)  // 当前选中的文件夹
@@ -152,13 +145,66 @@ function updateUrl() {
   router.replace({ path: route.path, query })
 }
 
-// 展开文件所在的所有父目录
-function expandParentDirs(filePath: string) {
+// 懒加载子目录
+async function loadNodeChildren(node: FileNode) {
+  if (node.loading || node.loaded) return
+  node.loading = true
+  try {
+    const children = await api.files.tree(node.path)
+    sortTree(children)
+    node.children = children
+    node.loaded = true
+  } catch (err: any) {
+    toast.error(`加载目录 [${node.name}] 失败: ` + err.message)
+  } finally {
+    node.loading = false
+  }
+}
+
+async function reloadSubdir(dirPath: string) {
+  const parts = dirPath.split('/')
+  let currentNodes = fileTree.value
+  let targetNode: FileNode | null = null
+  let currentPath = ''
+
+  for (const part of parts) {
+    currentPath = currentPath ? `${currentPath}/${part}` : part
+    const found = currentNodes.find(n => n.path === currentPath)
+    if (found && found.isDir) {
+      if (currentPath === dirPath) {
+        targetNode = found
+        break
+      }
+      currentNodes = found.children || []
+    }
+  }
+
+  if (targetNode) {
+    try {
+      const children = await api.files.tree(targetNode.path)
+      sortTree(children)
+      targetNode.children = children
+      targetNode.loaded = true
+    } catch {}
+  }
+}
+
+// 展开文件所在的所有父目录并按需加载
+async function expandParentDirs(filePath: string) {
   const parts = filePath.split('/')
   let current: string = ''
+  let currentNodes = fileTree.value
   for (let i = 0; i < parts.length - 1; i++) {
-    current = current ? `${current}/${parts[i]}` : parts[i] ?? ''
+    const part = parts[i] ?? ''
+    current = current ? `${current}/${part}` : part
     expandedDirs.value.add(current)
+    const dirNode = currentNodes.find(n => n.path === current)
+    if (dirNode && dirNode.isDir) {
+      if (!dirNode.loaded) {
+        await loadNodeChildren(dirNode)
+      }
+      currentNodes = dirNode.children || []
+    }
   }
 }
 
@@ -214,12 +260,23 @@ async function loadTree() {
     sortTree(nodes)
     fileTree.value = nodes
 
+    // 若已有展开的目录，恢复它们的内容
+    if (expandedDirs.value && expandedDirs.value.size > 0) {
+      for (const dirPath of Array.from(expandedDirs.value)) {
+        await reloadSubdir(dirPath)
+      }
+    }
+
     // 仅在首次加载时从 URL 恢复状态
     if (expandedDirs.value.size === 0 && selectedFile.value === null && selectedDir.value === null) {
       // 从 URL 恢复展开的目录
       const dirsParam = route.query.dirs
       if (dirsParam && typeof dirsParam === 'string') {
-        dirsParam.split(',').forEach(dir => expandedDirs.value.add(dir))
+        const dirsList = dirsParam.split(',')
+        for (const dir of dirsList) {
+          expandedDirs.value.add(dir)
+          await reloadSubdir(dir)
+        }
       }
 
       // 从 URL 恢复选中的文件夹
@@ -227,12 +284,13 @@ async function loadTree() {
       if (dirParam && typeof dirParam === 'string') {
         selectedDir.value = dirParam
         expandedDirs.value.add(dirParam)
+        await reloadSubdir(dirParam)
       }
 
       // 从 URL 加载文件
       const fileParam = route.query.file
       if (fileParam && typeof fileParam === 'string') {
-        expandParentDirs(fileParam)
+        await expandParentDirs(fileParam)
         await loadFileContent(fileParam)
       }
     }
@@ -256,11 +314,14 @@ async function loadFileContent(path: string) {
   }
 }
 
-function toggleDir(path: string) {
-  if (expandedDirs.value.has(path)) {
-    expandedDirs.value.delete(path)
+async function toggleDir(node: FileNode) {
+  if (expandedDirs.value.has(node.path)) {
+    expandedDirs.value.delete(node.path)
   } else {
-    expandedDirs.value.add(path)
+    expandedDirs.value.add(node.path)
+    if (!node.loaded && node.hasChildren !== false) {
+      await loadNodeChildren(node)
+    }
   }
   // 点击文件夹时不改变文件选择状态，只更新展开状态
   updateUrl()
@@ -272,7 +333,7 @@ async function handleSelect(node: FileNode) {
     selectedFile.value = null
     fileContent.value = ''
     originalContent.value = ''
-    toggleDir(node.path)
+    await toggleDir(node)
     return
   }
 
@@ -492,23 +553,118 @@ onMounted(async () => {
           </Button>
         </div>
       </div>
-      <!-- 搜索过滤输入框 -->
+      <!-- 搜索过滤输入框与配置 -->
       <div class="px-2 py-1.5 border-b bg-muted/5">
-        <div class="relative flex items-center">
-          <Search class="absolute left-2.5 h-3 w-3 text-muted-foreground/50" />
-          <Input v-model="tempSearchQuery" placeholder="搜索文件名..." class="h-7 pl-7 pr-6 w-full text-[11px] placeholder:text-[11px] bg-background/50 border-muted-foreground/15 rounded-md focus-visible:ring-1 focus-visible:ring-ring/30" />
-          <button v-if="tempSearchQuery" class="absolute right-2 text-muted-foreground/60 hover:text-foreground transition-colors focus:outline-none" @click="clearSearch">
-            <X class="w-3 h-3" />
-          </button>
+        <div class="relative flex items-center gap-1">
+          <div class="relative flex-1 flex items-center">
+            <Search class="absolute left-2.5 h-3 w-3 text-muted-foreground/50" />
+            <Input v-model="tempSearchQuery" placeholder="搜索全盘文件..." class="h-7 pl-7 pr-6 w-full text-[11px] placeholder:text-[11px] bg-background/50 border-muted-foreground/15 rounded-md focus-visible:ring-1 focus-visible:ring-ring/30" />
+            <button v-if="tempSearchQuery" class="absolute right-2 text-muted-foreground/60 hover:text-foreground transition-colors focus:outline-none" @click="clearSearch">
+              <X class="w-3 h-3" />
+            </button>
+          </div>
+
+          <!-- 搜索配置按钮与 Popover -->
+          <Popover>
+            <PopoverTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon"
+                class="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
+                title="搜索配置"
+              >
+                <SlidersHorizontal class="w-3.5 h-3.5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent class="w-60 p-3 shadow-lg rounded-xl text-xs" align="end">
+              <div class="font-medium text-foreground mb-2.5 flex items-center justify-between">
+                <span>搜索偏好配置</span>
+                <span class="text-[10px] text-muted-foreground">实时生效</span>
+              </div>
+
+              <div class="space-y-3">
+                <div>
+                  <label class="text-[11px] text-muted-foreground block mb-1.5">最大返回数量</label>
+                  <div class="grid grid-cols-4 gap-1">
+                    <button
+                      v-for="count in [50, 100, 200, 500]"
+                      :key="count"
+                      type="button"
+                      @click="updateSearchConfig({ limit: count })"
+                      class="py-1 px-1.5 text-[11px] rounded border text-center transition-all"
+                      :class="searchConfig.limit === count
+                        ? 'bg-primary text-primary-foreground border-primary font-medium'
+                        : 'border-border/60 hover:bg-muted text-muted-foreground hover:text-foreground'"
+                    >
+                      {{ count }}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-2 border-t">
+                  <span class="text-[11px] text-muted-foreground">仅搜文件 (排除目录)</span>
+                  <Switch
+                    :model-value="searchConfig.onlyFiles"
+                    @update:model-value="updateSearchConfig({ onlyFiles: $event })"
+                  />
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
+
+      <!-- 列表展示区域：搜索结果 vs 目录树 -->
       <div class="flex-1 overflow-auto p-1">
-        <div v-if="filteredFileTree.length === 0" class="text-xs text-muted-foreground text-center py-4">
-          暂无匹配文件
-        </div>
-        <FileTreeNode v-for="node in filteredFileTree" :key="node.path" :node="node" :expanded-dirs="computedExpandedDirs"
-          :selected-path="selectedFile || selectedDir" @select="handleSelect" @delete="confirmDeleteFile"
-          @download-file="handleDownload" @download-zip="handleDownloadZip" @duplicate="handleCopyFile" />
+        <!-- 搜索模式 -->
+        <template v-if="searchQuery">
+          <div v-if="isSearching" class="py-8 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+            <Loader2 class="h-4 w-4 animate-spin text-primary" />
+            <span>正在全盘检索...</span>
+          </div>
+          <div v-else-if="searchResults.length === 0" class="text-xs text-muted-foreground text-center py-8">
+            未找到与 "{{ searchQuery }}" 匹配的文件
+          </div>
+          <div v-else class="space-y-0.5">
+            <div class="px-2 py-1 text-[10px] text-muted-foreground/80 flex items-center justify-between border-b mb-1">
+              <span>找到 {{ searchResults.length }} 个结果</span>
+              <span v-if="searchResults.length >= searchConfig.limit" class="text-amber-500 font-medium">已达上限 {{ searchConfig.limit }}</span>
+            </div>
+            <div
+              v-for="item in searchResults"
+              :key="item.path"
+              @click="handleSelect(item)"
+              class="flex items-center gap-2 py-1 px-2 rounded cursor-pointer text-xs hover:bg-muted group transition-colors"
+              :class="(selectedFile === item.path || selectedDir === item.path) && 'bg-accent text-accent-foreground font-medium'"
+            >
+              <Folder v-if="item.isDir" class="h-3.5 w-3.5 text-yellow-500 shrink-0" />
+              <File v-else class="h-3.5 w-3.5 text-blue-500 shrink-0" />
+              <div class="flex-1 min-w-0">
+                <div class="truncate text-xs text-foreground font-medium leading-tight">{{ item.name }}</div>
+                <div class="truncate text-[10px] text-muted-foreground/70 leading-tight mt-0.5">{{ item.path }}</div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 普通懒加载树视图 -->
+        <template v-else>
+          <div v-if="fileTree.length === 0" class="text-xs text-muted-foreground text-center py-4">
+            暂无文件
+          </div>
+          <FileTreeNode
+            v-for="node in fileTree"
+            :key="node.path"
+            :node="node"
+            :expanded-dirs="expandedDirs"
+            :selected-path="selectedFile || selectedDir"
+            @select="handleSelect"
+            @delete="confirmDeleteFile"
+            @download-file="handleDownload"
+            @download-zip="handleDownloadZip"
+            @duplicate="handleCopyFile"
+          />
+        </template>
       </div>
     </div>
 

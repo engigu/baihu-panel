@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Folder, File, ChevronRight, ChevronDown, Trash2, Copy as CopyIcon, Download } from 'lucide-vue-next'
+import { Folder, File, ChevronRight, ChevronDown, Trash2, Copy as CopyIcon, Download, Loader2 } from 'lucide-vue-next'
 import type { FileNode } from '@/api'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -82,8 +82,9 @@ function handleDrop(e: DragEvent) {
     ]" :style="{ paddingLeft: depth * 12 + 4 + 'px' }" draggable="true" @click="handleSelect"
       @dragstart="handleDragStart" @dragover="handleDragOver" @dragleave="handleDragLeave" @drop="handleDrop">
       <template v-if="node.isDir">
-        <ChevronDown v-if="isExpanded" class="h-3 w-3 flex-shrink-0" />
-        <ChevronRight v-else class="h-3 w-3 flex-shrink-0" />
+        <Loader2 v-if="node.loading" class="h-3 w-3 flex-shrink-0 animate-spin text-muted-foreground" />
+        <ChevronDown v-else-if="isExpanded" class="h-3 w-3 flex-shrink-0" />
+        <ChevronRight v-else class="h-3 w-3 flex-shrink-0" :class="{ 'opacity-40': node.hasChildren === false }" />
       </template>
       <span v-else class="w-3 flex-shrink-0" />
       <Folder v-if="node.isDir" class="h-3 w-3 text-yellow-500 flex-shrink-0" />
@@ -121,13 +122,22 @@ function handleDrop(e: DragEvent) {
         </span>
       </div>
     </div>
-    <template v-if="node.isDir && isExpanded && node.children">
-      <FileTreeNode v-for="child in node.children" :key="child.path" :node="child" :expanded-dirs="expandedDirs"
-        :selected-path="selectedPath" :depth="depth + 1" @select="$emit('select', $event)"
-        @create="$emit('create', $event)" @move="(oldPath, newPath) => $emit('move', oldPath, newPath)"
-        @rename="$emit('rename', $event)" @delete="$emit('delete', $event)"
-        @download-file="$emit('downloadFile', $event)" @download-zip="$emit('downloadZip', $event)"
-        @duplicate="$emit('duplicate', $event)" />
+    <template v-if="node.isDir && isExpanded">
+      <div v-if="node.loading" :style="{ paddingLeft: (depth + 1) * 12 + 4 + 'px' }" class="py-0.5 text-[11px] text-muted-foreground flex items-center gap-1">
+        <Loader2 class="h-3 w-3 animate-spin" />
+        <span>加载中...</span>
+      </div>
+      <template v-else-if="node.children && node.children.length > 0">
+        <FileTreeNode v-for="child in node.children" :key="child.path" :node="child" :expanded-dirs="expandedDirs"
+          :selected-path="selectedPath" :depth="depth + 1" @select="$emit('select', $event)"
+          @create="$emit('create', $event)" @move="(oldPath, newPath) => $emit('move', oldPath, newPath)"
+          @rename="$emit('rename', $event)" @delete="$emit('delete', $event)"
+          @download-file="$emit('downloadFile', $event)" @download-zip="$emit('downloadZip', $event)"
+          @duplicate="$emit('duplicate', $event)" />
+      </template>
+      <div v-else-if="node.loaded" :style="{ paddingLeft: (depth + 1) * 12 + 4 + 'px' }" class="py-0.5 text-[11px] text-muted-foreground/60 italic">
+        (空)
+      </div>
     </template>
   </div>
 </template>

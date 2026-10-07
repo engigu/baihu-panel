@@ -22,6 +22,8 @@ func initOpenAPIV1Routes(root *gin.RouterGroup, c *Controllers) {
 		registerOpenAPILogRoutes(open, c)
 		// 任务执行相关接口
 		registerOpenAPIExecutorRoutes(open, c)
+		// 文件树相关接口
+		registerOpenAPIFileRoutes(open, c)
 	}
 }
 
@@ -80,5 +82,15 @@ func registerOpenAPIScriptRoutes(g *gin.RouterGroup, c *Controllers) {
 		scripts.GET("/:id", c.Script.GetScript)
 		scripts.PUT("/:id", c.Script.UpdateScript)
 		scripts.DELETE("/:id", c.Script.DeleteScript)
+	}
+}
+
+// registerOpenAPIFileRoutes 注册 OpenAPI 文件树相关路由
+func registerOpenAPIFileRoutes(g *gin.RouterGroup, c *Controllers) {
+	files := g.Group("/files")
+	{
+		files.GET("/tree", c.File.GetFileTree)
+		files.GET("/search", c.File.SearchFiles)
+		files.GET("/content", c.File.GetFileContent)
 	}
 }

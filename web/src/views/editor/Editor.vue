@@ -173,12 +173,61 @@ async function initSortMethod() {
   } catch {}
 }
 
+async function loadNodeChildren(node: FileNode) {
+  if (node.loading || node.loaded) return
+  node.loading = true
+  try {
+    const children = await api.files.tree(node.path)
+    sortTree(children)
+    node.children = children
+    node.loaded = true
+  } catch (err: any) {
+    toast.error(`加载目录 [${node.name}] 失败: ` + err.message)
+  } finally {
+    node.loading = false
+  }
+}
+
+async function reloadSubdir(dirPath: string) {
+  const parts = dirPath.split('/')
+  let currentNodes = fileTree.value
+  let targetNode: FileNode | null = null
+  let currentPath = ''
+
+  for (const part of parts) {
+    currentPath = currentPath ? `${currentPath}/${part}` : part
+    const found = currentNodes.find(n => n.path === currentPath)
+    if (found && found.isDir) {
+      if (currentPath === dirPath) {
+        targetNode = found
+        break
+      }
+      currentNodes = found.children || []
+    }
+  }
+
+  if (targetNode) {
+    try {
+      const children = await api.files.tree(targetNode.path)
+      sortTree(children)
+      targetNode.children = children
+      targetNode.loaded = true
+    } catch {}
+  }
+}
+
 async function loadTree() {
   isRefreshing.value = true
   try {
     const nodes = await api.files.tree()
     sortTree(nodes)
     fileTree.value = nodes
+    // 若已有展开目录，顺带恢复它们
+    if (expandedDirs.value && expandedDirs.value.size > 0) {
+      for (const dirPath of Array.from(expandedDirs.value)) {
+        await reloadSubdir(dirPath)
+      }
+    }
   } catch {
     toast.error('加载文件树失败')
   } finally {
@@ -195,6 +244,9 @@ async function handleSelect(node: FileNode) {
       expandedDirs.value.delete(node.path)
     } else {
       expandedDirs.value.add(node.path)
+      if (!node.loaded && node.hasChildren !== false) {
+        await loadNodeChildren(node)
+      }
     }
     expandedDirs.value = new Set(expandedDirs.value)
     selectedFile.value = null
@@ -538,14 +590,25 @@ function getLanguage(path: string): string {
   return langMap[ext] || 'plaintext'
 }
 
-function expandParentDirs(path: string) {
-  const parts = path.split('/')
-  if (expandedDirs.value) {
-    for (let i = 1; i < parts.length; i++) {
-        expandedDirs.value.add(parts.slice(0, i).join('/'))
+async function expandAndLoadPath(filePath: string) {
+  const parts = filePath.split('/')
+  let currentPath = ''
+  let currentNodes = fileTree.value
+
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i] ?? ''
+    currentPath = currentPath ? `${currentPath}/${part}` : part
+    expandedDirs.value.add(currentPath)
+
+    const dirNode = currentNodes.find(n => n.path === currentPath)
+    if (dirNode && dirNode.isDir) {
+      if (!dirNode.loaded) {
+        await loadNodeChildren(dirNode)
+      }
+      currentNodes = dirNode.children || []
     }
-    expandedDirs.value = new Set(expandedDirs.value)
   }
+  expandedDirs.value = new Set(expandedDirs.value)
 }
 
 async function initFromUrl() {
@@ -553,7 +616,7 @@ async function initFromUrl() {
   const q = route.query.file as string
   if (q) {
     selectedPath.value = q
-    expandParentDirs(q)
+    await expandAndLoadPath(q)
     try {
       const res = await api.files.getContent(q)
       if (res) {

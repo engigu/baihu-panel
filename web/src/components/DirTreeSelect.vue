@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Folder, ChevronRight, ChevronDown, FolderOpen } from 'lucide-vue-next'
+import { Folder, ChevronRight, ChevronDown, FolderOpen, Loader2 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { api, type FileNode } from '@/api'
@@ -40,6 +40,7 @@ interface FlatDir {
   name: string
   depth: number
   hasChildren: boolean
+  loading?: boolean
 }
 
 // 将树形结构扁平化，只保留目录
@@ -50,12 +51,12 @@ function flattenDirs(nodes: FileNode[], depth = 0): FlatDir[] {
     if (props.modelValue?.startsWith(node.path) && props.modelValue !== node.path) {
       expandedDirs.value.add(node.path)
     }
-    const children = node.children?.filter(c => c.isDir) || []
     result.push({
       path: node.path,
       name: node.name,
       depth,
-      hasChildren: children.length > 0
+      hasChildren: node.hasChildren !== false,
+      loading: node.loading
     })
     if (expandedDirs.value.has(node.path) && node.children) {
       result.push(...flattenDirs(node.children, depth + 1))
@@ -79,12 +80,33 @@ async function loadTree() {
   }
 }
 
-function toggleDir(path: string, e: Event) {
+async function toggleDir(dirPath: string, e: Event) {
   e.stopPropagation()
-  if (expandedDirs.value.has(path)) {
-    expandedDirs.value.delete(path)
+  if (expandedDirs.value.has(dirPath)) {
+    expandedDirs.value.delete(dirPath)
   } else {
-    expandedDirs.value.add(path)
+    expandedDirs.value.add(dirPath)
+    const findNode = (nodes: FileNode[], targetPath: string): FileNode | null => {
+      for (const n of nodes) {
+        if (n.path === targetPath) return n
+        if (n.children) {
+          const res = findNode(n.children, targetPath)
+          if (res) return res
+        }
+      }
+      return null
+    }
+    const targetNode = findNode(fileTree.value, dirPath)
+    if (targetNode && !targetNode.loaded && targetNode.hasChildren !== false) {
+      targetNode.loading = true
+      try {
+        const children = await api.files.tree(targetNode.path)
+        targetNode.children = children
+        targetNode.loaded = true
+      } finally {
+        targetNode.loading = false
+      }
+    }
   }
 }
 
@@ -168,7 +190,8 @@ const displayValue = computed(() => {
             class="shrink-0 cursor-pointer"
             @click="toggleDir(dir.path, $event)"
           >
-            <ChevronDown v-if="expandedDirs.has(dir.path)" class="h-3 w-3" />
+            <Loader2 v-if="dir.loading" class="h-3 w-3 animate-spin text-muted-foreground" />
+            <ChevronDown v-else-if="expandedDirs.has(dir.path)" class="h-3 w-3" />
             <ChevronRight v-else class="h-3 w-3" />
           </span>
           <span v-else class="w-3 shrink-0" />
