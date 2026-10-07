@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,11 +35,19 @@ func NewFileController(workDir string) *FileController {
 }
 
 type FileNode struct {
-	Name     string      `json:"name"`
-	Path     string      `json:"path"`
-	IsDir    bool        `json:"isDir"`
-	ModTime  int64       `json:"modTime"`
-	Children []*FileNode `json:"children,omitempty"`
+	Name        string      `json:"name"`
+	Path        string      `json:"path"`
+	IsDir       bool        `json:"isDir"`
+	ModTime     int64       `json:"modTime"`
+	HasChildren bool        `json:"hasChildren,omitempty"`
+	Children    []*FileNode `json:"children,omitempty"`
+}
+
+// FileContentVO 文件内容响应数据
+type FileContentVO struct {
+	Path     string `json:"path"`
+	Content  string `json:"content"`
+	IsBinary bool   `json:"isBinary"`
 }
 
 // checkPath 校验路径是否在工作目录内且安全。
@@ -63,15 +72,118 @@ func (fc *FileController) checkPath(path string, allowRoot bool) (string, bool) 
 	return fullPath, true
 }
 
+// GetFileTree 获取文件树/目录节点列表
+// @Summary 获取文件树/目录节点列表
+// @Description 懒加载获取指定目录下的单层直接子项文件与文件夹节点
+// @Tags 文件管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param path query string false "相对目录路径（留空表示根目录）"
+// @Success 200 {object} utils.Response{data=[]controllers.FileNode}
+// @Failure 400 {object} utils.Response "目标路径不是目录"
+// @Failure 403 {object} utils.Response "访问被拒绝"
+// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Router /files/tree [get]
 func (fc *FileController) GetFileTree(c *gin.Context) {
-	root := &FileNode{
-		Name:     filepath.Base(fc.workDir),
-		Path:     "",
-		IsDir:    true,
-		Children: []*FileNode{},
+	subPath := c.DefaultQuery("path", "")
+	targetPath, safe := fc.checkPath(subPath, true)
+	if !safe {
+		utils.Forbidden(c, "访问被拒绝")
+		return
 	}
 
-	err := filepath.WalkDir(fc.workDir, func(path string, d fs.DirEntry, err error) error {
+	fi, err := os.Stat(targetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			utils.Success(c, []*FileNode{})
+			return
+		}
+		utils.ServerError(c, err.Error())
+		return
+	}
+
+	if !fi.IsDir() {
+		utils.BadRequest(c, "目标路径不是目录")
+		return
+	}
+
+	entries, err := os.ReadDir(targetPath)
+	if err != nil {
+		utils.ServerError(c, err.Error())
+		return
+	}
+
+	nodes := make([]*FileNode, 0, len(entries))
+	for _, entry := range entries {
+		var modTime int64
+		if info, err := entry.Info(); err == nil {
+			modTime = info.ModTime().UnixMilli()
+		}
+
+		relPath, err := filepath.Rel(fc.workDir, filepath.Join(targetPath, entry.Name()))
+		if err != nil {
+			relPath = filepath.Join(subPath, entry.Name())
+		}
+		cleanRel := filepath.ToSlash(filepath.Clean(relPath))
+		if cleanRel == "." {
+			cleanRel = ""
+		}
+
+		isDir := entry.IsDir()
+		hasChildren := false
+		if isDir {
+			// 轻量探测直接子项是否存在，绝不递归
+			if subEntries, err := os.ReadDir(filepath.Join(targetPath, entry.Name())); err == nil && len(subEntries) > 0 {
+				hasChildren = true
+			}
+		}
+
+		node := &FileNode{
+			Name:        entry.Name(),
+			Path:        cleanRel,
+			IsDir:       isDir,
+			ModTime:     modTime,
+			HasChildren: hasChildren,
+			Children:    []*FileNode{},
+		}
+		nodes = append(nodes, node)
+	}
+
+	utils.Success(c, nodes)
+}
+
+// SearchFiles 搜索文件列表
+// @Summary 搜索文件
+// @Description 全盘快速模糊搜索文件名，支持限制最大返回条数以及仅匹配文件
+// @Tags 文件管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param keyword query string true "搜索关键字"
+// @Param limit query int false "最大返回数量（默认 100）"
+// @Param only_files query bool false "是否仅匹配文件（默认 false）"
+// @Success 200 {object} utils.Response{data=[]controllers.FileNode}
+// @Router /files/search [get]
+func (fc *FileController) SearchFiles(c *gin.Context) {
+	keyword := strings.TrimSpace(c.Query("keyword"))
+	if keyword == "" {
+		utils.Success(c, []*FileNode{})
+		return
+	}
+
+	limit := 100
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	onlyFiles := c.Query("only_files") == "true"
+
+	lowerKeyword := strings.ToLower(keyword)
+	results := make([]*FileNode, 0)
+
+	_ = filepath.WalkDir(fc.workDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -79,57 +191,55 @@ func (fc *FileController) GetFileTree(c *gin.Context) {
 			return nil
 		}
 
-		// 过滤 __pycache__ 文件夹
-		if d.IsDir() && d.Name() == "__pycache__" {
-			return filepath.SkipDir
+		isDir := d.IsDir()
+		if onlyFiles && isDir {
+			return nil
 		}
 
-		relPath, _ := filepath.Rel(fc.workDir, path)
-		parts := strings.Split(relPath, string(filepath.Separator))
-
-		info, err := d.Info()
-		var modTime int64
-		if err == nil {
-			modTime = info.ModTime().UnixMilli()
-		}
-
-		current := root
-		for i, part := range parts {
-			found := false
-			for _, child := range current.Children {
-				if child.Name == part {
-					current = child
-					found = true
-					break
-				}
+		name := d.Name()
+		if strings.Contains(strings.ToLower(name), lowerKeyword) {
+			relPath, err := filepath.Rel(fc.workDir, path)
+			if err != nil {
+				return nil
 			}
-			if !found {
-				isLast := i == len(parts)-1
-				isDir := !isLast || d.IsDir()
-				node := &FileNode{
-					Name:    part,
-					Path:    strings.Join(parts[:i+1], "/"),
-					IsDir:   isDir,
-					ModTime: modTime,
-				}
-				if isDir {
-					node.Children = []*FileNode{}
-				}
-				current.Children = append(current.Children, node)
-				current = node
+			cleanRel := filepath.ToSlash(filepath.Clean(relPath))
+
+			var modTime int64
+			if info, err := d.Info(); err == nil {
+				modTime = info.ModTime().UnixMilli()
+			}
+
+			results = append(results, &FileNode{
+				Name:    name,
+				Path:    cleanRel,
+				IsDir:   isDir,
+				ModTime: modTime,
+			})
+
+			if len(results) >= limit {
+				return filepath.SkipAll
 			}
 		}
 		return nil
 	})
 
-	if err != nil {
-		utils.ServerError(c, err.Error())
-		return
-	}
-
-	utils.Success(c, root.Children)
+	utils.Success(c, results)
 }
 
+// GetFileContent 获取文件内容
+// @Summary 获取文件内容
+// @Description 获取指定路径的文件文本内容
+// @Tags 文件管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param path query string true "相对文件路径"
+// @Success 200 {object} utils.Response{data=controllers.FileContentVO}
+// @Failure 400 {object} utils.Response "path参数必填"
+// @Failure 403 {object} utils.Response "访问被拒绝"
+// @Failure 404 {object} utils.Response "文件不存在"
+// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Router /files/content [get]
 func (fc *FileController) GetFileContent(c *gin.Context) {
 	filePath := c.Query("path")
 	if filePath == "" {
@@ -150,10 +260,10 @@ func (fc *FileController) GetFileContent(c *gin.Context) {
 	}
 
 	if isBin {
-		utils.Success(c, gin.H{
-			"path":     filePath,
-			"content":  "",
-			"isBinary": true,
+		utils.Success(c, FileContentVO{
+			Path:     filePath,
+			Content:  "",
+			IsBinary: true,
 		})
 		return
 	}
@@ -164,10 +274,10 @@ func (fc *FileController) GetFileContent(c *gin.Context) {
 		return
 	}
 
-	utils.Success(c, gin.H{
-		"path":     filePath,
-		"content":  string(content),
-		"isBinary": false,
+	utils.Success(c, FileContentVO{
+		Path:     filePath,
+		Content:  string(content),
+		IsBinary: false,
 	})
 }
 

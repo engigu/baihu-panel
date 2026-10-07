@@ -188,7 +188,7 @@ deps:
 # Generate swagger documentation
 swag:
 	@mkdir -p docs/public
-	go run github.com/swaggo/swag/cmd/swag@latest init -g main.go -o ./docs/public --ot json,yaml
+	go run github.com/swaggo/swag/cmd/swag@latest init -g main.go -o ./docs/public --ot json,yaml --exclude ./data,./web,./docs
 
 docs-dev:
 	cd docs && npm run docs:dev

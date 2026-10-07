@@ -335,7 +335,9 @@ export const api = {
     }
   },
   files: {
-    tree: () => request<FileNode[]>('/files/tree'),
+    tree: (path?: string) => request<FileNode[]>(`/files/tree${path ? `?path=${encodeURIComponent(path)}` : ''}`),
+    search: (keyword: string, limit = 100, onlyFiles = false) =>
+      request<FileNode[]>(`/files/search?keyword=${encodeURIComponent(keyword)}&limit=${limit}&only_files=${onlyFiles}`),
     getContent: (path: string) => request<{ path: string; content: string; isBinary?: boolean }>(`/files/content?path=${encodeURIComponent(path)}`),
     download: (path: string) => `${API_BASE_URL}/files/download?path=${encodeURIComponent(path)}`,
     downloadZip: (path: string) => `${API_BASE_URL}/files/download-zip?path=${encodeURIComponent(path)}`,
@@ -678,7 +680,10 @@ export interface FileNode {
   path: string
   isDir: boolean
   modTime: number
+  hasChildren?: boolean
   children?: FileNode[]
+  loading?: boolean
+  loaded?: boolean
 }
 
 export interface Task {

@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { RefreshCw, FileUp, FileArchive, Plus, ArrowDownAZ, ArrowUpZA, Clock, AlertCircle, Search, X } from 'lucide-vue-next'
+import { Switch } from '@/components/ui/switch'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { RefreshCw, FileUp, FileArchive, Plus, ArrowDownAZ, ArrowUpZA, Clock, AlertCircle, Search, X, SlidersHorizontal, Folder, File, Loader2 } from 'lucide-vue-next'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import FileTreeNode from '@/components/FileTreeNode.vue'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
-import { type FileNode } from '@/api'
+import { api, type FileNode } from '@/api'
 
 const props = defineProps<{
   fileTree: FileNode[]
@@ -18,6 +20,56 @@ const props = defineProps<{
 
 const tempSearchQuery = ref('')
 const searchQuery = ref('')
+const isSearching = ref(false)
+const searchResults = ref<FileNode[]>([])
+
+// 搜索配置
+interface SearchConfig {
+  limit: number
+  onlyFiles: boolean
+}
+
+const searchConfig = ref<SearchConfig>({
+  limit: 100,
+  onlyFiles: false
+})
+
+onMounted(() => {
+  try {
+    const saved = localStorage.getItem('file_search_config')
+    if (saved) {
+      searchConfig.value = { ...searchConfig.value, ...JSON.parse(saved) }
+    }
+  } catch {}
+})
+
+function updateSearchConfig(patch: Partial<SearchConfig>) {
+  searchConfig.value = { ...searchConfig.value, ...patch }
+  try {
+    localStorage.setItem('file_search_config', JSON.stringify(searchConfig.value))
+  } catch {}
+  if (searchQuery.value) {
+    performSearch(searchQuery.value)
+  }
+}
+
+async function performSearch(query: string) {
+  const q = query.trim()
+  if (!q) {
+    searchResults.value = []
+    isSearching.value = false
+    return
+  }
+  isSearching.value = true
+  try {
+    const res = await api.files.search(q, searchConfig.value.limit, searchConfig.value.onlyFiles)
+    searchResults.value = res
+  } catch {
+    searchResults.value = []
+  } finally {
+    isSearching.value = false
+  }
+}
 
 let debounceTimeout: number | undefined
 watch(tempSearchQuery, (newVal) => {
@@ -26,76 +78,26 @@ watch(tempSearchQuery, (newVal) => {
   }
   if (!newVal.trim()) {
     searchQuery.value = ''
+    searchResults.value = []
+    isSearching.value = false
     return
   }
   debounceTimeout = window.setTimeout(() => {
     searchQuery.value = newVal
+    performSearch(newVal)
   }, 250)
 })
 
 function clearSearch() {
   tempSearchQuery.value = ''
   searchQuery.value = ''
+  searchResults.value = []
+  isSearching.value = false
   if (debounceTimeout) {
     clearTimeout(debounceTimeout)
   }
 }
 
-const filteredFileTree = computed(() => {
-  if (!searchQuery.value.trim()) return props.fileTree
-
-  const query = searchQuery.value.toLowerCase().trim()
-
-  const filterNodes = (nodes: FileNode[]): FileNode[] => {
-    const result: FileNode[] = []
-    for (const node of nodes) {
-      const nodeCopy = { ...node }
-      if (nodeCopy.isDir && nodeCopy.children) {
-        const filteredChildren = filterNodes(nodeCopy.children)
-        if (nodeCopy.name.toLowerCase().includes(query) || filteredChildren.length > 0) {
-          nodeCopy.children = filteredChildren
-          result.push(nodeCopy)
-        }
-      } else {
-        if (nodeCopy.name.toLowerCase().includes(query)) {
-          result.push(nodeCopy)
-        }
-      }
-    }
-    return result
-  }
-
-  return filterNodes(props.fileTree)
-})
-
-const computedExpandedDirs = computed(() => {
-  if (!searchQuery.value.trim()) return props.expandedDirs
-
-  const expanded = new Set(props.expandedDirs)
-  const query = searchQuery.value.toLowerCase().trim()
-  
-  const collectPaths = (nodes: FileNode[]) => {
-    for (const node of nodes) {
-      if (node.isDir && node.children) {
-        const hasMatchingDescendant = (n: FileNode): boolean => {
-          if (n.name.toLowerCase().includes(query)) return true
-          if (n.children) {
-            return n.children.some(hasMatchingDescendant)
-          }
-          return false
-        }
-        
-        if (node.children.some(hasMatchingDescendant)) {
-          expanded.add(node.path)
-        }
-        collectPaths(node.children)
-      }
-    }
-  }
-  
-  collectPaths(props.fileTree)
-  return expanded
-})
 
 const emit = defineEmits<{
   'update:sortMethod': [method: 'name_asc' | 'name_desc' | 'time_desc' | 'time_asc']
@@ -264,30 +266,129 @@ function handleFilesUpload(e: Event) {
       <input ref="archiveInputRef" type="file" accept=".zip,.tar,.gz,.tgz" class="hidden" @change="handleArchiveUpload" />
       <input ref="filesInputRef" type="file" multiple class="hidden" @change="handleFilesUpload" />
     </div>
-    <!-- 搜索过滤输入框 -->
+    <!-- 搜索过滤输入框与配置 -->
     <div class="px-2 py-1.5 border-b bg-muted/5">
-      <div class="relative flex items-center">
-        <Search class="absolute left-2.5 h-3 w-3 text-muted-foreground/50" />
-        <Input v-model="tempSearchQuery" placeholder="搜索文件名..." class="h-7 pl-7 pr-6 w-full text-[11px] bg-background/50 border-muted-foreground/15 rounded-md focus-visible:ring-1 focus-visible:ring-ring/30" />
-        <button v-if="tempSearchQuery" class="absolute right-2 text-muted-foreground/60 hover:text-foreground transition-colors focus:outline-none" @click="clearSearch">
-          <X class="w-3 h-3" />
-        </button>
+      <div class="relative flex items-center gap-1">
+        <div class="relative flex-1 flex items-center">
+          <Search class="absolute left-2.5 h-3 w-3 text-muted-foreground/50" />
+          <Input
+            v-model="tempSearchQuery"
+            placeholder="搜索全盘文件..."
+            class="h-7 pl-7 pr-6 w-full text-[11px] bg-background/50 border-muted-foreground/15 rounded-md focus-visible:ring-1 focus-visible:ring-ring/30"
+          />
+          <button
+            v-if="tempSearchQuery"
+            class="absolute right-2 text-muted-foreground/60 hover:text-foreground transition-colors focus:outline-none"
+            @click="clearSearch"
+          >
+            <X class="w-3 h-3" />
+          </button>
+        </div>
+
+        <!-- 搜索配置按钮与 Popover -->
+        <Popover>
+          <PopoverTrigger as-child>
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
+              title="搜索配置"
+            >
+              <SlidersHorizontal class="w-3.5 h-3.5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent class="w-60 p-3 shadow-lg rounded-xl text-xs" align="end">
+            <div class="font-medium text-foreground mb-2.5 flex items-center justify-between">
+              <span>搜索偏好配置</span>
+              <span class="text-[10px] text-muted-foreground">实时生效</span>
+            </div>
+
+            <div class="space-y-3">
+              <div>
+                <label class="text-[11px] text-muted-foreground block mb-1.5">最大返回数量</label>
+                <div class="grid grid-cols-4 gap-1">
+                  <button
+                    v-for="count in [50, 100, 200, 500]"
+                    :key="count"
+                    type="button"
+                    @click="updateSearchConfig({ limit: count })"
+                    class="py-1 px-1.5 text-[11px] rounded border text-center transition-all"
+                    :class="searchConfig.limit === count
+                      ? 'bg-primary text-primary-foreground border-primary font-medium'
+                      : 'border-border/60 hover:bg-muted text-muted-foreground hover:text-foreground'"
+                  >
+                    {{ count }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between pt-2 border-t">
+                <span class="text-[11px] text-muted-foreground">仅搜文件 (排除目录)</span>
+                <Switch
+                  :model-value="searchConfig.onlyFiles"
+                  @update:model-value="updateSearchConfig({ onlyFiles: $event })"
+                />
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
     </div>
+
+    <!-- 列表展示区域：搜索结果 vs 目录树 -->
     <div class="flex-1 overflow-auto p-1 text-[13px]">
-      <div v-if="filteredFileTree.length === 0" class="text-xs text-muted-foreground text-center py-4">
-        暂无匹配文件
-      </div>
-      <FileTreeNode v-for="node in filteredFileTree" :key="node.path" :node="node" :expanded-dirs="computedExpandedDirs"
-        :selected-path="selectedPath" 
-        @select="n => emit('select', n)" 
-        @delete="p => emit('delete', p)" 
-        @create="p => emit('create', p)"
-        @download-file="p => emit('download', p)" 
-        @download-zip="p => emit('downloadZip', p)"
-        @move="(o, n) => emit('move', o, n)" 
-        @rename="p => emit('rename', p)" 
-        @duplicate="p => emit('duplicate', p)" />
+      <!-- 搜索模式 -->
+      <template v-if="searchQuery">
+        <div v-if="isSearching" class="py-8 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+          <Loader2 class="h-4 w-4 animate-spin text-primary" />
+          <span>正在全盘检索...</span>
+        </div>
+        <div v-else-if="searchResults.length === 0" class="text-xs text-muted-foreground text-center py-8">
+          未找到与 "{{ searchQuery }}" 匹配的文件
+        </div>
+        <div v-else class="space-y-0.5">
+          <div class="px-2 py-1 text-[10px] text-muted-foreground/80 flex items-center justify-between border-b mb-1">
+            <span>找到 {{ searchResults.length }} 个结果</span>
+            <span v-if="searchResults.length >= searchConfig.limit" class="text-amber-500 font-medium">已达上限 {{ searchConfig.limit }}</span>
+          </div>
+          <div
+            v-for="item in searchResults"
+            :key="item.path"
+            @click="emit('select', item)"
+            class="flex items-center gap-2 py-1 px-2 rounded cursor-pointer text-xs hover:bg-muted group transition-colors"
+            :class="selectedPath === item.path && 'bg-accent text-accent-foreground font-medium'"
+          >
+            <Folder v-if="item.isDir" class="h-3.5 w-3.5 text-yellow-500 shrink-0" />
+            <File v-else class="h-3.5 w-3.5 text-blue-500 shrink-0" />
+            <div class="flex-1 min-w-0">
+              <div class="truncate text-xs text-foreground font-medium leading-tight">{{ item.name }}</div>
+              <div class="truncate text-[10px] text-muted-foreground/70 leading-tight mt-0.5">{{ item.path }}</div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- 普通懒加载树视图 -->
+      <template v-else>
+        <div v-if="fileTree.length === 0" class="text-xs text-muted-foreground text-center py-4">
+          暂无文件
+        </div>
+        <FileTreeNode
+          v-for="node in fileTree"
+          :key="node.path"
+          :node="node"
+          :expanded-dirs="expandedDirs"
+          :selected-path="selectedPath"
+          @select="n => emit('select', n)"
+          @delete="p => emit('delete', p)"
+          @create="p => emit('create', p)"
+          @download-file="p => emit('download', p)"
+          @download-zip="p => emit('downloadZip', p)"
+          @move="(o, n) => emit('move', o, n)"
+          @rename="p => emit('rename', p)"
+          @duplicate="p => emit('duplicate', p)"
+        />
+      </template>
     </div>
 
     <!-- 上传确认对话框 -->
