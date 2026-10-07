@@ -31,6 +31,8 @@ type AgentWSManager interface {
 	SendToAgent(agentID string, msgType string, data interface{}) error
 	IsAgentOnline(agentID string) bool
 	PushAgentSync(agentID string, task *models.Task, logID string) (*executor.Result, error)
+	BroadcastTasks(agentID string)
+	BroadcastTasksToAll()
 }
 
 // SettingsService 接口定义（避免循环依赖）
@@ -845,6 +847,22 @@ func (es *ExecutorService) SyncRepoTasks(upsertedIDs []string, deletedIDs []stri
 	}
 }
 
+// SyncAppTasks 同步指定声明式应用及其所有受控子任务在调度器中的调度状态
+func (es *ExecutorService) SyncAppTasks(masterTaskID string) {
+	if es == nil || masterTaskID == "" {
+		return
+	}
+	var appTasks []models.Task
+	database.DB.Where("id = ? OR (source_id = ? AND type = ?)", masterTaskID, masterTaskID, constant.TaskTypeNormal).Find(&appTasks)
+	var ids []string
+	for _, t := range appTasks {
+		ids = append(ids, t.ID)
+	}
+	if len(ids) > 0 {
+		es.SyncRepoTasks(ids, nil)
+	}
+}
+
 // StopTaskExecution stops a running task execution by LogID
 func (es *ExecutorService) StopTaskExecution(logID string) error {
 	var taskLog models.TaskLog
@@ -1609,4 +1627,46 @@ func buildRepoCommandEnvPrefix() string {
 
 func resolveAbsScriptsDir() string {
 	return utils.ResolveAbsScriptsDir()
+}
+
+// SystemStatsOverview 系统运行统计概览数据
+type SystemStatsOverview struct {
+	Tasks      int64 `json:"tasks"`
+	TodayExecs int64 `json:"today_execs"`
+	Envs       int64 `json:"envs"`
+	Logs       int64 `json:"logs"`
+	Scheduled  int   `json:"scheduled"`
+	Running    int   `json:"running"`
+}
+
+// GetSystemStatsOverview 获取系统聚合统计概览数据（统一任务、环境变量、日志、今日执行与调度/运行状态）
+func (es *ExecutorService) GetSystemStatsOverview() SystemStatsOverview {
+	var taskCount, envCount, logCount, todayExecs int64
+
+	database.DB.Model(&models.Task{}).Count(&taskCount)
+	database.DB.Model(&models.EnvironmentVariable{}).Count(&envCount)
+	database.DB.Model(&models.TaskLog{}).Count(&logCount)
+
+	// 今日执行总数
+	today := time.Now().Format("2006-01-02")
+	database.DB.Model(&models.SendStats{}).Where("day = ?", today).Select("COALESCE(SUM(num), 0)").Scan(&todayExecs)
+
+	// 调度统计：本地调度 + Agent 调度
+	localScheduled := es.GetScheduledCount()
+	var agentScheduled int64
+	database.DB.Model(&models.Task{}).
+		Where("agent_id IS NOT NULL AND enabled = ?", true).
+		Count(&agentScheduled)
+
+	totalScheduled := localScheduled + int(agentScheduled)
+	running := es.GetRunningCount()
+
+	return SystemStatsOverview{
+		Tasks:      taskCount,
+		TodayExecs: todayExecs,
+		Envs:       envCount,
+		Logs:       logCount,
+		Scheduled:  totalScheduled,
+		Running:    running,
+	}
 }

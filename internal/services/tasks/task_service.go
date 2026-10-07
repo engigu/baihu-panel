@@ -1,6 +1,7 @@
 package tasks
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/constant"
@@ -269,6 +270,95 @@ func (ts *TaskService) DeleteTask(id string) bool {
 
 	result := database.DB.Unscoped().Where("id = ?", id).Delete(&models.Task{})
 	return result.RowsAffected > 0
+}
+
+// CreateTaskWithSchedule 创建任务并校验 Cron，同时自动注册到定时调度器或广播至 Agent
+func (ts *TaskService) CreateTaskWithSchedule(param *TaskParam, executor *ExecutorService) (*models.Task, error) {
+	if param.Schedule != "" && executor != nil {
+		if err := executor.ValidateCron(param.Schedule); err != nil {
+			return nil, err
+		}
+	}
+
+	task := ts.CreateTask(param)
+	if task == nil {
+		return nil, fmt.Errorf("创建任务失败")
+	}
+
+	if executor != nil {
+		if task.AgentID != nil && *task.AgentID != "" && task.Type != constant.TaskTypeAgentSyncScript {
+			if executor.agentWSManager != nil {
+				executor.agentWSManager.BroadcastTasks(*task.AgentID)
+			}
+		} else {
+			if task.Type == constant.TaskTypeAgentSyncScript {
+				GetSyncWatcherService().RegisterTask(task)
+				if syncCfg := task.GetAgentSync(); syncCfg == nil || syncCfg.SyncMode != constant.SyncModeRealtime {
+					executor.AddCronTask(task)
+				}
+			} else {
+				executor.AddCronTask(task)
+			}
+		}
+	}
+	return task, nil
+}
+
+// UpdateTaskWithSchedule 更新任务并更新 Cron 调度或广播至 Agent
+func (ts *TaskService) UpdateTaskWithSchedule(id string, param *TaskParam, executor *ExecutorService) (*models.Task, error) {
+	if param.Schedule != "" && executor != nil {
+		if err := executor.ValidateCron(param.Schedule); err != nil {
+			return nil, err
+		}
+	}
+
+	task := ts.UpdateTask(id, param)
+	if task == nil {
+		return nil, fmt.Errorf("更新任务失败")
+	}
+
+	if executor != nil {
+		executor.RemoveCronTask(id)
+		if utils.DerefBool(task.Enabled, true) {
+			if task.AgentID != nil && *task.AgentID != "" && task.Type != constant.TaskTypeAgentSyncScript {
+				if executor.agentWSManager != nil {
+					executor.agentWSManager.BroadcastTasks(*task.AgentID)
+				}
+			} else {
+				executor.AddCronTask(task)
+			}
+		}
+	}
+	return task, nil
+}
+
+// DeleteTaskWithCascade 完整的级联删除：移除 Cron、停止运行中实例、注销监听、广播 Agent 并删除数据
+func (ts *TaskService) DeleteTaskWithCascade(id string, executor *ExecutorService) bool {
+	task := ts.GetTaskByID(id)
+	if task == nil {
+		return false
+	}
+
+	if executor != nil {
+		executor.RemoveCronTask(id)
+		executor.GetScheduler().StopTask(id)
+	}
+	GetSyncWatcherService().UnregisterTask(id)
+
+	if task.Type == constant.TaskTypeApp && executor != nil {
+		var childTaskIDs []string
+		database.DB.Model(&models.Task{}).Where("source_id = ? AND type = ?", id, constant.TaskTypeNormal).Pluck("id", &childTaskIDs)
+		for _, cid := range childTaskIDs {
+			executor.RemoveCronTask(cid)
+			executor.GetScheduler().StopTask(cid)
+		}
+	}
+
+	success := ts.DeleteTask(id)
+	if success && task.AgentID != nil && *task.AgentID != "" && executor != nil && executor.agentWSManager != nil {
+		executor.agentWSManager.BroadcastTasks(*task.AgentID)
+	}
+	return success
 }
 
 func (ts *TaskService) BatchDeleteTasks(ids []string) int64 {

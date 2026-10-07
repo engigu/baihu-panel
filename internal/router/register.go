@@ -9,7 +9,10 @@ import (
 	"github.com/engigu/baihu-panel/internal/services/tasks"
 )
 
-var executorService *tasks.ExecutorService
+var (
+	executorService *tasks.ExecutorService
+	taskLogService  *tasks.TaskLogService
+)
 
 func RegisterControllers() *Controllers {
 	// 初始化服务
@@ -27,7 +30,7 @@ func RegisterControllers() *Controllers {
 	agentWSManager := services.GetAgentWSManager()
 	systemWSManager := services.GetSystemWSManager()
 
-	taskLogService := tasks.NewTaskLogService(sendStatsService)
+	taskLogService = tasks.NewTaskLogService(sendStatsService)
 	// 创建任务执行服务（需要依赖注入）
 	notifyService := services.NewNotificationService()
 	appLogService := services.NewAppLogService()
@@ -66,7 +69,7 @@ func RegisterControllers() *Controllers {
 		Executor:     controllers.NewExecutorController(executorService),
 		File:         controllers.NewFileController(constant.ScriptsWorkDir),
 		Dashboard:    controllers.NewDashboardController(executorService),
-		Log:          controllers.NewLogController(),
+		Log:          controllers.NewLogController(taskLogService),
 		LogSSE:       controllers.NewLogSSEController(),
 		Terminal:     controllers.NewTerminalController(envService),
 		Settings:     controllers.NewSettingsController(userService, loginLogService, executorService),

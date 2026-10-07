@@ -1,7 +1,11 @@
 package router
 
 import (
+	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/mcp"
 	"github.com/engigu/baihu-panel/internal/middleware"
+	"github.com/engigu/baihu-panel/internal/services"
+	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/gin-gonic/gin"
 )
 
@@ -24,7 +28,21 @@ func initOpenAPIV1Routes(root *gin.RouterGroup, c *Controllers) {
 		registerOpenAPIExecutorRoutes(open, c)
 		// 文件树相关接口
 		registerOpenAPIFileRoutes(open, c)
+		// MCP (Model Context Protocol) 服务接口
+		registerOpenAPIMCPRoutes(open)
 	}
+}
+
+// registerOpenAPIMCPRoutes 注册 MCP (Model Context Protocol) SSE 与消息端点
+func registerOpenAPIMCPRoutes(g *gin.RouterGroup) {
+	deps := &mcp.Deps{
+		TaskService:     tasks.NewTaskService(),
+		ExecutorService: executorService,
+		TaskLogService:  taskLogService,
+		EnvService:      services.NewEnvService(),
+		FileWorkDir:     constant.ScriptsWorkDir,
+	}
+	mcp.RegisterOpenAPIMCPRoutes(g, deps)
 }
 
 // registerOpenAPITaskRoutes 注册 OpenAPI 任务路由（只包含有 @Tags OpenAPI 注释的接口）

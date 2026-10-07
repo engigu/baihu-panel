@@ -23,51 +23,10 @@ func NewDashboardController(executorService *tasks.ExecutorService) *DashboardCo
 	}
 }
 
-type StatsResponse struct {
-	Tasks      int64 `json:"tasks"`
-	TodayExecs int64 `json:"today_execs"`
-	Envs       int64 `json:"envs"`
-	Logs       int64 `json:"logs"`
-	Scheduled  int   `json:"scheduled"`
-	Running    int   `json:"running"`
-}
+type StatsResponse = tasks.SystemStatsOverview
 
 func (dc *DashboardController) GetStats(c *gin.Context) {
-	var taskCount, envCount, logCount, todayExecs int64
-
-	database.DB.Model(&models.Task{}).Count(&taskCount)
-	database.DB.Model(&models.EnvironmentVariable{}).Count(&envCount)
-	database.DB.Model(&models.TaskLog{}).Count(&logCount)
-
-	// 今日执行总数
-	today := time.Now().Format("2006-01-02")
-	database.DB.Model(&models.SendStats{}).Where("day = ?", today).Select("COALESCE(SUM(num), 0)").Scan(&todayExecs)
-
-	// 调度统计：本地调度 + Agent 调度
-	// 本地调度：agent_id 为 NULL 且 enabled = true 的任务
-	localScheduled := dc.executorService.GetScheduledCount()
-
-	// Agent 调度：agent_id 不为 NULL 且 enabled = true 的任务
-	var agentScheduled int64
-	database.DB.Model(&models.Task{}).
-		Where("agent_id IS NOT NULL AND enabled = ?", true).
-		Count(&agentScheduled)
-
-	totalScheduled := localScheduled + int(agentScheduled)
-
-	// 正在运行：目前只能统计本地运行的任务
-	// Agent 端的运行状态需要通过心跳上报（未来优化）
-	running := dc.executorService.GetRunningCount()
-
-	stats := StatsResponse{
-		Tasks:      taskCount,
-		TodayExecs: todayExecs,
-		Envs:       envCount,
-		Logs:       logCount,
-		Scheduled:  totalScheduled,
-		Running:    running,
-	}
-
+	stats := dc.executorService.GetSystemStatsOverview()
 	utils.Success(c, stats)
 }
 

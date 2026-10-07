@@ -97,4 +97,8 @@ var Commands = []CommandSpec{
 		Description: "生成当前 Shell (PowerShell/Bash/Zsh) 的 Tab 自动补全脚本",
 		Args:        []string{"powershell", "pwsh", "bash", "zsh"},
 	},
+	{
+		Name:        "mcp",
+		Description: "启动白虎面板 Model Context Protocol (MCP) 标准输入输出服务",
+	},
 }

@@ -17,6 +17,7 @@
 | [`baihu depinstall`](#baihu-depinstall) | 智能分析执行日志并自动安装缺失的依赖包 | 脚本依赖报错快速排查与自动补齐 |
 | [`baihu builtininstall`](#baihu-builtininstall) | 为所有 Python / Node.js 运行时安装面板原生 SDK | 新增多版本解释器后一键注入 SDK |
 | [`baihu completion`](#baihu-completion) | 生成 PowerShell / Bash / Zsh 的 Tab 自动补全脚本 | 提升终端交互与命令敲击体验 |
+| [`baihu mcp`](#baihu-mcp) | 启动 Stdio 模式的模型上下文协议服务 | AI 客户端（Cursor、Claude Desktop、Cline）直接对接调用 |
 | [`baihu version`](#baihu-version) | 查看当前二进制版本号 (同 `-v`, `-V`) | 环境排查、版本确认 |
 
 ---
@@ -498,6 +499,30 @@ baihu version
 # 或简写
 baihu -v
 ```
+
+---
+
+## `baihu mcp`
+
+以标准输入输出 (Stdio JSON-RPC) 方式启动白虎面板的模型上下文协议 (Model Context Protocol, MCP) 服务。专供 Claude Desktop、Cursor、Cline、Windsurf 等 AI 客户端直接调用接管面板运维。
+
+### 特性与优势
+- **纯净 Stdout 流**：自动将系统日志输出重定向至 Stderr，保证 Stdio 管道 100% 为合法的 JSON-RPC 通信协议帧；
+- **全生命周期工具集**：提供任务编排、环境变量、安全日志、脚本文件读写等 18 个原子级工具，并支持安全沙箱隔离；
+- **无需额外启动 HTTP 端口**：外部 AI 工具直接通过执行此 CLI 命令与白虎面板在本地进程管道通信。
+
+### 客户端接入示例 (Claude Desktop / Cursor)
+```json
+{
+  "mcpServers": {
+    "baihu": {
+      "command": "/usr/local/bin/baihu",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+*更多高级用法与远程 SSE 协议接入，请参考 [模型上下文协议 (MCP) 指南](/guide/mcp)。*
 
 ---
 

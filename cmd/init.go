@@ -6,6 +6,7 @@ import (
 	"github.com/engigu/baihu-panel/cmd/builtininstall"
 	"github.com/engigu/baihu-panel/cmd/completion"
 	"github.com/engigu/baihu-panel/cmd/depinstall"
+	"github.com/engigu/baihu-panel/cmd/mcp"
 	"github.com/engigu/baihu-panel/cmd/reposync"
 	"github.com/engigu/baihu-panel/cmd/resetpwd"
 	"github.com/engigu/baihu-panel/cmd/restore"
@@ -33,6 +34,9 @@ func InitHandlers() {
 	RegisterHandler("restore", restore.Run)
 	RegisterHandler("task", task.Run)
 	RegisterHandler("webui", webui.Run)
+
+	// 注册 MCP 协议服务 (RequireContext 设为 false，由内部自行重定向日志至 stderr 并完成环境引导，防止 stdout 污染)
+	RegisterHandlerWithConfig("mcp", mcp.Run, false)
 
 	// 轻量级命令显式标记 RequireContext = false
 	RegisterHandlerWithConfig("version", version.Run, false)

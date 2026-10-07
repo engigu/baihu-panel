@@ -24,7 +24,8 @@ import {
   Send,
   ShieldCheck,
   CalendarClock,
-  Save
+  Save,
+  Sparkles
 } from 'lucide-vue-next'
 import {
   AlertDialog,
@@ -143,6 +144,55 @@ function openSwaggerDocs() {
   window.open('https://engigu.github.io/baihu-panel/guide/api.html', '_blank')
 }
 
+function openMcpDocs() {
+  window.open('https://engigu.github.io/baihu-panel/guide/mcp.html', '_blank')
+}
+
+const showMcpSnippet = ref(false)
+
+const mcpSseUrl = computed(() => {
+  if (typeof window === 'undefined') return ''
+  const base = window.location.origin
+  const token = form.value.openapi_token || '<Token>'
+  return `${base}/open2api/v1/mcp/sse?token=${token}`
+})
+
+const mcpConfigJson = computed(() => {
+  return JSON.stringify({
+    mcpServers: {
+      "baihu": {
+        "url": mcpSseUrl.value
+      }
+    }
+  }, null, 2)
+})
+
+async function copyMcpSseUrl() {
+  if (!form.value.openapi_token) {
+    toast.error('请先生成并保存 OpenAPI Token')
+    return
+  }
+  const success = await copyTextToClipboard(mcpSseUrl.value)
+  if (success) {
+    toast.success('MCP SSE 连接地址已复制到剪贴板')
+  } else {
+    toast.error('复制失败，请手动复制')
+  }
+}
+
+async function copyMcpConfigJson() {
+  if (!form.value.openapi_token) {
+    toast.error('请先生成并保存 OpenAPI Token')
+    return
+  }
+  const success = await copyTextToClipboard(mcpConfigJson.value)
+  if (success) {
+    toast.success('MCP 客户端配置 JSON 已复制')
+  } else {
+    toast.error('复制失败，请手动复制')
+  }
+}
+
 onMounted(loadSettings)
 </script>
 
@@ -225,14 +275,25 @@ onMounted(loadSettings)
             </div>
             <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
               <span class="truncate">通过 Bearer Token 实现外部系统调用</span>
-              <a
-                href="#"
-                @click.prevent="openSwaggerDocs"
-                class="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline shrink-0"
-              >
-                文档
-                <ExternalLink class="w-3 h-3" />
-              </a>
+              <div class="flex items-center gap-2.5 shrink-0">
+                <a
+                  href="#"
+                  @click.prevent="openMcpDocs"
+                  class="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:underline"
+                >
+                  <Sparkles class="w-3 h-3 text-purple-500" />
+                  MCP 指南
+                  <ExternalLink class="w-2.5 h-2.5" />
+                </a>
+                <a
+                  href="#"
+                  @click.prevent="openSwaggerDocs"
+                  class="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  API 文档
+                  <ExternalLink class="w-2.5 h-2.5" />
+                </a>
+              </div>
             </div>
           </CardHeader>
           <CardContent class="space-y-4">
@@ -285,6 +346,72 @@ onMounted(loadSettings)
                   :disabled="!form.openapi_enabled"
                 />
                 <p class="text-[10px] text-muted-foreground">超过此日期后 Token 将失效，置空代表永不过期</p>
+              </div>
+            </div>
+
+            <!-- 模块 2.1: 模型上下文协议 (MCP) 快捷连接指引 -->
+            <div class="pt-3 border-t border-border/60">
+              <div class="p-3 rounded-xl border bg-gradient-to-br from-purple-500/5 via-background to-sky-500/5 border-purple-500/25 space-y-2.5">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <Sparkles class="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                    <span class="text-xs font-semibold text-foreground">AI 客户端连接 (MCP)</span>
+                    <Badge variant="outline" class="font-normal text-[9px] px-1.5 py-0 h-4 border-purple-500/30 text-purple-600 dark:text-purple-400 shrink-0">
+                      Cursor / Claude
+                    </Badge>
+                  </div>
+                  <button
+                    type="button"
+                    @click="showMcpSnippet = !showMcpSnippet"
+                    class="text-[11px] text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-0.5 shrink-0"
+                  >
+                    {{ showMcpSnippet ? '收起配置' : '配置示例' }}
+                  </button>
+                </div>
+
+                <div class="space-y-1">
+                  <Label class="text-[11px] text-muted-foreground flex items-center justify-between">
+                    <span>SSE 远程连接 URL</span>
+                    <span v-if="!form.openapi_token" class="text-amber-500 text-[10px]">需先生成 Token</span>
+                  </Label>
+                  <div class="flex items-center gap-1.5">
+                    <Input
+                      :model-value="mcpSseUrl"
+                      readonly
+                      class="text-xs h-8 font-mono bg-muted/40 select-all flex-1 min-w-0"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      class="h-8 px-2.5 shrink-0 text-xs gap-1"
+                      @click="copyMcpSseUrl"
+                      :disabled="!form.openapi_token || !form.openapi_enabled"
+                    >
+                      <Copy class="w-3 h-3" />
+                      复制
+                    </Button>
+                  </div>
+                </div>
+
+                <!-- 展开的 JSON 客户端配置 -->
+                <div v-if="showMcpSnippet" class="space-y-1.5 pt-1">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[10px] text-muted-foreground font-mono">claude_desktop_config.json / Cursor</span>
+                    <button
+                      type="button"
+                      @click="copyMcpConfigJson"
+                      class="text-[10px] text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
+                    >
+                      <Copy class="w-2.5 h-2.5" />
+                      复制配置 JSON
+                    </button>
+                  </div>
+                  <pre class="p-2 rounded-lg bg-muted/80 text-[10px] font-mono leading-relaxed overflow-x-auto select-all text-foreground/90 max-h-36 border border-border/50">{{ mcpConfigJson }}</pre>
+                  <p class="text-[10px] text-muted-foreground leading-normal">
+                    提示：本地环境还可直接在终端使用 <code class="bg-muted px-1 py-0.5 rounded font-mono text-[10px]">baihu mcp</code> 启动 Stdio 管道连接。
+                  </p>
+                </div>
               </div>
             </div>
           </CardContent>
