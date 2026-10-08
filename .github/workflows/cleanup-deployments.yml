@@ -1,0 +1,69 @@
+name: Cleanup Old GitHub Pages Deployments
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # 每周日 00:00 (UTC) 自动执行
+  workflow_dispatch:      # 支持手动触发
+
+permissions:
+  deployments: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cleanup deployments (keep latest 15)
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const environment = 'github-pages';
+            const keepCount = 15;
+
+            console.log(`正在获取 ${environment} 的部署记录...`);
+            
+            // 分页获取 github-pages 环境下的所有 deployments
+            const deployments = await github.paginate(github.rest.repos.listDeployments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              environment: environment,
+              per_page: 100
+            });
+
+            console.log(`当前共有 ${deployments.length} 条部署记录。`);
+
+            if (deployments.length <= keepCount) {
+              console.log(`当前记录数 (${deployments.length}) 未超过 ${keepCount}，无需清理。`);
+              return;
+            }
+
+            // 按创建时间倒序排序 (最新在前)
+            deployments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            // 保留前 keepCount 个，超出的全部分批删除
+            const toDelete = deployments.slice(keepCount);
+            console.log(`准备清理 ${toDelete.length} 条历史部署记录...`);
+
+            for (const deployment of toDelete) {
+              try {
+                // 删除部署前需先将其状态设为 inactive
+                await github.rest.repos.createDeploymentStatus({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  deployment_id: deployment.id,
+                  state: 'inactive'
+                });
+
+                // 删除 deployment 节点
+                await github.rest.repos.deleteDeployment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  deployment_id: deployment.id
+                });
+                console.log(`已成功删除 Deployment ID: ${deployment.id} (${deployment.created_at})`);
+              } catch (err) {
+                console.error(`删除 Deployment ID ${deployment.id} 失败: ${err.message}`);
+              }
+            }
+
+            console.log(`清理完成！成功剔除 ${toDelete.length} 条历史部署记录。`);
