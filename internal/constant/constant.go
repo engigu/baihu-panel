@@ -202,6 +202,16 @@ const (
 
 	// ScriptsDirPlaceholder 脚本目录占位符
 	ScriptsDirPlaceholder = "$SCRIPTS_DIR$"
+
+	// 容器 Page Cache 智能控存相关环境变量 Key
+	EnvKeyMiseDataDir   = "MISE_DATA_DIR"
+	EnvKeyCacheTrimSpec = "BH_CACHE_TRIM_SPEC"
+	EnvKeyCacheMaxMB    = "BH_CACHE_MAX_MB"
+	EnvKeyCacheTrimDirs = "BH_CACHE_TRIM_DIRS"
+
+	// 容器 Page Cache 智能控存默认配置
+	DefaultCacheTrimSpec = "@every 5m"
+	DefaultCacheMaxMB    = 60
 )
 
 // CookieName Cookie 名称

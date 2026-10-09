@@ -6,6 +6,20 @@ import (
 	"strings"
 )
 
+const (
+	// ContainerMiseBaseDir 容器内预置的 Mise 基础环境只读目录
+	ContainerMiseBaseDir = "/opt/mise-base"
+
+	// ContainerDefaultMiseDataDir 容器内默认的 Mise 环境数据存储目录
+	ContainerDefaultMiseDataDir = "/app/envs/mise"
+
+	// CgroupV2MemoryStatPath Linux cgroup v2 内存账本绝对路径
+	CgroupV2MemoryStatPath = "/sys/fs/cgroup/memory.stat"
+
+	// CgroupV1MemoryStatPath Linux cgroup v1 内存账本绝对路径
+	CgroupV1MemoryStatPath = "/sys/fs/cgroup/memory/memory.stat"
+)
+
 var (
 	// ConfigPath 配置文件路径
 	ConfigPath string
@@ -21,6 +35,9 @@ var (
 
 	// ScriptsWorkDir 脚本工作目录
 	ScriptsWorkDir string
+
+	// LogsDir 系统与任务日志存储目录
+	LogsDir string
 )
 
 func init() {
@@ -32,8 +49,17 @@ func init() {
 	DataDir = filepath.Clean(filepath.Join(rootDir, "data"))
 	DefaultDBPath = filepath.Clean(filepath.Join(rootDir, "data", "baihu.db"))
 	WebDistDir = filepath.Clean(filepath.Join(rootDir, "web", "dist"))
+	LogsDir = filepath.Clean(filepath.Join(rootDir, "data", "logs"))
 	ScriptsWorkDir = ResolveScriptsDir(rootDir)
 	_ = os.Setenv("BH_SCRIPTS_DIR", ScriptsWorkDir)
+}
+
+// ResolveMiseDataDir 解析 Mise 数据存储目录（优先读取 MISE_DATA_DIR 环境变量，若无则基于容器默认路径兜底）
+func ResolveMiseDataDir() string {
+	if dir := os.Getenv(EnvKeyMiseDataDir); dir != "" {
+		return filepath.Clean(dir)
+	}
+	return ContainerDefaultMiseDataDir
 }
 
 // ResolveScriptsDir 解析脚本工作目录（优先读取 BH_SCRIPTS_DIR 环境变量，若无则基于 rootDir/data/scripts 兜底）

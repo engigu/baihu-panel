@@ -3,12 +3,17 @@ package memopt
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"time"
 
+	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/logger"
+	"github.com/engigu/baihu-panel/internal/utils"
 	"github.com/shirou/gopsutil/v3/process"
 )
 
@@ -142,12 +147,128 @@ func DropMiseCacheAsync(delays ...time.Duration) {
 		if delay > 0 {
 			time.Sleep(delay)
 		}
-		miseDataDir := os.Getenv("MISE_DATA_DIR")
-		if miseDataDir == "" {
-			miseDataDir = "/app/envs/mise"
-		}
-		_, _ = DropCache("/opt/mise-base", miseDataDir)
+		_, _ = DropCache(constant.ContainerMiseBaseDir, constant.ResolveMiseDataDir())
 	}()
+}
+
+var isTrimming atomic.Bool
+
+// getContainerTrimTargets 获取容器内需重点回收 Page Cache 的目标路径清单
+// 覆盖：Mise 运行时、任务脚本工作目录、系统与任务日志目录，以及用户自定义扩展目录
+func getContainerTrimTargets() []string {
+	targets := make([]string, 0, 8)
+
+	// 1. Mise 运行时基础只读目录与应用数据目录
+	targets = append(targets, constant.ContainerMiseBaseDir)
+	targets = append(targets, constant.ResolveMiseDataDir())
+
+	// 2. 任务脚本工作目录（大量定时任务代码与依赖）
+	if constant.ScriptsWorkDir != "" {
+		targets = append(targets, constant.ScriptsWorkDir)
+	}
+
+	// 3. 系统与任务执行日志目录（高频磁盘落盘产生 Page Cache）
+	if constant.LogsDir != "" {
+		targets = append(targets, constant.LogsDir)
+	}
+
+	// 4. 支持通过环境变量附加扩展目录（以逗号、分号或冒号分隔）
+	if extraDirs := os.Getenv(constant.EnvKeyCacheTrimDirs); extraDirs != "" {
+		for _, dir := range strings.FieldsFunc(extraDirs, func(r rune) bool {
+			return r == ',' || r == ';' || r == ':'
+		}) {
+			dir = strings.TrimSpace(dir)
+			if dir != "" {
+				targets = append(targets, dir)
+			}
+		}
+	}
+
+	// 去重并过滤出真实存在的路径，避免无效扫描
+	seen := make(map[string]bool)
+	validTargets := make([]string, 0, len(targets))
+	for _, p := range targets {
+		cleanPath := filepath.Clean(p)
+		if seen[cleanPath] {
+			continue
+		}
+		seen[cleanPath] = true
+		if _, err := os.Stat(cleanPath); err == nil {
+			validTargets = append(validTargets, cleanPath)
+		}
+	}
+
+	return validTargets
+}
+
+// TrimContainerCache 立即同步执行一次容器内 Page Cache 与 Go 运行时堆内存回收
+// 返回本次释放的文件总数量
+func TrimContainerCache() int {
+	if !utils.IsRunningInDocker() {
+		return 0
+	}
+
+	targets := getContainerTrimTargets()
+	if len(targets) == 0 {
+		return 0
+	}
+
+	// 1. 同步遍历高频目录，调用 posix_fadvise 卸载已读入内存的文件缓存
+	totalFiles, err := DropCache(targets...)
+	if err != nil {
+		logger.Debugf("[MemOpt] 释放容器文件缓存出现提示: %v", err)
+	}
+
+	// 2. 联动触发运行时堆内存收缩与物理页退还
+	Free()
+
+	return totalFiles
+}
+
+// AutoTrimContainerCache 智能检测并自适应释放容器内的 Page Cache
+// 规则：
+// 1. 仅在 Docker 容器环境中执行；
+// 2. 原子防重入保护：避免上一轮耗时较长时造成定时任务 IO 堆叠；
+// 3. 动态读取 cgroup 文件缓存占用，若超过水位线（默认 60MB，可通过 BH_CACHE_MAX_MB 配置）才触发释放；
+// 4. 低于水位线时静默跳过，无额外 CPU 或磁盘 IO 损耗；
+// 5. 触发释放时，同步遍历 Mise/脚本/日志等目录卸载 Page Cache，并联动归还 Go 堆内存给操作系统（无二次 goroutine）。
+func AutoTrimContainerCache() bool {
+	if !utils.IsRunningInDocker() {
+		return false
+	}
+
+	// 防重入原子控制
+	if !isTrimming.CompareAndSwap(false, true) {
+		logger.Debugf("[MemOpt] 上一次容器缓存回收任务仍在进行中，跳过本次触发")
+		return false
+	}
+	defer isTrimming.Store(false)
+
+	thresholdMB := constant.DefaultCacheMaxMB
+	if envVal := os.Getenv(constant.EnvKeyCacheMaxMB); envVal != "" {
+		if v, err := strconv.Atoi(envVal); err == nil && v > 0 {
+			thresholdMB = v
+		}
+	}
+	thresholdBytes := uint64(thresholdMB) * 1024 * 1024
+
+	cacheBytes, err := GetContainerFileCacheBytes()
+	if err == nil {
+		if cacheBytes < thresholdBytes {
+			// 未达到水位线，保持现状，不进行多余操作
+			return false
+		}
+		logger.Infof("[MemOpt] 容器 PageCache 达到智能水位线 (当前: %s, 阈值: %d MB)，启动自适应回收", FormatBytes(cacheBytes), thresholdMB)
+	} else {
+		// 未能精准读取 cgroup 时（如部分老旧宿主机或受限无权读取），直接按计划轻量执行
+		logger.Debugf("[MemOpt] 未能获取 cgroup 缓存指标 (%v)，按计划执行轻量回收", err)
+	}
+
+	// 同步执行目标目录回收与运行时内存退还
+	filesTrimmed := TrimContainerCache()
+	logger.Infof("[MemOpt] 容器自适应回收完成，清理了 %d 个文件的 Page Cache 并归还物理内存", filesTrimmed)
+
+	return true
 }
 
 /*

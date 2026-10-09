@@ -39,6 +39,21 @@ func New() *App {
 	// 启动系统级后台定时任务调度器
 	executor.InitSysCron()
 
+	// 注册容器 PageCache 智能自适应控存任务到系统定时器（仅在 Docker 容器生效，默认每 5 分钟智能巡检）
+	if utils.IsRunningInDocker() {
+		spec := os.Getenv(constant.EnvKeyCacheTrimSpec)
+		if spec == "" {
+			spec = constant.DefaultCacheTrimSpec
+		}
+		if _, err := executor.GetSysCron().AddJob(spec, func() {
+			memopt.AutoTrimContainerCache()
+		}); err != nil {
+			logger.Errorf("[System] 注册 PageCache 智能守护任务失败: %v", err)
+		} else {
+			logger.Infof("[System] 已注册 Docker 容器 PageCache 智能控存任务 (调度周期: %s)", spec)
+		}
+	}
+
 	// 启动静默期后台物理内存守护协程 (暂时保留注释)
 	// memopt.StartDaemon(30 * time.Minute)
 
