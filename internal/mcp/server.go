@@ -40,9 +40,7 @@ func ToolConcurrencyLimiter(limit int) server.ToolHandlerMiddleware {
 
 // NewBaihuMCPServer 创建并初始化白虎面板的 MCP 服务实例
 func NewBaihuMCPServer(deps *Deps) *server.MCPServer {
-	if deps == nil {
-		deps = InitDefaultDeps()
-	}
+	deps = deps.EnsureDefaults()
 
 	s := server.NewMCPServer(
 		"baihu-panel",
@@ -51,6 +49,7 @@ func NewBaihuMCPServer(deps *Deps) *server.MCPServer {
 		server.WithResourceCapabilities(true, true),
 		server.WithPromptCapabilities(true),
 		server.WithInstructions("白虎面板 (Baihu Panel) 是极致轻量、高性能的自动化定时任务调度平台。你可以通过本 MCP 服务查询/触发/编排任务、管理环境变量、查看实时执行日志以及读写本地脚本。"),
+		server.WithRecovery(),
 	)
 
 	// 挂载并发控制中间件，严格限制同时执行工具的协程数上限（默认为 4）

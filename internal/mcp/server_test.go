@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -806,5 +807,80 @@ func TestRepoAndNotifyLifecycleTools(t *testing.T) {
 		t.Fatalf("clean_task_logs failed: %v", err)
 	}
 }
+
+// 14. 针对 Issue #187 的防御性测试 (验证 Deps 缺失字段自动补齐与 FileService 空指针防御)
+func TestIssue187_NullPointerDereferenceFix(t *testing.T) {
+	tempDir := setupTestDB(t)
+	defer os.RemoveAll(tempDir)
+
+	scriptsDir := filepath.Join(tempDir, "scripts")
+	_ = os.MkdirAll(scriptsDir, 0755)
+
+	// 14.1 模拟 Issue #187 场景：上游构造 Deps 时漏传了 FileService, AppService, NotifyService
+	incompleteDeps := &Deps{
+		TaskService: tasks.NewTaskService(),
+		EnvService:  services.NewEnvService(),
+		FileWorkDir: scriptsDir,
+		// FileService, AppService, NotifyService 故意留空 (nil)
+	}
+
+	// 验证 NewBaihuMCPServer 能够自动感知并补全缺失的核心服务
+	s := NewBaihuMCPServer(incompleteDeps)
+	if incompleteDeps.FileService == nil {
+		t.Fatal("NewBaihuMCPServer 应自动补齐缺失的 FileService")
+	}
+	if incompleteDeps.AppService == nil {
+		t.Fatal("NewBaihuMCPServer 应自动补齐缺失的 AppService")
+	}
+	if incompleteDeps.NotifyService == nil {
+		t.Fatal("NewBaihuMCPServer 应自动补齐缺失的 NotifyService")
+	}
+
+	ctx := context.Background()
+
+	// 验证在补齐后调用 get_file_tree 正常执行而不报错/不崩溃
+	treeTool := s.GetTool("get_file_tree")
+	treeRes, err := treeTool.Handler(ctx, makeCallToolReq("get_file_tree", nil))
+	if err != nil || treeRes.IsError {
+		t.Fatalf("get_file_tree 执行失败: %v, res: %+v", err, treeRes)
+	}
+
+	// 14.2 模拟最极端的防御性场景：强制将 FileService 置为 nil，检验 handler 的空指针防御机制
+	nullDeps := &Deps{
+		FileService: nil,
+		FileWorkDir: scriptsDir,
+	}
+
+	// 测试 handleGetFileTree 判空保护
+	resTree, errTree := handleGetFileTree(ctx, nullDeps, makeCallToolReq("get_file_tree", nil))
+	if errTree != nil || resTree == nil || !resTree.IsError || !strings.Contains(fmt.Sprint(resTree.Content[0]), "FileService 未初始化") {
+		t.Fatalf("handleGetFileTree 未能正确返回空指针防御错误: %+v, err: %v", resTree, errTree)
+	}
+
+	// 测试 handleReadScript 判空保护
+	resRead, errRead := handleReadScript(ctx, nullDeps, makeCallToolReq("read_script", map[string]any{"path": "test.js"}))
+	if errRead != nil || resRead == nil || !resRead.IsError || !strings.Contains(fmt.Sprint(resRead.Content[0]), "FileService 未初始化") {
+		t.Fatalf("handleReadScript 未能正确返回空指针防御错误: %+v, err: %v", resRead, errRead)
+	}
+
+	// 测试 handleSaveScript 判空保护
+	resSave, errSave := handleSaveScript(ctx, nullDeps, makeCallToolReq("save_script", map[string]any{"path": "test.js", "content": "hello"}))
+	if errSave != nil || resSave == nil || !resSave.IsError || !strings.Contains(fmt.Sprint(resSave.Content[0]), "FileService 未初始化") {
+		t.Fatalf("handleSaveScript 未能正确返回空指针防御错误: %+v, err: %v", resSave, errSave)
+	}
+
+	// 测试 handleSearchScripts 判空保护
+	resSearch, errSearch := handleSearchScripts(ctx, nullDeps, makeCallToolReq("search_scripts", map[string]any{"keyword": "test"}))
+	if errSearch != nil || resSearch == nil || !resSearch.IsError || !strings.Contains(fmt.Sprint(resSearch.Content[0]), "FileService 未初始化") {
+		t.Fatalf("handleSearchScripts 未能正确返回空指针防御错误: %+v, err: %v", resSearch, errSearch)
+	}
+
+	// 测试 handleDeleteScript 判空保护
+	resDel, errDel := handleDeleteScript(ctx, nullDeps, makeCallToolReq("delete_script", map[string]any{"path": "test.js"}))
+	if errDel != nil || resDel == nil || !resDel.IsError || !strings.Contains(fmt.Sprint(resDel.Content[0]), "FileService 未初始化") {
+		t.Fatalf("handleDeleteScript 未能正确返回空指针防御错误: %+v, err: %v", resDel, errDel)
+	}
+}
+
 
 

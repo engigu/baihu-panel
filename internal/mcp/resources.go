@@ -100,6 +100,9 @@ func registerResources(s *server.MCPServer, deps *Deps) {
 		mcp.WithTemplateDescription("读取指定相对路径的脚本文件内容"),
 	), func(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		relPath := strings.TrimPrefix(req.Params.URI, "file://")
+		if deps == nil || deps.FileService == nil {
+			return nil, fmt.Errorf("FileService 未初始化")
+		}
 		fileVO, err := deps.FileService.GetFileContent(relPath)
 		if err != nil {
 			return nil, err

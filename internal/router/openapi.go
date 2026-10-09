@@ -5,6 +5,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/mcp"
 	"github.com/engigu/baihu-panel/internal/middleware"
 	"github.com/engigu/baihu-panel/internal/services"
+	"github.com/engigu/baihu-panel/internal/services/app"
 	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/gin-gonic/gin"
 )
@@ -40,6 +41,9 @@ func registerOpenAPIMCPRoutes(g *gin.RouterGroup) {
 		ExecutorService: executorService,
 		TaskLogService:  taskLogService,
 		EnvService:      services.NewEnvService(),
+		FileService:     services.NewFileService(constant.ScriptsWorkDir),
+		AppService:      app.DefaultAppService,
+		NotifyService:   services.NewNotificationService(),
 		FileWorkDir:     constant.ScriptsWorkDir,
 	}
 	mcp.RegisterOpenAPIMCPRoutes(g, deps)

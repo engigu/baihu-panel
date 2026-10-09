@@ -29,6 +29,9 @@ func registerGetFileTreeTool(s *server.MCPServer, deps *Deps) {
 }
 
 func handleGetFileTree(_ context.Context, deps *Deps, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if deps == nil || deps.FileService == nil {
+		return mcp.NewToolResultError("FileService 未初始化"), nil
+	}
 	subPath := req.GetString("path", "")
 	nodes, err := deps.FileService.GetFileTree(subPath)
 	if err != nil {
@@ -50,6 +53,9 @@ func registerReadScriptTool(s *server.MCPServer, deps *Deps) {
 }
 
 func handleReadScript(_ context.Context, deps *Deps, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if deps == nil || deps.FileService == nil {
+		return mcp.NewToolResultError("FileService 未初始化"), nil
+	}
 	filePath, err := req.RequireString("path")
 	if err != nil {
 		return mcp.NewToolResultError("缺少必填参数 path"), nil
@@ -78,6 +84,9 @@ func registerSaveScriptTool(s *server.MCPServer, deps *Deps) {
 }
 
 func handleSaveScript(_ context.Context, deps *Deps, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if deps == nil || deps.FileService == nil {
+		return mcp.NewToolResultError("FileService 未初始化"), nil
+	}
 	filePath, err := req.RequireString("path")
 	if err != nil {
 		return mcp.NewToolResultError("缺少必填参数 path"), nil
@@ -106,6 +115,9 @@ func registerSearchScriptsTool(s *server.MCPServer, deps *Deps) {
 }
 
 func handleSearchScripts(_ context.Context, deps *Deps, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if deps == nil || deps.FileService == nil {
+		return mcp.NewToolResultError("FileService 未初始化"), nil
+	}
 	keyword, err := req.RequireString("keyword")
 	if err != nil {
 		return mcp.NewToolResultError("缺少必填参数 keyword"), nil
@@ -137,6 +149,9 @@ func registerDeleteScriptTool(s *server.MCPServer, deps *Deps) {
 }
 
 func handleDeleteScript(_ context.Context, deps *Deps, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if deps == nil || deps.FileService == nil {
+		return mcp.NewToolResultError("FileService 未初始化"), nil
+	}
 	filePath, err := req.RequireString("path")
 	if err != nil {
 		return mcp.NewToolResultError("缺少必填参数 path"), nil

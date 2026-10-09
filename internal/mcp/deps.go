@@ -1,6 +1,8 @@
 package mcp
 
 import (
+	"cmp"
+
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/services/app"
@@ -43,3 +45,27 @@ func InitDefaultDeps() *Deps {
 		FileWorkDir:     constant.ScriptsWorkDir,
 	}
 }
+
+// lazyOr 当 val 为零值时才调用 factory，确保严格惰性求值与零额外分配副作用
+func lazyOr[T comparable](val T, factory func() T) T {
+	var zero T
+	if val != zero {
+		return val
+	}
+	return factory()
+}
+
+// EnsureDefaults 补全缺失依赖（基于 cmp.Or 与 lazyOr 严格惰性初始化）
+func (d *Deps) EnsureDefaults() *Deps {
+	if d == nil {
+		return InitDefaultDeps()
+	}
+	d.FileWorkDir = cmp.Or(d.FileWorkDir, constant.ScriptsWorkDir)
+	d.AppService = cmp.Or(d.AppService, app.DefaultAppService)
+	d.FileService = lazyOr(d.FileService, func() *services.FileService { return services.NewFileService(d.FileWorkDir) })
+	d.NotifyService = lazyOr(d.NotifyService, services.NewNotificationService)
+	d.TaskService = lazyOr(d.TaskService, tasks.NewTaskService)
+	d.EnvService = lazyOr(d.EnvService, services.NewEnvService)
+	return d
+}
+
