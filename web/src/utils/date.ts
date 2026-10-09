@@ -53,14 +53,26 @@ export function formatDateTime(date: Date | string | number | undefined, dateFor
     }
 }
 
+export interface UptimePart {
+    value: number
+    unit: string
+}
+
+export interface FormattedUptime {
+    compact: string
+    full: string
+    parts: UptimePart[]
+}
+
 /**
  * 格式化运行时长（前端自主计算，传入秒数纯数值）
- * compact: 紧凑自适应显示（高阶 2 级单位，如 15天8小时、2小时15分、3分12秒，彻底避免小屏被 truncate 截断）
- * full: 完整精确时长（如 15天8小时43分钟21秒，用于 title 悬停查看）
+ * compact: 紧凑自适应字符串
+ * full: 完整精确时长（用于 title 悬停查看）
+ * parts: 结构化数字与单位拆分列表（用于与数值卡片保持一致的“大数字 + 小灰色单位”排印）
  */
-export function formatUptime(uptimeSeconds: number | undefined | null): { compact: string; full: string } {
+export function formatUptime(uptimeSeconds: number | undefined | null): FormattedUptime {
     if (uptimeSeconds === undefined || uptimeSeconds === null || isNaN(uptimeSeconds) || uptimeSeconds < 0) {
-        return { compact: '-', full: '-' }
+        return { compact: '-', full: '-', parts: [] }
     }
 
     const totalSec = Math.floor(uptimeSeconds)
@@ -71,19 +83,40 @@ export function formatUptime(uptimeSeconds: number | undefined | null): { compac
 
     let full = ''
     let compact = ''
+    const parts: UptimePart[] = []
 
     if (d > 0) {
         full = `${d}天${h}小时${m}分钟${s}秒`
-        compact = h > 0 ? `${d}天${h}小时` : `${d}天`
+        parts.push({ value: d, unit: '天' })
+        if (h > 0) {
+            parts.push({ value: h, unit: '小时' })
+            compact = `${d}天${h}小时`
+        } else {
+            compact = `${d}天`
+        }
     } else if (h > 0) {
         full = `${h}小时${m}分钟${s}秒`
-        compact = m > 0 ? `${h}小时${m}分` : `${h}小时`
+        parts.push({ value: h, unit: '小时' })
+        if (m > 0) {
+            parts.push({ value: m, unit: '分' })
+            compact = `${h}小时${m}分`
+        } else {
+            compact = `${h}小时`
+        }
     } else if (m > 0) {
         full = `${m}分钟${s}秒`
-        compact = `${m}分${s}秒`
+        parts.push({ value: m, unit: '分' })
+        if (s > 0) {
+            parts.push({ value: s, unit: '秒' })
+            compact = `${m}分${s}秒`
+        } else {
+            compact = `${m}分钟`
+        }
     } else {
         full = `${s}秒`
         compact = full
+        parts.push({ value: s, unit: '秒' })
     }
-    return { compact, full }
+
+    return { compact, full, parts }
 }

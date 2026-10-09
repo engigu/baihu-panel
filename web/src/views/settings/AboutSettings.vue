@@ -69,14 +69,7 @@ onMounted(loadAbout)
         <CardHeader class="pb-3 pt-0 px-5 space-y-2">
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-2 flex-wrap min-w-0">
-              <CardTitle class="text-base sm:text-lg font-bold">白虎面板</CardTitle>
-              <span class="text-xs text-muted-foreground">Baihu Panel</span>
-              <Badge
-                variant="secondary"
-                class="font-mono text-[10px] sm:text-[11px] px-1.5 py-0 bg-primary/10 text-primary border-primary/20 shrink-0"
-              >
-                {{ aboutInfo?.version || 'dev' }}
-              </Badge>
+              <CardTitle class="text-base sm:text-lg font-bold">Baihu Panel</CardTitle>
             </div>
 
             <a
@@ -192,17 +185,17 @@ onMounted(loadAbout)
 
         <CardContent class="flex-1 flex flex-col justify-between px-5 pb-0 pt-0">
           <div class="space-y-2.5">
-            <!-- 2x2 规整指标网格（采用 Inter 专属数字排印与精致微卡片样式） -->
+            <!-- 2x2 规整指标网格（严格等高且排印统一） -->
             <div class="grid grid-cols-2 gap-2.5">
-              <!-- 内存开销 -->
-              <div class="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-1 group">
-                <div class="text-xs text-muted-foreground flex items-center justify-between font-medium">
+              <!-- 内存占用 -->
+              <div class="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-1 group min-h-[102px]">
+                <div class="h-6 flex items-center justify-between text-xs text-muted-foreground font-medium">
                   <span>内存占用</span>
                   <div class="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center text-muted-foreground/70 group-hover:text-primary transition-colors">
                     <Cpu class="w-3.5 h-3.5" />
                   </div>
                 </div>
-                <div class="flex items-baseline gap-1 my-0.5">
+                <div class="h-7 flex items-baseline gap-1 my-0.5 truncate">
                   <span class="text-lg sm:text-xl font-bold tracking-tight text-foreground font-inter">
                     {{ parsedMemory.num }}
                   </span>
@@ -210,56 +203,73 @@ onMounted(loadAbout)
                     {{ parsedMemory.unit }}
                   </span>
                 </div>
-                <span class="text-[10px] text-muted-foreground">常驻轻量内存</span>
+                <div class="h-4 flex items-center text-[10px] text-muted-foreground truncate">
+                  <span>常驻轻量内存</span>
+                </div>
               </div>
 
               <!-- 活跃协程 -->
-              <div class="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-1 group">
-                <div class="text-xs text-muted-foreground flex items-center justify-between font-medium">
+              <div class="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-1 group min-h-[102px]">
+                <div class="h-6 flex items-center justify-between text-xs text-muted-foreground font-medium">
                   <span>活跃协程</span>
                   <div class="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center text-muted-foreground/70 group-hover:text-primary transition-colors">
                     <Layers class="w-3.5 h-3.5" />
                   </div>
                 </div>
-                <div class="flex items-baseline gap-1 my-0.5">
+                <div class="h-7 flex items-baseline gap-1 my-0.5 truncate">
                   <span class="text-lg sm:text-xl font-bold tracking-tight text-foreground font-inter">
                     {{ aboutInfo?.goroutines ?? '-' }}
                   </span>
                   <span class="text-xs font-medium text-muted-foreground/75">个</span>
                 </div>
-                <span class="text-[10px] text-muted-foreground">高效轻量并发</span>
+                <div class="h-4 flex items-center text-[10px] text-muted-foreground truncate">
+                  <span>高效轻量并发</span>
+                </div>
               </div>
 
               <!-- 连续运行时长 -->
-              <div class="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-1 group">
-                <div class="text-xs text-muted-foreground flex items-center justify-between font-medium">
+              <div class="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-1 group min-h-[102px]">
+                <div class="h-6 flex items-center justify-between text-xs text-muted-foreground font-medium">
                   <span>运行时间</span>
                   <div class="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center text-muted-foreground/70 group-hover:text-primary transition-colors">
                     <Clock class="w-3.5 h-3.5" />
                   </div>
                 </div>
-                <div
-                  class="my-0.5 text-sm sm:text-[15px] font-bold tracking-tight text-foreground truncate font-inter"
-                  :title="uptimeInfo.full"
-                >
-                  {{ uptimeInfo.compact }}
+                <div class="h-7 flex items-baseline gap-1 my-0.5 truncate" :title="uptimeInfo.full">
+                  <template v-if="uptimeInfo.parts && uptimeInfo.parts.length">
+                    <div v-for="(p, idx) in uptimeInfo.parts" :key="idx" class="flex items-baseline gap-0.5">
+                      <span class="text-lg sm:text-xl font-bold tracking-tight text-foreground font-inter">
+                        {{ p.value }}
+                      </span>
+                      <span class="text-xs font-semibold text-muted-foreground/75 font-inter">
+                        {{ p.unit }}
+                      </span>
+                    </div>
+                  </template>
+                  <span v-else class="text-lg sm:text-xl font-bold tracking-tight text-foreground font-inter">-</span>
                 </div>
-                <span class="text-[10px] text-muted-foreground">持续稳定守护</span>
+                <div class="h-4 flex items-center text-[10px] text-muted-foreground truncate">
+                  <span>持续稳定守护</span>
+                </div>
               </div>
 
               <!-- 当前版本 / 远端对比 -->
-              <div class="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-1 group">
-                <div class="text-xs text-muted-foreground flex items-center justify-between font-medium">
+              <div class="p-3 rounded-xl border border-border/70 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-1 group min-h-[102px]">
+                <div class="h-6 flex items-center justify-between text-xs text-muted-foreground font-medium">
                   <span>当前版本</span>
-                  <span class="relative flex h-2 w-2">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  <div class="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center transition-colors">
+                    <span class="relative flex h-2 w-2">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                  </div>
+                </div>
+                <div class="h-7 flex items-baseline gap-1 my-0.5 truncate" :title="aboutInfo?.version || ''">
+                  <span class="text-lg sm:text-xl font-bold tracking-tight text-foreground font-inter truncate">
+                    {{ aboutInfo?.version || 'dev' }}
                   </span>
                 </div>
-                <div class="my-0.5 text-[15px] font-bold tracking-tight text-foreground truncate font-inter" :title="aboutInfo?.version || ''">
-                  {{ aboutInfo?.version || 'dev' }}
-                </div>
-                <div class="text-[10px] truncate">
+                <div class="h-4 flex items-center text-[10px] truncate">
                   <span
                     v-if="aboutInfo?.remote_version && aboutInfo.remote_version !== aboutInfo.version"
                     class="text-primary font-medium"
