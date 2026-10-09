@@ -845,7 +845,7 @@ export interface AboutInfo {
   build_time: string
   mem_usage: string
   goroutines: number
-  uptime: string
+  uptime: number
   task_count: number
   log_count: number
   env_count: number

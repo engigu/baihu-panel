@@ -377,8 +377,8 @@ func (sc *SettingsController) GetAbout(c *gin.Context) {
 		}
 	}
 
-	// 运行时间
-	uptime, uptimeFull := formatDuration(time.Since(constant.StartTime))
+	// 运行时间（以秒为单位纯数值返回，格式化由前端统一处理）
+	uptimeSeconds := int64(time.Since(constant.StartTime).Seconds())
 
 	// 获取远程最新版本
 	remoteVersion := ""
@@ -403,8 +403,7 @@ func (sc *SettingsController) GetAbout(c *gin.Context) {
 		"build_time":     constant.BuildTime,
 		"mem_usage":      memUsage,
 		"goroutines":     runtime.NumGoroutine(),
-		"uptime":         uptime,
-		"uptime_full":    uptimeFull,
+		"uptime":         uptimeSeconds,
 		"task_count":     taskCount,
 		"log_count":      logCount,
 		"env_count":      envCount,
@@ -433,37 +432,6 @@ func formatBytes(bytes uint64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-}
-
-// formatDuration 格式化时间间隔（compact 保留最高 2 级单位紧凑展示，full 保留精确秒数）
-func formatDuration(d time.Duration) (compact string, full string) {
-	days := int(d.Hours()) / 24
-	hours := int(d.Hours()) % 24
-	minutes := int(d.Minutes()) % 60
-	seconds := int(d.Seconds()) % 60
-
-	if days > 0 {
-		full = fmt.Sprintf("%d天%d小时%d分钟%d秒", days, hours, minutes, seconds)
-		if hours > 0 {
-			compact = fmt.Sprintf("%d天%d小时", days, hours)
-		} else {
-			compact = fmt.Sprintf("%d天", days)
-		}
-	} else if hours > 0 {
-		full = fmt.Sprintf("%d小时%d分钟%d秒", hours, minutes, seconds)
-		if minutes > 0 {
-			compact = fmt.Sprintf("%d小时%d分", hours, minutes)
-		} else {
-			compact = fmt.Sprintf("%d小时", hours)
-		}
-	} else if minutes > 0 {
-		full = fmt.Sprintf("%d分钟%d秒", minutes, seconds)
-		compact = fmt.Sprintf("%d分%d秒", minutes, seconds)
-	} else {
-		full = fmt.Sprintf("%d秒", seconds)
-		compact = full
-	}
-	return compact, full
 }
 
 // GetLoginLogs 获取登录日志

@@ -17,7 +17,7 @@ import {
   ShieldCheck
 } from 'lucide-vue-next'
 import { api, type AboutInfo } from '@/api'
-import { formatDateTime } from '@/utils/date'
+import { formatDateTime, formatUptime } from '@/utils/date'
 
 const aboutInfo = ref<AboutInfo | null>(null)
 
@@ -46,19 +46,9 @@ const parsedMemory = computed(() => {
   return { num: val, unit: '' }
 })
 
-// 紧凑运行时长展示 (最高保留 2 级单位，避免小屏被 truncate 截断)
-const displayUptime = computed(() => {
-  const raw = aboutInfo.value?.uptime
-  if (!raw) return '-'
-  const match = raw.match(/^(?:(\d+)天)?(?:(\d+)小时)?(?:(\d+)分钟?)?(?:(\d+)秒)?$/)
-  if (match) {
-    const [, d, h, m, s] = match
-    if (d) return h ? `${d}天${h}小时` : `${d}天`
-    if (h) return m ? `${h}小时${m}分` : `${h}小时`
-    if (m) return s ? `${m}分${s}秒` : `${m}分钟`
-    if (s) return `${s}秒`
-  }
-  return raw
+// 由前端独立负责格式化运行时长（紧凑格式 compact 与完整悬停格式 full）
+const uptimeInfo = computed(() => {
+  return formatUptime(aboutInfo.value?.uptime)
 })
 
 async function loadAbout() {
@@ -213,7 +203,7 @@ onMounted(loadAbout)
                   </div>
                 </div>
                 <div class="flex items-baseline gap-1 my-0.5">
-                  <span class="text-2xl font-bold tracking-tight text-foreground font-inter">
+                  <span class="text-lg sm:text-xl font-bold tracking-tight text-foreground font-inter">
                     {{ parsedMemory.num }}
                   </span>
                   <span class="text-xs font-semibold text-muted-foreground/75 font-inter">
@@ -232,7 +222,7 @@ onMounted(loadAbout)
                   </div>
                 </div>
                 <div class="flex items-baseline gap-1 my-0.5">
-                  <span class="text-2xl font-bold tracking-tight text-foreground font-inter">
+                  <span class="text-lg sm:text-xl font-bold tracking-tight text-foreground font-inter">
                     {{ aboutInfo?.goroutines ?? '-' }}
                   </span>
                   <span class="text-xs font-medium text-muted-foreground/75">个</span>
@@ -250,9 +240,9 @@ onMounted(loadAbout)
                 </div>
                 <div
                   class="my-0.5 text-sm sm:text-[15px] font-bold tracking-tight text-foreground truncate font-inter"
-                  :title="(aboutInfo as any)?.uptime_full || aboutInfo?.uptime || ''"
+                  :title="uptimeInfo.full"
                 >
-                  {{ displayUptime }}
+                  {{ uptimeInfo.compact }}
                 </div>
                 <span class="text-[10px] text-muted-foreground">持续稳定守护</span>
               </div>
