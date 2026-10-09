@@ -1,38 +1,32 @@
-# 更新日志 (v1.5.0)
+# 更新日志 (v1.5.1)
 
-### 2026.10.07 - 原生内置 Model Context Protocol (MCP) 服务、Server酱推送通道、向导式通知渠道网格、文件树懒加载与全局检索、Agent 实时同步与 Windows 二进制支持
+### 2026.10.09 - Windows托盘无黑窗静默运行、容器内存口径对齐Docker Stats、OpenAPI MCP服务健壮性加固
 
 🎉 **新增功能与体验升级**
-* **原生内置 Model Context Protocol (MCP) 协议服务支持 (Major Feature & AI)**：
-  - **全套原子运维工具集**：原生集成 24 个全生命周期原子运维工具，包含定时任务管理（增删改查、手动执行、超时强制终止）、声明式应用与官方应用商店全流程管控（检索、安装、切换运行场景、级联卸载）、环境变量安全脱敏读写、脚本沙箱文件管理、执行历史日志与空间清理、Git 仓库绑定与即时拉取、多渠道消息通知连通性自检与自定义告警推送（[#182](https://github.com/engigu/baihu-panel/pull/182)）；
-  - **7 组上下文资源与智能诊断 Prompt 模板**：提供系统运行状态、通知渠道、已装应用、Git仓库、任务模型、执行日志及脚本源码的 URI 资源引入；内置任务失败智能归因排查 (`diagnose_task_failure`) 与自然语言生成定时任务 (`create_scheduled_task`) Prompt 模板；
-  - **双传输协议支持**：支持远程网络传输（SSE/HTTP）与 CLI Stdio 子进程本地管道传输，自动隔离控制台输出保障标准 JSON-RPC 纯净通信；
-  - **严格并发与协程控制**：内置 `ToolConcurrencyLimiter(4)` 中间件限制并发调用，排队超时自动熔断；限制活跃 SSE 连接数（$\le 3$），单客户端仅占用 2 协程，零任务常驻协程；
-  - **可视化设置与指南**：站点设置中心新增“AI 客户端连接 (MCP)”指引面板，支持一键复制 SSE 链接与客户端配置 JSON，并提供官方文档。
-* **ServerChan（Server酱）消息推送通道支持 (Feature & Notify)**：
-  - 消息通知中心原生集成 ServerChan（Server酱·Turbo版）通知渠道，支持 SendKey 配置与连通性即时自检（[#183](https://github.com/engigu/baihu-panel/pull/183)）。
-* **通知渠道添加流程交互重构 (UI & Refactor)**：
-  - 将通知渠道选择升级为现代向导式卡片网格，醒目展示品牌图标、定位用途与特性支持；精简配置项并优化表单分组，大幅降低配置门槛。
-* **脚本文件管理全流程重构 (Files & Editor & OpenAPI)**：
-  - **文件树按需懒加载 (Lazy Load)**：重构文件树加载机制为按需懒加载，大幅提升海量脚本与深层嵌套目录下的浏览性能与首屏渲染速度；
-  - **全盘模糊检索**：支持脚本目录树全局文件名与相对路径模糊搜索，前端设置中心新增搜索结果数量上限调节；
-  - **OpenAPI 深度集成**：脚本文件树遍历、源码读取、沙箱写入与安全删除能力全量开放接入 OpenAPI 接口。
-* **集群 Agent 深度演进与 Windows 客户端支持 (Agent & Windows)**：
-  - **实时增量同步体系**：新增 Agent 脚本多目录精准实时变动监听与增量同步机制，支持防抖事件合并与监听休眠机制，避免无效 IO；
-  - **物理内存深度优化**：优化 Agent 进程驻留内存管理，高频修改后主动触发物理内存回收与系统句柄释放；
-  - **Windows Agent 正式发布**：CI/CD 产物流水线正式集成 Windows 二进制 Agent 打包；重构下载弹窗为全平台分类标签，提供一键复制的完整初始化命令集。
-
-✨ **问题修复与细节打磨**
-* **日志详情终端自适应排版修复 (Web & Fix)**：
-  - 修复任务执行日志详情弹窗/侧边栏展开瞬间列宽未稳定导致的 5 字窄折行与右侧留白问题；新增 `fitAndRefresh` 列宽动态监测与多阶段尺寸校准，列宽变化时自动按真实全宽重新平铺渲染；
-  - 优化日志 SSE 瞬时并发落库时的防抖查库与系统提示回车换行格式。
-* **界面细节与小屏响应式排版优化 (Style & UI)**：
-  - 优化“关于”页面在移动端小屏设备下的卡片网格排版与文本对齐；
-  - 统一站点设置中心小屏设备下的按钮间距与表单交互风格。
-* **安全依赖升级与 Dependabot 漏洞清零 (Security)**：
-  - 升级 `vue` 至 `3.5.43`，修复 `@vue/server-renderer` XSS 漏洞；
-  - 锁定升级 `source-map-js`（1.2.2）、`brace-expansion`（5.0.12）、`fast-uri`（3.1.8）、`dompurify`（3.4.16）；
-  - 修正 `nanoid` 为 CommonJS 兼容版本 `3.3.20`，彻底消除 7 项安全漏洞告警。
+* **Windows 系统托盘无黑窗静默运行与更新检测优化 (Tray & Windows & Perf)**：
+  - **全链路无黑窗静默执行**：封装 `silentCmd` 底层命令执行工具，统一注入 `HideWindow: true` 与 `CREATE_NO_WINDOW (0x08000000)` 标志位；彻底消除 Windows 系统托盘启动、后台定时检查更新 (`baihu.exe version`)、服务重启与停止 (`taskkill`)、自动升级批处理脚本触发时弹出的黑控制台/黑屏闪烁问题；
+  - **版本号缓存优化**：引入 `sync.Once` 本地版本号单例缓存机制，避免后台 2 小时定时器或右键菜单重复唤起外部进程获取版本。
+* **容器内存优化与 Docker Stats 官方相减算法对齐 (MemOpt & Docker & Perf)**：
+  - **Docker Stats 真实占用口径对齐**：引入 Docker CLI 官方标准的相减计算规则 `docker_stats_used = total_usage - inactive_file`，彻底解决控制台日志所报 Page Cache 与宿主机 `docker stats` 显示严重对不上的口径错位问题；
+  - **cgroup v1/v2 双架构真实账本解析**：结构化提取 `memory.current` / `memory.usage_in_bytes`、`memory.max` / `memory.limit_in_bytes` 与 `memory.stat` 完整账本；
+  - **自适应控存巡检日志重构**：容器自适应巡检日志透明并列输出 Docker 真实物理占用、内存上限使用率及 Page Cache 缓存回收效果；
+  - **安全文件类型断言**：增加 `IsRegular` 普通文件类型断言，遍历缓存清理时安全跳过特殊设备、管道及 Unix 套接字文件，杜绝异常 IO；
+  - **服务启动时序调优**：收拢 Mise 环境扫描读盘缓存的首次回收至 Web 服务对外监听之前；Docker 启动脚本新增 `dropcache` 主动卸载镜像启动初期的读盘缓存；
+  - **架构深度收敛**：移除 `utils/runtime` 空壳层，底层内存管理与优化模块彻底收敛统一至 `internal/memopt`。
+* **OpenAPI 与 MCP 协议服务健壮性加固 (MCP & OpenAPI & Fix)**：
+  - **依赖注入空指针修复**：修复在 OpenAPI 模式下调用 MCP SSE 路由时，因未完整挂载 `FileService`、`AppService`、`NotifyService` 引发的 nil 指针 Panic 缺陷（[#187](https://github.com/engigu/baihu-panel/issues/187)）；
+  - **自动兜底补全与全局恢复**：引入基于 `cmp.Or` 与惰性初始化的 `EnsureDefaults()` 依赖补全兜底机制；挂载 `server.WithRecovery()` 全局恢复中间件，保障 MCP 服务的极致高可用与容错。
+* **DevOps 现代紧凑风格任务耗时与运行时长优化 (Task & Settings & Style)**：
+  - **任务耗时 DevOps 紧凑化**：全链路将定时任务执行耗时重构为现代化紧凑格式（如 `1m 23s`、`450ms`），直观清晰；
+  - **服务运行时长前端统一格式化**：关于页面后端仅返回服务运行秒数数值，由前端统一实现紧凑/完整时长自适应排版及悬停 Tooltip 提示，并移除冗余版本标签。
+* **声明式应用 YAML 清单预览、复制与导出 (AppStore & Tasks & UI)**：
+  - **应用市场清单查看**：应用市场详情弹窗支持直接预览应用标准化 `app.yaml` 清单，提供一键复制与下载能力；
+  - **配置导出统一复用**：定时任务列表“导出应用配置”弹窗全面复用应用市场专业 YAML 代码高亮预览组件。
+* **系统调度与连接池自适应缩容 (Goroutine & DB & Perf)**：
+  - **后台清理任务统一收拢**：将系统定期垃圾回收、日志归档与空闲资源清理任务收拢至统一的 `SysCron` 调度架构；
+  - **数据库连接池空闲缩容**：根据系统空闲周期动态缩容数据库空闲连接，降低低峰期系统句柄与常驻内存开销。
+* **加速源与镜像矩阵统一 (Mirrors & Network)**：
+  - 前后端统一封装加速源与镜像矩阵，首选 `gh-proxy` 并标准化浏览器 User-Agent 请求头。
 
 ---
 
@@ -87,7 +81,7 @@ chmod +x baihu-linux-amd64
 
 * **方式一：使用 GUI 安装包安装（推荐）**
 
-  直接运行附件中的安装程序 `BaihuPanel-Setup-v1.5.0-windows-amd64.exe` 完成安装，程序将自动完成桌面快捷方式创建、开机自启配置与 `127.0.0.1 baihu.local` 域名绑定。安装完成后通过桌面图标或任务栏右下角托盘图标即可直接打开 `http://baihu.local:38052`。
+  直接运行附件中的安装程序 `BaihuPanel-Setup-v1.5.1-windows-amd64.exe` 完成安装，程序将自动完成桌面快捷方式创建、开机自启配置与 `127.0.0.1 baihu.local` 域名绑定。安装完成后通过桌面图标或任务栏右下角托盘图标即可直接打开 `http://baihu.local:38052`。
 
 * **方式二：二进制单文件运行（免安装/便携版）**
 

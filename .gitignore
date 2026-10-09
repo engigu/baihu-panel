@@ -68,4 +68,5 @@ builtin/**/__pycache__/
 builtin/**/*.pyc
 
 .agents/
+scratch/
 
