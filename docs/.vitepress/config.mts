@@ -12,6 +12,10 @@ export default defineConfig({
     ],
     themeConfig: {
         logo: '/logo.svg',
+        outline: {
+            level: 2,
+            label: '版本时间'
+        },
         nav: [
             { text: '快速开始', link: '/guide/introduction' },
             { text: '部署指南', link: '/guide/deployment' },
