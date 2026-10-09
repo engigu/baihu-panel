@@ -16,8 +16,20 @@ const (
 	// CgroupV2MemoryStatPath Linux cgroup v2 内存账本绝对路径
 	CgroupV2MemoryStatPath = "/sys/fs/cgroup/memory.stat"
 
+	// CgroupV2MemoryCurrentPath Linux cgroup v2 当前物理内存占用绝对路径
+	CgroupV2MemoryCurrentPath = "/sys/fs/cgroup/memory.current"
+
+	// CgroupV2MemoryMaxPath Linux cgroup v2 内存上限绝对路径
+	CgroupV2MemoryMaxPath = "/sys/fs/cgroup/memory.max"
+
 	// CgroupV1MemoryStatPath Linux cgroup v1 内存账本绝对路径
 	CgroupV1MemoryStatPath = "/sys/fs/cgroup/memory/memory.stat"
+
+	// CgroupV1MemoryUsagePath Linux cgroup v1 当前物理内存占用绝对路径
+	CgroupV1MemoryUsagePath = "/sys/fs/cgroup/memory/memory.usage_in_bytes"
+
+	// CgroupV1MemoryLimitPath Linux cgroup v1 内存上限绝对路径
+	CgroupV1MemoryLimitPath = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
 )
 
 var (

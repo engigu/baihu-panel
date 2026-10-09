@@ -256,19 +256,30 @@ func AutoTrimContainerCache() bool {
 	}
 	thresholdBytes := uint64(thresholdMB) * 1024 * 1024
 
-	cacheBytes, err := GetContainerFileCacheBytes()
+	stat, err := GetContainerMemoryStat()
 	if err != nil {
 		// 未能精准读取 cgroup 时（如部分老旧宿主机或受限无权读取），直接按 debug 记录并跳过，避免盲目频繁报警
-		logger.Debugf("[MemOpt] 未能获取 cgroup 缓存指标 (%v)，跳过本次自适应回收", err)
+		logger.Debugf("[MemOpt] 未能获取 cgroup 内存指标 (%v)，跳过本次自适应回收", err)
 		return false
 	}
 
-	if cacheBytes < thresholdBytes {
+	if stat.InactiveFile < thresholdBytes {
 		// 未达到水位线，保持现状，不进行多余操作
 		return false
 	}
 
-	logger.Infof("[MemOpt] 容器 PageCache 达到智能水位线 (当前: %s, 阈值: %d MB)，启动自适应回收", FormatBytes(cacheBytes), thresholdMB)
+	// 格式化输出容器内存状况，让 Docker Stats 真实占用与 PageCache 缓存清晰透明对齐
+	usedStr := FormatBytes(stat.DockerUsedBytes)
+	cacheStr := FormatBytes(stat.InactiveFile)
+	if stat.LimitBytes > 0 {
+		limitStr := FormatBytes(stat.LimitBytes)
+		pct := float64(stat.DockerUsedBytes) / float64(stat.LimitBytes) * 100
+		logger.Infof("[MemOpt] 容器 PageCache 达到水位线 (当前缓存: %s, 阈值: %d MB, Docker真实占用: %s / %s [%.1f%%])，启动自适应回收",
+			cacheStr, thresholdMB, usedStr, limitStr, pct)
+	} else {
+		logger.Infof("[MemOpt] 容器 PageCache 达到水位线 (当前缓存: %s, 阈值: %d MB, Docker真实占用: %s)，启动自适应回收",
+			cacheStr, thresholdMB, usedStr)
+	}
 
 	// 同步执行目标目录回收与运行时内存退还
 	filesTrimmed := TrimContainerCache()

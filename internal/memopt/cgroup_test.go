@@ -53,3 +53,29 @@ file_mapped 40000000
 		t.Errorf("非法输入期望返回 ok=false, 得到 %v", ok)
 	}
 }
+
+func TestCalculateDockerMemory(t *testing.T) {
+	// 测试相减计算规则：totalUsage (95797248 B, ~91.36 MB) 扣除 inactive_file (74678272 B, ~71.22 MB)
+	// 得到真实 Docker stats 内存占用 (21118976 B, ~20.14 MB)
+	v2Stat := `anon 21118976
+file 74678272
+inactive_file 74678272
+active_file 0
+`
+	dockerUsed, inactive, ok := CalculateDockerMemory(95797248, v2Stat)
+	if !ok {
+		t.Fatalf("CalculateDockerMemory 期望成功, 实际失败")
+	}
+	if inactive != 74678272 {
+		t.Errorf("inactive_file 解析错误: 期望 74678272, 得到 %d", inactive)
+	}
+	if dockerUsed != 21118976 {
+		t.Errorf("dockerUsed 相减规则计算错误: 期望 21118976, 得到 %d", dockerUsed)
+	}
+
+	// 边界测试：totalUsage 小于 inactive 时归 0
+	dockerUsed, _, _ = CalculateDockerMemory(100, "inactive_file 200\n")
+	if dockerUsed != 0 {
+		t.Errorf("totalUsage 小于 inactive 时期望返回 0, 得到 %d", dockerUsed)
+	}
+}
