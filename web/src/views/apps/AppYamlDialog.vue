@@ -31,11 +31,17 @@ import { toast } from 'vue-sonner'
 const props = withDefaults(
   defineProps<{
     open: boolean
-    app: MarketplaceApp | null
+    app?: any | null
+    yaml?: string
+    showDeploy?: boolean
+    dialogTitle?: string
   }>(),
   {
     open: false,
-    app: null
+    app: null,
+    yaml: '',
+    showDeploy: true,
+    dialogTitle: ''
   }
 )
 
@@ -105,22 +111,29 @@ const fileSizeFormatted = computed(() => {
 
 // 获取 YAML 内容
 async function loadYaml() {
+  loadError.value = ''
+
+  // 1. 若 props 中直接传入了 yaml 文本，最高优先级直接采用
+  if (props.yaml && props.yaml.trim()) {
+    yamlContent.value = props.yaml
+    loading.value = false
+    return
+  }
+
   if (!props.app) {
     yamlContent.value = ''
     loadError.value = ''
     return
   }
 
-  loadError.value = ''
-
-  // 1. 若应用对象中已存在 manifest_raw，直接使用
+  // 2. 若应用对象中已存在 manifest_raw，直接使用
   if (props.app.manifest_raw && props.app.manifest_raw.trim()) {
     yamlContent.value = props.app.manifest_raw
     loading.value = false
     return
   }
 
-  // 2. 若无 manifest_raw，从远程候选源异步拉取
+  // 3. 若无 manifest_raw，从远程候选源异步拉取
   loading.value = true
   const candidates: string[] = []
 
@@ -161,7 +174,7 @@ async function loadYaml() {
 }
 
 watch(
-  () => [props.open, props.app],
+  () => [props.open, props.app, props.yaml],
   ([isOpen]) => {
     if (isOpen) {
       copied.value = false
@@ -207,19 +220,21 @@ async function handleCopy() {
 
 // 一键下载文件
 function handleDownload() {
-  if (!yamlContent.value || !props.app) return
+  if (!yamlContent.value) return
 
   try {
     const blob = new Blob([yamlContent.value], { type: 'text/yaml;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${props.app.id}.app.yaml`
+    const targetName = props.app?.id || (props.app?.name ? props.app.name.toLowerCase().replace(/\s+/g, '-') : 'app')
+    const fileName = `${targetName}.app.yaml`
+    a.download = fileName
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    toast.success(`已保存文件: ${props.app.id}.app.yaml`)
+    toast.success(`已保存文件: ${fileName}`)
   } catch (err: any) {
     toast.error('下载失败: ' + (err.message || '未知错误'))
   }
@@ -255,13 +270,13 @@ function handleClose() {
       <div class="px-3 sm:px-5 py-2.5 sm:py-3 border-b border-border/60 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between shrink-0 gap-2 sm:gap-3">
         <!-- 头部第一行（移动端：应用标题与右上角关闭；桌面端：完整信息） -->
         <div class="flex items-center justify-between sm:justify-start gap-2.5 sm:gap-3 min-w-0 flex-1">
-          <div v-if="app" class="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+          <div class="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
             <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 overflow-hidden shadow-xs">
               <img
                 v-if="displayIconUrl"
                 :src="displayIconUrl"
                 class="w-full h-full object-cover"
-                :alt="app.name"
+                :alt="app?.name || 'app'"
                 @error="handleImageError"
               />
               <Package v-else class="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
@@ -270,19 +285,20 @@ function handleClose() {
             <div class="space-y-0.5 min-w-0 flex-1">
               <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <DialogTitle class="text-xs sm:text-base font-bold text-foreground truncate leading-snug max-w-[200px] xs:max-w-[260px] sm:max-w-none">
-                  {{ app.name }}
+                  {{ app?.name || dialogTitle || '应用清单配置' }}
                 </DialogTitle>
-                <Badge variant="secondary" class="font-mono text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 shrink-0">
+                <Badge v-if="app?.version" variant="secondary" class="font-mono text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 shrink-0">
                   v{{ app.version }}
                 </Badge>
                 <Badge variant="outline" class="hidden xs:inline-flex text-[9px] font-mono px-1.5 py-0 text-primary border-primary/30 bg-primary/5 shrink-0">
-                  YAML
+                  {{ dialogTitle || 'YAML' }}
                 </Badge>
               </div>
               <DialogDescription class="text-[10px] sm:text-xs text-muted-foreground font-mono truncate">
-                <span>{{ app.id }}</span>
-                <span v-if="app.category" class="opacity-75"> • {{ app.category }}</span>
-                <span v-if="app.author" class="hidden sm:inline opacity-75"> • {{ app.author }}</span>
+                <span v-if="app?.id">{{ app.id }}</span>
+                <span v-if="app?.category" class="opacity-75"> • {{ app.category }}</span>
+                <span v-if="app?.author" class="hidden sm:inline opacity-75"> • {{ app.author }}</span>
+                <span v-if="!app?.id && !app?.category" class="opacity-75">可一键复制 YML 文本或下载离线文件</span>
               </DialogDescription>
             </div>
           </div>
@@ -452,10 +468,17 @@ function handleClose() {
 
         <!-- 右侧操作按钮组 -->
         <div class="flex items-center gap-2 shrink-0 ml-auto">
-          <Button size="sm" variant="ghost" class="hidden sm:inline-flex h-7 sm:h-8 px-2.5 sm:px-3 text-xs" @click="handleClose">
+          <Button
+            size="sm"
+            variant="ghost"
+            class="h-7 sm:h-8 px-2.5 sm:px-3 text-xs"
+            :class="{ 'inline-flex': !showDeploy, 'hidden sm:inline-flex': showDeploy }"
+            @click="handleClose"
+          >
             关闭
           </Button>
           <Button
+            v-if="showDeploy"
             size="sm"
             class="h-7 sm:h-8 px-3 text-xs gap-1.5 shadow-sm font-medium"
             @click="handleDeploy"

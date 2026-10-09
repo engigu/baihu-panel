@@ -70,6 +70,7 @@ const showLogViewer = ref(false)
 
 const shareAppName = ref('')
 const shareYamlText = ref('')
+const shareAppInfo = ref<any>(null)
 
 const editingTask = ref<Partial<Task>>({})
 const editingMarketApp = ref<any>(null)
@@ -395,13 +396,28 @@ function openExportDialog(task: Task) {
 
 async function openShareApp(task: Task) {
   shareAppName.value = task.name
+  const cfg = getAppConfig(task)
+  let appData: any = {
+    id: (task as any).source_id?.replace(/^app:/, '') || task.id,
+    name: task.name,
+    version: cfg.version || '1.0.0',
+    description: task.remark || cfg.description,
+    icon: cfg.icon,
+    category: cfg.category,
+    author: cfg.author,
+    homepage: cfg.homepage
+  }
   
   // 1. 优先调用后端 API 获取经 FormatManifestYAML 规范重排后的权威 app.yaml
   try {
     const detail = await api.apps.get(task.id) as any
     const rawYaml = detail?.manifest_raw || detail?.app?.manifest_raw
+    if (detail?.app) {
+      appData = { ...appData, ...detail.app }
+    }
     if (rawYaml) {
       shareYamlText.value = rawYaml
+      shareAppInfo.value = appData
       showShareDialog.value = true
       return
     }
@@ -422,6 +438,7 @@ async function openShareApp(task: Task) {
 
   if (rawYaml) {
     shareYamlText.value = rawYaml
+    shareAppInfo.value = appData
     showShareDialog.value = true
   } else {
     toast.error('未找到该应用的 manifest_raw 原始配置文件')
@@ -976,6 +993,7 @@ watch(() => route.query.type, (newVal: any) => {
     <!-- 分享 / 导出 app.yaml 配置文件弹窗 -->
     <AppShareDialog
       v-model:open="showShareDialog"
+      :app="shareAppInfo"
       :app-name="shareAppName"
       :yaml-content="shareYamlText"
     />
