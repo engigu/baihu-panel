@@ -46,6 +46,21 @@ const parsedMemory = computed(() => {
   return { num: val, unit: '' }
 })
 
+// 紧凑运行时长展示 (最高保留 2 级单位，避免小屏被 truncate 截断)
+const displayUptime = computed(() => {
+  const raw = aboutInfo.value?.uptime
+  if (!raw) return '-'
+  const match = raw.match(/^(?:(\d+)天)?(?:(\d+)小时)?(?:(\d+)分钟?)?(?:(\d+)秒)?$/)
+  if (match) {
+    const [, d, h, m, s] = match
+    if (d) return h ? `${d}天${h}小时` : `${d}天`
+    if (h) return m ? `${h}小时${m}分` : `${h}小时`
+    if (m) return s ? `${m}分${s}秒` : `${m}分钟`
+    if (s) return `${s}秒`
+  }
+  return raw
+})
+
 async function loadAbout() {
   try {
     aboutInfo.value = await api.settings.getAbout()
@@ -233,8 +248,11 @@ onMounted(loadAbout)
                     <Clock class="w-3.5 h-3.5" />
                   </div>
                 </div>
-                <div class="my-0.5 text-[15px] font-bold tracking-tight text-foreground truncate font-inter" :title="aboutInfo?.uptime || ''">
-                  {{ aboutInfo?.uptime || '-' }}
+                <div
+                  class="my-0.5 text-sm sm:text-[15px] font-bold tracking-tight text-foreground truncate font-inter"
+                  :title="(aboutInfo as any)?.uptime_full || aboutInfo?.uptime || ''"
+                >
+                  {{ displayUptime }}
                 </div>
                 <span class="text-[10px] text-muted-foreground">持续稳定守护</span>
               </div>
