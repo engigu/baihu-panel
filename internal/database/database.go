@@ -78,13 +78,21 @@ func Init(cfg *Config) error {
 
 	logger.Infof("[Database] 已连接 %s 数据库 (时区: Asia/Shanghai)", cfg.Type)
 
-	// SQLite 特殊优化：开启 WAL 模式，提升并发性能
-	if cfg.Type == "sqlite" {
-		sqlDB, _ := DB.DB()
-		if sqlDB != nil {
-			sqlDB.SetMaxOpenConns(1) // SQLite 只允许单写连接
+	// 数据库连接池自适应与性能优化
+	sqlDB, err := DB.DB()
+	if err == nil && sqlDB != nil {
+		if cfg.Type == "sqlite" {
+			// SQLite 特殊优化：开启 WAL 模式，提升并发性能，限制单写连接
+			sqlDB.SetMaxOpenConns(1)
 			sqlDB.Exec("PRAGMA journal_mode=WAL")
 			sqlDB.Exec("PRAGMA synchronous=NORMAL")
+		} else {
+			// MySQL / PostgreSQL 连接池自适应轻量化：
+			// 限制空闲连接保活时间为 30 秒，并发高峰过后自动销毁空闲连接并回收驱动 Watcher 协程
+			sqlDB.SetMaxIdleConns(2)
+			sqlDB.SetMaxOpenConns(10)
+			sqlDB.SetConnMaxIdleTime(30 * time.Second)
+			sqlDB.SetConnMaxLifetime(10 * time.Minute)
 		}
 	}
 

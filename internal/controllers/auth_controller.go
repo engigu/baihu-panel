@@ -8,6 +8,7 @@ import (
 
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/eventbus"
+	"github.com/engigu/baihu-panel/internal/executor"
 	"github.com/engigu/baihu-panel/internal/middleware"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/utils"
@@ -27,25 +28,28 @@ type loginAttempt struct {
 	LastAttempt time.Time
 }
 
-var loginAttempts sync.Map
+var (
+	loginAttempts     sync.Map
+	cleanAttemptsOnce sync.Once
+)
 
-func init() {
-	// 定期清理过期的登录尝试统计，防止内存溢出
-	go func() {
-		ticker := time.NewTicker(30 * time.Minute)
-		for range ticker.C {
-			loginAttempts.Range(func(key, value any) bool {
-				attempt := value.(*loginAttempt)
-				if time.Since(attempt.LastAttempt) > 10*time.Minute {
-					loginAttempts.Delete(key)
-				}
-				return true
-			})
+// CleanExpiredLoginAttempts 定期清理过期的登录尝试统计，防止内存堆积
+func CleanExpiredLoginAttempts() {
+	loginAttempts.Range(func(key, value any) bool {
+		attempt := value.(*loginAttempt)
+		if time.Since(attempt.LastAttempt) > 10*time.Minute {
+			loginAttempts.Delete(key)
 		}
-	}()
+		return true
+	})
 }
 
 func NewAuthController(userService *services.UserService, settingsService *services.SettingsService, loginLogService *services.LoginLogService) *AuthController {
+	cleanAttemptsOnce.Do(func() {
+		// 注册到内部系统定时器，统一由 SysCron 调度，避免常驻死循环协程
+		executor.GetSysCron().AddJob("@every 30m", CleanExpiredLoginAttempts)
+	})
+
 	return &AuthController{
 		userService:     userService,
 		settingsService: settingsService,
