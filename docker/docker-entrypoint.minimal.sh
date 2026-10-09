@@ -33,13 +33,31 @@ else
 fi
 
 # ============================
-# Mise 环境初始化
+# Mise 环境初始化 (仅容器重建或镜像版本更新时同步)
 # ============================
 mkdir -p "$MISE_DIR"
 if [ -d "/opt/mise-base" ]; then
-  log "Syncing mise environment from base..."
-  rsync -a --ignore-existing /opt/mise-base/ "$MISE_DIR/" || true
-  log "Mise environment synced"
+  CURRENT_VER=$(cat /build-info/version.txt 2>/dev/null || echo "")
+  INSTALLED_VER=$(cat "$MISE_DIR/.installed_version" 2>/dev/null || echo "")
+
+  NEED_SYNC=0
+  if [ ! -f "/tmp/.mise_container_synced" ]; then
+    NEED_SYNC=1
+  elif [ -n "$CURRENT_VER" ] && [ "$CURRENT_VER" != "$INSTALLED_VER" ]; then
+    NEED_SYNC=1
+  elif [ ! -f "$MISE_DIR/config.toml" ]; then
+    NEED_SYNC=1
+  fi
+
+  if [ "$NEED_SYNC" -eq 1 ]; then
+    log "Syncing mise environment from base (rebuild or image update)..."
+    rsync -a --ignore-existing /opt/mise-base/ "$MISE_DIR/" || true
+    touch /tmp/.mise_container_synced
+    [ -n "$CURRENT_VER" ] && echo "$CURRENT_VER" > "$MISE_DIR/.installed_version"
+    log "Mise environment synced"
+  else
+    log "Mise environment already synced for this container, skipping rsync"
+  fi
 else
   log "No base mise environment found, skipping sync"
 fi
@@ -78,6 +96,11 @@ for rcfile in /etc/bash.bashrc /etc/bashrc /root/.bashrc; do
     fi
   fi
 done
+
+# ============================
+# 释放启动读盘产生的 Page Cache
+# ============================
+baihu dropcache /opt/mise-base "$MISE_DIR" 2>/dev/null || true
 
 # ============================
 # 启动应用

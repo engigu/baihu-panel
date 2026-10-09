@@ -89,6 +89,10 @@ var Commands = []CommandSpec{
 		Description: "一键补全指定任务日志中的缺失依赖包",
 	},
 	{
+		Name:        "dropcache",
+		Description: "释放指定目录或文件的只读 Page Cache 缓存",
+	},
+	{
 		Name:        "version",
 		Description: "查看当前系统版本号 (同 -v, -V)",
 	},
