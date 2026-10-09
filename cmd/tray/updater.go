@@ -300,23 +300,37 @@ func showBalloonNotification(title, msg string) {
 	shellNotifyIcon.Call(nimModify, uintptr(unsafe.Pointer(&nidCopy)))
 }
 
+var (
+	cachedVersion     string
+	cachedVersionOnce sync.Once
+)
+
 // getCurrentVersion 获取当前本地程序版本
 func getCurrentVersion() string {
 	if constant.Version != "" && constant.Version != "dev" && constant.Version != "unknown" {
 		return constant.Version
 	}
 
-	// 若未注入版本号，尝试从同目录 baihu.exe version 获取
-	exePath, err := os.Executable()
-	if err == nil {
-		dir := filepath.Dir(exePath)
-		baihuExe := filepath.Join(dir, "baihu.exe")
-		if out, err := exec.Command(baihuExe, "version").Output(); err == nil {
-			fields := strings.Fields(string(out))
-			if len(fields) >= 2 {
-				return fields[1]
+	cachedVersionOnce.Do(func() {
+		// 若未注入版本号，尝试从同目录 baihu.exe version 获取
+		exePath, err := os.Executable()
+		if err == nil {
+			dir := filepath.Dir(exePath)
+			baihuExe := filepath.Join(dir, "baihu.exe")
+			cmd := silentCmd(baihuExe, "version")
+			if out, err := cmd.Output(); err == nil {
+				fields := strings.Fields(string(out))
+				if len(fields) >= 2 {
+					cachedVersion = fields[1]
+					return
+				}
 			}
 		}
+		cachedVersion = "v1.0.0"
+	})
+
+	if cachedVersion != "" {
+		return cachedVersion
 	}
 	return "v1.0.0"
 }
@@ -533,10 +547,7 @@ del "%%~f0"
 	}
 
 	// 启动批处理脚本并退出托盘自身
-	cmd := exec.Command("cmd.exe", "/c", updaterBat)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		HideWindow: true,
-	}
+	cmd := silentCmd("cmd.exe", "/c", updaterBat)
 	if err := cmd.Start(); err != nil {
 		showMessage("更新失败", fmt.Sprintf("启动更新程序失败：%v", err), mbIconError)
 		return

@@ -112,7 +112,20 @@ const (
 
 	// 默认高位监听端口
 	defaultPort = 38052
+
+	// CREATE_NO_WINDOW 标志 (0x08000000)，阻止控制台应用弹出黑窗口
+	createNoWindow = 0x08000000
 )
+
+// silentCmd 创建一个默认隐藏控制台窗口且禁止弹窗闪烁的 exec.Cmd
+func silentCmd(name string, arg ...string) *exec.Cmd {
+	cmd := exec.Command(name, arg...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow:    true,
+		CreationFlags: createNoWindow,
+	}
+	return cmd
+}
 
 var (
 	hwnd      syscall.Handle
@@ -448,11 +461,8 @@ func startPanelService() {
 	panelUrl = fmt.Sprintf("http://%s:%d%s", hostStr, port, urlPrefix)
 
 	args := []string{"server", "--config", configPath}
-	cmd := exec.Command(baihuExe, args...)
+	cmd := silentCmd(baihuExe, args...)
 	cmd.Dir = dir
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		HideWindow: true,
-	}
 
 	// 自动创建并重定向标准输出及标准错误到 data/logs/server.log，以便通过托盘直接查看
 	logDir := filepath.Clean(filepath.Join(dir, "data", "logs"))
@@ -488,12 +498,12 @@ func stopPanelService() {
 
 	// 最终兜底：如果 PID 记录和 Cmd 控制柄均因异常丢失，通过 taskkill 确保没有残留程序死锁端口
 	if runtime.GOOS == "windows" {
-		_ = exec.Command("taskkill", "/F", "/IM", "baihu.exe").Run()
+		_ = silentCmd("taskkill", "/F", "/IM", "baihu.exe").Run()
 	}
 }
 
 func openBrowser(url string) {
-	_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	_ = silentCmd("rundll32", "url.dll,FileProtocolHandler", url).Start()
 }
 
 func isAutoStartEnabled() bool {
