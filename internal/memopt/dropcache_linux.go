@@ -24,14 +24,14 @@ func DropCache(paths ...string) (int, error) {
 			continue
 		}
 		if !fi.IsDir() {
-			if dropFileCache(p) {
+			if fi.Mode().IsRegular() && dropFileCache(p) {
 				totalFiles++
 			}
 			continue
 		}
 
 		_ = filepath.Walk(p, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info == nil || info.IsDir() {
+			if err != nil || info == nil || !info.Mode().IsRegular() {
 				return nil
 			}
 			if dropFileCache(path) {
