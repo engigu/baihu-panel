@@ -17,10 +17,12 @@ import {
   Eye,
   Github,
   ExternalLink,
-  Clock
+  Clock,
+  FileCode
 } from 'lucide-vue-next'
 import { api, type MarketplaceApp } from '@/api'
 import ApplyDialog from './ApplyDialog.vue'
+import AppYamlDialog from './AppYamlDialog.vue'
 import { toast } from 'vue-sonner'
 import { useRouter } from 'vue-router'
 import { formatDateTime, formatDate } from '@/utils/date'
@@ -45,6 +47,21 @@ const statsData = ref<MarketStats>({ downloads: {}, pv: {} })
 // 弹窗
 const showApplyDialog = ref(false)
 const selectedMarketApp = ref<MarketplaceApp | null>(null)
+
+// YAML 预览弹窗
+const showYamlDialog = ref(false)
+const selectedYamlApp = ref<MarketplaceApp | null>(null)
+
+function openYamlPreview(app: MarketplaceApp) {
+  ;(document.activeElement as HTMLElement)?.blur()
+  selectedYamlApp.value = app
+  showYamlDialog.value = true
+}
+
+function handleDeployFromYaml(app: MarketplaceApp) {
+  showYamlDialog.value = false
+  openMarketApply(app)
+}
 
 const isSearchReadonly = ref(true)
 
@@ -290,9 +307,21 @@ function handleApplySuccess() {
                 </div>
               </div>
 
-              <Badge variant="outline" class="text-[9px] sm:text-[10px] shrink-0 font-mono bg-muted/20 border-border/60">
-                商店精选
-              </Badge>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  class="h-5 px-1.5 rounded text-[10px] font-mono text-muted-foreground/75 hover:text-primary hover:bg-primary/10 border border-border/60 hover:border-primary/40 transition-all flex items-center gap-1 group/yaml cursor-pointer shadow-2xs"
+                  title="查看与复制应用 YAML 清单"
+                  @click.stop="openYamlPreview(app)"
+                >
+                  <FileCode class="w-2.5 h-2.5 text-primary/70 group-hover/yaml:text-primary transition-colors" />
+                  <span>YAML</span>
+                </button>
+
+                <Badge variant="outline" class="text-[9px] sm:text-[10px] shrink-0 font-mono bg-muted/20 border-border/60">
+                  商店精选
+                </Badge>
+              </div>
             </div>
 
             <p class="text-xs text-muted-foreground/90 line-clamp-2 leading-relaxed min-h-[2.25rem]">
@@ -316,14 +345,43 @@ function handleApplySuccess() {
             </div>
           </div>
 
-          <Button class="w-full h-9 font-medium shadow-xs text-xs gap-1.5 shrink-0" @click="openMarketApply(app)">
-            <Sparkles class="w-3.5 h-3.5 shrink-0" />
-            <span class="truncate">部署应用到调度实体</span>
-            <ArrowRight class="w-3.5 h-3.5 ml-auto opacity-70 shrink-0 group-hover:translate-x-0.5 transition-transform" />
-          </Button>
+          <!-- 一体化高质感分体控制底座 (Action Dock) -->
+          <div class="w-full h-9 rounded-lg bg-primary text-primary-foreground flex items-center p-0.5 shadow-xs group/dock transition-all hover:shadow-md">
+            <!-- 主动作：部署应用 -->
+            <button
+              type="button"
+              class="flex-1 h-full px-3 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-primary-foreground/10 rounded-[6px] transition-colors min-w-0 cursor-pointer"
+              @click="openMarketApply(app)"
+            >
+              <Sparkles class="w-3.5 h-3.5 shrink-0" />
+              <span class="truncate">部署应用到调度实体</span>
+              <ArrowRight class="w-3.5 h-3.5 opacity-70 shrink-0 group-hover/dock:translate-x-0.5 transition-transform" />
+            </button>
+
+            <!-- 垂直微细分割线 -->
+            <div class="h-4 w-px bg-primary-foreground/20 shrink-0 my-auto" />
+
+            <!-- 副动作：YAML 清单 -->
+            <button
+              type="button"
+              class="h-full px-2.5 text-xs font-mono font-medium flex items-center gap-1 hover:bg-primary-foreground/15 rounded-[6px] transition-colors shrink-0 text-primary-foreground/90 hover:text-primary-foreground cursor-pointer"
+              title="查看与复制应用 YAML 清单"
+              @click.stop="openYamlPreview(app)"
+            >
+              <FileCode class="w-3.5 h-3.5" />
+              <span class="text-[11px] font-bold">YAML</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
+
+    <!-- YAML 预览与复制弹窗 -->
+    <AppYamlDialog
+      v-model:open="showYamlDialog"
+      :app="selectedYamlApp"
+      @deploy="handleDeployFromYaml"
+    />
 
     <!-- 应用部署弹窗 -->
     <ApplyDialog

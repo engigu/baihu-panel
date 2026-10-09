@@ -10,14 +10,17 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Eye, EyeOff, Loader2, Terminal, CheckCircle2, Check, AlertCircle, AlertTriangle, Sparkles, Package, ExternalLink, ChevronDown, ChevronRight, Maximize2, Minimize2, X } from 'lucide-vue-next'
+import { Eye, EyeOff, Loader2, Terminal, CheckCircle2, Check, AlertCircle, AlertTriangle, Sparkles, Package, ExternalLink, ChevronDown, ChevronRight, Maximize2, Minimize2, X, FileCode } from 'lucide-vue-next'
 import { api, type MarketplaceApp, type AppEnvItemSchema, type AppScenarioSchema, type ApplyAppPayload, type Task } from '@/api'
 import { toast } from 'vue-sonner'
 import TaskNotificationConfig from '@/views/tasks/components/TaskNotificationConfig.vue'
 import TaskAdvancedConfig from '@/views/tasks/components/TaskAdvancedConfig.vue'
 import TaskCronConfig from '@/views/tasks/components/TaskCronConfig.vue'
 import TaskLangConfig, { type LangConfig } from '@/views/tasks/components/TaskLangConfig.vue'
+import AppYamlDialog from './AppYamlDialog.vue'
 import { formatDate } from '@/utils/date'
+
+const showYamlPreview = ref(false)
 
 const demoMode = ref(false)
 onMounted(async () => {
@@ -633,7 +636,7 @@ async function executeDeploy() {
             />
             <Package v-else class="w-5 h-5 text-primary" />
           </div>
-          <div class="space-y-0.5 min-w-0">
+          <div class="space-y-0.5 min-w-0 flex-1">
             <DialogTitle class="text-base font-bold flex items-center gap-2 truncate">
               <span class="truncate">{{ targetApp ? (mode === 'edit_task' ? `编辑应用调度配置：${targetApp.name}` : (isInstalled ? `配置 / 重新部署：${targetApp.name}` : `部署应用：${targetApp.name}`)) : '导入应用 (Apply Manifest)' }}</span>
               <Badge v-if="targetApp?.version" variant="secondary" class="text-[10px] font-mono shrink-0">
@@ -646,6 +649,21 @@ async function executeDeploy() {
             <DialogDescription class="text-xs text-muted-foreground truncate">
               {{ targetApp?.description || '通过白虎声明式规范一键部署代码源与任务配置' }}
             </DialogDescription>
+          </div>
+
+          <!-- 查看原始 YAML 按钮 (targetApp 存在时) -->
+          <div v-if="targetApp" class="shrink-0 pr-6">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              class="h-7 px-2 text-xs gap-1 font-mono text-muted-foreground hover:text-foreground border-border/80"
+              title="查看与复制当前应用的原始 YAML 清单"
+              @click="showYamlPreview = true"
+            >
+              <FileCode class="w-3.5 h-3.5 text-primary" />
+              <span>YAML</span>
+            </Button>
           </div>
         </div>
       </DialogHeader>
@@ -1170,4 +1188,10 @@ async function executeDeploy() {
       </Button>
     </template>
   </BaihuDialog>
+
+  <!-- 查看原始 YAML 弹窗 -->
+  <AppYamlDialog
+    v-model:open="showYamlPreview"
+    :app="targetApp"
+  />
 </template>
