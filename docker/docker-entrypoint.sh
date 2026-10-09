@@ -106,10 +106,6 @@ for rcfile in /etc/bash.bashrc /etc/bashrc /root/.bashrc; do
   fi
 done
 
-# ============================
-# 释放启动读盘产生的 Page Cache
-# ============================
-baihu dropcache /opt/mise-base "$MISE_DIR" 2>/dev/null || true
 
 # ============================
 # 启动应用

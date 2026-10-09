@@ -14,6 +14,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/memopt"
 	"github.com/engigu/baihu-panel/internal/router"
 	"github.com/engigu/baihu-panel/internal/services"
+	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/engigu/baihu-panel/internal/tunnel"
 	"github.com/engigu/baihu-panel/internal/utils"
 	"github.com/engigu/baihu-panel/internal/windows"
@@ -59,9 +60,6 @@ func New() *App {
 
 	// 初始化完成阶段检查点：释放启动临时对象并收缩物理常驻内存
 	memopt.Checkpoint("system_ready")
-
-	// 异步延迟回收启动期可能残留的读盘 Page Cache，确保系统就绪后常驻内存处于极致轻量状态
-	memopt.DropMiseCacheAsync(3 * time.Second)
 
 	return app
 }
@@ -178,6 +176,17 @@ func (a *App) initRouter() {
 }
 
 func (a *App) Run() {
+	// 启动全局文件监听服务 (支持 Agent 实时热同步)
+	if err := tasks.GetSyncWatcherService().Start(); err != nil {
+		logger.Warnf("启动文件同步监听服务失败: %v", err)
+	}
+
+	// 系统各核心组件启动就绪后，直接触发一次容器 Page Cache 与运行时物理内存回收
+	if utils.IsRunningInDocker() {
+		trimmed := memopt.TrimContainerCache()
+		logger.Infof("[MemOpt] 系统启动就绪联动回收完成，共释放 %d 个文件的 Page Cache 并归还物理内存", trimmed)
+	}
+
 	addr := fmt.Sprintf("%s:%d", a.Config.Server.Host, a.Config.Server.Port)
 	logger.Infof("[HTTP] 服务正在启动，监听地址: http://%s", addr)
 	if err := a.Router.Run(addr); err != nil {
