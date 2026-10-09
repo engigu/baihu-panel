@@ -25,7 +25,29 @@ total_rss 10485760
 		t.Errorf("cgroup v1 解析失败: 期望 67108864, 得到 %d, ok: %v", val, ok)
 	}
 
-	// 3. 测试非法输入
+	// 3. 测试 cgroup v2 包含 inactive_file 优先读取
+	v2WithInactive := `anon 10485760
+file 110940160
+file_mapped 83886080
+inactive_file 27054080
+active_file 83886080
+`
+	val, ok = parseCgroupFileCache(v2WithInactive)
+	if !ok || val != 27054080 {
+		t.Errorf("cgroup v2 期望优先读取 inactive_file 27054080, 得到 %d, ok: %v", val, ok)
+	}
+
+	// 4. 测试 cgroup v2 仅含 file 与 file_mapped (扣除只读代码段)
+	v2WithMapped := `anon 10485760
+file 100000000
+file_mapped 40000000
+`
+	val, ok = parseCgroupFileCache(v2WithMapped)
+	if !ok || val != 60000000 {
+		t.Errorf("cgroup v2 期望扣除 file_mapped 后得到 60000000, 得到 %d, ok: %v", val, ok)
+	}
+
+	// 5. 测试非法输入
 	val, ok = parseCgroupFileCache("invalid content without key")
 	if ok {
 		t.Errorf("非法输入期望返回 ok=false, 得到 %v", ok)

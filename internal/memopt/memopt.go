@@ -154,13 +154,17 @@ func DropMiseCacheAsync(delays ...time.Duration) {
 var isTrimming atomic.Bool
 
 // getContainerTrimTargets 获取容器内需重点回收 Page Cache 的目标路径清单
-// 覆盖：Mise 运行时、任务脚本工作目录、系统与任务日志目录，以及用户自定义扩展目录
+// 覆盖：任务脚本工作目录、系统与任务日志目录、用户动态环境目录，以及用户自定义扩展目录（自动排除静态只读的系统底座）
 func getContainerTrimTargets() []string {
 	targets := make([]string, 0, 8)
 
-	// 1. Mise 运行时基础只读目录与应用数据目录
-	targets = append(targets, constant.ContainerMiseBaseDir)
-	targets = append(targets, constant.ResolveMiseDataDir())
+	// 1. Mise 运行时基础底座与数据存储目录
+	if constant.ContainerMiseBaseDir != "" {
+		targets = append(targets, constant.ContainerMiseBaseDir)
+	}
+	if miseDataDir := constant.ResolveMiseDataDir(); miseDataDir != "" && miseDataDir != constant.ContainerMiseBaseDir {
+		targets = append(targets, miseDataDir)
+	}
 
 	// 2. 任务脚本工作目录（大量定时任务代码与依赖）
 	if constant.ScriptsWorkDir != "" {
@@ -231,7 +235,7 @@ func TrimContainerCache() int {
 // 2. 原子防重入保护：避免上一轮耗时较长时造成定时任务 IO 堆叠；
 // 3. 动态读取 cgroup 文件缓存占用，若超过水位线（默认 60MB，可通过 BH_CACHE_MAX_MB 配置）才触发释放；
 // 4. 低于水位线时静默跳过，无额外 CPU 或磁盘 IO 损耗；
-// 5. 触发释放时，同步遍历 Mise/脚本/日志等目录卸载 Page Cache，并联动归还 Go 堆内存给操作系统（无二次 goroutine）。
+// 5. 触发释放时，同步遍历脚本/日志等动态高频目录卸载 Page Cache，并联动归还 Go 堆内存给操作系统。
 func AutoTrimContainerCache() bool {
 	if !utils.IsRunningInDocker() {
 		return false
@@ -253,20 +257,26 @@ func AutoTrimContainerCache() bool {
 	thresholdBytes := uint64(thresholdMB) * 1024 * 1024
 
 	cacheBytes, err := GetContainerFileCacheBytes()
-	if err == nil {
-		if cacheBytes < thresholdBytes {
-			// 未达到水位线，保持现状，不进行多余操作
-			return false
-		}
-		logger.Infof("[MemOpt] 容器 PageCache 达到智能水位线 (当前: %s, 阈值: %d MB)，启动自适应回收", FormatBytes(cacheBytes), thresholdMB)
-	} else {
-		// 未能精准读取 cgroup 时（如部分老旧宿主机或受限无权读取），直接按计划轻量执行
-		logger.Debugf("[MemOpt] 未能获取 cgroup 缓存指标 (%v)，按计划执行轻量回收", err)
+	if err != nil {
+		// 未能精准读取 cgroup 时（如部分老旧宿主机或受限无权读取），直接按 debug 记录并跳过，避免盲目频繁报警
+		logger.Debugf("[MemOpt] 未能获取 cgroup 缓存指标 (%v)，跳过本次自适应回收", err)
+		return false
 	}
+
+	if cacheBytes < thresholdBytes {
+		// 未达到水位线，保持现状，不进行多余操作
+		return false
+	}
+
+	logger.Infof("[MemOpt] 容器 PageCache 达到智能水位线 (当前: %s, 阈值: %d MB)，启动自适应回收", FormatBytes(cacheBytes), thresholdMB)
 
 	// 同步执行目标目录回收与运行时内存退还
 	filesTrimmed := TrimContainerCache()
-	logger.Infof("[MemOpt] 容器自适应回收完成，清理了 %d 个文件的 Page Cache 并归还物理内存", filesTrimmed)
+	if filesTrimmed > 0 {
+		logger.Infof("[MemOpt] 容器自适应回收完成，清理了 %d 个文件的 Page Cache 并归还物理内存", filesTrimmed)
+	} else {
+		logger.Debugf("[MemOpt] 容器自适应回收完成，动态工作区无待释放文件缓存")
+	}
 
 	return true
 }
