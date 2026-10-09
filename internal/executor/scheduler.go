@@ -599,8 +599,8 @@ func (s *Scheduler) executeTask(req *ExecutionRequest) (*ExecutionResult, error)
 	if execErr != nil {
 		s.logger.Errorf("[Scheduler] 任务 %s 执行失败: %v", req.TaskID, execErr)
 	} else {
-		s.logger.Infof("[Scheduler] 执行完成: %s (#%s) [%s] (状态: %s, 耗时: %dms)",
-			req.Name, req.TaskID, req.Type, result.Status, result.Duration)
+		s.logger.Infof("[Scheduler] 执行完成: %s (#%s) [%s] (状态: %s, 耗时: %s)",
+			req.Name, req.TaskID, req.Type, result.Status, utils.FormatDuration(result.Duration))
 	}
 
 	return result, execErr

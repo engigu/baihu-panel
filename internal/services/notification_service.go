@@ -391,19 +391,37 @@ func (s *NotificationService) getDefaultMessage(eventType string, payload map[st
 		text = fmt.Sprintf("用户 %v 刚刚修改了密码", payload["username"])
 	case constant.EventTaskSuccess:
 		title = fmt.Sprintf("任务[%v] 成功", payload["task_name"])
-		text = fmt.Sprintf("任务 #%v %v\n状态: 成功\n执行时间: %v\n耗时: %vms", payload["task_id"], payload["task_name"], payload["start_time"], payload["duration"])
+		text = fmt.Sprintf("任务 #%v %v\n状态: 成功\n执行时间: %v\n耗时: %s", payload["task_id"], payload["task_name"], payload["start_time"], formatPayloadDuration(payload["duration"]))
 	case constant.EventTaskFailed:
 		title = fmt.Sprintf("任务[%v] 失败", payload["task_name"])
 		if errStr, ok := payload["error"]; ok {
 			text = fmt.Sprintf("任务 #%v %v\n执行失败\n执行时间: %v\n错误: %v", payload["task_id"], payload["task_name"], payload["start_time"], errStr)
 		} else {
-			text = fmt.Sprintf("任务 #%v %v\n执行失败\n状态: %v\n执行时间: %v\n耗时: %vms", payload["task_id"], payload["task_name"], payload["status"], payload["start_time"], payload["duration"])
+			text = fmt.Sprintf("任务 #%v %v\n执行失败\n状态: %v\n执行时间: %v\n耗时: %s", payload["task_id"], payload["task_name"], payload["status"], payload["start_time"], formatPayloadDuration(payload["duration"]))
 		}
 	case constant.EventTaskTimeout:
 		title = fmt.Sprintf("任务[%v] 超时", payload["task_name"])
-		text = fmt.Sprintf("任务 #%v %v\n执行超时\n执行时间: %v\n耗时: %vms", payload["task_id"], payload["task_name"], payload["start_time"], payload["duration"])
+		text = fmt.Sprintf("任务 #%v %v\n执行超时\n执行时间: %v\n耗时: %s", payload["task_id"], payload["task_name"], payload["start_time"], formatPayloadDuration(payload["duration"]))
 	}
 	return title, text
+}
+
+func formatPayloadDuration(val interface{}) string {
+	if val == nil {
+		return "0ms"
+	}
+	var d int64
+	switch v := val.(type) {
+	case int64:
+		d = v
+	case int:
+		d = int64(v)
+	case float64:
+		d = int64(v)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+	return utils.FormatDuration(d)
 }
 
 // resolveEvent 解析不同事件类型，返回对应的模板Key、静态内容（非模板事件）和原始任务输出

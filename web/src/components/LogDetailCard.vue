@@ -9,7 +9,7 @@ import LogContent from './LogContent.vue'
 import StatusBadge from './StatusBadge.vue'
 import { TASK_STATUS } from '@/constants'
 import type { TaskLog } from '@/api'
-import { formatDateTime } from '@/utils/date'
+import { formatDateTime, formatDuration } from '@/utils/date'
 
 interface Props {
   log: TaskLog | null
@@ -46,12 +46,7 @@ const searchKeyword = ref('')
 const currentDuration = ref(props.log?.duration || 0)
 let timer: ReturnType<typeof setInterval> | null = null
 
-function formatDuration(ms: number): string {
-  if (ms <= 0) return '0毫秒'
-  if (ms < 1000) return `${ms.toFixed(0)}毫秒`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}秒`
-  return `${(ms / 60000).toFixed(1)}分钟`
-}
+
 
 const startTimer = () => {
   stopTimer()

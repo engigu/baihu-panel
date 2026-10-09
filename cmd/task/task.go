@@ -290,7 +290,7 @@ func runStatus(args []string) {
 	fmt.Printf("任务名称: %s (ID: %s)\n", taskName, taskID)
 	fmt.Printf("日志记录: %s\n", taskLog.ID)
 	fmt.Printf("执行命令: %s\n", string(taskLog.Command))
-	fmt.Printf("最终状态: %s (耗时: %d 毫秒, 退出码: %d)\n", statusText, taskLog.Duration, taskLog.ExitCode)
+	fmt.Printf("最终状态: %s (耗时: %s, 退出码: %d)\n", statusText, utils.FormatDuration(taskLog.Duration), taskLog.ExitCode)
 	if taskLog.StartTime != nil {
 		fmt.Printf("开始时间: %s\n", taskLog.StartTime.Time().Format("2006-01-02 15:04:05"))
 	}

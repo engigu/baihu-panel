@@ -120,3 +120,34 @@ export function formatUptime(uptimeSeconds: number | undefined | null): Formatte
 
     return { compact, full, parts }
 }
+
+/**
+ * 格式化任务耗时（标准紧凑 DevOps 风格）
+ * 规则：
+ * 1. < 1000ms: 直接输出毫秒 (如 450ms)
+ * 2. 1s ~ 59.9s: 秒级，带适度小数 (如 2.49s, 15.2s)
+ * 3. 1m ~ 59m59s: 分秒组合 (如 9m13s)
+ * 4. >= 1h: 时分秒组合 (如 1h2m3s)
+ */
+export function formatDuration(ms: number | undefined | null): string {
+    if (ms === undefined || ms === null || isNaN(ms) || ms <= 0) {
+        return '0ms'
+    }
+    if (ms < 1000) {
+        return `${ms}ms`
+    }
+    const totalSec = Math.floor(ms / 1000)
+    if (totalSec < 10) {
+        return `${(ms / 1000).toFixed(2)}s`
+    }
+    if (totalSec < 60) {
+        return `${(ms / 1000).toFixed(1)}s`
+    }
+    const h = Math.floor(totalSec / 3600)
+    const m = Math.floor((totalSec % 3600) / 60)
+    const s = totalSec % 60
+    if (h > 0) {
+        return `${h}h${m}m${s}s`
+    }
+    return `${m}m${s}s`
+}

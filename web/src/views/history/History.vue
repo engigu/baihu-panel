@@ -18,7 +18,7 @@ import { useSiteSettings } from '@/composables/useSiteSettings'
 import TextOverflow from '@/components/TextOverflow.vue'
 import StatusDot from '@/components/StatusDot.vue'
 import { useEventBus } from '@/composables/useEventBus'
-import { formatDateTime } from '@/utils/date'
+import { formatDateTime, formatDuration } from '@/utils/date'
 
 const route = useRoute()
 const { pageSize } = useSiteSettings()
@@ -364,11 +364,7 @@ async function stopTask() {
   }
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}毫秒`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}秒`
-  return `${(ms / 60000).toFixed(1)}分钟`
-}
+
 
 async function handleClearLogs() {
   try {
