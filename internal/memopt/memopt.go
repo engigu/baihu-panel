@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strconv"
+	"time"
 
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/shirou/gopsutil/v3/process"
@@ -127,6 +128,26 @@ func FormatBytes(bytes uint64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// DropMiseCacheAsync 异步延迟释放 mise 相关目录的文件缓存 (Page Cache)
+// 仅在 Docker 容器环境中真正执行，避免占用容器内存限额
+func DropMiseCacheAsync(delays ...time.Duration) {
+	delay := 500 * time.Millisecond
+	if len(delays) > 0 {
+		delay = delays[0]
+	}
+
+	go func() {
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+		miseDataDir := os.Getenv("MISE_DATA_DIR")
+		if miseDataDir == "" {
+			miseDataDir = "/app/envs/mise"
+		}
+		_, _ = DropCache("/opt/mise-base", miseDataDir)
+	}()
 }
 
 /*

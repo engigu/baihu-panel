@@ -45,6 +45,9 @@ func New() *App {
 	// 初始化完成阶段检查点：释放启动临时对象并收缩物理常驻内存
 	memopt.Checkpoint("system_ready")
 
+	// 异步延迟回收启动期可能残留的读盘 Page Cache，确保系统就绪后常驻内存处于极致轻量状态
+	memopt.DropMiseCacheAsync(3 * time.Second)
+
 	return app
 }
 
