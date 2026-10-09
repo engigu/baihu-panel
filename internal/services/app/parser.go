@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/utils"
 	"github.com/goccy/go-yaml"
 )
 
@@ -116,19 +117,7 @@ func ParseManifestFromFile(filePath string) (*AppManifest, error) {
 
 // ParseManifestFromURL 从远程 URL 下载并解析出 AppManifest
 func ParseManifestFromURL(rawURL string, proxy string) (*AppManifest, error) {
-	finalURL := strings.TrimSpace(rawURL)
-	if proxy != "" && proxy != "none" {
-		switch proxy {
-		case "ghproxy":
-			finalURL = "https://ghfast.top/" + finalURL
-		case "mirror":
-			finalURL = "https://mirror.ghproxy.com/" + finalURL
-		default:
-			if strings.HasPrefix(proxy, "http://") || strings.HasPrefix(proxy, "https://") {
-				finalURL = strings.TrimRight(proxy, "/") + "/" + finalURL
-			}
-		}
-	}
+	finalURL := utils.BuildProxyURL(rawURL, proxy, "")
 
 	client := &http.Client{
 		Timeout: 30 * time.Second,
@@ -138,7 +127,7 @@ func ParseManifestFromURL(rawURL string, proxy string) (*AppManifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("创建 HTTP 请求失败: %w", err)
 	}
-	req.Header.Set("User-Agent", "Baihu-App-Engine/1.0")
+	req.Header.Set("User-Agent", utils.DefaultBrowserUA)
 
 	resp, err := client.Do(req)
 	if err != nil {

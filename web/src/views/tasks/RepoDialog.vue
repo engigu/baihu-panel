@@ -42,12 +42,7 @@ const emit = defineEmits<{
 
 
 
-const proxyOptions = [
-  { label: '不使用代理', value: 'none' },
-  { label: 'ghproxy.com', value: 'ghproxy' },
-  { label: 'mirror.ghproxy.com', value: 'mirror' },
-  { label: '自定义代理', value: 'custom' },
-]
+import { PROXY_TYPE_OPTIONS as proxyOptions } from '@/utils/mirrors'
 
 const form = ref<Partial<Task>>({})
 const repoConfig = ref<RepoConfig>({

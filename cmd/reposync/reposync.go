@@ -371,29 +371,7 @@ func getRemoteDefaultBranch(repoURL string, env []string) string {
 }
 
 func buildProxyURL(url string, proxyType string, proxyURL string) string {
-	if proxyType == "" || proxyType == "none" {
-		return url
-	}
-
-	// 如果 URL 已经包含明显的代理前缀 (如用户手动填写的 http://ghproxy.com/...)
-	// 则跳过内置代理逻辑
-	if strings.Contains(url, "googo.win") || (proxyType == "custom" && strings.HasPrefix(url, proxyURL)) {
-		return url
-	}
-
-	base := ""
-	if proxyType == "ghproxy" {
-		base = "https://gh-proxy.com/"
-	} else if proxyType == "mirror" {
-		base = "https://mirror.ghproxy.com/"
-	} else if proxyType == "custom" && proxyURL != "" {
-		base = strings.TrimSuffix(proxyURL, "/") + "/"
-	}
-
-	if base != "" && strings.HasPrefix(url, "http") && !strings.HasPrefix(url, base) {
-		return base + url
-	}
-	return url
+	return utils.BuildProxyURL(url, proxyType, proxyURL)
 }
 
 func downloadFile(rawURL string, dest string, cfg Config) {

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -456,46 +455,14 @@ type MarketplaceResult struct {
 
 // FetchMarketplace 从官方/镜像源矩阵拉取白虎应用市场索引并完成数据修饰
 func (s *AppService) FetchMarketplace() (*MarketplaceResult, error) {
-	branch := strings.TrimSpace(os.Getenv("BH_APPSTORE_BRANCH"))
-	if branch == "" {
-		branch = "main"
-	}
+	remoteCandidates := utils.GetAppStoreAppsJSONCandidates()
+	body, usedURL, err := utils.FetchWithFallback(remoteCandidates, 8*time.Second)
 
-	remoteCandidates := []string{
-		"https://engigu.github.io/baihu-appstore/apps.json",
-		fmt.Sprintf("https://ghproxy.net/https://raw.githubusercontent.com/engigu/baihu-appstore/%s/apps.json", branch),
-		fmt.Sprintf("https://ghp.ci/https://raw.githubusercontent.com/engigu/baihu-appstore/%s/apps.json", branch),
-		fmt.Sprintf("https://raw.githubusercontent.com/engigu/baihu-appstore/%s/apps.json", branch),
-		fmt.Sprintf("https://cdn.jsdelivr.net/gh/engigu/baihu-appstore@%s/apps.json", branch),
-	}
-
-	client := &http.Client{Timeout: 8 * time.Second}
-	var resp *http.Response
-	var err error
-	nowTs := time.Now().Unix()
-
-	for _, targetURL := range remoteCandidates {
-		fetchURL := fmt.Sprintf("%s?t=%d", targetURL, nowTs)
-		resp, err = client.Get(fetchURL)
-		if err == nil && resp.StatusCode == http.StatusOK {
-			break
-		}
-		if resp != nil {
-			resp.Body.Close()
-		}
-	}
-
-	if err != nil || resp == nil || resp.StatusCode != http.StatusOK {
+	if err != nil || len(body) == 0 {
 		return &MarketplaceResult{
 			Source: "none",
 			Apps:   []map[string]interface{}{},
 		}, nil
-	}
-
-	defer resp.Body.Close()
-	body, rErr := io.ReadAll(resp.Body)
-	if rErr != nil {
-		return nil, fmt.Errorf("读取应用市场响应失败: %w", rErr)
 	}
 
 	var rawJSON interface{}
@@ -524,7 +491,7 @@ func (s *AppService) FetchMarketplace() (*MarketplaceResult, error) {
 	}
 
 	res := &MarketplaceResult{
-		Source: "remote",
+		Source: usedURL,
 		Apps:   resultApps,
 	}
 	if rawMap != nil {

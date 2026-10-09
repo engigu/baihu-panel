@@ -26,6 +26,7 @@ import {
 } from 'lucide-vue-next'
 import { VueMonacoEditor } from '@guolao/vue-monaco-editor'
 import { type MarketplaceApp } from '@/api'
+import { getAppStoreYamlCandidates, fetchWithFallback } from '@/utils/mirrors'
 import { toast } from 'vue-sonner'
 
 const props = withDefaults(
@@ -133,44 +134,18 @@ async function loadYaml() {
     return
   }
 
-  // 3. 若无 manifest_raw，从远程候选源异步拉取
+  // 3. 若无 manifest_raw，从统一镜像矩阵异步容灾拉取
   loading.value = true
-  const candidates: string[] = []
+  const candidates = getAppStoreYamlCandidates(props.app.id, props.app.manifest_url)
 
-  if (props.app.manifest_url) {
-    candidates.push(props.app.manifest_url)
+  try {
+    const { text } = await fetchWithFallback(candidates, { timeoutMs: 6000 })
+    yamlContent.value = text
+  } catch (err: any) {
+    loadError.value = err.message || '未获取到 YAML 清单内容，请检查网络连接或源仓库'
+  } finally {
+    loading.value = false
   }
-
-  const appId = props.app.id
-  candidates.push(
-    `https://fastly.jsdelivr.net/gh/engigu/baihu-appstore@main/apps/${appId}/app.yaml`,
-    `https://raw.githubusercontent.com/engigu/baihu-appstore/main/apps/${appId}/app.yaml`,
-    `https://ghproxy.net/https://raw.githubusercontent.com/engigu/baihu-appstore/main/apps/${appId}/app.yaml`
-  )
-
-  let fetchedText = ''
-  let lastErr = ''
-
-  for (const url of candidates) {
-    try {
-      const resp = await fetch(url)
-      if (resp.ok) {
-        fetchedText = await resp.text()
-        if (fetchedText && fetchedText.trim()) {
-          break
-        }
-      }
-    } catch (e: any) {
-      lastErr = e.message || '网络请求异常'
-    }
-  }
-
-  if (fetchedText && fetchedText.trim()) {
-    yamlContent.value = fetchedText
-  } else {
-    loadError.value = lastErr || '未获取到 YAML 清单内容，请检查网络连接或源仓库'
-  }
-  loading.value = false
 }
 
 watch(
