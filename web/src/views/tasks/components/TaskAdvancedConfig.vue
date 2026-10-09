@@ -247,57 +247,93 @@ watch(() => form.value.id, () => {
       <slot name="run-strategy-prepend"></slot>
 
       <!-- 双选项卡片 -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <!-- 选项 1: 限制并发 (单实例推荐) -->
         <div
-          class="p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between select-none"
+          class="p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between select-none relative group"
           :class="limitConcurrency
-            ? 'border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-500/[0.07] shadow-xs'
-            : 'border-border/60 bg-muted/10 hover:bg-muted/20 opacity-70 hover:opacity-100'"
+            ? 'border-emerald-500/50 bg-emerald-500/[0.06] dark:bg-emerald-500/[0.1] shadow-xs ring-1 ring-emerald-500/20'
+            : 'border-border/60 bg-muted/10 hover:bg-muted/20 opacity-75 hover:opacity-100'"
           @click="updateConcurrencyConfig(true)"
         >
-          <div class="flex items-center justify-between mb-1.5">
-            <div class="flex items-center gap-2">
-              <ShieldCheck class="h-4 w-4" :class="limitConcurrency ? 'text-emerald-500/80 dark:text-emerald-400/80' : 'text-muted-foreground'" />
-              <span class="text-xs font-semibold" :class="limitConcurrency ? 'text-foreground' : 'text-foreground/80'">限制并发</span>
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <div class="flex items-center gap-2 min-w-0 flex-wrap">
+              <div
+                class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors"
+                :class="limitConcurrency
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-muted text-muted-foreground group-hover:text-foreground'"
+              >
+                <ShieldCheck class="h-3.5 w-3.5" />
+              </div>
+              <span class="text-xs font-semibold whitespace-nowrap" :class="limitConcurrency ? 'text-foreground font-bold' : 'text-foreground/80'">
+                限制并发
+              </span>
+              <span
+                class="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium whitespace-nowrap shrink-0"
+                :class="limitConcurrency
+                  ? 'bg-emerald-500/15 text-emerald-600/95 dark:text-emerald-400 border border-emerald-500/25'
+                  : 'bg-muted text-muted-foreground'"
+              >
+                单实例 · 推荐
+              </span>
             </div>
-            <span
-              class="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium"
+            <!-- 单选 Radio 指示圆圈 -->
+            <div
+              class="w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-all"
               :class="limitConcurrency
-                ? 'bg-emerald-500/10 text-emerald-600/90 dark:text-emerald-400/80 border border-emerald-500/20'
-                : 'bg-muted text-muted-foreground'"
+                ? 'border-emerald-500 bg-emerald-500/10'
+                : 'border-muted-foreground/30 bg-transparent group-hover:border-muted-foreground/60'"
             >
-              单实例 · 推荐
-            </span>
+              <div v-if="limitConcurrency" class="w-2 h-2 rounded-full bg-emerald-500" />
+            </div>
           </div>
-          <p class="text-[11px] leading-relaxed" :class="limitConcurrency ? 'text-foreground/75 dark:text-foreground/70' : 'text-muted-foreground/80'">
+          <p class="text-[11px] leading-relaxed" :class="limitConcurrency ? 'text-foreground/80 dark:text-foreground/75' : 'text-muted-foreground/80'">
             同一时间只跑一个实例。执行未结束时，新触发将被直接拦截跳过，防止冲突。
           </p>
         </div>
 
         <!-- 选项 2: 允许并发 (多副本并行) -->
         <div
-          class="p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between select-none"
+          class="p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between select-none relative group"
           :class="!limitConcurrency
-            ? 'border-amber-500/40 bg-amber-500/5 dark:bg-amber-500/[0.07] shadow-xs'
-            : 'border-border/60 bg-muted/10 hover:bg-muted/20 opacity-70 hover:opacity-100'"
+            ? 'border-amber-500/50 bg-amber-500/[0.06] dark:bg-amber-500/[0.1] shadow-xs ring-1 ring-amber-500/20'
+            : 'border-border/60 bg-muted/10 hover:bg-muted/20 opacity-75 hover:opacity-100'"
           @click="updateConcurrencyConfig(false)"
         >
-          <div class="flex items-center justify-between mb-1.5">
-            <div class="flex items-center gap-2">
-              <Zap class="h-4 w-4" :class="!limitConcurrency ? 'text-amber-500/80 dark:text-amber-400/80' : 'text-muted-foreground'" />
-              <span class="text-xs font-semibold" :class="!limitConcurrency ? 'text-foreground' : 'text-foreground/80'">允许并发</span>
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <div class="flex items-center gap-2 min-w-0 flex-wrap">
+              <div
+                class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors"
+                :class="!limitConcurrency
+                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                  : 'bg-muted text-muted-foreground group-hover:text-foreground'"
+              >
+                <Zap class="h-3.5 w-3.5" />
+              </div>
+              <span class="text-xs font-semibold whitespace-nowrap" :class="!limitConcurrency ? 'text-foreground font-bold' : 'text-foreground/80'">
+                允许并发
+              </span>
+              <span
+                class="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium whitespace-nowrap shrink-0"
+                :class="!limitConcurrency
+                  ? 'bg-amber-500/15 text-amber-600/95 dark:text-amber-400 border border-amber-500/25'
+                  : 'bg-muted text-muted-foreground'"
+              >
+                多副本并行
+              </span>
             </div>
-            <span
-              class="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium"
+            <!-- 单选 Radio 指示圆圈 -->
+            <div
+              class="w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-all"
               :class="!limitConcurrency
-                ? 'bg-amber-500/10 text-amber-600/90 dark:text-amber-400/80 border border-amber-500/20'
-                : 'bg-muted text-muted-foreground'"
+                ? 'border-amber-500 bg-amber-500/10'
+                : 'border-muted-foreground/30 bg-transparent group-hover:border-muted-foreground/60'"
             >
-              多副本并行
-            </span>
+              <div v-if="!limitConcurrency" class="w-2 h-2 rounded-full bg-amber-500" />
+            </div>
           </div>
-          <p class="text-[11px] leading-relaxed" :class="!limitConcurrency ? 'text-foreground/75 dark:text-foreground/70' : 'text-muted-foreground/80'">
+          <p class="text-[11px] leading-relaxed" :class="!limitConcurrency ? 'text-foreground/80 dark:text-foreground/75' : 'text-muted-foreground/80'">
             不做任何限制。无论是否有任务在跑，每次触发都创建新的独立进程同时执行。
           </p>
         </div>
