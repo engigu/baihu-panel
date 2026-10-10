@@ -40,12 +40,13 @@ func New() *App {
 	// 启动系统级后台定时任务调度器
 	executor.InitSysCron()
 
-	// 注册容器 PageCache 智能自适应控存任务到系统定时器（仅在 Docker 容器生效，默认每 5 分钟智能巡检）
+	// 注册容器 PageCache 智能自适应控存任务与事件监听（仅在 Docker 容器生效）
 	if utils.IsRunningInDocker() {
-		spec := os.Getenv(constant.EnvKeyCacheTrimSpec)
-		if spec == "" {
-			spec = constant.DefaultCacheTrimSpec
-		}
+		// 1. 注册 EventBus 任务结束事件监听器，随产随清
+		memopt.RegisterTaskCompletionListener()
+
+		// 2. 注册系统后台定时高水位控存任务
+		spec := memopt.GetTrimSpec()
 		if _, err := executor.GetSysCron().AddJob(spec, func() {
 			memopt.AutoTrimContainerCache()
 		}); err != nil {
@@ -181,9 +182,9 @@ func (a *App) Run() {
 		logger.Warnf("启动文件同步监听服务失败: %v", err)
 	}
 
-	// 系统各核心组件启动就绪后，直接触发一次容器 Page Cache 与运行时物理内存回收
+	// 系统各核心组件启动就绪后，直接触发一次容器 Page Cache 与运行时物理内存回收（包含启动期基础环境母盘）
 	if utils.IsRunningInDocker() {
-		trimmed := memopt.TrimContainerCache()
+		trimmed := memopt.TrimContainerStartupCache()
 		logger.Infof("[MemOpt] 系统启动就绪联动回收完成，共释放 %d 个文件的 Page Cache 并归还物理内存", trimmed)
 	}
 

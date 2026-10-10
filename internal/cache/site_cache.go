@@ -27,16 +27,19 @@ func LoadSiteCache() {
 		}
 	}
 
-	// 从数据库加载覆盖
-	var settings []models.Setting
-	database.DB.Where("section = ?", constant.SectionSite).Find(&settings)
-	for _, setting := range settings {
-		val := string(setting.Value)
-		if val != "" {
-			siteCache[setting.Key] = val
+	// 从数据库加载覆盖（若数据库已连接）
+	if database.DB != nil {
+		var settings []models.Setting
+		if err := database.DB.Where("section = ?", constant.SectionSite).Find(&settings).Error; err == nil {
+			for _, setting := range settings {
+				val := string(setting.Value)
+				if val != "" {
+					siteCache[setting.Key] = val
+				}
+			}
+			siteCacheInit = true
 		}
 	}
-	siteCacheInit = true
 }
 
 // ensureSiteCache 确保站点缓存已初始化

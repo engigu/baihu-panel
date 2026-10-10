@@ -35,14 +35,11 @@ func readCgroupV2MemoryStat() (*ContainerMemoryStat, error) {
 	totalUsage := readUint64File(constant.CgroupV2MemoryCurrentPath)
 	limit := readUint64File(constant.CgroupV2MemoryMaxPath)
 
-	dockerUsed, inactive, _ := CalculateDockerMemory(totalUsage, string(statData))
+	stat := ParseCgroupMemoryDetails(totalUsage, string(statData))
+	stat.TotalUsageBytes = totalUsage
+	stat.LimitBytes = limit
 
-	return &ContainerMemoryStat{
-		TotalUsageBytes: totalUsage,
-		DockerUsedBytes: dockerUsed,
-		InactiveFile:    inactive,
-		LimitBytes:      limit,
-	}, nil
+	return &stat, nil
 }
 
 func readCgroupV1MemoryStat() (*ContainerMemoryStat, error) {
@@ -54,14 +51,11 @@ func readCgroupV1MemoryStat() (*ContainerMemoryStat, error) {
 	totalUsage := readUint64File(constant.CgroupV1MemoryUsagePath)
 	limit := readUint64File(constant.CgroupV1MemoryLimitPath)
 
-	dockerUsed, inactive, _ := CalculateDockerMemory(totalUsage, string(statData))
+	stat := ParseCgroupMemoryDetails(totalUsage, string(statData))
+	stat.TotalUsageBytes = totalUsage
+	stat.LimitBytes = limit
 
-	return &ContainerMemoryStat{
-		TotalUsageBytes: totalUsage,
-		DockerUsedBytes: dockerUsed,
-		InactiveFile:    inactive,
-		LimitBytes:      limit,
-	}, nil
+	return &stat, nil
 }
 
 func readUint64File(path string) uint64 {

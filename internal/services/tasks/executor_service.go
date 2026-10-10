@@ -330,6 +330,7 @@ func (h *ServerSchedulerHandler) OnTaskCompleted(req *executor.ExecutionRequest,
 					"duration":   result.Duration,
 					"output":     result.Output,
 					"error":      result.Error,
+					"work_dir":   req.WorkDir,
 				},
 			})
 		}
@@ -406,7 +407,6 @@ func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, er
 	h.es.HandleTaskRetry(task, req, false, constant.TaskStatusFailed, 1)
 
 	// ======= 通知触发 =======
-	// ======= 通知触发 =======
 	go func() {
 		taskName := "未知任务"
 		if task != nil {
@@ -422,6 +422,7 @@ func (h *ServerSchedulerHandler) OnTaskFailed(req *executor.ExecutionRequest, er
 				"end_time":  now.Time().Format("2006-01-02 15:04:05"),
 				"error":     err.Error(),
 				"output":    output,
+				"work_dir":  h.es.ResolvePath(req.WorkDir),
 			},
 		})
 	}()

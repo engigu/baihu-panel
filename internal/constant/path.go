@@ -22,6 +22,9 @@ const (
 	// CgroupV2MemoryMaxPath Linux cgroup v2 内存上限绝对路径
 	CgroupV2MemoryMaxPath = "/sys/fs/cgroup/memory.max"
 
+	// CgroupV2MemoryReclaimPath Linux cgroup v2 主动内存回收接口绝对路径
+	CgroupV2MemoryReclaimPath = "/sys/fs/cgroup/memory.reclaim"
+
 	// CgroupV1MemoryStatPath Linux cgroup v1 内存账本绝对路径
 	CgroupV1MemoryStatPath = "/sys/fs/cgroup/memory/memory.stat"
 

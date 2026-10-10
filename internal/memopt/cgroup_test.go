@@ -79,3 +79,32 @@ active_file 0
 		t.Errorf("totalUsage 小于 inactive 时期望返回 0, 得到 %d", dockerUsed)
 	}
 }
+
+func TestParseCgroupMemoryDetails(t *testing.T) {
+	// 模拟真实服务器产生 115MB active_file 的 cgroup v2 账本
+	v2Stat := `anon 12099584
+file 123731968
+inactive_file 8278016
+active_file 115453952
+slab_reclaimable 66716208
+`
+	totalUsage := uint64(202715008)
+	stat := ParseCgroupMemoryDetails(totalUsage, v2Stat)
+
+	if stat.InactiveFile != 8278016 {
+		t.Errorf("期望 InactiveFile 为 8278016, 得到 %d", stat.InactiveFile)
+	}
+	if stat.ActiveFile != 115453952 {
+		t.Errorf("期望 ActiveFile 为 115453952, 得到 %d", stat.ActiveFile)
+	}
+	if stat.TotalFileCache != 123731968 {
+		t.Errorf("期望 TotalFileCache 为 123731968, 得到 %d", stat.TotalFileCache)
+	}
+	if stat.SlabReclaimable != 66716208 {
+		t.Errorf("期望 SlabReclaimable 为 66716208, 得到 %d", stat.SlabReclaimable)
+	}
+	// DockerUsed 应当等于 202715008 - 8278016 = 194436992 (~185.4 MB)
+	if stat.DockerUsedBytes != totalUsage-stat.InactiveFile {
+		t.Errorf("DockerUsed 计算异常: 期望 %d, 得到 %d", totalUsage-stat.InactiveFile, stat.DockerUsedBytes)
+	}
+}

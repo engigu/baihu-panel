@@ -10,7 +10,9 @@ type ContainerMemoryStat struct {
 	TotalUsageBytes uint64 // 物理总使用量 (memory.current / memory.usage_in_bytes)
 	DockerUsedBytes uint64 // 对齐 Docker stats 口径: TotalUsageBytes - InactiveFile
 	InactiveFile    uint64 // inactive_file (未激活文件页，Docker 视为随时可释放丢弃的缓存)
-	TotalFileCache  uint64 // 总 Page Cache (file / cache)
+	ActiveFile      uint64 // active_file (活跃文件页，重型任务反复读取的类库/文件缓存)
+	TotalFileCache  uint64 // 总文件页缓存 (file / cache，包含 active + inactive)
+	SlabReclaimable uint64 // slab_reclaimable (可回收内核 Slab 目录项与 inode 缓存)
 	LimitBytes      uint64 // 内存上限 (0 代表未限制)
 }
 
@@ -27,6 +29,73 @@ func CalculateDockerMemory(totalUsage uint64, statContent string) (dockerUsed ui
 		return totalUsage - inactive, inactive, true
 	}
 	return 0, inactive, true
+}
+
+// ParseCgroupMemoryDetails 完整解析 cgroup memory.stat 内容获取结构化指标
+func ParseCgroupMemoryDetails(totalUsage uint64, content string) ContainerMemoryStat {
+	lines := strings.Split(content, "\n")
+	metrics := make(map[string]uint64, 32)
+
+	for _, line := range lines {
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		val, err := strconv.ParseUint(parts[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		metrics[parts[0]] = val
+	}
+
+	stat := ContainerMemoryStat{
+		TotalUsageBytes: totalUsage,
+	}
+
+	// 1. InactiveFile (用于 Docker stats 标准相减计算)
+	if v, ok := metrics["inactive_file"]; ok {
+		stat.InactiveFile = v
+	} else if v, ok := metrics["total_inactive_file"]; ok {
+		stat.InactiveFile = v
+	}
+
+	// 2. ActiveFile
+	if v, ok := metrics["active_file"]; ok {
+		stat.ActiveFile = v
+	} else if v, ok := metrics["total_active_file"]; ok {
+		stat.ActiveFile = v
+	}
+
+	// 3. TotalFileCache
+	if v, ok := metrics["file"]; ok {
+		stat.TotalFileCache = v
+	} else if v, ok := metrics["total_cache"]; ok {
+		stat.TotalFileCache = v
+	} else if v, ok := metrics["cache"]; ok {
+		stat.TotalFileCache = v
+	} else {
+		stat.TotalFileCache = stat.InactiveFile + stat.ActiveFile
+	}
+
+	// 4. SlabReclaimable
+	if v, ok := metrics["slab_reclaimable"]; ok {
+		stat.SlabReclaimable = v
+	} else if v, ok := metrics["total_slab_reclaimable"]; ok {
+		stat.SlabReclaimable = v
+	}
+
+	// 5. 对齐 Docker Stats 真实内存相减口径
+	if stat.InactiveFile > 0 {
+		if totalUsage >= stat.InactiveFile {
+			stat.DockerUsedBytes = totalUsage - stat.InactiveFile
+		} else {
+			stat.DockerUsedBytes = 0
+		}
+	} else {
+		stat.DockerUsedBytes = totalUsage
+	}
+
+	return stat
 }
 
 // parseCgroupInactiveFile 解析 cgroup memory.stat 内容获取 inactive_file（不活跃文件缓存）

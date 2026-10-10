@@ -15,6 +15,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/eventbus"
+	"github.com/engigu/baihu-panel/internal/memopt"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
 	"github.com/engigu/baihu-panel/internal/services"
@@ -148,11 +149,12 @@ func (sc *SettingsController) GetSiteSettings(c *gin.Context) {
 		settings[constant.KeyIcon] = constant.DefaultIcon
 		sc.settingsService.Set(constant.SectionSite, constant.KeyIcon, constant.DefaultIcon)
 	}
-	if settings[constant.KeyPageSize] == "" {
-		settings[constant.KeyPageSize] = constant.DefaultSettings[constant.SectionSite][constant.KeyPageSize]
-	}
-	if settings[constant.KeyCookieDays] == "" {
-		settings[constant.KeyCookieDays] = constant.DefaultSettings[constant.SectionSite][constant.KeyCookieDays]
+
+	// 2. 统一用默认配置字典兜底补齐所有空值（自动覆盖分页、Cookie以及内存回收等全部站点默认配置）
+	for k, v := range constant.DefaultSettings[constant.SectionSite] {
+		if settings[k] == "" {
+			settings[k] = v
+		}
 	}
 
 	// 解析 JSON 格式的 OpenAPI Token
@@ -226,6 +228,11 @@ func (sc *SettingsController) UpdateSiteSettings(c *gin.Context) {
 		OpenapiEnabled       bool   `json:"openapi_enabled"`
 		OpenapiToken         string `json:"openapi_token"`
 		OpenapiTokenExpire   string `json:"openapi_token_expire"`
+		CacheTrimEnabled     bool   `json:"cache_trim_enabled"`
+		MemWatermarkRate     string `json:"mem_watermark_rate"`
+		CacheMaxMB           string `json:"cache_max_mb"`
+		CacheTrimSpec        string `json:"cache_trim_spec"`
+		TaskFinishedTrim     bool   `json:"task_finished_trim"`
 		SystemNoticeDays     string `json:"system_notice_days"`
 		SystemNoticeMaxCount string `json:"system_notice_max_count"`
 		PushLogDays          string `json:"push_log_days"`
@@ -261,14 +268,28 @@ func (sc *SettingsController) UpdateSiteSettings(c *gin.Context) {
 	if req.CookieDays == "" {
 		req.CookieDays = constant.DefaultSettings[constant.SectionSite][constant.KeyCookieDays]
 	}
+	if req.MemWatermarkRate == "" {
+		req.MemWatermarkRate = constant.DefaultSettings[constant.SectionSite][constant.KeyMemWatermarkRate]
+	}
+	if req.CacheMaxMB == "" {
+		req.CacheMaxMB = constant.DefaultSettings[constant.SectionSite][constant.KeyCacheMaxMB]
+	}
+	if req.CacheTrimSpec == "" {
+		req.CacheTrimSpec = constant.DefaultSettings[constant.SectionSite][constant.KeyCacheTrimSpec]
+	}
 
 	values := map[string]string{
-		constant.KeyTitle:        req.Title,
-		constant.KeySubtitle:     req.Subtitle,
-		constant.KeyIcon:         req.Icon,
-		constant.KeyPageSize:     req.PageSize,
-		constant.KeyCookieDays:   req.CookieDays,
-		constant.KeyOpenapiToken: openapiTokenJson,
+		constant.KeyTitle:            req.Title,
+		constant.KeySubtitle:         req.Subtitle,
+		constant.KeyIcon:             req.Icon,
+		constant.KeyPageSize:         req.PageSize,
+		constant.KeyCookieDays:       req.CookieDays,
+		constant.KeyOpenapiToken:     openapiTokenJson,
+		constant.KeyCacheTrimEnabled: strconv.FormatBool(req.CacheTrimEnabled),
+		constant.KeyMemWatermarkRate: req.MemWatermarkRate,
+		constant.KeyCacheMaxMB:       req.CacheMaxMB,
+		constant.KeyCacheTrimSpec:    req.CacheTrimSpec,
+		constant.KeyTaskFinishedTrim: strconv.FormatBool(req.TaskFinishedTrim),
 	}
 
 	if err := sc.settingsService.SetSection(constant.SectionSite, values); err != nil {
@@ -295,6 +316,17 @@ func (sc *SettingsController) UpdateSiteSettings(c *gin.Context) {
 func (sc *SettingsController) GenerateOpenapiToken(c *gin.Context) {
 	utils.Success(c, gin.H{
 		"token": strings.ToLower(utils.RandomString(32)),
+	})
+}
+
+// TrimCache 手动触发容器 PageCache 与运行时内存自适应回收
+func (sc *SettingsController) TrimCache(c *gin.Context) {
+	_ = memopt.TryReclaimCgroupMemory(0)
+	trimmedFiles := memopt.TrimContainerCache()
+	memopt.Free()
+	utils.Success(c, gin.H{
+		"message":       "内存与文件缓存回收成功",
+		"trimmed_files": trimmedFiles,
 	})
 }
 

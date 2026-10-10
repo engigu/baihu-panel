@@ -1,6 +1,7 @@
 package memopt
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,9 +10,11 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/engigu/baihu-panel/internal/constant"
+	"github.com/engigu/baihu-panel/internal/eventbus"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/utils"
 	"github.com/shirou/gopsutil/v3/process"
@@ -147,21 +150,39 @@ func DropMiseCacheAsync(delays ...time.Duration) {
 		if delay > 0 {
 			time.Sleep(delay)
 		}
-		_, _ = DropCache(constant.ContainerMiseBaseDir, constant.ResolveMiseDataDir())
+		_, _ = DropCache(constant.ResolveMiseDataDir())
 	}()
 }
 
 var isTrimming atomic.Bool
 
-// getContainerTrimTargets 获取容器内需重点回收 Page Cache 的目标路径清单
-// 覆盖：任务脚本工作目录、系统与任务日志目录、用户动态环境目录，以及用户自定义扩展目录（自动排除静态只读的系统底座）
-func getContainerTrimTargets() []string {
-	targets := make([]string, 0, 8)
-
-	// 1. Mise 运行时基础底座与数据存储目录
-	if constant.ContainerMiseBaseDir != "" {
-		targets = append(targets, constant.ContainerMiseBaseDir)
+// filterValidTargets 过滤出真实存在的目录路径并进行路径去重
+func filterValidTargets(targets []string) []string {
+	seen := make(map[string]bool)
+	validTargets := make([]string, 0, len(targets))
+	for _, p := range targets {
+		if p == "" {
+			continue
+		}
+		cleanPath := filepath.Clean(p)
+		if seen[cleanPath] {
+			continue
+		}
+		seen[cleanPath] = true
+		if _, err := os.Stat(cleanPath); err == nil {
+			validTargets = append(validTargets, cleanPath)
+		}
 	}
+	return validTargets
+}
+
+// getContainerTrimTargets 获取容器常驻运行期需重点回收 Page Cache 的动态工作区目标路径清单
+// 专注于高频产物：任务脚本、系统与任务日志目录、用户动态环境目录
+// 【关键设计】：彻底排除静态只读的容器镜像底座 (/opt/mise-base)，避免每轮巡检对数千静态文件产生无意义的磁盘扫描与 Slab 膨胀
+func getContainerTrimTargets() []string {
+	targets := make([]string, 0, 4)
+
+	// 1. 用户动态环境目录（若用户安装了新扩展或依赖）
 	if miseDataDir := constant.ResolveMiseDataDir(); miseDataDir != "" && miseDataDir != constant.ContainerMiseBaseDir {
 		targets = append(targets, miseDataDir)
 	}
@@ -188,24 +209,10 @@ func getContainerTrimTargets() []string {
 		}
 	}
 
-	// 去重并过滤出真实存在的路径，避免无效扫描
-	seen := make(map[string]bool)
-	validTargets := make([]string, 0, len(targets))
-	for _, p := range targets {
-		cleanPath := filepath.Clean(p)
-		if seen[cleanPath] {
-			continue
-		}
-		seen[cleanPath] = true
-		if _, err := os.Stat(cleanPath); err == nil {
-			validTargets = append(validTargets, cleanPath)
-		}
-	}
-
-	return validTargets
+	return filterValidTargets(targets)
 }
 
-// TrimContainerCache 立即同步执行一次容器内 Page Cache 与 Go 运行时堆内存回收
+// TrimContainerCache 立即同步执行一次动态工作区 Page Cache 与 Go 运行时堆内存回收
 // 返回本次释放的文件总数量
 func TrimContainerCache() int {
 	if !utils.IsRunningInDocker() {
@@ -217,7 +224,7 @@ func TrimContainerCache() int {
 		return 0
 	}
 
-	// 1. 同步遍历高频目录，调用 posix_fadvise 卸载已读入内存的文件缓存
+	// 1. 同步遍历高频动态目录，调用 posix_fadvise 卸载已读入内存的文件缓存
 	totalFiles, err := DropCache(targets...)
 	if err != nil {
 		logger.Debugf("[MemOpt] 释放容器文件缓存出现提示: %v", err)
@@ -229,15 +236,67 @@ func TrimContainerCache() int {
 	return totalFiles
 }
 
+// TrimContainerStartupCache 系统启动就绪时的一次性全量回收
+// 包含一次性初始化产生的只读基础底座 (/opt/mise-base) 以及全量工作区
+func TrimContainerStartupCache() int {
+	if !utils.IsRunningInDocker() {
+		return 0
+	}
+
+	targets := getContainerTrimTargets()
+	if constant.ContainerMiseBaseDir != "" {
+		targets = append(targets, constant.ContainerMiseBaseDir)
+	}
+	validTargets := filterValidTargets(targets)
+	if len(validTargets) == 0 {
+		return 0
+	}
+
+	totalFiles, err := DropCache(validTargets...)
+	if err != nil {
+		logger.Debugf("[MemOpt] 释放启动文件缓存出现提示: %v", err)
+	}
+
+	Free()
+	return totalFiles
+}
+
+// TryReclaimCgroupMemory 尝试通过 cgroup v2 memory.reclaim 请求内核主动回收可回收内存（含 Slab 与 PageCache）
+// 若当前容器具备该文件写权限，内核将以毫秒级速度直接完成回收，无需应用层递归遍历文件系统
+func TryReclaimCgroupMemory(reclaimBytes uint64) bool {
+	if !utils.IsRunningInDocker() {
+		return false
+	}
+	if reclaimBytes == 0 {
+		reclaimBytes = 50 * 1024 * 1024
+	}
+	payload := []byte(strconv.FormatUint(reclaimBytes, 10))
+	err := os.WriteFile(constant.CgroupV2MemoryReclaimPath, payload, 0644)
+	if err == nil {
+		return true
+	}
+	// 在 Linux 内核 cgroup v2 规范中，若实际回收的字节数小于请求量，内核仍会尽最大努力回收，但系统调用会返回 -EAGAIN。
+	// 针对此类情况，内核已实际完成部分回收，视为生效，避免误判降级产生无效的磁盘遍历。
+	if errors.Is(err, syscall.EAGAIN) {
+		return true
+	}
+	return false
+}
+
 // AutoTrimContainerCache 智能检测并自适应释放容器内的 Page Cache
 // 规则：
 // 1. 仅在 Docker 容器环境中执行；
 // 2. 原子防重入保护：避免上一轮耗时较长时造成定时任务 IO 堆叠；
-// 3. 动态读取 cgroup 文件缓存占用，若超过水位线（默认 60MB，可通过 BH_CACHE_MAX_MB 配置）才触发释放；
-// 4. 低于水位线时静默跳过，无额外 CPU 或磁盘 IO 损耗；
-// 5. 触发释放时，同步遍历脚本/日志等动态高频目录卸载 Page Cache，并联动归还 Go 堆内存给操作系统。
+// 3. 高水位线自适应：配置了内存限额时，仅在总内存达到安全警戒线（默认 80%）且存在大量 Page Cache 时介入；
+//    平时充裕时静默放行，让 Page Cache 充分发挥磁盘加速作用，避免无谓的磁盘扫描开销；
+// 4. 清理时优先使用 cgroup memory.reclaim 原生回收（一并卸载 Slab 与 PageCache），不可用时降级为动态目录 DropCache。
 func AutoTrimContainerCache() bool {
 	if !utils.IsRunningInDocker() {
+		return false
+	}
+
+	cfg := GetConfig()
+	if !cfg.Enabled {
 		return false
 	}
 
@@ -248,40 +307,66 @@ func AutoTrimContainerCache() bool {
 	}
 	defer isTrimming.Store(false)
 
-	thresholdMB := constant.DefaultCacheMaxMB
-	if envVal := os.Getenv(constant.EnvKeyCacheMaxMB); envVal != "" {
-		if v, err := strconv.Atoi(envVal); err == nil && v > 0 {
-			thresholdMB = v
-		}
-	}
-	thresholdBytes := uint64(thresholdMB) * 1024 * 1024
-
 	stat, err := GetContainerMemoryStat()
 	if err != nil {
-		// 未能精准读取 cgroup 时（如部分老旧宿主机或受限无权读取），直接按 debug 记录并跳过，避免盲目频繁报警
 		logger.Debugf("[MemOpt] 未能获取 cgroup 内存指标 (%v)，跳过本次自适应回收", err)
 		return false
 	}
 
-	if stat.InactiveFile < thresholdBytes {
-		// 未达到水位线，保持现状，不进行多余操作
+	thresholdMB := cfg.ThresholdMB
+	thresholdBytes := uint64(thresholdMB) * 1024 * 1024
+	watermarkRate := cfg.WatermarkRate
+
+	// 智能判定策略：
+	// 若配置了容器内存限额 (LimitBytes > 0)：
+	// 只要出现以下任一情况，即启动自适应回收：
+	//   1. 达到高警戒水位线 (默认 80%): 容器总物理内存或 Docker 真实占用 >= watermarkRate，且存在可回收资源 (hasReclaimable)；
+	//   2. 活跃缓存重型任务半载防护: 总文件缓存 (TotalFileCache = active + inactive) 达到阈值 (>= thresholdBytes)，
+	//      且系统整体负载已过半 (totalUsageRate >= 0.60)，避免像 .NET/Python/Node 任务产生上百兆 active_file 时漏判。
+	// 若未配置限额 (LimitBytes == 0)：
+	//   只要总文件缓存 TotalFileCache >= thresholdBytes 即触发
+	shouldTrim := false
+	if stat.LimitBytes > 0 {
+		totalUsageRate := float64(stat.TotalUsageBytes) / float64(stat.LimitBytes)
+		dockerUsageRate := float64(stat.DockerUsedBytes) / float64(stat.LimitBytes)
+		hasReclaimable := stat.TotalFileCache >= thresholdBytes || stat.SlabReclaimable >= thresholdBytes
+
+		isHighWatermark := hasReclaimable && (totalUsageRate >= watermarkRate || dockerUsageRate >= watermarkRate)
+		isCacheHeavy := stat.TotalFileCache >= thresholdBytes && totalUsageRate >= 0.60
+
+		if isHighWatermark || isCacheHeavy {
+			shouldTrim = true
+		}
+	} else if stat.TotalFileCache >= thresholdBytes {
+		shouldTrim = true
+	}
+
+	if !shouldTrim {
 		return false
 	}
 
 	// 格式化输出容器内存状况，让 Docker Stats 真实占用与 PageCache 缓存清晰透明对齐
 	usedStr := FormatBytes(stat.DockerUsedBytes)
-	cacheStr := FormatBytes(stat.InactiveFile)
+	cacheStr := FormatBytes(stat.TotalFileCache)
 	if stat.LimitBytes > 0 {
 		limitStr := FormatBytes(stat.LimitBytes)
 		pct := float64(stat.DockerUsedBytes) / float64(stat.LimitBytes) * 100
-		logger.Infof("[MemOpt] 容器 PageCache 达到水位线 (当前缓存: %s, 阈值: %d MB, Docker真实占用: %s / %s [%.1f%%])，启动自适应回收",
-			cacheStr, thresholdMB, usedStr, limitStr, pct)
+		totalPct := float64(stat.TotalUsageBytes) / float64(stat.LimitBytes) * 100
+		logger.Infof("[MemOpt] 容器内存达到警戒水位线 (当前总占用: %.1f%%, 总文件缓存: %s [活跃: %s, 非活跃: %s], Docker真实占用: %s / %s [%.1f%%])，启动自适应回收",
+			totalPct, cacheStr, FormatBytes(stat.ActiveFile), FormatBytes(stat.InactiveFile), usedStr, limitStr, pct)
 	} else {
-		logger.Infof("[MemOpt] 容器 PageCache 达到水位线 (当前缓存: %s, 阈值: %d MB, Docker真实占用: %s)，启动自适应回收",
+		logger.Infof("[MemOpt] 容器 PageCache 达到水位线 (当前总缓存: %s, 阈值: %d MB, Docker真实占用: %s)，启动自适应回收",
 			cacheStr, thresholdMB, usedStr)
 	}
 
-	// 同步执行目标目录回收与运行时内存退还
+	// 优先尝试 cgroup v2 memory.reclaim 原生回收（毫秒级极速，且可回收 Slab 目录项）
+	if TryReclaimCgroupMemory(thresholdBytes) {
+		Free()
+		logger.Infof("[MemOpt] 容器自适应回收完成，已通过 cgroup memory.reclaim 原生卸载缓存与 Slab 并归还物理内存")
+		return true
+	}
+
+	// 降级回退方案：精准同步遍历动态工作区目录回收并联动堆退还
 	filesTrimmed := TrimContainerCache()
 	if filesTrimmed > 0 {
 		logger.Infof("[MemOpt] 容器自适应回收完成，清理了 %d 个文件的 Page Cache 并归还物理内存", filesTrimmed)
@@ -290,6 +375,60 @@ func AutoTrimContainerCache() bool {
 	}
 
 	return true
+}
+
+// OnTaskFinished 任务执行完成联动回收
+// 针对大任务（耗时较长或处理大量依赖/产物文件）结束后的轻量级异步回收
+// 采用尾部防抖（Trailing Debounce）：同目录多任务密集接连结束时自动顺延合并，在最后一个任务平息后执行唯一一次彻底清理
+func OnTaskFinished(workDir string) {
+	if !utils.IsRunningInDocker() {
+		return
+	}
+
+	cfg := GetConfig()
+	if !cfg.Enabled || !cfg.TaskFinishedTrim {
+		return
+	}
+
+	// 若未指定具体工作目录，轻量延迟后直接检测容器内存水位
+	if workDir == "" {
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			AutoTrimContainerCache()
+		}()
+		return
+	}
+
+	// 尾部防抖窗口设为 1.5 秒：多个密集子任务接连结束时自动顺延，在最后一个任务完全平息后执行收尾
+	defaultDirDebouncer.Debounce(workDir, 1500*time.Millisecond, func(dir string) {
+		_, _ = DropCache(dir)
+		AutoTrimContainerCache()
+	})
+}
+
+// RegisterTaskCompletionListener 注册全局事件总线监听（仅在 Docker 容器环境下激活）
+// 监听任务成功/失败/超时/取消等全部结束事件，解耦触发工作区 Page Cache 与高水位内存异步自适应回收
+func RegisterTaskCompletionListener() {
+	if !utils.IsRunningInDocker() {
+		return
+	}
+
+	handler := func(e eventbus.Event) {
+		var workDir string
+		if payload, ok := e.Payload.(map[string]interface{}); ok {
+			if wd, okStr := payload["work_dir"].(string); okStr {
+				workDir = wd
+			}
+		}
+		OnTaskFinished(workDir)
+	}
+
+	eventbus.DefaultBus.Subscribe(constant.EventTaskSuccess, handler)
+	eventbus.DefaultBus.Subscribe(constant.EventTaskFailed, handler)
+	eventbus.DefaultBus.Subscribe(constant.EventTaskTimeout, handler)
+	eventbus.DefaultBus.Subscribe(constant.EventTaskCancelled, handler)
+
+	logger.Infof("[MemOpt] 已挂载 EventBus 任务结束事件监听器 (工作区 PageCache 异步自适应回收)")
 }
 
 /*
