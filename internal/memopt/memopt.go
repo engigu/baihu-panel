@@ -358,31 +358,44 @@ func AutoTrimContainerCache() bool {
 		return false
 	}
 
-	// 格式化输出容器内存状况，让 Docker Stats 真实占用与 PageCache 缓存清晰透明对齐
-	usedStr := FormatBytes(stat.DockerUsedBytes)
-	cacheStr := FormatBytes(stat.TotalFileCache)
-	if stat.LimitBytes > 0 {
-		limitStr := FormatBytes(stat.LimitBytes)
-		pct := float64(stat.DockerUsedBytes) / float64(stat.LimitBytes) * 100
-		totalPct := float64(stat.TotalUsageBytes) / float64(stat.LimitBytes) * 100
-		logger.Infof("[MemOpt] 容器内存达到警戒水位线 (当前总占用: %.1f%%, 总文件缓存: %s [活跃: %s, 非活跃: %s], Docker真实占用: %s / %s [%.1f%%])，启动自适应回收",
-			totalPct, cacheStr, FormatBytes(stat.ActiveFile), FormatBytes(stat.InactiveFile), usedStr, limitStr, pct)
-	} else {
-		logger.Infof("[MemOpt] 容器 PageCache 达到水位线 (当前总缓存: %s, 阈值: %d MB, Docker真实占用: %s)，启动自适应回收",
-			cacheStr, thresholdMB, usedStr)
+	// 执行回收并合并输出结果，精简日志且不丢失任何指标数据
+	logTrimResult := func(methodDesc string) {
+		time.Sleep(50 * time.Millisecond)
+		newStat, err := GetContainerMemoryStat()
+		if err == nil && stat.LimitBytes > 0 {
+			oldTotalPct := float64(stat.TotalUsageBytes) / float64(stat.LimitBytes) * 100
+			newTotalPct := float64(newStat.TotalUsageBytes) / float64(stat.LimitBytes) * 100
+			dockerPct := float64(newStat.DockerUsedBytes) / float64(stat.LimitBytes) * 100
+			logger.Infof("[MemOpt] 容器自适应回收 (%s): 总占用 %.1f%% -> %.1f%% | 文件缓存 %s -> %s (活跃: %s -> %s, 非活跃: %s -> %s) | Docker真实占用 %s / %s (%.1f%%)",
+				methodDesc,
+				oldTotalPct, newTotalPct,
+				FormatBytes(stat.TotalFileCache), FormatBytes(newStat.TotalFileCache),
+				FormatBytes(stat.ActiveFile), FormatBytes(newStat.ActiveFile),
+				FormatBytes(stat.InactiveFile), FormatBytes(newStat.InactiveFile),
+				FormatBytes(newStat.DockerUsedBytes), FormatBytes(stat.LimitBytes), dockerPct)
+		} else if err == nil {
+			logger.Infof("[MemOpt] 容器自适应回收 (%s): 文件缓存 %s -> %s (活跃: %s -> %s, 非活跃: %s -> %s) | Docker真实占用 %s",
+				methodDesc,
+				FormatBytes(stat.TotalFileCache), FormatBytes(newStat.TotalFileCache),
+				FormatBytes(stat.ActiveFile), FormatBytes(newStat.ActiveFile),
+				FormatBytes(stat.InactiveFile), FormatBytes(newStat.InactiveFile),
+				FormatBytes(newStat.DockerUsedBytes))
+		} else {
+			logger.Infof("[MemOpt] 容器自适应回收完成 (%s，并归还物理内存)", methodDesc)
+		}
 	}
 
 	// 优先尝试 cgroup v2 memory.reclaim 原生回收（毫秒级极速，且可回收 Slab 目录项）
 	if TryReclaimCgroupMemory(thresholdBytes) {
 		Free()
-		logger.Infof("[MemOpt] 容器自适应回收完成 (内核 cgroup 原生释放 Slab 与缓存，并归还物理内存)")
+		logTrimResult("内核 cgroup 原生释放 Slab 与缓存")
 		return true
 	}
 
 	// 降级回退方案：精准同步遍历动态工作区目录回收并联动堆退还
 	filesTrimmed := TrimContainerCache()
 	if filesTrimmed > 0 {
-		logger.Infof("[MemOpt] 容器自适应回收完成 (已释放 %d 个文件缓存，并归还物理内存)", filesTrimmed)
+		logTrimResult(fmt.Sprintf("已释放 %d 个文件缓存", filesTrimmed))
 	} else {
 		logger.Debugf("[MemOpt] 容器自适应巡检完成 (无待释放文件缓存)")
 	}
