@@ -29,6 +29,13 @@ const (
 	KeyOpenapiToken      = "openapi_token"
 	KeyActiveWebUI       = "active_webui"
 
+	// 容器内存与缓存回收设置 Key 常量
+	KeyCacheTrimEnabled = "cache_trim_enabled" // 智能内存回收总开关
+	KeyMemWatermarkRate = "mem_watermark_rate" // 警戒水位线比例 (如 80%)
+	KeyCacheMaxMB       = "cache_max_mb"       // 缓存触发阈值 (MB)
+	KeyCacheTrimSpec    = "cache_trim_spec"    // 后台巡检周期
+	KeyTaskFinishedTrim = "task_finished_trim" // 任务结束尾部回收开关
+
 	// Security Settings Key 常量
 	KeySecret = "secret"
 
@@ -202,6 +209,18 @@ const (
 
 	// ScriptsDirPlaceholder 脚本目录占位符
 	ScriptsDirPlaceholder = "$SCRIPTS_DIR$"
+
+	// 容器 Page Cache 智能控存相关环境变量 Key
+	EnvKeyMiseDataDir   = "MISE_DATA_DIR"
+	EnvKeyCacheTrimSpec = "BH_CACHE_TRIM_SPEC"
+	EnvKeyCacheMaxMB      = "BH_CACHE_MAX_MB"
+	EnvKeyCacheTrimDirs   = "BH_CACHE_TRIM_DIRS"
+	EnvKeyMemWatermarkRate = "BH_MEM_WATERMARK_RATE"
+
+	// 容器 Page Cache 智能控存默认配置
+	DefaultCacheTrimSpec    = "@every 5m"
+	DefaultCacheMaxMB       = 60
+	DefaultMemWatermarkRate = 0.80 // 默认达到总内存限额 80% 高水位才介入自适应回收
 )
 
 // CookieName Cookie 名称
@@ -243,6 +262,11 @@ var DefaultSettings = map[string]map[string]string{
 		KeyPageSize:         "10",
 		KeyCookieDays:       "7",
 		KeyActiveWebUI:      "default",
+		KeyCacheTrimEnabled: "true",
+		KeyMemWatermarkRate: "80",
+		KeyCacheMaxMB:       "60",
+		KeyCacheTrimSpec:    "@every 5m",
+		KeyTaskFinishedTrim: "true",
 	},
 	SectionScheduler: {
 		KeyWorkerCount:  "4",

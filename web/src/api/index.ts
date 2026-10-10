@@ -303,6 +303,7 @@ export const api = {
     updateSite: (data: SiteSettings) =>
       request('/settings/site', { method: 'PUT', body: JSON.stringify(data) }),
     generateOpenapiToken: () => request<{ token: string }>('/settings/site/openapi-token/generate', { method: 'POST' }),
+    trimCache: () => request<{ message: string; trimmed_files: number }>('/settings/site/trim-cache', { method: 'POST' }),
     getScheduler: () => request<SchedulerSettings>('/settings/scheduler'),
     updateScheduler: (data: SchedulerSettings) =>
       request('/settings/scheduler', { method: 'PUT', body: JSON.stringify(data) }),
@@ -880,6 +881,11 @@ export interface SiteSettings {
   login_log_max_count?: string
   scheduler_log_days?: string
   scheduler_log_max_count?: string
+  cache_trim_enabled?: boolean
+  mem_watermark_rate?: string
+  cache_max_mb?: string
+  cache_trim_spec?: string
+  task_finished_trim?: boolean
   active_webui?: string
   demo_mode?: string
 }

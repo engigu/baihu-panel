@@ -40,6 +40,25 @@ func New() *App {
 	// 启动系统级后台定时任务调度器
 	executor.InitSysCron()
 
+	// 注册容器 PageCache 智能自适应控存任务与事件监听（仅在 Docker 容器生效）
+	if utils.IsRunningInDocker() {
+		// 1. 注册 EventBus 任务结束事件监听器，随产随清
+		memopt.RegisterTaskCompletionListener()
+
+		// 2. 注册系统后台定时高水位控存任务
+		spec := memopt.GetTrimSpec()
+		if _, err := executor.GetSysCron().AddJob(spec, func() {
+			memopt.AutoTrimContainerCache()
+		}); err != nil {
+			logger.Errorf("[System] 注册 PageCache 智能守护任务失败: %v", err)
+		} else {
+			logger.Infof("[System] 已注册 Docker 容器 PageCache 智能控存任务 (调度周期: %s)", spec)
+		}
+	}
+
+	// 启动静默期后台物理内存守护协程 (暂时保留注释)
+	// memopt.StartDaemon(30 * time.Minute)
+
 	// 初始化完成阶段检查点：释放启动临时对象并收缩物理常驻内存
 	memopt.Checkpoint("system_ready")
 
@@ -163,8 +182,11 @@ func (a *App) Run() {
 		logger.Warnf("启动文件同步监听服务失败: %v", err)
 	}
 
-	// 系统启动就绪后触发一次 Go 运行时物理内存回收
-	memopt.Free()
+	// 系统各核心组件启动就绪后，直接触发一次容器 Page Cache 与运行时物理内存回收（包含启动期基础环境母盘）
+	if utils.IsRunningInDocker() {
+		trimmed := memopt.TrimContainerStartupCache()
+		logger.Infof("[MemOpt] 系统启动就绪联动回收完成，共释放 %d 个文件的 Page Cache 并归还物理内存", trimmed)
+	}
 
 	addr := fmt.Sprintf("%s:%d", a.Config.Server.Host, a.Config.Server.Port)
 	logger.Infof("[HTTP] 服务正在启动，监听地址: http://%s", addr)
