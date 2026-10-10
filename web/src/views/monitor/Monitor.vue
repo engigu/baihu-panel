@@ -4,8 +4,7 @@ import type { MonitorStats } from '@/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import StatusDot from '@/components/StatusDot.vue'
-import { RefreshCw, Cpu, MemoryStick, HardDrive, Activity, LayoutDashboard } from 'lucide-vue-next'
+import { RefreshCw, Cpu, MemoryStick, HardDrive, Activity, LayoutDashboard, Layers, Play, Server, CalendarClock } from 'lucide-vue-next'
 import { formatDateTime } from '@/utils/date'
 
 import {
@@ -33,6 +32,7 @@ ChartJS.register(
   Legend,
   Filler
 )
+ChartJS.defaults.font.family = "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, sans-serif"
 
 const activeTab = ref(localStorage.getItem('monitor_active_tab') || 'charts')
 
@@ -42,6 +42,15 @@ watch(activeTab, (newVal) => {
 
 const stats = ref<MonitorStats | null>(null)
 const loading = ref(false)
+
+const busyWorkersCount = computed(() => {
+  if (!stats.value?.scheduler?.workers) return 0
+  return stats.value.scheduler.workers.filter(w => w.status === 'running').length
+})
+
+const totalWorkersCount = computed(() => {
+  return stats.value?.scheduler?.workers?.length || stats.value?.scheduler?.worker_count || 0
+})
 
 // --- 时序数据池 ---
 const historySize = 60 // 保存最近60次请求（约3分钟@3s）
@@ -325,65 +334,182 @@ const schedulerChartData = computed(() => ({
       
 
 
-      <!-- 物理主机监控环形图 -->
+      <!-- 物理主机与容器资源监控环形图 -->
       <div v-if="stats" class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-        <Card>
+        <!-- CPU 使用率 -->
+        <Card class="border-border/60">
           <CardHeader class="pb-2">
-            <CardTitle class="text-base font-medium text-muted-foreground flex items-center"><Cpu class="w-4 h-4 mr-2" /> CPU 使用率</CardTitle>
-          </CardHeader>
-          <CardContent class="flex flex-col items-center">
-            <div class="relative w-32 h-32 flex items-center justify-center mt-2">
-              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                <path class="text-muted/20" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                <path :class="stats.host.cpu_percent > 80 ? 'text-red-500' : 'text-blue-500'" stroke-dasharray="100, 100" :stroke-dashoffset="100 - stats.host.cpu_percent" stroke-width="3" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" style="transition: stroke-dashoffset 0.5s ease 0s;" />
-              </svg>
-              <div class="absolute text-2xl font-bold" :class="stats.host.cpu_percent > 80 ? 'text-red-500' : 'text-foreground'">{{ stats.host.cpu_percent.toFixed(1) }}%</div>
+            <div class="flex items-center justify-between">
+              <CardTitle class="text-sm font-semibold text-foreground flex items-center gap-2">
+                <span class="p-1 rounded-md bg-blue-500/10 text-blue-500">
+                  <Cpu class="w-3.5 h-3.5" />
+                </span>
+                CPU 使用率
+              </CardTitle>
+              <span class="text-[10px] px-1.5 py-0.5 rounded border border-border/60 text-muted-foreground bg-muted/20 font-medium tracking-wide">
+                host cpu
+              </span>
             </div>
-            <div class="text-xs text-muted-foreground mt-4">宿主机物理核心负载</div>
+          </CardHeader>
+          <CardContent class="flex flex-col items-center pt-1">
+            <div class="relative w-32 h-32 flex items-center justify-center mt-1">
+              <svg class="w-full h-full transform -rotate-90 drop-shadow-sm" viewBox="0 0 36 36">
+                <defs>
+                  <linearGradient id="cpuGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#38bdf8" />
+                    <stop offset="100%" stop-color="#3b82f6" />
+                  </linearGradient>
+                  <linearGradient id="cpuGradWarn" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#fb7185" />
+                    <stop offset="100%" stop-color="#e11d48" />
+                  </linearGradient>
+                </defs>
+                <path class="text-muted/20" stroke-width="2.8" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path
+                  :stroke="stats.host.cpu_percent > 80 ? 'url(#cpuGradWarn)' : 'url(#cpuGrad)'"
+                  stroke-dasharray="100, 100"
+                  :stroke-dashoffset="100 - stats.host.cpu_percent"
+                  stroke-width="2.8"
+                  stroke-linecap="round"
+                  fill="none"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  style="transition: stroke-dashoffset 0.6s ease;"
+                />
+              </svg>
+              <div class="absolute flex flex-col items-center justify-center">
+                <div class="flex items-baseline" :class="stats.host.cpu_percent > 80 ? 'text-red-500' : 'text-foreground'">
+                  <span class="text-2xl font-extrabold tracking-tight tabular-nums metric-num">{{ stats.host.cpu_percent.toFixed(1) }}</span>
+                  <span class="text-xs font-semibold text-muted-foreground ml-0.5">%</span>
+                </div>
+              </div>
+            </div>
+            <div class="w-full mt-3 p-2 rounded-lg bg-muted/20 border border-border/50 flex items-center justify-between text-xs">
+              <span class="text-muted-foreground">核心状态</span>
+              <span class="font-medium text-foreground flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full" :class="stats.host.cpu_percent > 80 ? 'bg-red-500 animate-pulse' : 'bg-blue-500'"></span>
+                {{ stats.host.cpu_percent > 80 ? '高负载' : '负载正常' }}
+              </span>
+            </div>
           </CardContent>
         </Card>
         
-        <Card>
+        <!-- 内存使用率 -->
+        <Card class="border-border/60">
           <CardHeader class="pb-2">
-            <CardTitle class="text-base font-medium text-muted-foreground flex items-center justify-between">
-              <span class="flex items-center"><MemoryStick class="w-4 h-4 mr-2" /> 内存使用率</span>
+            <div class="flex items-center justify-between">
+              <CardTitle class="text-sm font-semibold text-foreground flex items-center gap-2">
+                <span class="p-1 rounded-md bg-emerald-500/10 text-emerald-500">
+                  <MemoryStick class="w-3.5 h-3.5" />
+                </span>
+                内存使用率
+              </CardTitle>
               <span v-if="stats.container?.is_docker" class="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-medium">
                 docker stats
               </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent class="flex flex-col items-center">
-            <div class="relative w-32 h-32 flex items-center justify-center mt-2">
-              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                <path class="text-muted/20" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                <path :class="memPercent > 80 ? 'text-red-500' : 'text-emerald-500'" stroke-dasharray="100, 100" :stroke-dashoffset="100 - memPercent" stroke-width="3" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" style="transition: stroke-dashoffset 0.5s ease 0s;" />
-              </svg>
-              <div class="absolute text-2xl font-bold tabular-nums metric-num" :class="memPercent > 80 ? 'text-red-500' : 'text-foreground'">{{ memPercent.toFixed(1) }}%</div>
+              <span v-else class="text-[10px] px-1.5 py-0.5 rounded border border-border/60 text-muted-foreground bg-muted/20 font-medium tracking-wide">
+                host mem
+              </span>
             </div>
-            <div class="text-xs text-muted-foreground mt-4 tabular-nums">
-              <template v-if="stats.container?.is_docker">
-                {{ formatBytes(stats.container.docker_used) }} / {{ stats.container.limit > 0 ? formatBytes(stats.container.limit) : '未限额' }}
-              </template>
-              <template v-else>
-                {{ formatBytes(stats.host.mem_used) }} / {{ formatBytes(stats.host.mem_total) }}
-              </template>
+          </CardHeader>
+          <CardContent class="flex flex-col items-center pt-1">
+            <div class="relative w-32 h-32 flex items-center justify-center mt-1">
+              <svg class="w-full h-full transform -rotate-90 drop-shadow-sm" viewBox="0 0 36 36">
+                <defs>
+                  <linearGradient id="memGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#34d399" />
+                    <stop offset="100%" stop-color="#059669" />
+                  </linearGradient>
+                  <linearGradient id="memGradWarn" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#fb7185" />
+                    <stop offset="100%" stop-color="#e11d48" />
+                  </linearGradient>
+                </defs>
+                <path class="text-muted/20" stroke-width="2.8" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path
+                  :stroke="memPercent > 80 ? 'url(#memGradWarn)' : 'url(#memGrad)'"
+                  stroke-dasharray="100, 100"
+                  :stroke-dashoffset="100 - memPercent"
+                  stroke-width="2.8"
+                  stroke-linecap="round"
+                  fill="none"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  style="transition: stroke-dashoffset 0.6s ease;"
+                />
+              </svg>
+              <div class="absolute flex flex-col items-center justify-center">
+                <div class="flex items-baseline" :class="memPercent > 80 ? 'text-red-500' : 'text-foreground'">
+                  <span class="text-2xl font-extrabold tracking-tight tabular-nums metric-num">{{ memPercent.toFixed(1) }}</span>
+                  <span class="text-xs font-semibold text-muted-foreground ml-0.5">%</span>
+                </div>
+              </div>
+            </div>
+            <div class="w-full mt-3 p-2 rounded-lg bg-muted/20 border border-border/50 flex items-center justify-between text-xs">
+              <span class="text-muted-foreground">已用 / 限额</span>
+              <span class="font-medium text-foreground tabular-nums metric-num">
+                <template v-if="stats.container?.is_docker">
+                  {{ formatBytes(stats.container.docker_used) }} / {{ stats.container.limit > 0 ? formatBytes(stats.container.limit) : '未限额' }}
+                </template>
+                <template v-else>
+                  {{ formatBytes(stats.host.mem_used) }} / {{ formatBytes(stats.host.mem_total) }}
+                </template>
+              </span>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <!-- 磁盘使用率 -->
+        <Card class="border-border/60">
           <CardHeader class="pb-2">
-            <CardTitle class="text-base font-medium text-muted-foreground flex items-center"><HardDrive class="w-4 h-4 mr-2" /> 磁盘使用率</CardTitle>
-          </CardHeader>
-          <CardContent class="flex flex-col items-center">
-            <div class="relative w-32 h-32 flex items-center justify-center mt-2">
-              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                <path class="text-muted/20" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                <path :class="stats.host.disk_percent > 80 ? 'text-red-500' : 'text-purple-500'" stroke-dasharray="100, 100" :stroke-dashoffset="100 - stats.host.disk_percent" stroke-width="3" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" style="transition: stroke-dashoffset 0.5s ease 0s;" />
-              </svg>
-              <div class="absolute text-2xl font-bold tabular-nums metric-num" :class="stats.host.disk_percent > 80 ? 'text-red-500' : 'text-foreground'">{{ stats.host.disk_percent.toFixed(1) }}%</div>
+            <div class="flex items-center justify-between">
+              <CardTitle class="text-sm font-semibold text-foreground flex items-center gap-2">
+                <span class="p-1 rounded-md bg-purple-500/10 text-purple-500">
+                  <HardDrive class="w-3.5 h-3.5" />
+                </span>
+                磁盘使用率
+              </CardTitle>
+              <span class="text-[10px] px-1.5 py-0.5 rounded border border-border/60 text-muted-foreground bg-muted/20 font-medium tracking-wide">
+                disk storage
+              </span>
             </div>
-            <div class="text-xs text-muted-foreground mt-4 tabular-nums">{{ formatBytes(stats.host.disk_used) }} / {{ formatBytes(stats.host.disk_total) }}</div>
+          </CardHeader>
+          <CardContent class="flex flex-col items-center pt-1">
+            <div class="relative w-32 h-32 flex items-center justify-center mt-1">
+              <svg class="w-full h-full transform -rotate-90 drop-shadow-sm" viewBox="0 0 36 36">
+                <defs>
+                  <linearGradient id="diskGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#c084fc" />
+                    <stop offset="100%" stop-color="#9333ea" />
+                  </linearGradient>
+                  <linearGradient id="diskGradWarn" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#fb7185" />
+                    <stop offset="100%" stop-color="#e11d48" />
+                  </linearGradient>
+                </defs>
+                <path class="text-muted/20" stroke-width="2.8" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path
+                  :stroke="stats.host.disk_percent > 80 ? 'url(#diskGradWarn)' : 'url(#diskGrad)'"
+                  stroke-dasharray="100, 100"
+                  :stroke-dashoffset="100 - stats.host.disk_percent"
+                  stroke-width="2.8"
+                  stroke-linecap="round"
+                  fill="none"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  style="transition: stroke-dashoffset 0.6s ease;"
+                />
+              </svg>
+              <div class="absolute flex flex-col items-center justify-center">
+                <div class="flex items-baseline" :class="stats.host.disk_percent > 80 ? 'text-red-500' : 'text-foreground'">
+                  <span class="text-2xl font-extrabold tracking-tight tabular-nums metric-num">{{ stats.host.disk_percent.toFixed(1) }}</span>
+                  <span class="text-xs font-semibold text-muted-foreground ml-0.5">%</span>
+                </div>
+              </div>
+            </div>
+            <div class="w-full mt-3 p-2 rounded-lg bg-muted/20 border border-border/50 flex items-center justify-between text-xs">
+              <span class="text-muted-foreground">已用 / 总容量</span>
+              <span class="font-medium text-foreground tabular-nums metric-num">
+                {{ formatBytes(stats.host.disk_used) }} / {{ formatBytes(stats.host.disk_total) }}
+              </span>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -394,7 +520,7 @@ const schedulerChartData = computed(() => ({
             <CardHeader class="pb-2">
               <div class="flex items-center justify-between">
                 <CardTitle class="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <span class="p-1 rounded-md bg-blue-500/10 text-blue-500"><Activity class="w-3.5 h-3.5" /></span>
+                  <span class="p-1 rounded-md bg-blue-500/10 text-blue-500"><Server class="w-3.5 h-3.5" /></span>
                   执行环境
                 </CardTitle>
                 <span class="text-[10px] px-1.5 py-0.5 rounded border border-border/60 text-muted-foreground bg-muted/20 font-medium tracking-wide">
@@ -469,7 +595,7 @@ const schedulerChartData = computed(() => ({
             <CardHeader class="pb-2">
               <div class="flex items-center justify-between">
                 <CardTitle class="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <span class="p-1 rounded-md bg-indigo-500/10 text-indigo-500"><Activity class="w-3.5 h-3.5" /></span>
+                  <span class="p-1 rounded-md bg-indigo-500/10 text-indigo-500"><CalendarClock class="w-3.5 h-3.5" /></span>
                   任务调度
                 </CardTitle>
                 <span class="text-[10px] px-1.5 py-0.5 rounded border border-border/60 text-muted-foreground bg-muted/20 font-medium tracking-wide">
@@ -616,31 +742,88 @@ const schedulerChartData = computed(() => ({
           </Card>
       </div>
       <div v-if="stats && stats.scheduler.workers" class="mt-4">
-        <Card>
-            <CardHeader class="pb-2">
-              <CardTitle class="text-base text-amber-600">并发池 Worker 状态</CardTitle>
-              <CardDescription>精确监控底层协程池调度执行情况</CardDescription>
+        <Card class="border-border/60">
+            <CardHeader class="pb-3">
+              <div class="flex items-center justify-between gap-3">
+                <div class="space-y-0.5">
+                  <CardTitle class="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <span class="p-1 rounded-md bg-amber-500/10 text-amber-500">
+                      <Layers class="w-3.5 h-3.5" />
+                    </span>
+                    并发池 Worker 调度
+                  </CardTitle>
+                  <CardDescription class="text-xs">底层协程并发池任务调度与实时执行状态</CardDescription>
+                </div>
+                <!-- 统计徽章 -->
+                <div class="shrink-0">
+                  <span
+                    v-if="busyWorkersCount > 0"
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                  >
+                    <span class="relative flex h-2 w-2">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                    </span>
+                    {{ busyWorkersCount }} / {{ totalWorkersCount }} 运行中
+                  </span>
+                  <span
+                    v-else
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border/60"
+                  >
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    全部就绪待命 ({{ totalWorkersCount }} 并发槽)
+                  </span>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
-                <div v-for="worker in stats.scheduler.workers" :key="worker.id" class="border rounded-md p-3 flex flex-col justify-between" :class="[worker.status === 'running' ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/50' : 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-900/50']">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div
+                  v-for="worker in stats.scheduler.workers"
+                  :key="worker.id"
+                  class="rounded-lg p-3 transition-all duration-200 border flex flex-col justify-between"
+                  :class="[
+                    worker.status === 'running'
+                      ? 'bg-amber-500/5 border-amber-500/30 shadow-sm shadow-amber-500/5'
+                      : 'bg-muted/15 border-border/50 hover:bg-muted/25'
+                  ]"
+                >
                   <div class="flex items-center justify-between mb-2">
-                    <span class="font-semibold text-sm">Worker #{{ worker.id }}</span>
-                    <span v-if="worker.status === 'idle'" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
-                      <StatusDot state="online" class="mr-1.5" />
-                      空闲 (Idle)
+                    <div class="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                      <span class="text-muted-foreground/60 font-medium">#</span><span class="tabular-nums">{{ worker.id }}</span>
+                      <span class="text-[11px] font-normal text-muted-foreground">Worker</span>
+                    </div>
+                    <span
+                      v-if="worker.status === 'idle'"
+                      class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted/50 text-muted-foreground border border-border/40"
+                    >
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500/80"></span>
+                      空闲
                     </span>
-                    <span v-else class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                      <StatusDot state="running" class="mr-1.5" />
-                      执行中 (Running)
+                    <span
+                      v-else
+                      class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                    >
+                      <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                      运行中
                     </span>
                   </div>
-                  <div v-if="worker.status === 'running'" class="text-xs text-muted-foreground mt-1 space-y-1">
-                    <div class="truncate" :title="worker.task_name"><span class="font-medium text-foreground">任务:</span> {{ worker.task_name || worker.task_id }}</div>
-                    <div><span class="font-medium text-foreground">运行时间:</span> {{ worker.duration || 0 }}s</div>
+
+                  <div v-if="worker.status === 'running'" class="space-y-1.5 text-xs pt-1">
+                    <div class="flex items-center gap-1.5 min-w-0" :title="worker.task_name || worker.task_id">
+                      <Play class="w-3 h-3 text-amber-500 shrink-0 fill-amber-500/20" />
+                      <span class="font-medium text-foreground truncate text-[11px]">
+                        {{ worker.task_name || worker.task_id }}
+                      </span>
+                    </div>
+                    <div class="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-amber-500/10">
+                      <span>已运行</span>
+                      <span class="tabular-nums metric-num text-amber-600 dark:text-amber-400 font-semibold">{{ worker.duration || 0 }}s</span>
+                    </div>
                   </div>
-                  <div v-else class="text-xs text-muted-foreground mt-1">
-                    当前暂无任务分配
+                  <div v-else class="flex items-center justify-between text-[11px] text-muted-foreground/60 pt-1">
+                    <span>暂无调度</span>
+                    <span class="text-[10px] tracking-wide text-muted-foreground/50 font-medium">IDLE</span>
                   </div>
                 </div>
               </div>
@@ -928,5 +1111,17 @@ const schedulerChartData = computed(() => ({
   font-family: var(--font-main);
   font-feature-settings: 'tnum' 1, 'cv05' 1, 'cv08' 1, 'cv11' 1, 'ss01' 1;
   font-variant-numeric: tabular-nums;
+}
+
+/* 小屏下数值卡字体强化加粗 */
+@media (max-width: 639px) {
+  .metric-num {
+    font-weight: 800 !important;
+  }
+
+  /* 环形图中央核心数值进一步强化至 900，更饱满厚实 */
+  .metric-num.text-2xl {
+    font-weight: 900 !important;
+  }
 }
 </style>

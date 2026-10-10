@@ -275,13 +275,13 @@
     line-height: 1.3;
   }
 
-  /* 正文与描述类文字回归 400，依靠 15.5px 的字号保证清晰度 */
-  p,
-  span:not([class*="icon"]),
-  label,
-  [class*="description"],
-  [class*="muted"],
-  .text-muted-foreground {
+  /* 正文与描述类文字回归 400，依靠 15.5px 的字号保证清晰度，排除明确声明了字重的类与数值类 */
+  p:not([class*="font-"]),
+  span:not([class*="icon"]):not([class*="font-"]):not(.metric-num):not(.tabular-nums),
+  label:not([class*="font-"]),
+  [class*="description"]:not([class*="font-"]),
+  [class*="muted"]:not([class*="font-"]),
+  .text-muted-foreground:not([class*="font-"]) {
     font-weight: 400;
     line-height: 1.6;
   }
