@@ -32,7 +32,8 @@ ChartJS.register(
   Legend,
   Filler
 )
-ChartJS.defaults.font.family = "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, sans-serif"
+const INTER_FONT = "'Inter Variable', 'Inter', system-ui, -apple-system, sans-serif"
+ChartJS.defaults.font.family = INTER_FONT
 
 const activeTab = ref(localStorage.getItem('monitor_active_tab') || 'charts')
 
@@ -158,6 +159,12 @@ const memPercent = computed(() => {
 
 onMounted(() => {
   connectWS()
+  if (typeof document !== 'undefined' && document.fonts) {
+    document.fonts.ready.then(() => {
+      // 字体解码就绪后触发微小更新，确保 Canvas 采用真实已就绪的 Inter 字体重新绘制
+      timeLabels.value = [...timeLabels.value]
+    })
+  }
 })
 
 onUnmounted(() => {
@@ -165,7 +172,60 @@ onUnmounted(() => {
 })
 
 // --- 图表配置 ---
-const chartOptions = {
+// --- 图表配置与渐变系统 ---
+const createLinearGradient = (rgbStr: string) => {
+  return (context: any) => {
+    const chart = context.chart
+    const { ctx, chartArea } = chart
+    if (!chartArea) return `rgba(${rgbStr}, 0.1)`
+    const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom)
+    gradient.addColorStop(0, `rgba(${rgbStr}, 0.28)`)
+    gradient.addColorStop(0.7, `rgba(${rgbStr}, 0.04)`)
+    gradient.addColorStop(1, `rgba(${rgbStr}, 0)`)
+    return gradient
+  }
+}
+
+const createBarGradient = (context: any) => {
+  const chart = context.chart
+  const { ctx, chartArea } = chart
+  if (!chartArea) return '#ea580c'
+  const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom)
+  gradient.addColorStop(0, '#fb923c') // orange-400
+  gradient.addColorStop(1, '#ea580c') // orange-600
+  return gradient
+}
+
+const commonChartPlugins = {
+  legend: {
+    position: 'top' as const,
+    align: 'end' as const,
+    labels: {
+      usePointStyle: true,
+      pointStyle: 'circle',
+      boxWidth: 6,
+      boxHeight: 6,
+      padding: 12,
+      color: 'rgba(156, 163, 175, 0.95)',
+      font: { size: 11, family: INTER_FONT, weight: 'bold' as const }
+    }
+  },
+  tooltip: {
+    backgroundColor: 'rgba(24, 24, 27, 0.94)',
+    titleColor: '#f4f4f5',
+    bodyColor: '#e4e4e7',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1,
+    padding: { top: 8, bottom: 8, left: 10, right: 10 },
+    cornerRadius: 6,
+    usePointStyle: true,
+    boxPadding: 4,
+    bodyFont: { family: INTER_FONT, size: 11, weight: 'bold' as const },
+    titleFont: { family: INTER_FONT, size: 11, weight: 'bold' as const }
+  }
+}
+
+const getChartOptions = (unitSuffix = ''): any => ({
   responsive: true,
   maintainAspectRatio: false,
   animation: {
@@ -175,50 +235,44 @@ const chartOptions = {
     mode: 'index' as const,
     intersect: false,
   },
-  plugins: {
-    legend: {
-      position: 'top' as const,
-      labels: {
-        usePointStyle: false,
-        boxWidth: 12,
-        boxHeight: 12,
-        useBorderRadius: true,
-        borderRadius: 2
-      }
-    }
-  },
+  plugins: commonChartPlugins,
   scales: {
     x: {
       grid: { display: false },
       ticks: {
-        maxTicksLimit: 8, // 限制 X 轴显示的标签数量，避免拥挤
-        maxRotation: 0,   // 禁止标签旋转，保持水平整洁
-        color: 'rgba(156, 163, 175, 0.8)', // 调整颜色更柔和 (gray-400)
-        font: { size: 11 }
+        maxTicksLimit: 8,
+        maxRotation: 0,
+        color: 'rgba(156, 163, 175, 0.95)',
+        font: { size: 11, family: INTER_FONT, weight: 'bold' as const }
       }
     },
     y: {
       beginAtZero: true,
       border: { dash: [4, 4] },
-      grid: { color: 'rgba(156, 163, 175, 0.1)' },
+      grid: { color: 'rgba(156, 163, 175, 0.08)' },
       ticks: {
-        color: 'rgba(156, 163, 175, 0.8)',
-        font: { size: 11 }
+        color: 'rgba(156, 163, 175, 0.95)',
+        font: { size: 11, family: INTER_FONT, weight: 'bold' as const },
+        callback: (val: any) => unitSuffix ? `${val} ${unitSuffix}` : val
       }
     }
   }
-}
+})
+
+const defaultChartOptions = getChartOptions()
+const memChartOptions = getChartOptions('MB')
+const gcChartOptions = getChartOptions('ms')
 
 const goroutineChartData = computed(() => ({
   labels: [...timeLabels.value],
   datasets: [
     {
-      label: 'Goroutines(协程数)',
-      backgroundColor: 'rgba(37, 99, 235, 0.1)',
-      borderColor: '#2563eb', // blue-600
+      label: 'Goroutines (协程数)',
+      backgroundColor: createLinearGradient('37, 99, 235'),
+      borderColor: '#3b82f6', // blue-500
       borderWidth: 2,
       data: [...goroutinesData.value],
-      tension: 0.4,
+      tension: 0.35,
       fill: true,
       pointRadius: 0,
       pointHitRadius: 10
@@ -230,24 +284,24 @@ const memChartData = computed(() => ({
   labels: [...timeLabels.value],
   datasets: [
     {
-      label: 'Alloc(MB) 当前分配',
-      backgroundColor: 'rgba(5, 150, 105, 0.1)',
-      borderColor: '#059669', // emerald-600
+      label: 'Alloc 当前分配',
+      backgroundColor: createLinearGradient('5, 150, 105'),
+      borderColor: '#10b981', // emerald-500
       borderWidth: 2,
       data: [...allocData.value],
-      tension: 0.4,
+      tension: 0.35,
       fill: true,
       pointRadius: 0,
       pointHitRadius: 10
     },
     {
-      label: 'Sys(MB) 系统申请上限',
+      label: 'Sys 系统申请上限',
       backgroundColor: 'transparent',
-      borderColor: '#d97706', // amber-600
-      borderWidth: 2,
+      borderColor: '#f59e0b', // amber-500
+      borderWidth: 1.8,
       borderDash: [5, 5],
       data: [...sysData.value],
-      tension: 0.4,
+      tension: 0.35,
       pointRadius: 0,
       pointHitRadius: 10
     }
@@ -258,10 +312,11 @@ const gcChartData = computed(() => ({
   labels: [...timeLabels.value],
   datasets: [
     {
-      label: 'GC Pause(ms) 垃圾回收停顿',
-      backgroundColor: '#ea580c', // orange-600
+      label: 'GC Pause 停顿耗时',
+      backgroundColor: createBarGradient,
       data: [...gcPausesData.value],
-      borderRadius: 4
+      borderRadius: { topLeft: 4, topRight: 4, bottomLeft: 0, bottomRight: 0 },
+      borderSkipped: false
     }
   ]
 }))
@@ -271,11 +326,11 @@ const schedulerChartData = computed(() => ({
   datasets: [
     {
       label: '正在运行 (Running)',
-      backgroundColor: 'rgba(16, 185, 129, 0.1)', // emerald-500
+      backgroundColor: createLinearGradient('16, 185, 129'),
       borderColor: '#10b981', 
       borderWidth: 2,
       data: [...runningData.value],
-      tension: 0.4,
+      tension: 0.35,
       fill: true,
       pointRadius: 0,
       pointHitRadius: 10
@@ -283,22 +338,22 @@ const schedulerChartData = computed(() => ({
     {
       label: '调度中 (Scheduled)',
       backgroundColor: 'transparent',
-      borderColor: '#6366f1', // indigo-500
-      borderWidth: 2,
+      borderColor: '#818cf8', // indigo-400
+      borderWidth: 1.8,
       borderDash: [5, 5],
       data: [...scheduledData.value],
-      tension: 0.4,
+      tension: 0.35,
       pointRadius: 0,
       pointHitRadius: 10
     },
     {
       label: '排队积压 (Queue)',
       backgroundColor: 'transparent',
-      borderColor: '#f59e0b', // amber-500
-      borderWidth: 2,
+      borderColor: '#fbbf24', // amber-400
+      borderWidth: 1.8,
       borderDash: [2, 2],
       data: [...queueData.value],
-      tension: 0.4,
+      tension: 0.35,
       pointRadius: 0,
       pointHitRadius: 10
     }
@@ -379,13 +434,13 @@ const schedulerChartData = computed(() => ({
               <div class="absolute flex flex-col items-center justify-center">
                 <div class="flex items-baseline" :class="stats.host.cpu_percent > 80 ? 'text-red-500' : 'text-foreground'">
                   <span class="text-2xl font-extrabold tracking-tight tabular-nums metric-num">{{ stats.host.cpu_percent.toFixed(1) }}</span>
-                  <span class="text-xs font-semibold text-muted-foreground ml-0.5">%</span>
+                  <span class="text-xs font-bold text-muted-foreground ml-0.5">%</span>
                 </div>
               </div>
             </div>
             <div class="w-full mt-3 p-2 rounded-lg bg-muted/20 border border-border/50 flex items-center justify-between text-xs">
               <span class="text-muted-foreground">核心状态</span>
-              <span class="font-medium text-foreground flex items-center gap-1.5">
+              <span class="font-bold text-foreground flex items-center gap-1.5">
                 <span class="w-1.5 h-1.5 rounded-full" :class="stats.host.cpu_percent > 80 ? 'bg-red-500 animate-pulse' : 'bg-blue-500'"></span>
                 {{ stats.host.cpu_percent > 80 ? '高负载' : '负载正常' }}
               </span>
@@ -439,13 +494,13 @@ const schedulerChartData = computed(() => ({
               <div class="absolute flex flex-col items-center justify-center">
                 <div class="flex items-baseline" :class="memPercent > 80 ? 'text-red-500' : 'text-foreground'">
                   <span class="text-2xl font-extrabold tracking-tight tabular-nums metric-num">{{ memPercent.toFixed(1) }}</span>
-                  <span class="text-xs font-semibold text-muted-foreground ml-0.5">%</span>
+                  <span class="text-xs font-bold text-muted-foreground ml-0.5">%</span>
                 </div>
               </div>
             </div>
             <div class="w-full mt-3 p-2 rounded-lg bg-muted/20 border border-border/50 flex items-center justify-between text-xs">
               <span class="text-muted-foreground">已用 / 限额</span>
-              <span class="font-medium text-foreground tabular-nums metric-num">
+              <span class="font-bold text-foreground tabular-nums metric-num">
                 <template v-if="stats.container?.is_docker">
                   {{ formatBytes(stats.container.docker_used) }} / {{ stats.container.limit > 0 ? formatBytes(stats.container.limit) : '未限额' }}
                 </template>
@@ -500,13 +555,13 @@ const schedulerChartData = computed(() => ({
               <div class="absolute flex flex-col items-center justify-center">
                 <div class="flex items-baseline" :class="stats.host.disk_percent > 80 ? 'text-red-500' : 'text-foreground'">
                   <span class="text-2xl font-extrabold tracking-tight tabular-nums metric-num">{{ stats.host.disk_percent.toFixed(1) }}</span>
-                  <span class="text-xs font-semibold text-muted-foreground ml-0.5">%</span>
+                  <span class="text-xs font-bold text-muted-foreground ml-0.5">%</span>
                 </div>
               </div>
             </div>
             <div class="w-full mt-3 p-2 rounded-lg bg-muted/20 border border-border/50 flex items-center justify-between text-xs">
               <span class="text-muted-foreground">已用 / 总容量</span>
-              <span class="font-medium text-foreground tabular-nums metric-num">
+              <span class="font-bold text-foreground tabular-nums metric-num">
                 {{ formatBytes(stats.host.disk_used) }} / {{ formatBytes(stats.host.disk_total) }}
               </span>
             </div>
@@ -1051,53 +1106,118 @@ const schedulerChartData = computed(() => ({
     <TabsContent value="charts" class="mt-0 space-y-4">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <!-- Scheduler 图表 -->
-          <Card>
-            <CardHeader class="pt-4 pb-1 px-4">
-              <CardTitle class="text-sm font-semibold text-indigo-600">任务调度 (Scheduler)</CardTitle>
-              <CardDescription class="text-xs">当前节点上正在运行和调度的任务数</CardDescription>
+          <Card class="border-border/60">
+            <CardHeader class="pt-4 pb-2 px-4">
+              <div class="flex items-center justify-between gap-2">
+                <div class="space-y-0.5">
+                  <CardTitle class="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <span class="p-1 rounded-md bg-indigo-500/10 text-indigo-500">
+                      <CalendarClock class="w-3.5 h-3.5" />
+                    </span>
+                    任务调度 (Scheduler)
+                  </CardTitle>
+                  <CardDescription class="text-xs">当前节点上正在运行和调度的任务数</CardDescription>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <span
+                    class="px-2.5 py-0.5 rounded-md border text-xs chart-metric-badge"
+                    :class="(stats?.scheduler?.running || 0) > 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-muted/30 text-muted-foreground border-border/50'"
+                  >
+                    {{ stats?.scheduler?.running || 0 }} 运行
+                  </span>
+                  <span v-if="(stats?.scheduler?.queue_size || 0) > 0" class="px-2.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs chart-metric-badge">
+                    {{ stats?.scheduler?.queue_size || 0 }} 排队
+                  </span>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent class="px-4 pb-4 pt-0">
-              <div class="h-52 w-full mt-2">
-                <Line :data="schedulerChartData" :options="chartOptions" />
+            <CardContent class="px-4 pb-4 pt-1">
+              <div class="h-56 w-full mt-1">
+                <Line :data="schedulerChartData" :options="defaultChartOptions" />
               </div>
             </CardContent>
           </Card>
 
           <!-- Goroutines 图表 -->
-          <Card>
-            <CardHeader class="pt-4 pb-1 px-4">
-              <CardTitle class="text-sm font-semibold text-blue-600">并发协程 (Goroutines)</CardTitle>
-              <CardDescription class="text-xs">轻量级线程的并发数量跟踪</CardDescription>
+          <Card class="border-border/60">
+            <CardHeader class="pt-4 pb-2 px-4">
+              <div class="flex items-center justify-between gap-2">
+                <div class="space-y-0.5">
+                  <CardTitle class="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <span class="p-1 rounded-md bg-blue-500/10 text-blue-500">
+                      <Activity class="w-3.5 h-3.5" />
+                    </span>
+                    并发协程 (Goroutines)
+                  </CardTitle>
+                  <CardDescription class="text-xs">轻量级线程的并发数量跟踪</CardDescription>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <span class="px-2.5 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-xs chart-metric-badge">
+                    {{ stats?.env?.goroutines || 0 }} 协程
+                  </span>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent class="px-4 pb-4 pt-0">
-              <div class="h-52 w-full mt-2">
-                <Line :data="goroutineChartData" :options="chartOptions" />
+            <CardContent class="px-4 pb-4 pt-1">
+              <div class="h-56 w-full mt-1">
+                <Line :data="goroutineChartData" :options="defaultChartOptions" />
               </div>
             </CardContent>
           </Card>
 
           <!-- Memory 图表 -->
-          <Card>
-            <CardHeader class="pt-4 pb-1 px-4">
-              <CardTitle class="text-sm font-semibold text-emerald-600">内存分配 (Memory Alloc vs Sys)</CardTitle>
-              <CardDescription class="text-xs">实际使用内存与系统申请上限对比</CardDescription>
+          <Card class="border-border/60">
+            <CardHeader class="pt-4 pb-2 px-4">
+              <div class="flex items-center justify-between gap-2">
+                <div class="space-y-0.5">
+                  <CardTitle class="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <span class="p-1 rounded-md bg-emerald-500/10 text-emerald-500">
+                      <MemoryStick class="w-3.5 h-3.5" />
+                    </span>
+                    内存分配 (Alloc vs Sys)
+                  </CardTitle>
+                  <CardDescription class="text-xs">实际活跃堆内存与系统申请上限对比</CardDescription>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <span class="px-2.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs chart-metric-badge">
+                    {{ stats?.mem ? formatBytes(stats.mem.alloc) : '0 B' }}
+                  </span>
+                  <span class="px-2.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs chart-metric-badge hidden sm:inline-flex">
+                    上限 {{ stats?.mem ? formatBytes(stats.mem.sys) : '0 B' }}
+                  </span>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent class="px-4 pb-4 pt-0">
-              <div class="h-52 w-full mt-2">
-                <Line :data="memChartData" :options="chartOptions" />
+            <CardContent class="px-4 pb-4 pt-1">
+              <div class="h-56 w-full mt-1">
+                <Line :data="memChartData" :options="memChartOptions" />
               </div>
             </CardContent>
           </Card>
 
           <!-- GC 图表 -->
-          <Card>
-            <CardHeader class="pt-4 pb-1 px-4">
-              <CardTitle class="text-sm font-semibold text-orange-600">垃圾回收停顿 (GC Pauses)</CardTitle>
-              <CardDescription class="text-xs">探针周期内 GC 暂停总耗时（ms）</CardDescription>
+          <Card class="border-border/60">
+            <CardHeader class="pt-4 pb-2 px-4">
+              <div class="flex items-center justify-between gap-2">
+                <div class="space-y-0.5">
+                  <CardTitle class="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <span class="p-1 rounded-md bg-orange-500/10 text-orange-500">
+                      <RefreshCw class="w-3.5 h-3.5" />
+                    </span>
+                    垃圾回收停顿 (GC Pauses)
+                  </CardTitle>
+                  <CardDescription class="text-xs">探针周期内 GC 暂停总耗时（ms）</CardDescription>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <span class="px-2.5 py-0.5 rounded-md bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 text-xs chart-metric-badge">
+                    {{ formatNs(stats?.gc?.pause_total_ns || 0) }} 累计
+                  </span>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent class="px-4 pb-4 pt-0">
-              <div class="h-52 w-full mt-2">
-                <Bar :data="gcChartData" :options="chartOptions" />
+            <CardContent class="px-4 pb-4 pt-1">
+              <div class="h-56 w-full mt-1">
+                <Bar :data="gcChartData" :options="gcChartOptions" />
               </div>
             </CardContent>
           </Card>
@@ -1111,6 +1231,15 @@ const schedulerChartData = computed(() => ({
   font-family: var(--font-main);
   font-feature-settings: 'tnum' 1, 'cv05' 1, 'cv08' 1, 'cv11' 1, 'ss01' 1;
   font-variant-numeric: tabular-nums;
+}
+
+/* 图表右上角指标胶囊全局强加粗 (包括数值与中文/单位) */
+.chart-metric-badge {
+  font-family: var(--font-main);
+  font-weight: 800 !important;
+  font-feature-settings: 'tnum' 1, 'cv05' 1, 'cv08' 1, 'cv11' 1, 'ss01' 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 /* 小屏下数值卡字体强化加粗 */

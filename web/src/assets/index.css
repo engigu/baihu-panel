@@ -2,6 +2,15 @@
 @import "tw-animate-css";
 @import "@fontsource-variable/inter/index.css";
 
+/* 建立 Inter 与 Inter Variable 别名映射，确保 Canvas 与 CSS 均能无缝匹配 */
+@font-face {
+  font-family: 'Inter';
+  src: local('Inter Variable');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @import "@fontsource-variable/jetbrains-mono/index.css";
 
 /* Sonner toast styles */
