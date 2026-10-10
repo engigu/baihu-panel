@@ -6,7 +6,6 @@ import (
 	"github.com/engigu/baihu-panel/cmd/builtininstall"
 	"github.com/engigu/baihu-panel/cmd/completion"
 	"github.com/engigu/baihu-panel/cmd/depinstall"
-	"github.com/engigu/baihu-panel/cmd/dropcache"
 	"github.com/engigu/baihu-panel/cmd/mcp"
 	"github.com/engigu/baihu-panel/cmd/reposync"
 	"github.com/engigu/baihu-panel/cmd/resetpwd"
@@ -30,7 +29,6 @@ func InitHandlers() {
 	RegisterHandler("builtininstall", builtininstall.Run)
 	RegisterHandler("completion", completion.Run)
 	RegisterHandler("depinstall", depinstall.Run)
-	RegisterHandlerWithConfig("dropcache", dropcache.Run, false)
 	RegisterHandler("reposync", reposync.Run)
 	RegisterHandler("resetpwd", resetpwd.Run)
 	RegisterHandler("restore", restore.Run)

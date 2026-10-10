@@ -139,6 +139,14 @@ const formatNs = (ns: number) => {
   return (ns / 1000000).toFixed(2) + ' ms'
 }
 
+const memPercent = computed(() => {
+  if (!stats.value) return 0
+  if (stats.value.container?.is_docker && stats.value.container.limit > 0) {
+    return stats.value.container.limit_percent || 0
+  }
+  return stats.value.host?.mem_percent || 0
+})
+
 onMounted(() => {
   connectWS()
 })
@@ -337,17 +345,29 @@ const schedulerChartData = computed(() => ({
         
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-base font-medium text-muted-foreground flex items-center"><MemoryStick class="w-4 h-4 mr-2" /> 内存使用率</CardTitle>
+            <CardTitle class="text-base font-medium text-muted-foreground flex items-center justify-between">
+              <span class="flex items-center"><MemoryStick class="w-4 h-4 mr-2" /> 内存使用率</span>
+              <span v-if="stats.container?.is_docker" class="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-mono">
+                docker stats
+              </span>
+            </CardTitle>
           </CardHeader>
           <CardContent class="flex flex-col items-center">
             <div class="relative w-32 h-32 flex items-center justify-center mt-2">
               <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
                 <path class="text-muted/20" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                <path :class="stats.host.mem_percent > 80 ? 'text-red-500' : 'text-emerald-500'" stroke-dasharray="100, 100" :stroke-dashoffset="100 - stats.host.mem_percent" stroke-width="3" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" style="transition: stroke-dashoffset 0.5s ease 0s;" />
+                <path :class="memPercent > 80 ? 'text-red-500' : 'text-emerald-500'" stroke-dasharray="100, 100" :stroke-dashoffset="100 - memPercent" stroke-width="3" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" style="transition: stroke-dashoffset 0.5s ease 0s;" />
               </svg>
-              <div class="absolute text-2xl font-bold" :class="stats.host.mem_percent > 80 ? 'text-red-500' : 'text-foreground'">{{ stats.host.mem_percent.toFixed(1) }}%</div>
+              <div class="absolute text-2xl font-bold" :class="memPercent > 80 ? 'text-red-500' : 'text-foreground'">{{ memPercent.toFixed(1) }}%</div>
             </div>
-            <div class="text-xs text-muted-foreground mt-4">{{ formatBytes(stats.host.mem_used) }} / {{ formatBytes(stats.host.mem_total) }}</div>
+            <div class="text-xs text-muted-foreground mt-4">
+              <template v-if="stats.container?.is_docker">
+                {{ formatBytes(stats.container.docker_used) }} / {{ stats.container.limit > 0 ? formatBytes(stats.container.limit) : '未限额' }}
+              </template>
+              <template v-else>
+                {{ formatBytes(stats.host.mem_used) }} / {{ formatBytes(stats.host.mem_total) }}
+              </template>
+            </div>
           </CardContent>
         </Card>
 
@@ -368,7 +388,7 @@ const schedulerChartData = computed(() => ({
         </Card>
       </div>
 
-      <div v-if="stats" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+      <div v-if="stats" class="grid grid-cols-1 gap-4 mt-4" :class="stats.container?.is_docker ? 'lg:grid-cols-3 md:grid-cols-2' : 'md:grid-cols-2'">
           <Card>
             <CardHeader class="pb-2">
               <CardTitle class="text-base text-blue-600">执行环境</CardTitle>
@@ -394,6 +414,88 @@ const schedulerChartData = computed(() => ({
                 <div class="flex justify-between border-b border-border/50 pb-1"><dt class="text-muted-foreground">排队积压 (Queue Size)</dt><dd class="font-bold text-amber-500">{{ stats.scheduler.queue_size }}</dd></div>
                 <div class="flex justify-between border-b border-border/50 pb-1"><dt class="text-muted-foreground">并发池限制 (Worker Count)</dt><dd class="font-medium">{{ stats.scheduler.worker_count }}</dd></div>
               </dl>
+            </CardContent>
+          </Card>
+
+          <!-- Docker 容器内存剖析卡片 (仅在 Docker 容器环境回显) -->
+          <Card v-if="stats.container?.is_docker">
+            <CardHeader class="pb-2">
+              <div class="flex items-center justify-between">
+                <CardTitle class="text-base text-emerald-600 flex items-center gap-1.5">
+                  <Cpu class="w-4 h-4 text-emerald-500" />
+                  容器内存剖析
+                </CardTitle>
+                <span class="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-mono">
+                  docker stats
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent class="space-y-3">
+              <!-- 板块 1: docker stats 官方计算公式 (减法口径: Used = Current - Inactive) -->
+              <div class="rounded-lg p-2.5 bg-emerald-500/10 border border-emerald-500/20 space-y-1">
+                <div class="flex items-center justify-between text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                  <span>Docker 真实占用 (MEM USAGE)</span>
+                  <span v-if="stats.container.limit > 0">
+                    {{ stats.container.limit_percent.toFixed(2) }}% ({{ formatBytes(stats.container.limit) }})
+                  </span>
+                </div>
+                <div class="flex items-baseline justify-between">
+                  <div class="text-lg font-bold text-emerald-600">
+                    {{ formatBytes(stats.container.docker_used) }}
+                  </div>
+                  <div class="text-[11px] text-muted-foreground font-mono">
+                    = {{ formatBytes(stats.container.total_usage) }} - {{ formatBytes(stats.container.inactive_file) }}
+                  </div>
+                </div>
+                <div class="text-[10px] text-muted-foreground flex justify-between">
+                  <span>公式: Total Current - Inactive File</span>
+                  <span class="text-emerald-600 dark:text-emerald-400 font-medium">(扣除随时可释放的冷缓存)</span>
+                </div>
+              </div>
+
+              <!-- 板块 2: 总物理内存加法拆解 (四项相加 = Total Current) -->
+              <div class="space-y-1 text-sm">
+                <div class="flex justify-between border-b border-border/50 pb-1 font-medium text-xs text-muted-foreground">
+                  <span>总物理内存构成 (四项相加)</span>
+                  <span class="text-foreground font-semibold">{{ formatBytes(stats.container.total_usage) }} (100%)</span>
+                </div>
+                <div class="flex justify-between border-b border-border/50 pb-1 text-xs">
+                  <dt class="text-muted-foreground flex items-center gap-1">
+                    <span class="text-muted-foreground/60 font-mono">├─</span> 进程堆栈 (Anon)
+                  </dt>
+                  <dd class="font-medium text-foreground">
+                    {{ formatBytes(stats.container.anon) }}
+                    <span class="text-[10px] text-muted-foreground ml-1">(白虎自身数据)</span>
+                  </dd>
+                </div>
+                <div class="flex justify-between border-b border-border/50 pb-1 text-xs">
+                  <dt class="text-muted-foreground flex items-center gap-1">
+                    <span class="text-muted-foreground/60 font-mono">├─</span> 活跃类库 (Active File)
+                  </dt>
+                  <dd class="font-medium text-amber-500">
+                    {{ formatBytes(stats.container.active_file) }}
+                    <span class="text-[10px] text-muted-foreground ml-1">(运行中代码段)</span>
+                  </dd>
+                </div>
+                <div class="flex justify-between border-b border-border/50 pb-1 text-xs">
+                  <dt class="text-muted-foreground flex items-center gap-1">
+                    <span class="text-muted-foreground/60 font-mono">├─</span> 目录索引 (Slab)
+                  </dt>
+                  <dd class="font-medium text-foreground">
+                    {{ formatBytes(stats.container.slab_reclaimable) }}
+                    <span class="text-[10px] text-muted-foreground ml-1">(内核元数据)</span>
+                  </dd>
+                </div>
+                <div class="flex justify-between border-b border-border/50 pb-1 text-xs bg-blue-500/5 -mx-1 px-1 rounded">
+                  <dt class="text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1">
+                    <span class="text-blue-500/60 font-mono">└─</span> 非活跃冷缓存 (Inactive)
+                  </dt>
+                  <dd class="font-bold text-blue-600 dark:text-blue-400">
+                    {{ formatBytes(stats.container.inactive_file) }}
+                    <span class="text-[10px] text-emerald-600 dark:text-emerald-400 ml-1">[-已从上方扣除]</span>
+                  </dd>
+                </div>
+              </div>
             </CardContent>
           </Card>
       </div>

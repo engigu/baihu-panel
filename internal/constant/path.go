@@ -71,7 +71,7 @@ func init() {
 
 // ResolveMiseDataDir 解析 Mise 数据存储目录（优先读取 MISE_DATA_DIR 环境变量，若无则基于容器默认路径兜底）
 func ResolveMiseDataDir() string {
-	if dir := os.Getenv(EnvKeyMiseDataDir); dir != "" {
+	if dir := os.Getenv("MISE_DATA_DIR"); dir != "" {
 		return filepath.Clean(dir)
 	}
 	return ContainerDefaultMiseDataDir

@@ -13,6 +13,7 @@ type ContainerMemoryStat struct {
 	ActiveFile      uint64 // active_file (活跃文件页，重型任务反复读取的类库/文件缓存)
 	TotalFileCache  uint64 // 总文件页缓存 (file / cache，包含 active + inactive)
 	SlabReclaimable uint64 // slab_reclaimable (可回收内核 Slab 目录项与 inode 缓存)
+	Anon            uint64 // anon / rss (进程匿名物理内存，应用自身堆栈数据)
 	LimitBytes      uint64 // 内存上限 (0 代表未限制)
 }
 
@@ -84,7 +85,16 @@ func ParseCgroupMemoryDetails(totalUsage uint64, content string) ContainerMemory
 		stat.SlabReclaimable = v
 	}
 
-	// 5. 对齐 Docker Stats 真实内存相减口径
+	// 5. Anon (应用自身匿名内存堆栈)
+	if v, ok := metrics["anon"]; ok {
+		stat.Anon = v
+	} else if v, ok := metrics["total_rss"]; ok {
+		stat.Anon = v
+	} else if v, ok := metrics["rss"]; ok {
+		stat.Anon = v
+	}
+
+	// 6. 对齐 Docker Stats 真实内存相减口径
 	if stat.InactiveFile > 0 {
 		if totalUsage >= stat.InactiveFile {
 			stat.DockerUsedBytes = totalUsage - stat.InactiveFile

@@ -25,8 +25,7 @@ import {
   ShieldCheck,
   CalendarClock,
   Save,
-  Sparkles,
-  Cpu
+  Sparkles
 } from 'lucide-vue-next'
 import {
   AlertDialog,
@@ -57,15 +56,9 @@ const form = ref<SiteSettings>({
   login_log_days: '30',
   login_log_max_count: '1000',
   scheduler_log_days: '30',
-  scheduler_log_max_count: '10000',
-  cache_trim_enabled: true,
-  mem_watermark_rate: '80',
-  cache_max_mb: '60',
-  cache_trim_spec: '@every 5m',
-  task_finished_trim: true
+  scheduler_log_max_count: '10000'
 })
 const loading = ref(false)
-const trimming = ref(false)
 const showOpenapiConfirmDialog = ref(false)
 
 const iconPreview = computed(() => {
@@ -91,11 +84,6 @@ async function loadSettings() {
       login_log_max_count: res.login_log_max_count || '1000',
       scheduler_log_days: res.scheduler_log_days || '30',
       scheduler_log_max_count: res.scheduler_log_max_count || '10000',
-      cache_trim_enabled: res.cache_trim_enabled === undefined ? true : (res.cache_trim_enabled === true || (res as any).cache_trim_enabled === 'true'),
-      mem_watermark_rate: res.mem_watermark_rate || '80',
-      cache_max_mb: res.cache_max_mb || '60',
-      cache_trim_spec: res.cache_trim_spec || '@every 5m',
-      task_finished_trim: res.task_finished_trim === undefined ? true : (res.task_finished_trim === true || (res as any).task_finished_trim === 'true'),
       openapi_enabled: res.openapi_enabled === true || (res as any).openapi_enabled === 'true'
     }
   } catch { }
@@ -115,12 +103,7 @@ async function saveSettings() {
       login_log_days: String(form.value.login_log_days || '30'),
       login_log_max_count: String(form.value.login_log_max_count || '1000'),
       scheduler_log_days: String(form.value.scheduler_log_days || '30'),
-      scheduler_log_max_count: String(form.value.scheduler_log_max_count || '10000'),
-      cache_trim_enabled: form.value.cache_trim_enabled,
-      mem_watermark_rate: String(form.value.mem_watermark_rate || '80'),
-      cache_max_mb: String(form.value.cache_max_mb || '60'),
-      cache_trim_spec: String(form.value.cache_trim_spec || '@every 5m'),
-      task_finished_trim: form.value.task_finished_trim
+      scheduler_log_max_count: String(form.value.scheduler_log_max_count || '10000')
     })
     await refreshSettings()
     await loadSettings()
@@ -207,18 +190,6 @@ async function copyMcpConfigJson() {
     toast.success('MCP 客户端配置 JSON 已复制')
   } else {
     toast.error('复制失败，请手动复制')
-  }
-}
-
-async function handleTrimCache() {
-  trimming.value = true
-  try {
-    const res = await api.settings.trimCache()
-    toast.success(res.message || '内存与文件缓存回收成功')
-  } catch (err: any) {
-    toast.error(err?.message || '触发缓存回收失败')
-  } finally {
-    trimming.value = false
   }
 }
 
@@ -607,102 +578,6 @@ onMounted(loadSettings)
                 <div class="leading-relaxed">
                   <span class="font-medium text-foreground">周期执行说明：</span>
                   服务启动时全量检测一次，运行期间后台每隔 1 小时自动触发巡检清理。
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <!-- 模块 3.5: 容器内存与缓存回收策略 -->
-        <Card class="shadow-sm">
-          <CardHeader class="pb-4 space-y-2">
-            <div class="flex items-center justify-between gap-3">
-              <CardTitle class="flex items-center gap-2 text-sm sm:text-base font-semibold min-w-0">
-                <Cpu class="w-4 h-4 text-emerald-500 shrink-0" />
-                <span class="truncate">容器内存与缓存回收策略</span>
-              </CardTitle>
-              <div class="flex items-center gap-2 shrink-0">
-                <Switch v-model="form.cache_trim_enabled" id="cache-trim-enabled" />
-                <Label for="cache-trim-enabled" class="text-xs cursor-pointer">开启自适应</Label>
-              </div>
-            </div>
-            <CardDescription class="text-xs">
-              动态监控 Docker 容器内存与 Page Cache 水位，自适应执行内核级与工作区安全释放
-            </CardDescription>
-          </CardHeader>
-          <CardContent class="space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <!-- 警戒水位线 -->
-              <div class="space-y-1.5">
-                <Label class="text-xs font-medium text-foreground">警戒水位线 (百分比)</Label>
-                <div class="relative">
-                  <Input
-                    v-model="form.mem_watermark_rate"
-                    type="number"
-                    class="h-9 pr-8 text-sm"
-                    min="10"
-                    max="99"
-                    :disabled="!form.cache_trim_enabled"
-                  />
-                  <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
-                </div>
-                <p class="text-[10px] text-muted-foreground">容器总内存达此警戒线时介入 (推荐 70-90%)</p>
-              </div>
-
-              <!-- 缓存释放阈值 -->
-              <div class="space-y-1.5">
-                <Label class="text-xs font-medium text-foreground">缓存触发阈值</Label>
-                <div class="relative">
-                  <Input
-                    v-model="form.cache_max_mb"
-                    type="number"
-                    class="h-9 pr-10 text-sm"
-                    min="10"
-                    :disabled="!form.cache_trim_enabled"
-                  />
-                  <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">MB</span>
-                </div>
-                <p class="text-[10px] text-muted-foreground">总文件缓存超此大小允许回收 (默认 60MB)</p>
-              </div>
-            </div>
-
-            <!-- 尾部防抖回收开关与手动触发行 -->
-            <div class="p-3 rounded-xl border bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div class="flex items-center gap-2.5 min-w-0">
-                <div class="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
-                  <Sparkles class="w-4 h-4" />
-                </div>
-                <div class="min-w-0">
-                  <div class="text-xs font-semibold text-foreground truncate">任务结束尾部回收</div>
-                  <div class="text-[10px] text-muted-foreground truncate">子任务全部平息后自动防抖释放工作区类库缓存</div>
-                </div>
-              </div>
-              <div class="flex items-center gap-3 shrink-0 self-end sm:self-auto">
-                <div class="flex items-center gap-1.5">
-                  <Switch v-model="form.task_finished_trim" id="task-finished-trim" :disabled="!form.cache_trim_enabled" />
-                  <Label for="task-finished-trim" class="text-xs cursor-pointer">自动</Label>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  class="h-8 px-2.5 text-xs gap-1"
-                  @click="handleTrimCache"
-                  :disabled="trimming"
-                >
-                  <RefreshCw :class="['w-3 h-3', trimming ? 'animate-spin' : '']" />
-                  {{ trimming ? '清理中...' : '立即释放' }}
-                </Button>
-              </div>
-            </div>
-
-            <!-- 说明底条 -->
-            <div class="p-3 bg-muted/30 rounded-xl border border-border/70 space-y-1.5 text-[11px] text-muted-foreground">
-              <div class="flex items-start gap-2">
-                <Info class="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                <div class="leading-relaxed">
-                  <span class="font-medium text-foreground">自适应回收原理：</span>
-                  平时静默放行让 Page Cache 加速磁盘，达到警戒线或重型任务结束时优先通过内核 cgroup 原生回收 Slab 与活跃页。
                 </div>
               </div>
             </div>

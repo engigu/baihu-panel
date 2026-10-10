@@ -12,7 +12,6 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/logger"
-	"github.com/engigu/baihu-panel/internal/memopt"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/services/deps"
 	"github.com/engigu/baihu-panel/internal/utils"
@@ -77,9 +76,6 @@ func (s *MiseService) fetchLiveLanguages() ([]MiseLanguage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mise ls --json 运行失败: %w", err)
 	}
-
-	// 每次执行完 mise ls 后，自动联动卸载调用产生的 Page Cache（内部限制仅在 Docker 环境生效）
-	memopt.DropMiseCacheAsync()
 
 	// 1. 尝试解析为数组格式 [{}, {}]
 	var languages []MiseLanguage

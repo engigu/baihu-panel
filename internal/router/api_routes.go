@@ -199,7 +199,6 @@ func registerSettingsRoutes(g *gin.RouterGroup, c *Controllers) {
 		settings.GET("/site", c.Settings.GetSiteSettings)
 		settings.PUT("/site", c.Settings.UpdateSiteSettings)
 		settings.POST("/site/openapi-token/generate", c.Settings.GenerateOpenapiToken)
-		settings.POST("/site/trim-cache", c.Settings.TrimCache)
 		settings.GET("/paths", c.Settings.GetPaths)
 		settings.GET("/scheduler", c.Settings.GetSchedulerSettings)
 		settings.PUT("/scheduler", c.Settings.UpdateSchedulerSettings)

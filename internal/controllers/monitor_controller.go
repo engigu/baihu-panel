@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/engigu/baihu-panel/internal/memopt"
 	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/services/tasks"
 	"github.com/engigu/baihu-panel/internal/utils"
@@ -130,5 +131,30 @@ func (mc *MonitorController) getMonitorData() gin.H {
 			"worker_count": mc.executorService.GetScheduler().GetConfig().WorkerCount,
 			"workers":      mc.executorService.GetScheduler().GetWorkerStatuses(),
 		},
+		"container": func() gin.H {
+			if !utils.IsRunningInDocker() {
+				return nil
+			}
+			cStat, err := memopt.GetContainerMemoryStat()
+			if err != nil {
+				return nil
+			}
+			var limitPercent float64
+			if cStat.LimitBytes > 0 {
+				limitPercent = float64(cStat.DockerUsedBytes) / float64(cStat.LimitBytes) * 100
+			}
+			return gin.H{
+				"is_docker":        true,
+				"total_usage":      cStat.TotalUsageBytes,
+				"docker_used":      cStat.DockerUsedBytes,
+				"limit":            cStat.LimitBytes,
+				"limit_percent":    limitPercent,
+				"active_file":      cStat.ActiveFile,
+				"inactive_file":    cStat.InactiveFile,
+				"total_file_cache": cStat.TotalFileCache,
+				"slab_reclaimable": cStat.SlabReclaimable,
+				"anon":             cStat.Anon,
+			}
+		}(),
 	}
 }
