@@ -30,8 +30,9 @@ func DropCache(paths ...string) (int, error) {
 			continue
 		}
 
-		// 目录受控浅层遍历：限制最大深度 3 层，并自动跳过 node_modules / .git 等臃肿目录
-		walkDirLimited(p, 0, 3, func(filePath string) {
+		// 目录受控遍历：深度覆盖至 6 层以完整纳入 mise 等环境目录 (如 installs/node/23.11.1/bin/node 为第 4 层)，
+		// 并自动跳过 node_modules / .git / include / share / doc 等臃肿/无关目录
+		walkDirLimited(p, 0, 6, func(filePath string) {
 			if dropFileCache(filePath) {
 				totalFiles++
 			}
@@ -51,8 +52,9 @@ func walkDirLimited(dir string, currentDepth, maxDepth int, onFile func(string))
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() {
-			// 跳过已知巨型依赖或无意义缓存子目录，避免磁盘 IO 与 Slab 膨胀
-			if name == "node_modules" || name == ".git" || name == ".cache" || name == "tmp" {
+			// 跳过已知巨型依赖、头文件、文档或无意义缓存子目录，避免磁盘 IO 与 Slab 膨胀
+			if name == "node_modules" || name == ".git" || name == ".cache" || name == "tmp" ||
+				name == "include" || name == "share" || name == "doc" || name == "man" {
 				continue
 			}
 			walkDirLimited(filepath.Join(dir, name), currentDepth+1, maxDepth, onFile)

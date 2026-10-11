@@ -236,6 +236,9 @@ func TrimContainerCache() int {
 		return 0
 	}
 
+	// 优先尝试 cgroup v2 原生快速回收（若支持则毫秒级一并卸载 Slab 与全局文件缓存）
+	_ = TryReclaimCgroupMemory(0)
+
 	targets := GetContainerTrimTargets()
 	if len(targets) == 0 {
 		return 0
@@ -259,6 +262,9 @@ func TrimContainerStartupCache() int {
 	if !utils.IsRunningInDocker() {
 		return 0
 	}
+
+	// 优先尝试 cgroup v2 原生快速回收（启动期产生的瞬时装载与 Slab 统一回收）
+	_ = TryReclaimCgroupMemory(0)
 
 	targets := GetContainerTrimTargets()
 	if len(targets) == 0 {
