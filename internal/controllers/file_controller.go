@@ -9,8 +9,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"errors"
 
 	"github.com/engigu/baihu-panel/internal/utils"
+	es "github.com/engigu/baihu-panel/internal/errors"
 
 	"github.com/gin-gonic/gin"
 )
@@ -87,31 +89,76 @@ func (fc *FileController) checkPath(path string, allowRoot bool) (string, bool) 
 // @Router /files/tree [get]
 func (fc *FileController) GetFileTree(c *gin.Context) {
 	subPath := c.DefaultQuery("path", "")
-	targetPath, safe := fc.checkPath(subPath, true)
-	if !safe {
-		utils.Forbidden(c, "访问被拒绝")
+	nodes, err := fc.getSubFileNodes(subPath)
+	if err != nil {
+		if errors.Is(err, &es.ForbiddenError{}) {
+			utils.Forbidden(c, err.Error())
+		} else if errors.Is(err, &es.BadRequestError{}) {
+			utils.BadRequest(c, err.Error())
+		} else {
+			utils.ServerError(c, err.Error())
+		}
 		return
+	}
+	utils.Success(c, nodes)
+}
+
+// GetFileTrees 获取文件树/目录节点列表
+// @Summary 获取文件树/目录节点列表
+// @Description 懒加载获取指定目录下的单层直接子项文件与文件夹节点
+// @Tags 文件管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param paths query string false "相对目录路径（留空表示根目录）；支持多个，逗号分割"
+// @Success 200 {object} utils.Response{data=[]controllers.FileNode}
+// @Failure 400 {object} utils.Response "目标路径不是目录"
+// @Failure 403 {object} utils.Response "访问被拒绝"
+// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Router /files/tree [get]
+func (fc *FileController) GetFileTrees(c *gin.Context) {
+	paths := c.DefaultQuery("paths", "")
+	pathArray := strings.Split(paths, ",")
+	nodes := make([]*FileNode, 0, len(pathArray) * 5)
+	for _, path := range pathArray {
+		subFileNodes, err := fc.getSubFileNodes(path)
+		if err != nil {
+			if errors.Is(err, &es.ForbiddenError{}) {
+				utils.Forbidden(c, err.Error())
+			} else if errors.Is(err, &es.BadRequestError{}) {
+				utils.BadRequest(c, err.Error())
+			} else {
+				utils.ServerError(c, err.Error())
+			}
+			return
+		}
+		nodes = append(nodes, subFileNodes...)
+	}
+	utils.Success(c, nodes)
+}
+
+// getSubFileNodes 获取子文件节点信息
+func (fc *FileController) getSubFileNodes(path string) ([]*FileNode, error) {
+	targetPath, safe := fc.checkPath(path, true)
+	if !safe {
+		return nil, &es.ForbiddenError{Message: "访问被拒绝"}
 	}
 
 	fi, err := os.Stat(targetPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			utils.Success(c, []*FileNode{})
-			return
+			return []*FileNode{}, nil
 		}
-		utils.ServerError(c, err.Error())
-		return
+		return nil, err
 	}
 
 	if !fi.IsDir() {
-		utils.BadRequest(c, "目标路径不是目录")
-		return
+		return nil, &es.BadRequestError{Message: "目标路径不是目录"}
 	}
 
 	entries, err := os.ReadDir(targetPath)
 	if err != nil {
-		utils.ServerError(c, err.Error())
-		return
+		return nil, err
 	}
 
 	nodes := make([]*FileNode, 0, len(entries))
@@ -123,7 +170,7 @@ func (fc *FileController) GetFileTree(c *gin.Context) {
 
 		relPath, err := filepath.Rel(fc.workDir, filepath.Join(targetPath, entry.Name()))
 		if err != nil {
-			relPath = filepath.Join(subPath, entry.Name())
+			relPath = filepath.Join(path, entry.Name())
 		}
 		cleanRel := filepath.ToSlash(filepath.Clean(relPath))
 		if cleanRel == "." {
@@ -150,7 +197,7 @@ func (fc *FileController) GetFileTree(c *gin.Context) {
 		nodes = append(nodes, node)
 	}
 
-	utils.Success(c, nodes)
+	return nodes, nil
 }
 
 // SearchFiles 搜索文件列表

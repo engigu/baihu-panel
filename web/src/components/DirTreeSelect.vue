@@ -72,7 +72,14 @@ async function loadTree() {
   if (internalFileTree.value.length > 0) return
   loading.value = true
   try {
-    internalFileTree.value = await api.files.tree()
+    let pathArray = [""] // 空字符串表示根目录
+    if (props.modelValue) {
+      let nodeArray = props.modelValue.split("/")
+      for (let i = 1; i < nodeArray.length; i++) {
+        pathArray.push(nodeArray.splice(0, i).join("/")) // 通过切片得到所有需要加载的路径
+      }
+    }
+    internalFileTree.value = await api.files.trees(pathArray.join(","))
   } catch {
     internalFileTree.value = []
   } finally {

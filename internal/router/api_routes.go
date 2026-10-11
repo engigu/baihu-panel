@@ -160,6 +160,7 @@ func registerFileRoutes(g *gin.RouterGroup, c *Controllers) {
 	files := g.Group("/files")
 	{
 		files.GET("/tree", c.File.GetFileTree)
+		files.GET("/trees", c.File.GetFileTrees)
 		files.GET("/search", c.File.SearchFiles)
 		files.GET("/content", c.File.GetFileContent)
 		files.GET("/download", c.File.DownloadFile)

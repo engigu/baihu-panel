@@ -349,6 +349,7 @@ export const api = {
   },
   files: {
     tree: (path?: string) => request<FileNode[]>(`/files/tree${path ? `?path=${encodeURIComponent(path)}` : ''}`),
+    trees: (paths?: string) => request<FileNode[]>(`/files/trees${paths ? `?paths=${encodeURIComponent(paths)}` : ''}`),
     search: (keyword: string, limit = 100, onlyFiles = false) =>
       request<FileNode[]>(`/files/search?keyword=${encodeURIComponent(keyword)}&limit=${limit}&only_files=${onlyFiles}`),
     getContent: (path: string) => request<{ path: string; content: string; isBinary?: boolean }>(`/files/content?path=${encodeURIComponent(path)}`),
