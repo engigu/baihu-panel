@@ -104,4 +104,6 @@ done
 printf "\n\033[1;32m>>> Environment setup complete. Starting Baihu Server...\033[0m\n\n"
 
 cd /app
-exec baihu server
+# tini as init reaps orphaned grandchildren that would otherwise become
+# zombies under baihu (container PID 1 has no reaper otherwise).
+exec tini -- baihu server
