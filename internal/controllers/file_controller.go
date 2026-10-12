@@ -91,10 +91,12 @@ func (fc *FileController) GetFileTree(c *gin.Context) {
 	subPath := c.DefaultQuery("path", "")
 	nodes, err := fc.getSubFileNodes(subPath)
 	if err != nil {
-		if errors.Is(err, &es.ForbiddenError{}) {
-			utils.Forbidden(c, err.Error())
-		} else if errors.Is(err, &es.BadRequestError{}) {
-			utils.BadRequest(c, err.Error())
+		var forbiddenErr *es.ForbiddenError
+		var badRequestErr *es.BadRequestError
+		if errors.As(err, &forbiddenErr) {
+			utils.Forbidden(c, forbiddenErr.Error())
+		} else if errors.As(err, &badRequestErr) {
+			utils.BadRequest(c, badRequestErr.Error())
 		} else {
 			utils.ServerError(c, err.Error())
 		}
@@ -103,38 +105,47 @@ func (fc *FileController) GetFileTree(c *gin.Context) {
 	utils.Success(c, nodes)
 }
 
-// GetFileTrees 获取文件树/目录节点列表
-// @Summary 获取文件树/目录节点列表
-// @Description 懒加载获取指定目录下的单层直接子项文件与文件夹节点
+// GetFileTrees 批量获取指定目录的文件树节点映射
+// @Summary 批量获取文件树节点
+// @Description 批量获取多个指定目录下的直接子项文件与文件夹节点
 // @Tags 文件管理
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param paths query string false "相对目录路径（留空表示根目录）；支持多个，逗号分割"
-// @Success 200 {object} utils.Response{data=[]controllers.FileNode}
-// @Failure 400 {object} utils.Response "目标路径不是目录"
+// @Success 200 {object} utils.Response{data=map[string][]controllers.FileNode}
 // @Failure 403 {object} utils.Response "访问被拒绝"
 // @Failure 500 {object} utils.Response "服务器内部错误"
-// @Router /files/tree [get]
+// @Router /files/trees [get]
 func (fc *FileController) GetFileTrees(c *gin.Context) {
 	paths := c.DefaultQuery("paths", "")
 	pathArray := strings.Split(paths, ",")
-	nodes := make([]*FileNode, 0, len(pathArray) * 5)
-	for _, path := range pathArray {
-		subFileNodes, err := fc.getSubFileNodes(path)
+
+	treeMap := make(map[string][]*FileNode)
+	for _, rawPath := range pathArray {
+		p := strings.TrimSpace(rawPath)
+		if _, exists := treeMap[p]; exists {
+			continue
+		}
+		subFileNodes, err := fc.getSubFileNodes(p)
 		if err != nil {
-			if errors.Is(err, &es.ForbiddenError{}) {
-				utils.Forbidden(c, err.Error())
-			} else if errors.Is(err, &es.BadRequestError{}) {
-				utils.BadRequest(c, err.Error())
+			var forbiddenErr *es.ForbiddenError
+			var badRequestErr *es.BadRequestError
+			if errors.As(err, &forbiddenErr) {
+				utils.Forbidden(c, forbiddenErr.Error())
+				return
+			} else if errors.As(err, &badRequestErr) {
+				// 如果特定路径不是目录或非法，降级为空列表，不阻断其它路径
+				treeMap[p] = []*FileNode{}
+				continue
 			} else {
 				utils.ServerError(c, err.Error())
+				return
 			}
-			return
 		}
-		nodes = append(nodes, subFileNodes...)
+		treeMap[p] = subFileNodes
 	}
-	utils.Success(c, nodes)
+	utils.Success(c, treeMap)
 }
 
 // getSubFileNodes 获取子文件节点信息

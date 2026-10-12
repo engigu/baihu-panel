@@ -67,19 +67,55 @@ function flattenDirs(nodes: FileNode[], depth = 0): FlatDir[] {
 
 const flatDirs = computed(() => flattenDirs(fileTree.value))
 
+function findNodeInTree(nodes: FileNode[], targetPath: string): FileNode | null {
+  for (const n of nodes) {
+    if (n.path === targetPath) return n
+    if (n.children && n.children.length > 0) {
+      const res = findNodeInTree(n.children, targetPath)
+      if (res) return res
+    }
+  }
+  return null
+}
+
 async function loadTree() {
   if (props.fileTree) return
   if (internalFileTree.value.length > 0) return
   loading.value = true
   try {
-    let pathArray = [""] // 空字符串表示根目录
-    if (props.modelValue) {
-      let nodeArray = props.modelValue.split("/")
-      for (let i = 1; i < nodeArray.length; i++) {
-        pathArray.push(nodeArray.splice(0, i).join("/")) // 通过切片得到所有需要加载的路径
+    const pathArray: string[] = [''] // 空字符串表示根目录
+    let cleanVal = (props.modelValue || '').trim()
+    if (cleanVal.startsWith(PATHS.SCRIPTS_DIR_PLACEHOLDER)) {
+      cleanVal = cleanVal.replace(PATHS.SCRIPTS_DIR_PLACEHOLDER, '').replace(/^\/+/, '')
+    }
+
+    if (cleanVal && cleanVal !== '/') {
+      const parts = cleanVal.split('/').filter(Boolean)
+      let cur = ''
+      for (const part of parts) {
+        cur = cur ? `${cur}/${part}` : part
+        pathArray.push(cur)
+        expandedDirs.value.add(cur)
       }
     }
-    internalFileTree.value = await api.files.trees(pathArray.join(","))
+
+    const treeMap = await api.files.trees(pathArray.join(','))
+    const rootNodes = treeMap[''] || []
+    
+    // 依次将各层级的子节点挂载到树形结构中
+    for (const p of pathArray) {
+      if (!p) continue
+      const children = treeMap[p]
+      if (!children) continue
+      const parent = findNodeInTree(rootNodes, p)
+      if (parent) {
+        parent.children = children
+        parent.loaded = true
+        expandedDirs.value.add(parent.path)
+      }
+    }
+
+    internalFileTree.value = rootNodes
   } catch {
     internalFileTree.value = []
   } finally {
@@ -93,17 +129,7 @@ async function toggleDir(dirPath: string, e: Event) {
     expandedDirs.value.delete(dirPath)
   } else {
     expandedDirs.value.add(dirPath)
-    const findNode = (nodes: FileNode[], targetPath: string): FileNode | null => {
-      for (const n of nodes) {
-        if (n.path === targetPath) return n
-        if (n.children) {
-          const res = findNode(n.children, targetPath)
-          if (res) return res
-        }
-      }
-      return null
-    }
-    const targetNode = findNode(fileTree.value, dirPath)
+    const targetNode = findNodeInTree(fileTree.value, dirPath)
     if (targetNode && !targetNode.loaded && targetNode.hasChildren !== false) {
       targetNode.loading = true
       try {

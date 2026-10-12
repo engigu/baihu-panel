@@ -115,6 +115,38 @@ func TestFileController_GetFileTree_Lazy(t *testing.T) {
 			}
 		}
 	}
+
+	// 3. 测试批量获取子目录：paths=,dirA,dirA/subDirAA,not_exist_dir
+	r.GET("/files/trees", fc.GetFileTrees)
+	req3, _ := http.NewRequest(http.MethodGet, "/files/trees?paths=,dirA,dirA/subDirAA,not_exist_dir", nil)
+	w3 := httptest.NewRecorder()
+	r.ServeHTTP(w3, req3)
+
+	if w3.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d", w3.Code)
+	}
+
+	var resp3 struct {
+		Code int                     `json:"code"`
+		Data map[string][]*FileNode `json:"data"`
+	}
+	if err := json.Unmarshal(w3.Body.Bytes(), &resp3); err != nil {
+		t.Fatalf("JSON decode error: %v", err)
+	}
+
+	if len(resp3.Data[""]) != 3 {
+		t.Fatalf("Expected 3 items in root, got %d", len(resp3.Data[""]))
+	}
+	if len(resp3.Data["dirA"]) != 2 {
+		t.Fatalf("Expected 2 items in dirA, got %d", len(resp3.Data["dirA"]))
+	}
+	if len(resp3.Data["dirA/subDirAA"]) != 1 {
+		t.Fatalf("Expected 1 item in subDirAA, got %d", len(resp3.Data["dirA/subDirAA"]))
+	}
+	// 不存在的目录应优雅容错降级为空数组
+	if resp3.Data["not_exist_dir"] == nil || len(resp3.Data["not_exist_dir"]) != 0 {
+		t.Fatalf("Expected empty array for non-existent path, got %+v", resp3.Data["not_exist_dir"])
+	}
 }
 
 func TestFileController_SearchFiles(t *testing.T) {
