@@ -686,6 +686,11 @@ func (sc *SettingsController) GetSectionSettings(c *gin.Context) {
 
 // UpdateSectionSettings 批量更新指定 section 的设置
 func (sc *SettingsController) UpdateSectionSettings(c *gin.Context) {
+	if constant.DemoMode {
+		utils.BadRequest(c, "演示模式下禁止修改配置")
+		return
+	}
+
 	section := c.Param("section")
 	if section == "" {
 		utils.BadRequest(c, "参数错误")
