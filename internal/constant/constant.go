@@ -39,6 +39,16 @@ const (
 	// Security Settings Key 常量
 	KeySecret = "secret"
 
+	// OIDC 登录（Security Section）
+	KeyOidcEnabled      = "oidc_enabled"
+	KeyOidcIssuer       = "oidc_issuer"
+	KeyOidcClientID     = "oidc_client_id"
+	KeyOidcClientSecret = "oidc_client_secret"
+	KeyOidcRedirectURL  = "oidc_redirect_url"
+	KeyOidcScopes       = "oidc_scopes"
+	KeyOidcAutoCreate   = "oidc_auto_create"
+	KeyOidcDefaultRole  = "oidc_default_role"
+
 	// System Settings Key 常量
 	KeyInitialized = "initialized"
 	KeyUnifiedTaskConfigMigrated = "unified_task_config_migrated"

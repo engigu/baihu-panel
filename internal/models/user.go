@@ -14,6 +14,7 @@ type User struct {
 	TokenVersion int       `json:"token_version,omitempty" gorm:"default:1"` // 用于 JWT 失效校验
 	OtpSecret    string    `json:"otp_secret,omitempty" gorm:"size:255"`
 	OtpEnabled   bool      `json:"otp_enabled" gorm:"default:false"`
+	OidcSubject  string    `json:"oidc_subject,omitempty" gorm:"size:255;index"` // OIDC 身份标识（IdP 的 sub）
 	CreatedAt    LocalTime `json:"created_at"`
 	UpdatedAt    LocalTime `json:"updated_at"`
 }

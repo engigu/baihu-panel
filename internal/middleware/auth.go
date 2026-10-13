@@ -224,6 +224,11 @@ func SetAuthCookie(c *gin.Context, token string, expireDays int) {
 	c.SetCookie(constant.CookieName, token, maxAge, "/", "", false, true)
 }
 
+// ClearCookie 清除指定名称的 Cookie
+func ClearCookie(c *gin.Context, name string) {
+	c.SetCookie(name, "", -1, "/", "", false, true)
+}
+
 // ClearAuthCookie 清除认证 Cookie
 func ClearAuthCookie(c *gin.Context) {
 	c.SetCookie(constant.CookieName, "", -1, "/", "", false, true)

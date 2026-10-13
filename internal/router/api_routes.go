@@ -26,6 +26,14 @@ func initPublicAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 		// auth.POST("/register", c.Auth.Register)
 	}
 
+	// OIDC 单点登录（浏览器重定向流程，不参与 API/MCP 认证）
+	authOidc := api.Group("/auth/oidc")
+	{
+		authOidc.GET("/status", c.Auth.OidcStatus)
+		authOidc.GET("/login", c.Auth.OidcLogin)
+		authOidc.GET("/callback", c.Auth.OidcCallback)
+	}
+
 	// 公开的站点设置（无需认证）
 	api.GET("/settings/public", c.Settings.GetPublicSiteSettings)
 

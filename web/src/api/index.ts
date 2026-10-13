@@ -158,6 +158,7 @@ export const api = {
     loginOtp: (data: { otp_pending_token: string; code: string }) =>
       request<{ user: string }>('/auth/login/otp', { method: 'POST', body: JSON.stringify(data) }),
     logout: () => request('/auth/logout', { method: 'POST' }),
+    oidcStatus: () => request<{ enabled: boolean }>('/auth/oidc/status'),
     me: () => request<{ username: string; role: string }>('/auth/me'),
     register: (data: { username: string; password: string; email: string }) =>
       request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),

@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import PasswordSettings from './PasswordSettings.vue'
 import OtpSettings from './OtpSettings.vue'
 import SiteSettings from './SiteSettings.vue'
+import OidcSettings from './OidcSettings.vue'
 import SchedulerSettings from './SchedulerSettings.vue'
 import BackupSettings from './BackupSettings.vue'
 import AboutSettings from './AboutSettings.vue'
@@ -31,9 +32,12 @@ const activeTab = ref('security')
 
       <!-- 安全设置：双列卡片并排 -->
       <TabsContent value="security" class="mt-6">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-          <PasswordSettings />
-          <OtpSettings />
+        <div class="space-y-6">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+            <PasswordSettings />
+            <OtpSettings />
+          </div>
+          <OidcSettings />
         </div>
       </TabsContent>
 

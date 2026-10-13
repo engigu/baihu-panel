@@ -23,6 +23,7 @@ const demoMode = ref(false)
 const requireOtp = ref(false)
 const otpPendingToken = ref('')
 const otpCode = ref('')
+const oidcEnabled = ref(false)
 
 // 从 localStorage 加载缓存的站点设置
 function loadCachedSettings() {
@@ -143,7 +144,26 @@ function handleBack() {
   otpCode.value = ''
 }
 
-onMounted(loadSiteSettings)
+onMounted(() => {
+  loadSiteSettings()
+  loadOidcStatus()
+})
+
+// 查询是否启用 OIDC 单点登录，启用则展示按钮
+async function loadOidcStatus() {
+  try {
+    const res = await api.auth.oidcStatus()
+    oidcEnabled.value = !!res?.enabled
+  } catch {
+    oidcEnabled.value = false
+  }
+}
+
+function handleOidcLogin() {
+  const baseUrl = (window as any).__BASE_URL__ || ''
+  const redirect = encodeURIComponent(window.location.pathname + window.location.search)
+  window.location.href = `${baseUrl}/api/v1/auth/oidc/login?redirect=${redirect}`
+}
 </script>
 
 <template>
@@ -224,6 +244,23 @@ onMounted(loadSiteSettings)
               </Button>
             </div>
           </form>
+
+          <!-- OIDC 单点登录 -->
+          <div v-if="oidcEnabled && !requireOtp" class="mt-6">
+            <div class="relative">
+              <div class="absolute inset-0 flex items-center">
+                <span class="w-full border-t border-border/60" />
+              </div>
+              <div class="relative flex justify-center text-xs uppercase">
+                <span class="bg-background px-2 text-muted-foreground/70">或</span>
+              </div>
+            </div>
+            <Button type="button" variant="outline"
+              class="mt-4 w-full h-12 text-base font-semibold rounded-2xl"
+              @click="handleOidcLogin" :disabled="loading">
+              使用 OIDC 单点登录
+            </Button>
+          </div>
 
           <p v-if="demoMode" class="mt-8 text-center text-xs text-muted-foreground/60">
             演示模式：已为您自动填充测试账号

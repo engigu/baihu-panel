@@ -49,6 +49,25 @@ func (us *UserService) CreateUser(username, password, email, role string) *model
 	return user
 }
 
+// CreateOidcUser 创建一个仅用于 OIDC 登录的本地账号（密码为随机值，不可用于本地登录）
+func (us *UserService) CreateOidcUser(username, email, role, subject string) *models.User {
+	randomPwd, _ := utils.RandomStringSecure(32)
+	hashedPassword, _ := us.hashPassword(randomPwd)
+	user := &models.User{
+		ID:           utils.GenerateID(),
+		Username:     username,
+		Password:     hashedPassword,
+		Email:        email,
+		Role:         role,
+		TokenVersion: 1,
+		OidcSubject:  subject,
+	}
+	if err := database.DB.Create(user).Error; err != nil {
+		return nil
+	}
+	return user
+}
+
 func (us *UserService) GetUserByUsername(username string) *models.User {
 	var user models.User
 	res := database.DB.Where("username = ?", username).Limit(1).Find(&user)
