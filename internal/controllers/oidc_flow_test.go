@@ -163,6 +163,40 @@ func TestOidcCallbackRejectsBadState(t *testing.T) {
 	}
 }
 
+// 带 ?redirect= 登录时，IdP 回显的 state 必须与 Cookie 中的基础 state 一致（不含回跳路径），
+// 否则回调会把回显值拿去比对基础值，直接登录被误判为「单点登录 state 校验失败」
+func TestOidcLoginWithRedirectKeepsIdpStateOpaque(t *testing.T) {
+	idp := newFakeIdP(t, "baihu-panel", "sub-redir", "redir@example.com", "rediruser")
+	ac := setupOidcTest(t, idp, true)
+	router := gin.New()
+	router.GET("/api/v1/auth/oidc/login", ac.OidcLogin)
+	router.GET("/api/v1/auth/oidc/callback", ac.OidcCallback)
+
+	loginReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/login?redirect=%2Fdashboard", nil)
+	lw := httptest.NewRecorder()
+	router.ServeHTTP(lw, loginReq)
+	if lw.Code != http.StatusFound {
+		t.Fatalf("login 期望 302，实际 %d (%s)", lw.Code, lw.Body.String())
+	}
+	state := extractQuery(t, lw.Header().Get("Location"), "state")
+	if state == "" || strings.Contains(state, "dashboard") {
+		t.Fatalf("发给 IdP 的 state 不应包含回跳路径: %q", state)
+	}
+
+	cbReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/callback?code=redir-code&state="+state, nil)
+	for _, c := range lw.Result().Cookies() {
+		cbReq.AddCookie(c)
+	}
+	cbW := httptest.NewRecorder()
+	router.ServeHTTP(cbW, cbReq)
+	if cbW.Code != http.StatusFound {
+		t.Fatalf("带 redirect 的回调应成功，实际 %d (%s)", cbW.Code, cbW.Body.String())
+	}
+	if loc := cbW.Header().Get("Location"); loc != "/dashboard" {
+		t.Fatalf("登录后应回跳 /dashboard，实际 %q", loc)
+	}
+}
+
 // 验证各种流行平台（GitHub, Gitee, 通用平台）返回的用户信息解析
 func TestParseOAuth2Userinfo(t *testing.T) {
 	// 1. GitHub 风格 (id 为数字，login 为用户名)

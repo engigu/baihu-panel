@@ -64,15 +64,20 @@ func (ac *AuthController) OidcLogin(c *gin.Context) {
 
 	state := utils.RandomString(32)
 	// 允许站内相对路径回跳；仅接受 "/" 开头且非 "//" 的值，防开放重定向
+	postLogin := "/"
 	if to := c.Query("redirect"); strings.HasPrefix(to, "/") && !strings.HasPrefix(to, "//") {
-		state = state + "." + to
+		postLogin = to
 	}
 	verifier := oauth2.GenerateVerifier()
 
 	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie(oidcStateCookie, state, int(oidcStateTTL.Seconds()), "/", "", false, true)
+	// Cookie 保存「state.回跳路径」，回调时按首个 "." 拆开
+	c.SetCookie(oidcStateCookie, state+"."+postLogin, int(oidcStateTTL.Seconds()), "/", "", false, true)
 	c.SetCookie(oidcVerifierCookie, verifier, int(oidcStateTTL.Seconds()), "/", "", false, true)
 
+	// 只把不透明的 state 交给 IdP：回跳路径仅留在 Cookie 中。
+	// 否则 IdP 回显的 state 会带上「.回跳路径」，与回调里比对的基础 state 不相等，
+	// 直接登录（带 ?redirect=）会被误判为「单点登录 state 校验失败」。
 	authURL := oauthCfg.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier))
 	c.Redirect(302, authURL)
 }
