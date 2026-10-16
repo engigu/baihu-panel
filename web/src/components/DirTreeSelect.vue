@@ -90,7 +90,7 @@ async function loadTree() {
     }
 
     if (cleanVal && cleanVal !== '/') {
-      const parts = cleanVal.split('/').filter(Boolean)
+      const parts = cleanVal.split('/').filter(Boolean).slice(0, -1)
       let cur = ''
       for (const part of parts) {
         cur = cur ? `${cur}/${part}` : part
