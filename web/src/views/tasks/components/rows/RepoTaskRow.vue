@@ -140,7 +140,7 @@ function getRepoConfig(task: Task) {
         <span v-else class="text-xs text-muted-foreground">-</span>
       </div>
 
-      <div class="hidden md:flex w-28 lg:w-36 shrink-col justify-center gap-0.5 text-[11px] text-muted-foreground tabular-nums">
+      <div class="hidden md:flex w-28 lg:w-36 shrink-0 flex-col justify-center gap-0.5 text-[11px] text-muted-foreground tabular-nums">
         <span class="truncate" :title="task.last_run ? task.last_run : ''">上: {{ task.last_run ? formatDateTime(task.last_run) : '-' }}</span>
         <span class="truncate" :title="task.schedule && task.enabled && task.next_run ? task.next_run : ''">下: {{task.schedule && task.enabled && task.next_run ? formatDateTime(task.next_run) : '-' }}</span>
       </div>
