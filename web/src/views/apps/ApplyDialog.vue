@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Eye, EyeOff, Loader2, Terminal, CheckCircle2, Check, AlertCircle, AlertTriangle, Sparkles, Package, ExternalLink, ChevronDown, ChevronRight, Maximize2, Minimize2, X, FileCode } from 'lucide-vue-next'
+import { Eye, EyeOff, Loader2, Terminal, CheckCircle2, Check, AlertCircle, AlertTriangle, Sparkles, Package, ExternalLink, ChevronDown, ChevronRight, Maximize2, Minimize2, X, FileCode, Info } from 'lucide-vue-next'
 import { api, type MarketplaceApp, type AppEnvItemSchema, type AppScenarioSchema, type ApplyAppPayload, type Task } from '@/api'
 import { toast } from 'vue-sonner'
 import TaskNotificationConfig from '@/views/tasks/components/TaskNotificationConfig.vue'
@@ -649,6 +649,10 @@ async function executeDeploy() {
             <DialogDescription class="text-xs text-muted-foreground truncate">
               {{ targetApp?.description || '通过白虎声明式规范一键部署代码源与任务配置' }}
             </DialogDescription>
+            <p v-if="mode === 'edit_task'" class="text-[11px] text-muted-foreground/85 flex items-center gap-1 mt-0.5">
+              <Info class="w-3 h-3 shrink-0" />
+              此处仅修改调度与通知配置（不动应用清单）；如需升级应用版本，请使用列表「详情与更新」入口
+            </p>
           </div>
 
           <!-- 查看原始 YAML 按钮 (targetApp 存在时) -->

@@ -5,7 +5,7 @@ import NormalTaskRow from './rows/NormalTaskRow.vue'
 import RepoTaskRow from './rows/RepoTaskRow.vue'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ArrowUpDown, ArrowUp, ArrowDown, GitBranch, Terminal, Package } from 'lucide-vue-next'
-import type { Task, Agent } from '@/api'
+import type { Task, Agent, AppUpdateInfo } from '@/api'
 import { TASK_TYPE } from '@/constants'
 
 const props = withDefaults(defineProps<{
@@ -21,10 +21,12 @@ const props = withDefaults(defineProps<{
   selectedIds?: string[]
   isAllSelected?: boolean
   isIndeterminate?: boolean
+  updateMap?: Record<string, AppUpdateInfo>
 }>(), {
   selectedIds: () => [],
   isAllSelected: false,
-  isIndeterminate: false
+  isIndeterminate: false,
+  updateMap: () => ({})
 })
 
 const hasSelection = computed(() => (props.selectedIds?.length || 0) > 0)
@@ -46,6 +48,7 @@ const emit = defineEmits<{
   'shareApp': [task: Task]
   'toggleSelect': [id: string]
   'toggleAll': []
+  'openAppDetail': [task: Task]
 }>()
 </script>
 
@@ -160,6 +163,7 @@ const emit = defineEmits<{
           :agent-map="agentMap"
           :selected="selectedIds.includes(task.id)"
           :has-selection="hasSelection"
+          :update-info="updateMap[task.id] || null"
           @run="$emit('runTask', $event)"
           @view-logs="$emit('viewLogs', $event)"
           @filter-by-app="$emit('filterByApp', $event)"
@@ -168,6 +172,7 @@ const emit = defineEmits<{
           @toggle-task="(t, val) => $emit('toggleTask', t, val)"
           @share-app="$emit('shareApp', $event)"
           @toggle-select="$emit('toggleSelect', $event)"
+          @open-detail="$emit('openAppDetail', $event)"
         />
 
         <!-- 业务场景 B: Git 仓库同步任务 -->

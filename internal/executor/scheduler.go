@@ -77,6 +77,7 @@ type ExecutionRequest struct {
 	Timeout       int                 // 超时时间（分钟）
 	Languages     []map[string]string // 语言环境配置
 	UseMise       bool                // 是否使用 mise
+	AppMaster     bool                // 是否为应用主任务（用于 per-app 更新互斥锁）
 	Metadata      ExecutionMetadata   // 额外元数据
 }
 

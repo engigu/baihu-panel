@@ -26,9 +26,13 @@ import {
   Clock,
   Terminal,
   FileCode,
-  AlertTriangle
+  AlertTriangle,
+  ArrowRight,
+  ArrowUpCircle,
+  ShieldAlert,
+  CheckCircle2
 } from 'lucide-vue-next'
-import { api, type AppDetailResponse, type Task } from '@/api'
+import { api, type AppDetailResponse, type Task, type AppUpdateInfo, type AppMissingEnvItem } from '@/api'
 import { getCronDescription } from '@/utils/cron'
 import { toast } from 'vue-sonner'
 
@@ -62,6 +66,18 @@ const selectedScenarioToSwitch = ref('')
 const rebuilding = ref(false)
 const rebuildLog = ref('')
 
+// 应用更新状态（design/app-update-proposal.md P1 前端中枢）
+const updateInfo = ref<AppUpdateInfo | null>(null)
+const updateInfoLoading = ref(false)
+const updateDetectFailed = ref(false)
+const updating = ref(false)
+const updateLog = ref('')
+const updateSuccess = ref(false)
+const updateError = ref('')
+const missingEnvs = ref<AppMissingEnvItem[]>([])
+const missingEnvForm = ref<Record<string, string>>({})
+const updateLogRef = ref<HTMLElement | null>(null)
+
 // 任务执行状态
 const runningTaskId = ref<string | null>(null)
 
@@ -79,9 +95,16 @@ watch(
   async ([open, id]) => {
     if (open && id) {
       await loadAppDetail(id as string)
+      loadUpdateInfo(id as string)
     } else {
       appData.value = null
       rebuildLog.value = ''
+      updateInfo.value = null
+      updateDetectFailed.value = false
+      updateLog.value = ''
+      updateSuccess.value = false
+      updateError.value = ''
+      missingEnvs.value = []
     }
   },
   { immediate: true }
@@ -156,6 +179,146 @@ async function handleToggleTask(task: Task, enabled: boolean) {
   } catch (err: any) {
     toast.error('更新失败: ' + (err.message || '未知错误'))
   }
+}
+
+// 加载更新检测结果
+async function loadUpdateInfo(appId: string) {
+  updateInfoLoading.value = true
+  updateDetectFailed.value = false
+  try {
+    const res = await api.apps.updates()
+    updateInfo.value = res.updates?.find(u => u.task_id === appId) || null
+  } catch {
+    updateInfo.value = null
+    updateDetectFailed.value = true
+  } finally {
+    updateInfoLoading.value = false
+  }
+}
+
+// 滚动更新日志到底部
+function scrollUpdateLog() {
+  requestAnimationFrame(() => {
+    const pre = updateLogRef.value
+    if (!pre) return
+    pre.scrollTop = pre.scrollHeight
+    // 日志增长会让抽屉主体出现纵向溢出：同步把最近的滚动祖先（抽屉内容区）滚到底，
+    // 否则日志区尾部（含更新完成结论）会被主体可视区裁剪在下方不可见
+    let p: HTMLElement | null = pre.parentElement
+    while (p) {
+      const oy = getComputedStyle(p).overflowY
+      if (oy === 'auto' || oy === 'scroll') {
+        p.scrollTop = p.scrollHeight
+        break
+      }
+      p = p.parentElement
+    }
+  })
+}
+
+// 一键更新（SSE 日志流）：409 安全阀拦截时展开补值表单
+async function startUpdate(extraEnvs?: Record<string, string>) {
+  if (!appData.value || updating.value) return
+  if (demoMode.value) {
+    toast.error('演示模式下禁止更新应用')
+    return
+  }
+
+  updating.value = true
+  updateLog.value = '>> 正在建立实时日志连接...\n'
+  updateSuccess.value = false
+  updateError.value = ''
+  missingEnvs.value = []
+
+  try {
+    const response = await fetch(`/api/v1/apps/${appData.value.app.id}/update?stream=true`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+      body: JSON.stringify({ env_values: extraEnvs, skip_setup: false, force_setup: false })
+    })
+
+    if (!response.ok) {
+      const errText = await response.text()
+      throw new Error(errText || `HTTP ${response.status}`)
+    }
+
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error('浏览器不支持 ReadableStream')
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+    // currentEvent 声明在分片循环外以跨 chunk 生效；按 SSE 规范在每次事件分发后重置为 message
+    let currentEvent = 'message'
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        if (trimmed.startsWith('event:')) {
+          currentEvent = trimmed.substring(6).trim()
+        } else if (trimmed.startsWith('data:')) {
+          const dataStr = line.substring(line.indexOf('data:') + 5).trim()
+          if (currentEvent === 'done') {
+            updateSuccess.value = true
+            toast.success('应用更新成功！')
+            await loadAppDetail(props.appId)
+            await loadUpdateInfo(props.appId)
+            emit('updated')
+          } else if (currentEvent === 'conflict') {
+            try {
+              const obj = JSON.parse(dataStr)
+              missingEnvs.value = obj.missing_envs || []
+              toast.warning(obj.error || '存在未提供值的必填环境变量，请补值后继续')
+            } catch {
+              updateError.value = dataStr
+            }
+          } else if (currentEvent === 'error') {
+            try {
+              const errObj = JSON.parse(dataStr)
+              updateError.value = errObj.error || '更新失败'
+            } catch {
+              updateError.value = dataStr
+            }
+            toast.error(updateError.value)
+          } else {
+            updateLog.value += dataStr + '\n'
+            scrollUpdateLog()
+          }
+          // SSE 规范：事件分发后事件类型重置，后续无 event: 前缀的 data 行一律按 message 处理
+          currentEvent = 'message'
+        }
+      }
+    }
+  } catch (err: any) {
+    updateError.value = err.message || '更新失败'
+    updateLog.value += `\n[ERROR] ${updateError.value}\n`
+    toast.error(updateError.value)
+  } finally {
+    updating.value = false
+    scrollUpdateLog()
+  }
+}
+
+// 提交补值并重放更新
+function submitMissingEnvs() {
+  const envs: Record<string, string> = {}
+  for (const item of missingEnvs.value) {
+    const val = (missingEnvForm.value[item.key] || '').trim()
+    if (val) {
+      envs[item.key] = val
+    }
+  }
+  if (Object.keys(envs).length < missingEnvs.value.length) {
+    toast.error('请填写全部缺失的必填环境变量')
+    return
+  }
+  startUpdate(envs)
 }
 
 // 触发重新预编译自愈
@@ -300,10 +463,10 @@ async function handleUninstall() {
 
         <!-- 标签页导航 -->
         <Tabs v-model="activeTab" class="w-full">
-          <TabsList class="grid grid-cols-3 w-full h-8 p-0.5 bg-muted/20 border border-border/40 rounded-lg">
+          <TabsList class="grid grid-cols-4 w-full h-8 p-0.5 bg-muted/20 border border-border/40 rounded-lg">
             <TabsTrigger value="tasks" class="text-xs h-7 flex items-center gap-1">
               <ListTodo class="w-3.5 h-3.5 opacity-70" />
-              <span>受控任务 ({{ appData.tasks?.length || 0 }})</span>
+              <span>任务 ({{ appData.tasks?.length || 0 }})</span>
             </TabsTrigger>
             <TabsTrigger value="manifest" class="text-xs h-7 flex items-center gap-1">
               <FileCode class="w-3.5 h-3.5 opacity-70" />
@@ -311,7 +474,11 @@ async function handleUninstall() {
             </TabsTrigger>
             <TabsTrigger value="maintenance" class="text-xs h-7 flex items-center gap-1">
               <Wrench class="w-3.5 h-3.5 opacity-70" />
-              <span>自愈与卸载</span>
+              <span>自愈卸载</span>
+            </TabsTrigger>
+            <TabsTrigger value="update" class="text-xs h-7 flex items-center gap-1">
+              <ArrowUpCircle class="w-3.5 h-3.5 opacity-70" />
+              <span>应用更新</span>
             </TabsTrigger>
           </TabsList>
 
@@ -370,6 +537,118 @@ async function handleUninstall() {
               <span class="font-mono text-[11px] truncate max-w-[260px]">{{ appData.app.manifest_path || '内存驻留' }}</span>
             </div>
             <pre class="bg-neutral-950 text-neutral-200 font-mono text-xs p-3.5 rounded-xl overflow-x-auto max-h-96 select-text border border-neutral-800 leading-relaxed">{{ appData.app.manifest_raw || '无原始 YAML' }}</pre>
+          </TabsContent>
+
+          <!-- Tab 4: 应用更新 -->
+          <TabsContent value="update" class="space-y-3.5 mt-3">
+            <!-- 版本对比卡片 -->
+            <div class="p-3.5 rounded-xl border border-border/80 bg-muted/20 flex items-center gap-3">
+              <template v-if="updateInfoLoading">
+                <Loader2 class="w-4 h-4 animate-spin text-muted-foreground" />
+                <span class="text-xs text-muted-foreground">正在检测更新源...</span>
+              </template>
+              <template v-else-if="updateInfo && updateInfo.latest_version">
+                <div class="text-center flex-1">
+                  <div class="text-sm font-bold font-mono text-foreground">v{{ updateInfo.installed_version || '-' }}</div>
+                  <div class="text-[10px] text-muted-foreground mt-0.5">当前版本</div>
+                </div>
+                <ArrowRight class="w-4 h-4 text-muted-foreground shrink-0" />
+                <div class="text-center flex-1">
+                  <div
+                    class="text-sm font-bold font-mono"
+                    :class="updateInfo.updatable ? 'text-amber-500' : 'text-emerald-500'"
+                  >v{{ updateInfo.latest_version }}</div>
+                  <div class="text-[10px] text-muted-foreground mt-0.5">市场最新</div>
+                </div>
+                <Badge
+                  v-if="updateInfo.updatable"
+                  class="shrink-0 text-[10px] bg-amber-500/10 text-amber-500 border-amber-500/30 font-medium"
+                  variant="outline"
+                >
+                  {{ updateInfo.reason === 'manifest_changed' ? '定义有更新' : '可更新' }}
+                </Badge>
+                <Badge v-else variant="outline" class="shrink-0 text-[10px] text-emerald-500 border-emerald-500/30 bg-emerald-500/10 font-medium">
+                  已是最新
+                </Badge>
+              </template>
+              <template v-else>
+                <ShieldAlert class="w-4 h-4 text-muted-foreground shrink-0" />
+                <span class="text-xs text-muted-foreground">
+                  {{ updateDetectFailed ? '更新检测失败，请关闭后重试' : updateInfo?.reason === 'fetch_failed' ? '更新源拉取失败，已禁用一键更新' : updateInfo?.reason === 'source_mismatch' ? '更新源内容已不属于该应用（清单 ID 不一致），已禁用更新以防误覆盖，请重新导入清单' : '该应用无自动更新源（手动导入或已从市场移除），可重新导入清单' }}
+                </span>
+              </template>
+            </div>
+
+            <!-- 409 安全阀: 补值表单 -->
+            <div v-if="missingEnvs.length > 0" class="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2.5">
+              <div class="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-400">
+                <ShieldAlert class="w-4 h-4 shrink-0 mt-0.5" />
+                <div class="leading-relaxed">
+                  新版本新增了 <b>{{ missingEnvs.length }}</b> 个必填环境变量且当前无可用值，更新已被安全阀拦截——请补值后继续，避免更新后任务静默失败。
+                </div>
+              </div>
+              <div v-for="item in missingEnvs" :key="item.key" class="space-y-1">
+                <div class="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                  <span>{{ item.label || item.key }}</span>
+                  <code class="text-[10px] font-mono text-muted-foreground">{{ item.key }}</code>
+                </div>
+                <input
+                  v-model="missingEnvForm[item.key]"
+                  :type="item.type === 'secret' ? 'password' : 'text'"
+                  :placeholder="item.description || `请输入 ${item.key}`"
+                  autocomplete="off"
+                  class="w-full h-8 px-2.5 text-xs rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div class="flex justify-end gap-2 pt-1">
+                <Button size="sm" variant="ghost" class="text-xs h-7" @click="missingEnvs = []">取消</Button>
+                <Button size="sm" class="text-xs h-7 font-medium" :disabled="updating" @click="submitMissingEnvs">
+                  <Loader2 v-if="updating" class="w-3 h-3 mr-1 animate-spin" />
+                  补值并继续更新
+                </Button>
+              </div>
+            </div>
+
+            <!-- 更新动作 -->
+            <div
+              v-else-if="updateInfo && updateInfo.latest_version"
+              class="flex items-center justify-between p-3.5 rounded-xl border border-primary/20 bg-primary/5 gap-3"
+            >
+              <p class="text-[11px] text-muted-foreground leading-relaxed min-w-0">
+                更新将保留：环境变量值 · 定时规则 · 场景选择 · 构建选项，并自动对齐任务编排。
+              </p>
+              <Button
+                size="sm"
+                class="shrink-0 text-xs h-7 px-3 font-semibold"
+                :disabled="updating || demoMode"
+                :title="demoMode ? '演示模式下禁止更新应用' : '按市场最新清单更新应用'"
+                @click="startUpdate()"
+              >
+                <Loader2 v-if="updating" class="w-3 h-3 mr-1 animate-spin" />
+                <ArrowUpCircle v-else class="w-3 h-3 mr-1" />
+                {{ updating ? '更新中...' : (updateInfo.updatable ? '一键更新' : '重新部署') }}
+              </Button>
+            </div>
+
+            <!-- 更新执行输出日志 -->
+            <div v-if="updating || updateLog" class="space-y-1.5">
+              <div class="flex items-center justify-between text-xs font-mono font-bold">
+                <span class="flex items-center gap-1.5">
+                  <Terminal class="w-3.5 h-3.5" />
+                  更新日志 (Update Output)
+                </span>
+                <span v-if="updateSuccess" class="text-emerald-500 flex items-center gap-1 font-sans text-[11px] font-semibold">
+                  <CheckCircle2 class="w-3.5 h-3.5" /> 更新就绪
+                </span>
+                <span v-else-if="updateError" class="text-destructive flex items-center gap-1 font-sans text-[11px] font-semibold">
+                  <AlertTriangle class="w-3.5 h-3.5" /> 执行失败
+                </span>
+              </div>
+              <pre
+                ref="updateLogRef"
+                class="bg-neutral-950 text-neutral-200 font-mono text-[11px] p-3 rounded-lg overflow-auto max-h-56 border border-neutral-800 leading-relaxed whitespace-pre-wrap break-all"
+              >{{ updateLog || '正在执行更新...' }}</pre>
+            </div>
           </TabsContent>
 
           <!-- Tab 3: 维护与自愈工具箱 -->

@@ -11,13 +11,14 @@ import LogViewer from '@/views/history/LogViewer.vue'
 import XTerminal from '@/components/XTerminal.vue'
 import TaskHeader from './components/TaskHeader.vue'
 import TaskList from './components/TaskList.vue'
+import AppDetailDrawer from '@/views/apps/AppDetailDrawer.vue'
 import FloatingBatchBar from './components/FloatingBatchBar.vue'
 import TaskBatchSettingsDialog from './components/dialogs/TaskBatchSettingsDialog.vue'
 import TaskDeleteDialog from './components/dialogs/TaskDeleteDialog.vue'
 import TaskExportDialog from './components/dialogs/TaskExportDialog.vue'
 import AppShareDialog from './components/dialogs/AppShareDialog.vue'
 import { X } from 'lucide-vue-next'
-import { api, type Agent, type Task, type TaskLog } from '@/api'
+import { api, type Agent, type Task, type TaskLog, type AppUpdateInfo } from '@/api'
 import { toast } from 'vue-sonner'
 import { usePageSize } from '@/composables/usePageSize'
 import { useSelection } from '@/composables/useSelection'
@@ -45,6 +46,27 @@ const agents = ref<Agent[]>([])
 const loading = ref(false)
 const currentPage = ref(1)
 const total = ref(0)
+
+// 应用更新检测（design/app-update-proposal.md P1：调度实体为更新中枢）
+const updateMap = ref<Record<string, AppUpdateInfo>>({})
+const showAppDetail = ref(false)
+const appDetailId = ref('')
+
+async function loadUpdateMap() {
+  try {
+    const res = await api.apps.updates()
+    const map: Record<string, AppUpdateInfo> = {}
+    for (const info of res.updates || []) {
+      map[info.task_id] = info
+    }
+    updateMap.value = map
+  } catch { /* 检测失败静默降级，不影响列表 */ }
+}
+
+function openAppDetail(task: Task) {
+  appDetailId.value = task.id
+  showAppDetail.value = true
+}
 
 // 通用多选状态机
 const {
@@ -149,6 +171,7 @@ async function loadTasks() {
     })
     tasks.value = res.data
     total.value = res.total
+    loadUpdateMap()
   } catch {
     toast.error('加载任务失败')
   } finally {
@@ -991,6 +1014,7 @@ watch(() => route.query.type, (newVal: any) => {
       :selected-ids="selectedIds"
       :is-all-selected="isAllSelected"
       :is-indeterminate="isIndeterminate"
+      :update-map="updateMap"
       @toggle-sort="toggleSort"
       @run-task="runTask"
       @view-logs="viewLogs"
@@ -1007,6 +1031,7 @@ watch(() => route.query.type, (newVal: any) => {
       @share-app="openShareApp"
       @toggle-select="toggleSelect"
       @toggle-all="toggleAll"
+      @open-app-detail="openAppDetail"
     >
       <template #pagination>
         <!-- 分页 (支持自定义每页条数) -->
@@ -1089,6 +1114,13 @@ watch(() => route.query.type, (newVal: any) => {
       :app="shareAppInfo"
       :app-name="shareAppName"
       :yaml-content="shareYamlText"
+    />
+
+    <!-- 应用详情与更新抽屉（更新中枢，design/app-update-proposal.md §9） -->
+    <AppDetailDrawer
+      v-model:open="showAppDetail"
+      :app-id="appDetailId"
+      @updated="loadTasks"
     />
 
     <!-- 依赖补全终端 -->

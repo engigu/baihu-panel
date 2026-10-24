@@ -505,6 +505,15 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 		}, stdout, stderr)
 	}
 
+	// per-app 互斥：应用主任务的调和/手动执行与 API 更新流程互斥，更新进行中则跳过本次执行
+	if req.AppMaster {
+		if lock, ok := app.TryLockAppRun(taskID); ok {
+			defer app.ReleaseAppLock(lock)
+		} else {
+			return nil, fmt.Errorf("应用正在更新或另一次执行中，本次执行已跳过 (task: %s)", taskID)
+		}
+	}
+
 	// 重新加载最新的环境变量，满足即时生效的需求
 	es.refreshExecutionRequestEnvs(req, task)
 
@@ -786,6 +795,7 @@ func (es *ExecutorService) CreateExecutionRequest(task *models.Task, triggerType
 		Timeout:       task.Timeout,
 		Languages:     []map[string]string(task.Languages),
 		UseMise:       useMise,
+		AppMaster:     task.Type == constant.TaskTypeApp,
 		Metadata: executor.ExecutionMetadata{
 			TempFilePath: tempFilePath,
 		},

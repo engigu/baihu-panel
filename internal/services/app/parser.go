@@ -115,8 +115,9 @@ func ParseManifestFromFile(filePath string) (*AppManifest, error) {
 	return manifest, nil
 }
 
-// ParseManifestFromURL 从远程 URL 下载并解析出 AppManifest
-func ParseManifestFromURL(rawURL string, proxy string) (*AppManifest, error) {
+// ParseManifestFromURL 从远程 URL 下载并解析出 AppManifest,同时返回预处理后的原始 YAML 字节
+// (原始快照用于落库 manifest_raw,支撑场景切换与更新流程的定制识别基线)
+func ParseManifestFromURL(rawURL string, proxy string) (*AppManifest, []byte, error) {
 	finalURL := utils.BuildProxyURL(rawURL, proxy, "")
 
 	client := &http.Client{
@@ -125,26 +126,36 @@ func ParseManifestFromURL(rawURL string, proxy string) (*AppManifest, error) {
 
 	req, err := http.NewRequest("GET", finalURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("创建 HTTP 请求失败: %w", err)
+		return nil, nil, fmt.Errorf("创建 HTTP 请求失败: %w", err)
 	}
 	req.Header.Set("User-Agent", utils.DefaultBrowserUA)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("请求远程应用规范文件失败 (%s): %w", finalURL, err)
+		return nil, nil, fmt.Errorf("请求远程应用规范文件失败 (%s): %w", finalURL, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("下载远程应用规范失败, HTTP 状态码: %d (%s)", resp.StatusCode, finalURL)
+		return nil, nil, fmt.Errorf("下载远程应用规范失败, HTTP 状态码: %d (%s)", resp.StatusCode, finalURL)
 	}
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("读取远程数据失败: %w", err)
+		return nil, nil, fmt.Errorf("读取远程数据失败: %w", err)
 	}
 
-	return ParseManifestFromYAML(data)
+	// 与本地文件路径保持一致:落库模板宏替换后的清单快照
+	if processed, pErr := PreprocessYAMLTemplate(data); pErr == nil {
+		data = processed
+	}
+
+	manifest, err := ParseManifestFromYAML(data)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return manifest, data, nil
 }
 
 // ValidateManifest 校验 Manifest 的合法性
