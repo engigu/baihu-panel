@@ -3,6 +3,7 @@ package controllers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -125,10 +126,11 @@ func (w *streamLogWriter) Write(p []byte) (int, error) {
 
 	if w.isSSE {
 		lines := strings.Split(string(p), "\n")
+		// 丢弃 Write 以换行结尾时 Split 产生的尾部空串，但保留日志中的真实空行
+		if n := len(lines); n > 0 && lines[n-1] == "" {
+			lines = lines[:n-1]
+		}
 		for _, line := range lines {
-			if line == "" {
-				continue
-			}
 			fmt.Fprintf(w.writer, "data: %s\n\n", line)
 		}
 	} else {
@@ -344,6 +346,14 @@ func (ac *AppController) RebuildApp(c *gin.Context) {
 		return
 	}
 
+	// per-app 互斥：重建与更新/执行流程互斥
+	lock, lockErr := app.LockAppUpdate(appEntity.ID, 10*time.Minute)
+	if lockErr != nil {
+		utils.BadRequest(c, "应用正在更新或执行中，重建请稍后再试")
+		return
+	}
+	defer app.ReleaseAppLock(lock)
+
 	var buf bytes.Buffer
 	opts := app.ApplyOptions{
 		ManifestPath: appEntity.ManifestPath,
@@ -436,6 +446,125 @@ func (ac *AppController) GetMarketplace(c *gin.Context) {
 	}
 
 	utils.Success(c, respData)
+}
+
+// GetAppUpdates 检测已装应用与更新源（市场索引 / 远程 URL）的版本差异
+func (ac *AppController) GetAppUpdates(c *gin.Context) {
+	infos, err := ac.appService.CheckUpdates()
+	if err != nil {
+		utils.BadRequest(c, "检测应用更新失败: "+err.Error())
+		return
+	}
+
+	updatable := 0
+	for _, info := range infos {
+		if info.Updatable {
+			updatable++
+		}
+	}
+
+	utils.Success(c, gin.H{
+		"updates":         infos,
+		"updatable_count": updatable,
+		"checked_at":      models.Now().Time().Format(models.TimeFormat),
+	})
+}
+
+// UpdateAppRequest 应用更新请求体
+type UpdateAppRequest struct {
+	EnvValues  map[string]string `json:"env_values"` // 补值（409 安全阀重放时传入）
+	SkipSetup  bool              `json:"skip_setup"`
+	ForceSetup bool              `json:"force_setup"`
+}
+
+// UpdateApp 一键更新已装应用（解析最新清单并按已保存配置重放 Apply 流水线，支持 SSE 实时日志流）
+func (ac *AppController) UpdateApp(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		utils.BadRequest(c, "应用 ID 不能为空")
+		return
+	}
+
+	var req UpdateAppRequest
+	if c.Request.Body != nil && c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			utils.BadRequest(c, "参数解析失败: "+err.Error())
+			return
+		}
+	}
+
+	isStream := c.Query("stream") == "true" || strings.Contains(c.GetHeader("Accept"), "text/event-stream")
+
+	// 演示模式拦截
+	if constant.DemoMode {
+		if isStream {
+			c.Header("Content-Type", "text/event-stream; charset=utf-8")
+			c.Header("Cache-Control", "no-cache")
+			c.Header("Connection", "keep-alive")
+			c.Header("X-Accel-Buffering", "no")
+			c.Writer.Flush()
+			fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", "演示模式下禁止更新应用")
+			c.Writer.Flush()
+			return
+		}
+		utils.BadRequest(c, "演示模式下禁止更新应用")
+		return
+	}
+
+	var buf bytes.Buffer
+	var multiLogWriter io.Writer = &buf
+
+	if isStream {
+		c.Header("Content-Type", "text/event-stream; charset=utf-8")
+		c.Header("Cache-Control", "no-cache")
+		c.Header("Connection", "keep-alive")
+		c.Header("X-Accel-Buffering", "no")
+		c.Writer.Flush()
+
+		multiLogWriter = &streamLogWriter{
+			writer: c.Writer,
+			buf:    &buf,
+			isSSE:  true,
+		}
+	}
+
+	res, err := ac.appService.UpdateApp(id, app.AppUpdateOptions{
+		EnvValues:  req.EnvValues,
+		SkipSetup:  req.SkipSetup,
+		ForceSetup: req.ForceSetup,
+	}, multiLogWriter)
+
+	if isStream {
+		// 流式模式下日志已由 streamLogWriter 逐行推送，事件负载不再重复携带全量日志快照（避免前端重复渲染）
+		if err != nil {
+			var conflict *app.AppUpdateConflictError
+			if errors.As(err, &conflict) {
+				obj, _ := json.Marshal(gin.H{"error": err.Error(), "missing_envs": conflict.MissingEnvs})
+				fmt.Fprintf(c.Writer, "event: conflict\ndata: %s\n\n", string(obj))
+			} else {
+				errObj, _ := json.Marshal(gin.H{"error": err.Error()})
+				fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", string(errObj))
+			}
+		} else {
+			resObj, _ := json.Marshal(gin.H{"result": res})
+			fmt.Fprintf(c.Writer, "event: done\ndata: %s\n\n", string(resObj))
+		}
+		c.Writer.Flush()
+		return
+	}
+
+	if err != nil {
+		var conflict *app.AppUpdateConflictError
+		if errors.As(err, &conflict) {
+			// 安全阀拦截按双轨契约返回 HTTP 409，缺失清单与日志经 data 回传
+			utils.ErrorData(c, 409, err.Error(), gin.H{"missing_envs": conflict.MissingEnvs, "log": buf.String()})
+			return
+		}
+		utils.ErrorData(c, 400, "更新应用失败: "+err.Error(), gin.H{"log": buf.String()})
+		return
+	}
+
+	utils.Success(c, gin.H{"result": res, "log": buf.String()})
 }
 
 // reportMarketplacePVTelemetry 异步上报应用市场浏览 PV (+1)

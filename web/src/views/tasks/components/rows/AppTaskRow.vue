@@ -8,9 +8,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import { Package, Pencil, Trash2, ListTodo, Zap, ZapOff, Play, ScrollText, Loader2, MoreHorizontal, Share2 } from 'lucide-vue-next'
+import { Package, Pencil, Trash2, ListTodo, Zap, ZapOff, Play, ScrollText, Loader2, MoreHorizontal, Share2, ArrowUpCircle, Info } from 'lucide-vue-next'
 import StatusDot from '@/components/StatusDot.vue'
-import type { Task, Agent } from '@/api'
+import type { Task, Agent, AppUpdateInfo } from '@/api'
 import { TASK_TYPE, TASK_TYPE_CONFIG } from '@/constants'
 import { formatDateTime } from '@/utils/date'
 
@@ -24,6 +24,7 @@ const props = defineProps<{
   agentMap?: Record<string, Agent>
   selected?: boolean
   hasSelection?: boolean
+  updateInfo?: AppUpdateInfo | null
 }>()
 
 const emit = defineEmits<{
@@ -35,6 +36,7 @@ const emit = defineEmits<{
   'toggleTask': [task: Task, enabled: boolean]
   'shareApp': [task: Task]
   'toggleSelect': [id: string]
+  'openDetail': [task: Task]
 }>()
 
 function getAppConfig(task: Task) {
@@ -105,12 +107,23 @@ function getAppConfig(task: Task) {
 
       <!-- 应用场景 -->
       <div class="flex-1 min-w-0 text-xs text-muted-foreground flex flex-col justify-center gap-1 items-start overflow-hidden">
-        <span
-          v-if="getAppConfig(task).version"
-          class="shrink-0 px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20 font-mono text-[10px] font-medium leading-none"
-        >
-          v{{ getAppConfig(task).version }}
-        </span>
+        <div class="flex items-center gap-1.5 min-w-0">
+          <span
+            v-if="getAppConfig(task).version"
+            class="shrink-0 px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20 font-mono text-[10px] font-medium leading-none"
+          >
+            v{{ getAppConfig(task).version }}
+          </span>
+          <span
+            v-if="updateInfo?.updatable && updateInfo.latest_version"
+            class="shrink-0 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/30 font-mono text-[10px] font-medium leading-none cursor-pointer hover:bg-amber-500/20 transition-colors flex items-center gap-1"
+            :title="`应用有新版本 v${updateInfo.installed_version} → v${updateInfo.latest_version}${updateInfo.reason === 'manifest_changed' ? '（应用定义有更新）' : ''}，点击查看详情与更新`"
+            @click="$emit('openDetail', task)"
+          >
+            <ArrowUpCircle class="h-2.5 w-2.5" />
+            {{ updateInfo.reason === 'manifest_changed' ? '定义有更新' : `v${updateInfo.latest_version}` }}
+          </span>
+        </div>
         <span
           class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-mono text-[11px] shrink-0 font-medium cursor-pointer hover:bg-emerald-500/20 transition-colors"
           :title="getAppConfig(task).description || '点击筛选该应用的任务'"
@@ -153,7 +166,7 @@ function getAppConfig(task: Task) {
           variant="ghost"
           size="icon"
           class="h-6 w-6"
-          title="立即运行应用"
+          title="立即运行应用（按当前清单重新部署，不检查市场新版本）"
           :disabled="executingTaskId === task.id"
           @click="$emit('run', task.id)"
         >
@@ -186,6 +199,10 @@ function getAppConfig(task: Task) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" class="w-32">
+            <DropdownMenuItem @click="$emit('openDetail', task)">
+              <Info class="h-3.5 w-3.5 mr-2" :class="updateInfo?.updatable ? 'text-amber-500' : 'text-primary'" />
+              <span>{{ updateInfo?.updatable ? '详情与更新' : '应用详情' }}</span>
+            </DropdownMenuItem>
             <DropdownMenuItem @click="$emit('filterByApp', task.id)">
               <ListTodo class="h-3.5 w-3.5 mr-2 text-emerald-500" />
               <span>受控任务</span>
@@ -243,6 +260,14 @@ function getAppConfig(task: Task) {
           <span v-if="getAppConfig(task).version" class="text-[9px] font-mono px-1 py-px bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded">
             v{{ getAppConfig(task).version }}
           </span>
+          <span
+            v-if="updateInfo?.updatable && updateInfo.latest_version"
+            class="text-[9px] font-mono px-1.5 py-px bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded flex items-center gap-0.5"
+            @click="$emit('openDetail', task)"
+          >
+            <ArrowUpCircle class="h-2 w-2" />
+            可更新 v{{ updateInfo.latest_version }}
+          </span>
           <span class="text-[9px] font-mono px-1.5 py-px bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded">
             {{ getAppConfig(task).current_scenario || 'standard' }}
           </span>
@@ -282,6 +307,10 @@ function getAppConfig(task: Task) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" class="w-32">
+            <DropdownMenuItem @click="$emit('openDetail', task)">
+              <Info class="h-3.5 w-3.5 mr-2" :class="updateInfo?.updatable ? 'text-amber-500' : 'text-primary'" />
+              <span>{{ updateInfo?.updatable ? '详情与更新' : '应用详情' }}</span>
+            </DropdownMenuItem>
             <DropdownMenuItem @click="$emit('filterByApp', task.id)">
               <ListTodo class="h-3.5 w-3.5 mr-2 text-emerald-500" />
               <span>受控任务</span>

@@ -411,6 +411,17 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 		}
 	}
 
+	// per-app 互斥：应用主任务调度配置保存与更新流程互斥，更新进行中则拒绝保存
+	// 锁持有到保存完成，避免「检查后立即释放」的窗口内更新读到旧调度、保存又被更新用旧值回滚
+	if oldTask != nil && oldTask.Type == constant.TaskTypeApp {
+		lock, ok := app.TryLockAppRun(oldTask.ID)
+		if !ok {
+			utils.ErrorData(c, 409, "应用正在更新中，请稍后再保存调度配置", nil)
+			return
+		}
+		defer app.ReleaseAppLock(lock)
+	}
+
 	// 转换为绝对路径（Agent 任务保持原样并清理可能混入的占位符）
 	workDir := req.WorkDir
 	if req.AgentID == nil || *req.AgentID == "" {

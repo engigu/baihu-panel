@@ -396,8 +396,10 @@ func registerAppRoutes(g *gin.RouterGroup, c *Controllers) {
 	{
 		apps.GET("", c.App.GetApps)
 		apps.GET("/store", c.App.GetMarketplace)
+		apps.GET("/updates", c.App.GetAppUpdates)
 		apps.GET("/:id", c.App.GetApp)
 		apps.POST("/apply", c.App.ApplyApp)
+		apps.POST("/:id/update", c.App.UpdateApp)
 		apps.POST("/:id/switch", c.App.SwitchScenario)
 		apps.POST("/:id/rebuild", c.App.RebuildApp)
 		apps.DELETE("/:id", c.App.RemoveApp)

@@ -20,6 +20,7 @@ import (
 // AppDTO 已安装应用的综合数据传输实体（从 baihu_tasks 表中的 App 主任务记录及其 Config 动态反序列化）
 type AppDTO struct {
 	ID              string           `json:"id"`
+	ManifestID      string           `json:"manifest_id,omitempty"`
 	Name            string           `json:"name"`
 	Version         string           `json:"version,omitempty"`
 	Author          string           `json:"author,omitempty"`
@@ -52,7 +53,7 @@ func (s *AppService) ApplyApp(pathOrURL string, opts ApplyOptions) (*ApplyResult
 	var err error
 
 	if strings.HasPrefix(pathOrURL, "http://") || strings.HasPrefix(pathOrURL, "https://") {
-		manifest, err = ParseManifestFromURL(pathOrURL, "")
+		manifest, rawData, err = ParseManifestFromURL(pathOrURL, "")
 		if err != nil {
 			return nil, err
 		}
@@ -70,7 +71,29 @@ func (s *AppService) ApplyApp(pathOrURL string, opts ApplyOptions) (*ApplyResult
 		}
 	}
 
+	// per-app 互斥:对已安装的同 ID 应用重放(再次部署/编辑重放)与 API 更新、调和执行互斥
+	if existingID := findInstalledMasterTaskID(manifest.ID); existingID != "" {
+		lock, lockErr := LockAppUpdate(existingID, 10*time.Minute)
+		if lockErr != nil {
+			return nil, fmt.Errorf("应用正在更新或执行中，部署请稍后再试")
+		}
+		defer ReleaseAppLock(lock)
+	}
+
 	return DefaultApplier.Apply(manifest, rawData, opts)
+}
+
+// findInstalledMasterTaskID 按 manifest ID 查找已安装应用的主任务 ID(未安装返回空串)
+func findInstalledMasterTaskID(manifestID string) string {
+	manifestID = strings.TrimSpace(manifestID)
+	if manifestID == "" {
+		return ""
+	}
+	var task models.Task
+	if err := database.DB.Where("source_id = ? AND type = ?", "app:"+manifestID, constant.TaskTypeApp).Limit(1).First(&task).Error; err != nil {
+		return ""
+	}
+	return task.ID
 }
 
 // GetApp 从 baihu_tasks 表中读取 type = 'app' 的主任务记录
@@ -119,6 +142,7 @@ func (s *AppService) buildAppDTOFromTask(task *models.Task, taskCount int) *AppD
 	}
 
 	if appCfg := task.GetAppConfig(); appCfg != nil {
+		dto.ManifestID = appCfg.ID
 		dto.Version = appCfg.Version
 		dto.Author = appCfg.Author
 		dto.Category = appCfg.Category
@@ -433,11 +457,25 @@ func (s *AppService) SwitchScenario(appID string, scenarioID string, out io.Writ
 		return fmt.Errorf("解析应用定义失败: %w", err)
 	}
 
+	// per-app 互斥：场景切换重放 Apply 与 API 更新流程互斥
+	lock, lockErr := LockAppUpdate(appDTO.ID, 10*time.Minute)
+	if lockErr != nil {
+		return fmt.Errorf("应用更新进行中，场景切换请稍后再试: %w", lockErr)
+	}
+	defer ReleaseAppLock(lock)
+
 	opts := ApplyOptions{
 		ScenarioID: scenarioID,
-		SkipSetup:  true, // 场景切换无需重复安装依赖
-		SkipSync:   true, // 无需重复拉取源码
-		LogWriter:  out,
+		// 保留已保存的清单来源（URL/本地路径）：Apply 会把该值落库，传空会把 URL 更新源清丢，
+		// 导致场景切换后应用失去自动更新能力（检测退化为 manual/no_source）
+		ManifestPath: appDTO.ManifestPath,
+		SkipSetup:    true, // 场景切换无需重复安装依赖
+		SkipSync:     true, // 无需重复拉取源码
+		// 定制识别基线:以切换前的清单快照与旧场景为参照,仅保留真正偏离旧基线的用户定制,
+		// 否则新旧场景预设的 Cron 差异会被兜底逻辑误判为定制,导致场景切换永远不生效
+		BaseManifestRaw: appDTO.ManifestRaw,
+		BaseScenarioID:  appDTO.CurrentScenario,
+		LogWriter:       out,
 	}
 
 	_, err = DefaultApplier.Apply(manifest, []byte(appDTO.ManifestRaw), opts)

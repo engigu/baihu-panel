@@ -42,6 +42,11 @@ type ApplyOptions struct {
 	UserID        string            // 当前安装用户的 UserID
 	Languages     []map[string]string // 关联绑定的运行语言环境列表
 	LogWriter     io.Writer         // 执行日志输出流
+
+	BaseManifestRaw string          // 旧清单快照（定制识别基线：对比子任务当前 Cron 判定用户定制）
+	BaseScenarioID  string          // 旧清单激活场景 ID（配合 BaseManifestRaw 计算基线 Cron）
+
+	KeepEnvValues bool // 保留用户已填环境变量值：更新路径专用，连清单级 overwrite_env 声明也一并忽略
 }
 
 // ApplyResult 应用执行结果
@@ -94,7 +99,7 @@ func (a *AppApplier) Apply(manifest *AppManifest, rawYAML []byte, opts ApplyOpti
 		if !opts.SkipSync && manifest.BuildOpts.SkipSync {
 			opts.SkipSync = true
 		}
-		if !opts.OverwriteEnv && manifest.BuildOpts.OverwriteEnv {
+		if !opts.KeepEnvValues && !opts.OverwriteEnv && manifest.BuildOpts.OverwriteEnv {
 			opts.OverwriteEnv = true
 		}
 		if opts.OverwriteTask == nil && manifest.BuildOpts.OverwriteTask != nil {
@@ -241,6 +246,14 @@ func (a *AppApplier) execRepoSync(idx int, total int, src AppSource, appDir stri
 	}
 	_ = os.MkdirAll(targetAbsDir, 0755)
 
+	// 调和日志增强：记录同步前 HEAD，同步成功后对比提交数，提示用户检查应用更新
+	previousHead := ""
+	if _, err := os.Stat(gitDir); err == nil {
+		if out, cErr := exec.Command("git", "-C", targetAbsDir, "rev-parse", "HEAD").Output(); cErr == nil {
+			previousHead = strings.TrimSpace(string(out))
+		}
+	}
+
 	syncArgs := []string{
 		"--source-type", src.SourceType,
 		"--source-url", src.SourceURL,
@@ -310,6 +323,20 @@ func (a *AppApplier) execRepoSync(idx int, total int, src AppSource, appDir stri
 		branchDesc = "默认分支"
 	}
 	log("  ✓ [%d/%d] 代码源 '%s' 同步就绪 (类型: %s, 分支: %s%s)", idx+1, total, src.ID, src.SourceType, branchDesc, filterNote)
+
+	// 调和日志增强：对比同步前后 HEAD，有新提交时提示检查应用更新（仅 Git 源）
+	if previousHead != "" {
+		if newOut, cErr := exec.Command("git", "-C", targetAbsDir, "rev-parse", "HEAD").Output(); cErr == nil {
+			newHead := strings.TrimSpace(string(newOut))
+			if newHead != "" && newHead != previousHead {
+				if cntOut, cntErr := exec.Command("git", "-C", targetAbsDir, "rev-list", "--count", previousHead+".."+newHead).Output(); cntErr == nil {
+					log("  ℹ 代码已更新 %s 个提交，上游可能引入新任务或新环境变量，建议检查应用更新", strings.TrimSpace(string(cntOut)))
+				} else {
+					log("  ℹ 代码已有更新，上游可能引入新任务或新环境变量，建议检查应用更新")
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -579,6 +606,29 @@ func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, mast
 	templateTag := manifest.GetTemplateTag()
 	taskTag := resolveEnvTag(templateTag, opts.Tag, manifest.ID)
 
+	// 定制识别基线：解析旧清单的任务 Cron（含场景预设覆盖），用于识别用户定制
+	// 规则：子任务当前 Cron 与旧清单基线不一致 → 视为用户定制，本次编排保留用户值
+	baseCrons := make(map[string]string)
+	if opts.BaseManifestRaw != "" {
+		if baseManifest, bErr := ParseManifestFromYAML([]byte(opts.BaseManifestRaw)); bErr == nil {
+			baseScenario := resolveActiveScenarioItem(baseManifest.Scenarios, opts.BaseScenarioID)
+			for _, bt := range baseManifest.GetTasks() {
+				bc := bt.Cron
+				if bc == "" {
+					bc = bt.DefaultCron
+				}
+				if baseScenario != nil && baseScenario.TaskPresets != nil {
+					if p, ok := baseScenario.TaskPresets[bt.ID]; ok && p.Cron != "" {
+						bc = p.Cron
+					}
+				}
+				if bc != "" {
+					baseCrons[bt.Name] = normalizeCron(bc)
+				}
+			}
+		}
+	}
+
 	defaultUnifiedConfig := models.UnifiedTaskConfig{
 		Common: &models.CommonConfig{
 			Concurrency: 0,
@@ -636,6 +686,21 @@ func (a *AppApplier) orchestrateTasks(manifest *AppManifest, appDir string, mast
 		var existingTask models.Task
 		tx := database.DB.Where("source_id = ? AND type = ? AND name = ?", masterTaskID, constant.TaskTypeNormal, t.Name).Limit(1).Find(&existingTask)
 		if tx.RowsAffected > 0 {
+			// 定制识别保留：子任务 Cron 与旧清单基线不一致 → 视为用户定制，保留用户值
+			if existingTask.Schedule != "" && scheduleCron != "" {
+				baseCron, hasBase := baseCrons[t.Name]
+				var userCustomized bool
+				if hasBase {
+					userCustomized = existingTask.Schedule != baseCron
+				} else {
+					userCustomized = existingTask.Schedule != scheduleCron
+				}
+				if userCustomized {
+					log("  ~ 保留用户定制 Cron: %s (%s)", t.Name, existingTask.Schedule)
+					scheduleCron = existingTask.Schedule
+				}
+			}
+
 			existingTask.Name = t.Name
 			existingTask.Command = models.BigText(cmdStr)
 			existingTask.Schedule = scheduleCron

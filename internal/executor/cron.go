@@ -95,6 +95,12 @@ func (m *CronManager) AddTask(task CronTask) error {
 	secrets := task.GetSecrets()
 
 	schedule := strings.TrimSpace(task.GetSchedule())
+	if schedule == "" {
+		// 空调度（如应用主任务的调和入口、手动触发型任务）不注册 Cron；
+		// 旧调度已在上方移除，此处干净跳过而非报错
+		m.logger.Infof("[CronManager] 任务 %s (#%s) 无调度配置，跳过 Cron 注册", name, taskID)
+		return nil
+	}
 	entryID, err := m.cron.AddFunc(schedule, func() {
 		defer func() {
 			if r := recover(); r != nil {
