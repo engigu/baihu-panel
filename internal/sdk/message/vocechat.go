@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // Copyright (c) 2026 engigu (Baihu Panel). All rights reserved.
@@ -54,7 +55,8 @@ func (v *VoceChat) Request(title, content string) ([]byte, error) {
 	req.Header.Set("Content-Type", "text/plain")
 	req.Header.Set("x-api-key", v.APIKey)
 
-	client := &http.Client{}
+	// 显式超时：默认 http.Client 无超时，渠道端挂起会拖住同步推送调用方（调和锁窗口/CLI 子进程）
+	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

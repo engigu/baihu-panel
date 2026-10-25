@@ -355,8 +355,10 @@ func findAppIdx(apps []AppDTO, taskID string) int {
 	return -1
 }
 
-// manifestSignature 提取清单的结构签名（任务名与默认 Cron、环境变量契约、场景及场景预设 Cron），
-// 用于同版本的清单变更检测：上游仅调整任务调度预设时也能被识别为「定义有更新」
+// manifestSignature 提取清单的结构签名（任务名与默认 Cron、环境变量契约（含 required 标志）、场景及场景预设 Cron），
+// 用于同版本的清单变更检测：上游仅调整任务调度预设时也能被识别为「定义有更新」。
+// required 必须参与签名：上游不升版本号把变量从可选改为必填时，闸门/自动预判/检测三处才能感知
+// （否则旧契约放行调和、新代码要求该变量 → 运行时失败）。签名运行时两侧现算、从不落库，改算法无迁移负担
 func manifestSignature(m *AppManifest) string {
 	taskParts := make([]string, 0)
 	for _, t := range m.GetTasks() {
@@ -368,11 +370,15 @@ func manifestSignature(m *AppManifest) string {
 	}
 	sort.Strings(taskParts)
 
-	envKeys := make([]string, 0, len(m.EnvSchema))
+	envParts := make([]string, 0, len(m.EnvSchema))
 	for _, e := range m.EnvSchema {
-		envKeys = append(envKeys, e.Key)
+		if e.Required {
+			envParts = append(envParts, e.Key+"(required)")
+		} else {
+			envParts = append(envParts, e.Key)
+		}
 	}
-	sort.Strings(envKeys)
+	sort.Strings(envParts)
 
 	scenarioParts := make([]string, 0, len(m.Scenarios))
 	for _, sc := range m.Scenarios {
@@ -389,7 +395,7 @@ func manifestSignature(m *AppManifest) string {
 
 	var b strings.Builder
 	b.WriteString("tasks:" + strings.Join(taskParts, ","))
-	b.WriteString("|envs:" + strings.Join(envKeys, ","))
+	b.WriteString("|envs:" + strings.Join(envParts, ","))
 	b.WriteString("|scenarios:" + strings.Join(scenarioParts, ","))
 	sum := sha256.Sum256([]byte(b.String()))
 	return hex.EncodeToString(sum[:8])
@@ -468,9 +474,27 @@ type AppUpdateOptions struct {
 	EnvValues  map[string]string // 补值（409 重放时传入，优先级高于已保存值）
 	SkipSetup  bool              // 跳过依赖安装（默认继承已保存 build_opts）
 	ForceSetup bool              // 强制重建
+	Auto       bool              // 自动更新路径（调度调和内触发）：每日节流 + 安全阀拦截降级为通知
+	SkipLock   bool              // 内部选项：调和路径由调度器父进程持有 per-app 锁，子进程跳过加锁（否则父子互等自锁）
 }
 
-// UpdateApp 一键更新编排：解析最新清单 → 409 安全阀 → 组装已保存配置 → 复用 Apply 流水线
+// AppAutoRefreshSkipError 自动刷新未执行（节流窗口内 / 已是最新 / 更新源不可达 / 安全阀拦截降级）。
+// 调和路径收到该错误应回退为按当前清单快照正常调和（与漂移闸门「静默跳过」语义一致）。
+// FreezeSync 为 true 表示闸门/安全阀挂起中（pending_gate 非空或本次降级落库）：
+// 回退调和必须跳过代码同步，否则代码跟随分支漂移到新 HEAD 而清单停留旧版，
+// 恰好复现闸门与失败启发式要防的「代码新、清单旧」运行时失败
+type AppAutoRefreshSkipError struct {
+	Reason     string
+	FreezeSync bool
+}
+
+func (e *AppAutoRefreshSkipError) Error() string {
+	return e.Reason
+}
+
+// UpdateApp 更新编排：解析最新清单 → 409 安全阀 → 组装已保存配置 → 复用 Apply 流水线。
+// 手动路径（Auto=false）三端共用；自动路径（Auto=true，调度调和内触发）叠加每日节流与
+// 安全阀拦截降级（design/app-update-proposal.md §10），可降级失败以 AppAutoRefreshSkipError 返回
 func (s *AppService) UpdateApp(taskID string, opts AppUpdateOptions, out io.Writer) (*ApplyResult, error) {
 	if out == nil {
 		out = os.Stdout
@@ -489,7 +513,15 @@ func (s *AppService) UpdateApp(taskID string, opts AppUpdateOptions, out io.Writ
 		return nil, err
 	}
 
-	// 2. 解析最新清单与原始 YAML
+	// 2. 自动更新路径（P3，design/app-update-proposal.md §10）：先做节流与变更预判，
+	//    无需刷新时以可跳过错误返回，由调和路径回退为按当前清单快照正常调和
+	if opts.Auto {
+		if skip := s.precheckAutoRefresh(masterTask, appCfg, out); skip != nil {
+			return nil, skip
+		}
+	}
+
+	// 3. 解析最新清单与原始 YAML
 	var (
 		newManifest *AppManifest
 		rawYAML     []byte
@@ -497,12 +529,12 @@ func (s *AppService) UpdateApp(taskID string, opts AppUpdateOptions, out io.Writ
 	)
 	_, hasMarket, marketErr := s.marketHasApp(appCfg.ID)
 	if marketErr != nil {
-		return nil, fmt.Errorf("检查应用市场索引失败: %w", marketErr)
+		return nil, s.autoSkipOr(appCfg, opts, fmt.Errorf("检查应用市场索引失败: %w", marketErr), "更新源不可达，本次按当前清单调和")
 	}
 	if hasMarket {
 		m, appMap, err := s.GetMarketplaceApp(appCfg.ID)
 		if err != nil {
-			return nil, fmt.Errorf("拉取市场最新清单失败: %w", err)
+			return nil, s.autoSkipOr(appCfg, opts, fmt.Errorf("拉取市场最新清单失败: %w", err), "更新源不可达，本次按当前清单调和")
 		}
 		newManifest = m
 		rawYAML, _ = yaml.Marshal(appMap)
@@ -510,7 +542,7 @@ func (s *AppService) UpdateApp(taskID string, opts AppUpdateOptions, out io.Writ
 	} else if isHTTPURL(appCfg.ManifestPath) {
 		m, raw, err := ParseManifestFromURL(appCfg.ManifestPath, "")
 		if err != nil {
-			return nil, fmt.Errorf("拉取远程最新清单失败: %w", err)
+			return nil, s.autoSkipOr(appCfg, opts, fmt.Errorf("拉取远程最新清单失败: %w", err), "更新源不可达，本次按当前清单调和")
 		}
 		// 更新执行同样校验远程清单归属：URL 内容被替换为其他应用时拒绝覆盖，防止把已装应用原地更新成别的应用
 		if appCfg.ID != "" && m.ID != "" && !strings.EqualFold(strings.TrimSpace(m.ID), strings.TrimSpace(appCfg.ID)) {
@@ -520,7 +552,7 @@ func (s *AppService) UpdateApp(taskID string, opts AppUpdateOptions, out io.Writ
 		rawYAML = raw
 		source = "url"
 	} else {
-		return nil, fmt.Errorf("该应用无自动更新源（手动导入或已从市场移除），请重新导入清单")
+		return nil, s.autoSkipOr(appCfg, opts, fmt.Errorf("该应用无自动更新源（手动导入或已从市场移除），请重新导入清单"), "该应用无自动更新源，本次按当前清单调和")
 	}
 
 	log("==================================================================")
@@ -528,20 +560,40 @@ func (s *AppService) UpdateApp(taskID string, opts AppUpdateOptions, out io.Writ
 	log("  更新源: %s", source)
 	log("==================================================================")
 
-	// 3. 获取 per-app 互斥锁（与定时调和 / 手动执行互斥）
-	lock, err := LockAppUpdate(masterTask.ID, 10*time.Minute)
-	if err != nil {
-		return nil, fmt.Errorf("应用更新锁获取失败: %w", err)
+	// 自动路径变更预判：版本与清单签名均无变化时跳过 Apply（调和回退为按当前快照空跑，避免每日重复全量流水线）；
+	// 若此前闸门/安全阀挂起（上游已回退破坏性变更），一并解除挂起标记
+	if opts.Auto && !versionChanged(appCfg.Version, newManifest.Version) {
+		if oldManifest, pErr := ParseManifestFromYAML([]byte(appCfg.ManifestRaw)); pErr == nil &&
+			manifestSignature(oldManifest) == manifestSignature(newManifest) {
+			log("  ✓ 更新源已是最新版本 (v%s)，跳过自动更新", appCfg.Version)
+			if appCfg.PendingGate != "" {
+				s.clearPendingGate(masterTask.ID)
+			}
+			return nil, &AppAutoRefreshSkipError{Reason: "更新源已是最新版本，本次按当前清单调和"}
+		}
 	}
-	defer ReleaseAppLock(lock)
 
-	// 4. 409 安全阀：新必填变量缺值则拦截（永不静默执行）
+	// 4. 获取 per-app 互斥锁（与定时调和 / 手动执行互斥；调和路径父进程已持锁则跳过）
+	if !opts.SkipLock {
+		lock, err := LockAppUpdate(masterTask.ID, 10*time.Minute)
+		if err != nil {
+			return nil, fmt.Errorf("应用更新锁获取失败: %w", err)
+		}
+		defer ReleaseAppLock(lock)
+	}
+
+	// 5. 409 安全阀：新必填变量缺值则拦截（永不静默执行）；
+	//    自动路径拦截时降级为通知（闸门同构落库），调和回退为按当前清单继续，任务不失败
 	if err := s.checkRequiredEnvs(newManifest, appCfg, opts.EnvValues); err != nil {
 		var conflict *AppUpdateConflictError
 		if errors.As(err, &conflict) {
 			log("  ⛔ 安全阀拦截: %s", err.Error())
 			for _, m := range conflict.MissingEnvs {
 				log("    - %s (%s)", m.Key, m.Label)
+			}
+			if opts.Auto {
+				s.degradeAutoUpdateConflict(masterTask, appCfg, newManifest, conflict, out)
+				return nil, &AppAutoRefreshSkipError{Reason: "安全阀拦截（新增必填变量缺值），已降级为通知，本次按当前清单调和", FreezeSync: true}
 			}
 		}
 		return nil, err
@@ -576,6 +628,91 @@ func (s *AppService) UpdateApp(taskID string, opts AppUpdateOptions, out io.Writ
 
 	log("  ✓ 更新完成: v%s（用户配置与定制项已保留）", res.Version)
 	return res, nil
+}
+
+// --------------------------------------------------------------------------
+// 自动更新路径（P3，design/app-update-proposal.md §10）
+// 调度调和触发（CLI apply --refresh-manifest）：每应用节流窗口内至多尝试一次。
+// 编排前置失败（更新源不可达 / 节流 / 已是最新 / 安全阀拦截降级）静默回退为按当前清单调和
+// （挂起中冻结代码同步）；刷新流水线真实中断（依赖安装失败等）与更新源归属异常则如实失败
+// 留痕、令本次调和失败——半更新状态下静默回退调和比让本次调和失败更危险
+// --------------------------------------------------------------------------
+
+// autoRefreshInterval 自动更新节流窗口（每应用默认每日一次）；
+// BAIHU_APP_AUTO_REFRESH_INTERVAL 可覆盖（供 E2E / 本机验证缩短窗口，如 3s）
+var autoRefreshInterval = func() time.Duration {
+	if v := strings.TrimSpace(os.Getenv("BAIHU_APP_AUTO_REFRESH_INTERVAL")); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			return d
+		}
+	}
+	return 24 * time.Hour
+}()
+
+// precheckAutoRefresh 自动路径节流预判：窗口内已尝试过则跳过；否则记录本次尝试时间
+// （无论后续成功失败均计数，更新源宕机期间不重复打满网络超时）。返回非 nil 表示跳过刷新
+func (s *AppService) precheckAutoRefresh(masterTask *models.Task, appCfg *models.AppTaskConfig, out io.Writer) error {
+	if appCfg.AutoUpdatedAt != "" {
+		if last, pErr := time.ParseInLocation(models.TimeFormat, appCfg.AutoUpdatedAt, time.Local); pErr == nil {
+			if elapsed := time.Since(last); elapsed < autoRefreshInterval {
+				fmt.Fprintf(out, "  ℹ 距上次自动更新检测仅 %s（节流窗口 %s），跳过刷新，按当前清单调和\n", elapsed.Round(time.Second), autoRefreshInterval)
+				// 挂起中（此前安全阀/闸门拦截未解除）节流跳过同样冻结代码同步，避免回退调和把代码拉到新 HEAD
+				return s.autoSkipError(appCfg, "自动更新节流窗口内，本次按当前清单调和")
+			}
+		}
+	}
+	touchAutoRefreshAt(masterTask.ID, models.Now().Time().Format(models.TimeFormat))
+	return nil
+}
+
+// touchAutoRefreshAt 写入自动刷新尝试时间戳（JSON 内扩展免迁移，仅更新 unified_config 单字段语义）
+func touchAutoRefreshAt(taskID, at string) {
+	var task models.Task
+	if err := database.DB.Where("id = ? AND type = ?", taskID, constant.TaskTypeApp).First(&task).Error; err != nil {
+		return
+	}
+	cfg := task.GetAppConfig()
+	if cfg == nil {
+		return
+	}
+	cfg.AutoUpdatedAt = at
+	unified := task.GetUnifiedConfig()
+	unified.App = cfg
+	database.DB.Model(&task).Update("unified_config", unified.ToJSON())
+}
+
+// autoSkipOr 自动路径把可降级错误收敛为跳过（调和回退按当前清单），手动路径原样返回真实错误。
+// 挂起中回退时冻结代码同步（autoSkipError 按 pending_gate 判定）
+func (s *AppService) autoSkipOr(appCfg *models.AppTaskConfig, opts AppUpdateOptions, err error, autoReason string) error {
+	if opts.Auto {
+		return s.autoSkipError(appCfg, autoReason)
+	}
+	return err
+}
+
+// autoSkipError 组装自动路径的可跳过错误：闸门/安全阀挂起中（pending_gate 非空）携带 FreezeSync，
+// 调和路径回退时跳过代码同步，兑现「代码停旧版本」——否则上游分支新代码会在挂起期间经回退调和照常落地
+func (s *AppService) autoSkipError(appCfg *models.AppTaskConfig, reason string) *AppAutoRefreshSkipError {
+	return &AppAutoRefreshSkipError{Reason: reason, FreezeSync: appCfg != nil && appCfg.PendingGate != ""}
+}
+
+// degradeAutoUpdateConflict 自动更新被安全阀拦截时的降级落库：
+// 与漂移闸门同构（pending_gate 标记 + 通知中心未读提示 + 通知渠道推送），
+// 用户补值或下次成功更新后自动解除；调和回退为按当前清单继续且冻结代码同步（FreezeSync），任务不失败
+func (s *AppService) degradeAutoUpdateConflict(masterTask *models.Task, appCfg *models.AppTaskConfig, newManifest *AppManifest, conflict *AppUpdateConflictError, out io.Writer) {
+	decision := &GateDecision{
+		Blocked:     true,
+		Reason:      "missing_envs",
+		VersionFrom: appCfg.Version,
+		VersionTo:   newManifest.Version,
+		MissingEnvs: conflict.MissingEnvs,
+	}
+	decision.Message = buildGateBlockMessage(appCfg, decision)
+	// CLI 子进程同步推送渠道：仅首次挂起触发（upsert 去重）；子进程随即退出，异步发送会被截断
+	if s.applyGateBlock(masterTask, decision) {
+		pushNoticeToChannels(gateNoticeTitle, decision.Message)
+	}
+	fmt.Fprintf(out, "  ℹ 已降级为通知（通知中心 + 通知渠道），本次调和按当前清单继续且跳过代码同步，应用停留 v%s\n", appCfg.Version)
 }
 
 // RollbackApp 一键回滚到上一成功版本（单快照方案，design/app-update-proposal.md §8）：

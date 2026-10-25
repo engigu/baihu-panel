@@ -341,7 +341,7 @@ async function save() {
                   <h3 class="text-sm font-bold text-foreground/90">路径映射编排</h3>
                 </div>
                 <div class="flex items-center space-x-2 bg-muted/10 px-3 py-1 rounded-full border border-muted-foreground/10">
-                  <Switch :checked="cleanTargetEnabled" @update:checked="cleanTargetEnabled = $event" id="clean-target" class="scale-90" />
+                  <Switch :model-value="cleanTargetEnabled" @update:model-value="cleanTargetEnabled = $event" id="clean-target" class="scale-90" />
                   <Label for="clean-target" class="text-[11px] font-medium cursor-pointer text-muted-foreground">同步前清空目标目录</Label>
                 </div>
               </div>

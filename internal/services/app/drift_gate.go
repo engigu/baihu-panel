@@ -9,9 +9,7 @@ import (
 
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
-	"github.com/engigu/baihu-panel/internal/eventbus"
 	"github.com/engigu/baihu-panel/internal/models"
-	"github.com/engigu/baihu-panel/internal/utils"
 )
 
 // ==========================================================================
@@ -24,7 +22,9 @@ import (
 //     子任务零运行时失败；落 pending_gate 标记（列表红色标签）+ 应用日志未读提示
 //
 // 与 409 安全阀同构（新必填变量缺值必拦截），检测为纯读操作，每应用每日节流一次。
-// 通知通道推送属 P3（§13），本期提示仅在通知中心（应用日志未读红点）呈现。
+// 挂起提示经通知中心（应用日志未读红点）与通知渠道双通道呈现（P3 §13，见 notify.go）。
+// auto_update 开启的应用闸门自动放行，破坏性变更由 --refresh-manifest 的安全阀兜底（§10）：
+// 拦截降级后调和冻结代码同步，保证「代码停旧版本」承诺不被回退调和绕开（AppAutoRefreshSkipError.FreezeSync）。
 // ==========================================================================
 
 // GateDecision 闸门决策结果
@@ -79,7 +79,13 @@ func (s *AppService) EvaluateReconcileGate(task *models.Task, appCfg *models.App
 		return nil
 	}
 
-	// 0. 挂起中的闸门拦截本次调和（保证「代码停旧版本」），但挂起 ≠ 停止评估：
+	// 0.1 自动更新开启的应用闸门自动放行（design §6.2/§10）：破坏性变更由 --refresh-manifest
+	//     路径的 409 安全阀兜底（拦截时降级为通知并回退调和，挂起期间冻结代码同步），闸门不再重复拦截
+	if appCfg.AutoUpdate {
+		return nil
+	}
+
+	// 0.2 挂起中的闸门拦截本次调和（保证「代码停旧版本」），但挂起 ≠ 停止评估：
 	//    节流窗口内的调和直接拦截（不消耗每日节流）；窗口外的调和照常执行每日检测，
 	//    用于发现漂移与确认上游是否已回退变更（此前提前 return 会让解除路径不可达）
 	pendingReason := appCfg.PendingGate
@@ -124,7 +130,10 @@ func (s *AppService) EvaluateReconcileGate(task *models.Task, appCfg *models.App
 				MissingEnvs: conflict.MissingEnvs,
 			}
 			decision.Message = buildGateBlockMessage(appCfg, decision)
-			s.applyGateBlock(task, decision)
+			// 面板进程常驻：异步推送渠道，慢渠道不拖长 per-app 锁窗口（调和持有 TryLockAppRun 期间走到这里）
+			if s.applyGateBlock(task, decision) {
+				go pushNoticeToChannels(gateNoticeTitle, decision.Message)
+			}
 			return decision
 		}
 		return nil
@@ -183,8 +192,10 @@ func (s *AppService) fetchGateLatestManifest(appCfg *models.AppTaskConfig) *AppM
 	return nil
 }
 
-// applyGateBlock 落闸门挂起标记 + 应用日志未读提示（同应用同标题未读提示 upsert 去重）
-func (s *AppService) applyGateBlock(task *models.Task, decision *GateDecision) {
+// applyGateBlock 落闸门挂起标记 + 应用日志未读提示（同应用同标题未读提示 upsert 去重）。
+// 返回是否新建了未读提示（false = 命中同题未读提示仅刷新内容），调用方据此决定是否推送通知渠道：
+// 面板闸门路径异步推送；CLI 安全阀降级路径同步推送（子进程随即退出，异步发送会被截断）
+func (s *AppService) applyGateBlock(task *models.Task, decision *GateDecision) bool {
 	// 1. pending_gate 标记落库：列表红色「待补值」标签的展示依据，补值/更新成功后自动清除
 	var fresh models.Task
 	if err := database.DB.Where("id = ?", task.ID).First(&fresh).Error; err == nil {
@@ -196,32 +207,9 @@ func (s *AppService) applyGateBlock(task *models.Task, decision *GateDecision) {
 		}
 	}
 
-	// 2. 应用日志未读提示：已存在同应用未读提示则仅刷新内容，避免闸门挂起期间每日重复堆叠。
-	//    创建必须生成 ID（AppLog 主键为应用层生成，裸 Create 空主键首次可插入、此后主键冲突静默失败，
-	//    导致闸门通知只在首次落库成功）并发布事件，与 AppLogService.Add 的落库语义保持一致
-	var existing models.AppLog
-	err := database.DB.Where("category = ? AND ref_id = ? AND title = ? AND status = ?",
-		constant.LogCategorySystemNotice, task.ID, gateNoticeTitle, constant.LogStatusUnread).
-		Order("created_at desc").First(&existing).Error
-	if err == nil {
-		database.DB.Model(&existing).Update("content", models.BigText(decision.Message))
-		return
-	}
-	notice := &models.AppLog{
-		ID:      utils.GenerateID(),
-		Category: constant.LogCategorySystemNotice,
-		Title:    gateNoticeTitle,
-		Content:  models.BigText(decision.Message),
-		Level:    constant.LogLevelWarning,
-		Status:   constant.LogStatusUnread,
-		RefID:    task.ID,
-	}
-	if err := database.DB.Create(notice).Error; err == nil {
-		eventbus.DefaultBus.Publish(eventbus.Event{
-			Type:    constant.EventAppLogAdded,
-			Payload: notice,
-		})
-	}
+	// 2. 应用日志未读提示：已存在同应用未读提示则仅刷新内容，避免闸门挂起期间每日重复堆叠
+	//    （addSystemNotice 内对齐 AppLogService.Add 的落库语义：应用层生成主键 + 事件发布）
+	return addSystemNotice(gateNoticeTitle, decision.Message, constant.LogLevelWarning, task.ID)
 }
 
 // clearPendingGate 清除闸门挂起标记：调和确认上游变更已回退/不再破坏、补值或更新/回滚成功后调用。

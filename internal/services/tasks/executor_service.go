@@ -564,7 +564,7 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 
 	// 本地任务
 	hooks := &LocalTaskHooks{es: es, logID: req.LogID}
-	return executor.ExecuteWithHooks(ctx, executor.Request{
+	res, execErr := executor.ExecuteWithHooks(ctx, executor.Request{
 		Command:     req.Command,
 		PreCommand:  req.PreCommand,
 		PostCommand: req.PostCommand,
@@ -574,6 +574,14 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 		Languages:   []map[string]string(task.Languages),
 		UseMise:     req.UseMise, // 使用请求中的 UseMise 标志 (由调度器统一处理过)
 	}, stdout, stderr, hooks)
+
+	// 应用主任务执行成功后的调度重注册（自动更新/调和可能新增或调整受控子任务编排，
+	// CLI 子进程只落库，面板进程负责把变更同步进 CronManager）
+	if execErr == nil && res != nil && res.Status == constant.TaskStatusSuccess && task.Type == constant.TaskTypeApp {
+		es.SyncAppTasks(taskID)
+	}
+
+	return res, execErr
 }
 
 // getIntSetting 从设置中获取整数值
@@ -1481,6 +1489,11 @@ func BuildAppCommand(task *models.Task) (string, string, string) {
 	// URL 更新源会在首次调和后被临时路径覆盖丢失（更新检测退化为 no_source）
 	if appCfg.ManifestPath != "" {
 		args = append(args, "--source-path", appCfg.ManifestPath)
+	}
+	// 自动更新（P3，design/app-update-proposal.md §10）：开关开启时调和前先经安全阀自动刷新至更新源最新版本，
+	// 引擎内每应用每日节流；安全阀拦截降级为通知并回退调和（挂起期间冻结代码同步，AppAutoRefreshSkipError.FreezeSync）
+	if appCfg.AutoUpdate {
+		args = append(args, "--refresh-manifest")
 	}
 
 	quotedArgs := make([]string, len(args))

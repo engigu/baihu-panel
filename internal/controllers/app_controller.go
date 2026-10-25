@@ -660,6 +660,42 @@ func (ac *AppController) RollbackApp(c *gin.Context) {
 	utils.Success(c, gin.H{"result": res, "log": buf.String()})
 }
 
+// SetAppAutoUpdateRequest 自动更新开关请求体
+type SetAppAutoUpdateRequest struct {
+	Enabled *bool `json:"enabled" binding:"required"`
+}
+
+// SetAppAutoUpdate 开/关应用自动更新（P3，design/app-update-proposal.md §10）
+func (ac *AppController) SetAppAutoUpdate(c *gin.Context) {
+	if constant.DemoMode {
+		utils.BadRequest(c, "演示模式下禁止修改应用自动更新设置")
+		return
+	}
+
+	id := c.Param("id")
+	if id == "" {
+		utils.BadRequest(c, "应用 ID 不能为空")
+		return
+	}
+
+	var req SetAppAutoUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.Enabled == nil {
+		utils.BadRequest(c, "参数解析失败: enabled 必填（布尔值）")
+		return
+	}
+
+	dto, err := ac.appService.SetAppAutoUpdate(id, *req.Enabled)
+	if err != nil {
+		utils.BadRequest(c, "设置自动更新失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"app":         dto,
+		"auto_update": dto.AutoUpdate,
+	})
+}
+
 // reportMarketplacePVTelemetry 异步上报应用市场浏览 PV (+1)
 func reportMarketplacePVTelemetry() {
 	go func() {

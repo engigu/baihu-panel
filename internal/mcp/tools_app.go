@@ -28,6 +28,7 @@ func registerAppTools(s *server.MCPServer, deps *Deps) {
 	registerCheckAppUpdatesTool(s, deps)
 	registerUpdateAppTool(s, deps)
 	registerRollbackAppTool(s, deps)
+	registerSetAppAutoUpdateTool(s, deps)
 }
 
 // 1. list_store_apps: 检索应用商店列表
@@ -510,6 +511,43 @@ func runAppUpdateOperation(ctx context.Context, deps *Deps, req mcp.CallToolRequ
 		"success": true,
 		"result":  res,
 		"log":     buf.String(),
+	}
+	resJSON, _ := json.MarshalIndent(resData, "", "  ")
+	return mcp.NewToolResultText(string(resJSON)), nil
+}
+
+// 11. set_app_auto_update: 开/关应用自动更新
+func registerSetAppAutoUpdateTool(s *server.MCPServer, deps *Deps) {
+	s.AddTool(mcp.NewTool("set_app_auto_update",
+		mcp.WithDescription("开/关已安装声明式应用的自动更新：开启后每次调度调和前自动检测更新源并经 409 安全阀更新至最新版本（每应用每日节流），安全阀拦截时降级为通知并保持当前版本。默认关闭，需按应用显式开启"),
+		mcp.WithString("app_id", mcp.Required(), mcp.Description("应用 TaskID 或 Manifest ID")),
+		mcp.WithBoolean("enabled", mcp.Required(), mcp.Description("true 开启 / false 关闭")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleSetAppAutoUpdate(ctx, deps, req)
+	})
+}
+
+func handleSetAppAutoUpdate(ctx context.Context, deps *Deps, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if deps.AppService == nil {
+		return mcp.NewToolResultError("AppService 未初始化"), nil
+	}
+
+	appID := strings.TrimSpace(req.GetString("app_id", ""))
+	if appID == "" {
+		return mcp.NewToolResultError("app_id 不能为空"), nil
+	}
+	enabled := req.GetBool("enabled", false)
+
+	dto, err := deps.AppService.SetAppAutoUpdate(appID, enabled)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("设置自动更新失败: %v", err)), nil
+	}
+
+	resData := map[string]interface{}{
+		"success":     true,
+		"app_id":      dto.ID,
+		"auto_update": dto.AutoUpdate,
+		"version":     dto.Version,
 	}
 	resJSON, _ := json.MarshalIndent(resData, "", "  ")
 	return mcp.NewToolResultText(string(resJSON)), nil

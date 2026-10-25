@@ -1024,6 +1024,10 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 			}
 			// 闸门挂起标记：非更新写路径继承（更新/回滚成功后由更新编排显式清除）
 			appCfg.PendingGate = unified.App.PendingGate
+			// 自动更新开关与节流时间戳（P3）：配置属面板侧生命周期管理，不在清单中声明，
+			// 与 PendingGate 同理随所有 Apply 写路径继承，避免调和重放后自动更新被静默关闭
+			appCfg.AutoUpdate = unified.App.AutoUpdate
+			appCfg.AutoUpdatedAt = unified.App.AutoUpdatedAt
 		}
 	}
 

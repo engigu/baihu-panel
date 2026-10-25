@@ -176,7 +176,7 @@ function getAppConfig(task: Task) {
           variant="ghost"
           size="icon"
           class="h-6 w-6"
-          title="立即运行应用（按当前清单重新部署，不检查市场新版本）"
+          :title="getAppConfig(task).auto_update ? '立即运行应用（自动更新已开启：调和前自动检测更新源，每日至多一次，安全阀拦截时保持当前版本）' : '立即运行应用（按当前清单重新部署，不检查市场新版本）'"
           :disabled="executingTaskId === task.id"
           @click="$emit('run', task.id)"
         >

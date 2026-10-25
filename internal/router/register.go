@@ -51,6 +51,7 @@ func RegisterControllers() *Controllers {
 	// 初始化所有关注系统总线的服务
 	setupEventHandlers(appLogService, notifyService, loginLogService, systemWSManager, executorService)
 	startAppLogCleanup(appLogService)
+	startAppUpdateDailyCheck()
 
 	taskController := controllers.NewTaskController(taskService, executorService)
 	envController := controllers.NewEnvController(envService, userService)

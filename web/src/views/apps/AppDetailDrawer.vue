@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -347,6 +347,31 @@ function submitMissingEnvs() {
   }
 }
 
+// 应用自动更新开关（P3，design/app-update-proposal.md §10）
+const togglingAutoUpdate = ref(false)
+const noAutoSource = computed(() => updateInfo.value?.update_source === 'manual')
+
+async function handleToggleAutoUpdate(enabled: boolean) {
+  if (!appData.value || togglingAutoUpdate.value) return
+  if (demoMode.value) {
+    toast.error('演示模式下禁止修改应用自动更新设置')
+    return
+  }
+  const prev = Boolean(appData.value.app.auto_update)
+  togglingAutoUpdate.value = true
+  try {
+    const res = await api.apps.setAutoUpdate(appData.value.app.id, enabled)
+    appData.value.app.auto_update = res.auto_update
+    toast.success(enabled ? '已开启自动更新：调度调和将自动检测更新源（每日至多一次），安全阀拦截时保持当前版本并通知' : '已关闭自动更新')
+    emit('updated')
+  } catch (err: any) {
+    appData.value.app.auto_update = prev
+    toast.error('设置自动更新失败: ' + (err.message || '未知错误'))
+  } finally {
+    togglingAutoUpdate.value = false
+  }
+}
+
 // 触发重新预编译自愈
 async function handleRebuild() {
   if (demoMode.value) {
@@ -535,9 +560,9 @@ async function handleUninstall() {
 
                 <div class="flex items-center gap-2 shrink-0">
                   <Switch
-                    :checked="Boolean(task.enabled)"
+                    :model-value="Boolean(task.enabled)"
                     :disabled="demoMode"
-                    @update:checked="handleToggleTask(task, $event)"
+                    @update:model-value="handleToggleTask(task, $event)"
                   />
                   <Button
                     size="sm"
@@ -679,6 +704,34 @@ async function handleUninstall() {
                 <RotateCcw v-else class="w-3 h-3 mr-1" />
                 {{ rollingBack ? '回滚中...' : '回滚到此版本' }}
               </Button>
+            </div>
+
+            <!-- 自动更新开关（P3，design/app-update-proposal.md §10）：调度调和内经安全阀自动更新，默认关 -->
+            <div
+              class="flex items-center justify-between p-3.5 rounded-xl border gap-3"
+              :class="appData.app.auto_update ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border/80 bg-muted/20'"
+            >
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                  <RefreshCw class="w-3.5 h-3.5" :class="appData.app.auto_update ? 'text-emerald-500' : 'text-muted-foreground'" />
+                  自动更新
+                  <Badge
+                    v-if="appData.app.auto_update"
+                    variant="outline"
+                    class="shrink-0 text-[10px] text-emerald-500 border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0 font-medium"
+                  >已开启</Badge>
+                </div>
+                <p class="text-[11px] text-muted-foreground leading-relaxed mt-1">
+                  {{ noAutoSource
+                    ? '该应用无自动更新源（手动导入或已从市场移除），自动更新不可用'
+                    : '开启后每次调度调和前自动检测更新源并更新（每日至多一次）；新版本缺少必填变量值时自动保持当前版本并推送通知' }}
+                </p>
+              </div>
+              <Switch
+                :model-value="Boolean(appData.app.auto_update)"
+                :disabled="demoMode || togglingAutoUpdate || updateInfoLoading || noAutoSource"
+                @update:model-value="handleToggleAutoUpdate"
+              />
             </div>
 
             <!-- 更新/回滚执行输出日志 -->

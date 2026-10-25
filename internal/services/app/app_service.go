@@ -34,7 +34,8 @@ type AppDTO struct {
 	ManifestPath    string                    `json:"manifest_path,omitempty"`
 	ManifestRaw     string                    `json:"manifest_raw,omitempty"`
 	Template        *models.AppTemplateConfig `json:"template,omitempty"`
-	Previous        *AppPreviousInfo          `json:"previous,omitempty"` // 回滚快照信息（指向当前版本时不返回）
+	Previous        *AppPreviousInfo          `json:"previous,omitempty"`    // 回滚快照信息（指向当前版本时不返回）
+	AutoUpdate      bool                      `json:"auto_update,omitempty"` // 自动更新开关（P3，默认关）
 	TasksCount      int                       `json:"tasks_count"`
 	ScenariosCount  int                       `json:"scenarios_count"`
 	CreatedAt       models.LocalTime          `json:"created_at"`
@@ -107,12 +108,15 @@ func findInstalledMasterTaskID(manifestID string) string {
 	return task.ID
 }
 
-// GetApp 从 baihu_tasks 表中读取 type = 'app' 的主任务记录
+// GetApp 从 baihu_tasks 表中读取 type = 'app' 的主任务记录（id 兼容 TaskID 与 Manifest ID）
 func (s *AppService) GetApp(id string) (*AppDTO, error) {
 	var task models.Task
 	res := database.DB.Where("id = ? AND type = ?", id, constant.TaskTypeApp).Limit(1).Find(&task)
 	if res.Error != nil || res.RowsAffected == 0 {
-		return nil, fmt.Errorf("未找到应用: %s", id)
+		res = database.DB.Where("source_id = ? AND type = ?", "app:"+id, constant.TaskTypeApp).Limit(1).Find(&task)
+		if res.Error != nil || res.RowsAffected == 0 {
+			return nil, fmt.Errorf("未找到应用: %s", id)
+		}
 	}
 
 	var childCount int64
@@ -178,6 +182,7 @@ func (s *AppService) buildAppDTOFromTask(task *models.Task, taskCount int) *AppD
 				UpdatedAt: appCfg.Previous.UpdatedAt,
 			}
 		}
+		dto.AutoUpdate = appCfg.AutoUpdate
 	}
 
 	if dto.ManifestRaw != "" {
@@ -273,6 +278,12 @@ func CleanAppTaskAndData(masterTask *models.Task, opts AppRemoveOptions, out io.
 	relation.DataRelation.CleanRelations(masterTask.ID, constant.RelationTypeTaskTag)
 	relation.DataRelation.CleanRelations(masterTask.ID, constant.RelationTypeTaskEnv)
 	database.DB.Unscoped().Where("id = ?", masterTask.ID).Delete(&models.Task{})
+
+	// 顺带清理指向本应用的未读系统提示（闸门「待补值」/每日更新提醒等）：应用已卸载，未读红点成死引用；
+	// 仅清未读提示，历史执行日志与已读提示保留作历史记录（另有 app_log_service 按类别的时效清理兜底）
+	database.DB.
+		Where("category = ? AND ref_id = ? AND status = ?", constant.LogCategorySystemNotice, masterTask.ID, constant.LogStatusUnread).
+		Delete(&models.AppLog{})
 
 	// 3. 按需清理应用关联的环境变量 (opts.CleanEnvs)
 	if opts.CleanEnvs {
@@ -498,6 +509,40 @@ func (s *AppService) SwitchScenario(appID string, scenarioID string, out io.Writ
 
 	_, err = DefaultApplier.Apply(manifest, []byte(appDTO.ManifestRaw), opts)
 	return err
+}
+
+// SetAppAutoUpdate 开/关应用自动更新（P3，design/app-update-proposal.md §10，三端一致由服务端组装）。
+// per-app 互斥覆盖：避免与更新/调和/编辑保存对 unified_config 的读改写竞态；
+// appID 兼容 TaskID 与 Manifest ID（与 update/rollback 路径一致，loadAppTask 内做双轨解析）
+func (s *AppService) SetAppAutoUpdate(appID string, enabled bool) (*AppDTO, error) {
+	masterTask, _, err := loadAppTask(appID)
+	if err != nil {
+		return nil, err
+	}
+
+	lock, lockErr := LockAppUpdate(masterTask.ID, 10*time.Minute)
+	if lockErr != nil {
+		return nil, fmt.Errorf("应用更新或执行进行中，请稍后再试: %w", lockErr)
+	}
+	defer ReleaseAppLock(lock)
+
+	// 锁内重新加载：等待锁期间配置可能已变化
+	var task models.Task
+	if err := database.DB.Where("id = ? AND type = ?", masterTask.ID, constant.TaskTypeApp).First(&task).Error; err != nil {
+		return nil, fmt.Errorf("未找到应用: %s", appID)
+	}
+	cfg := task.GetAppConfig()
+	if cfg == nil || cfg.ID == "" {
+		return nil, fmt.Errorf("应用缺少清单配置，无法设置自动更新")
+	}
+	cfg.AutoUpdate = enabled
+	unified := task.GetUnifiedConfig()
+	unified.App = cfg
+	if err := database.DB.Model(&task).Update("unified_config", unified.ToJSON()).Error; err != nil {
+		return nil, err
+	}
+
+	return s.GetApp(masterTask.ID)
 }
 
 // MarketplaceResult 应用市场数据载荷

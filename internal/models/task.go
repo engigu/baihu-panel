@@ -210,8 +210,10 @@ type AppTaskConfig struct {
 	BuildOpts       *AppBuildOpts        `json:"build_opts,omitempty"`
 	Schedule        string               `json:"schedule,omitempty"`
 	ScheduleOpts    *TaskScheduleOpts    `json:"schedule_opts,omitempty"`
-	Previous        *AppPreviousSnapshot `json:"previous,omitempty"` // 更新前快照，供一键回滚（design/app-update-proposal.md §8）
-	PendingGate     string               `json:"pending_gate,omitempty"` // 调和漂移闸门挂起原因（missing_envs 等，空串表示无挂起）
+	Previous        *AppPreviousSnapshot `json:"previous,omitempty"`        // 更新前快照，供一键回滚（design/app-update-proposal.md §8）
+	PendingGate     string               `json:"pending_gate,omitempty"`    // 调和漂移闸门挂起原因（missing_envs 等，空串表示无挂起）
+	AutoUpdate      bool                 `json:"auto_update,omitempty"`     // 自动更新开关（默认关）：调度调和时经安全阀自动更新至更新源最新版本（P3 §10）
+	AutoUpdatedAt   string               `json:"auto_updated_at,omitempty"` // 上次自动刷新尝试时间（成功失败均计），引擎内每应用节流窗口依据
 }
 
 // AppPreviousSnapshot 更新前快照：单快照回滚，仅记录上一个成功版本的版本号与清单原文。

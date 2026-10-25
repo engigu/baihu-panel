@@ -616,7 +616,8 @@ export const api = {
       return request<{ log: string }>(`/apps/${id}?${query.toString()}`, { method: 'DELETE' })
     },
     marketplace: () => request<{ source: string; apps: MarketplaceApp[] }>('/apps/store'),
-    updates: () => request<{ updates: AppUpdateInfo[]; updatable_count: number; checked_at: string }>('/apps/updates')
+    updates: () => request<{ updates: AppUpdateInfo[]; updatable_count: number; checked_at: string }>('/apps/updates'),
+    setAutoUpdate: (id: string, enabled: boolean) => request<{ app: AppItem; auto_update: boolean }>(`/apps/${id}/auto-update`, { method: 'POST', body: JSON.stringify({ enabled }) })
   }
 }
 
@@ -637,6 +638,7 @@ export interface AppItem {
   created_at: string
   updated_at: string
   previous?: AppPreviousInfo
+  auto_update?: boolean
 }
 
 // 回滚快照展示信息（design/app-update-proposal.md §8，单快照回滚）
