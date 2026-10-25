@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import { Package, Pencil, Trash2, ListTodo, Zap, ZapOff, Play, ScrollText, Loader2, MoreHorizontal, Share2, ArrowUpCircle, Info } from 'lucide-vue-next'
+import { Package, Pencil, Trash2, ListTodo, Zap, ZapOff, Play, ScrollText, Loader2, MoreHorizontal, Share2, ArrowUpCircle, Info, ShieldAlert } from 'lucide-vue-next'
 import StatusDot from '@/components/StatusDot.vue'
 import type { Task, Agent, AppUpdateInfo } from '@/api'
 import { TASK_TYPE, TASK_TYPE_CONFIG } from '@/constants'
@@ -114,8 +114,18 @@ function getAppConfig(task: Task) {
           >
             v{{ getAppConfig(task).version }}
           </span>
+          <!-- 调和漂移闸门挂起（P2）：新必填变量待补值，调和已被拦截，优先于「可更新」徽标展示 -->
           <span
-            v-if="updateInfo?.updatable && updateInfo.latest_version"
+            v-if="getAppConfig(task).pending_gate"
+            class="shrink-0 px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 border border-red-500/30 text-[10px] font-medium leading-none cursor-pointer hover:bg-red-500/20 transition-colors flex items-center gap-1"
+            title="上游新版本新增必填环境变量且无可用值，调和更新已被闸门拦截（应用停留旧版本）。点击补值或更新"
+            @click="$emit('openDetail', task)"
+          >
+            <ShieldAlert class="h-2.5 w-2.5" />
+            新必填变量待补充
+          </span>
+          <span
+            v-else-if="updateInfo?.updatable && updateInfo.latest_version"
             class="shrink-0 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/30 font-mono text-[10px] font-medium leading-none cursor-pointer hover:bg-amber-500/20 transition-colors flex items-center gap-1"
             :title="`应用有新版本 v${updateInfo.installed_version} → v${updateInfo.latest_version}${updateInfo.reason === 'manifest_changed' ? '（应用定义有更新）' : ''}，点击查看详情与更新`"
             @click="$emit('openDetail', task)"
@@ -260,8 +270,17 @@ function getAppConfig(task: Task) {
           <span v-if="getAppConfig(task).version" class="text-[9px] font-mono px-1 py-px bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded">
             v{{ getAppConfig(task).version }}
           </span>
+          <!-- 调和漂移闸门挂起（P2）：优先于「可更新」徽标展示 -->
           <span
-            v-if="updateInfo?.updatable && updateInfo.latest_version"
+            v-if="getAppConfig(task).pending_gate"
+            class="text-[9px] font-mono px-1.5 py-px bg-red-500/10 text-red-500 border border-red-500/30 rounded flex items-center gap-0.5"
+            @click="$emit('openDetail', task)"
+          >
+            <ShieldAlert class="h-2 w-2" />
+            待补值
+          </span>
+          <span
+            v-else-if="updateInfo?.updatable && updateInfo.latest_version"
             class="text-[9px] font-mono px-1.5 py-px bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded flex items-center gap-0.5"
             @click="$emit('openDetail', task)"
           >

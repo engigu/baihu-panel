@@ -29,11 +29,13 @@ import {
   AlertTriangle,
   ArrowRight,
   ArrowUpCircle,
+  RotateCcw,
   ShieldAlert,
   CheckCircle2
 } from 'lucide-vue-next'
 import { api, type AppDetailResponse, type Task, type AppUpdateInfo, type AppMissingEnvItem } from '@/api'
 import { getCronDescription } from '@/utils/cron'
+import { consumeSseStream } from '@/utils/sse'
 import { toast } from 'vue-sonner'
 
 const demoMode = ref(false)
@@ -66,16 +68,19 @@ const selectedScenarioToSwitch = ref('')
 const rebuilding = ref(false)
 const rebuildLog = ref('')
 
-// 应用更新状态（design/app-update-proposal.md P1 前端中枢）
+// 应用更新状态（design/app-update-proposal.md P1 前端中枢；P2 增加回滚与 update-all）
 const updateInfo = ref<AppUpdateInfo | null>(null)
 const updateInfoLoading = ref(false)
 const updateDetectFailed = ref(false)
 const updating = ref(false)
+const rollingBack = ref(false)
 const updateLog = ref('')
 const updateSuccess = ref(false)
 const updateError = ref('')
 const missingEnvs = ref<AppMissingEnvItem[]>([])
 const missingEnvForm = ref<Record<string, string>>({})
+// 409 补值表单所属的操作（更新或回滚），提交时重放到对应端点
+const pendingConflictOp = ref<'update' | 'rollback'>('update')
 const updateLogRef = ref<HTMLElement | null>(null)
 
 // 任务执行状态
@@ -105,6 +110,7 @@ watch(
       updateSuccess.value = false
       updateError.value = ''
       missingEnvs.value = []
+      rollingBack.value = false
     }
   },
   { immediate: true }
@@ -216,9 +222,16 @@ function scrollUpdateLog() {
   })
 }
 
+// 操作完成后刷新应用详情与更新检测结果
+async function refreshAfterOperation() {
+  await loadAppDetail(props.appId)
+  await loadUpdateInfo(props.appId)
+  emit('updated')
+}
+
 // 一键更新（SSE 日志流）：409 安全阀拦截时展开补值表单
 async function startUpdate(extraEnvs?: Record<string, string>) {
-  if (!appData.value || updating.value) return
+  if (!appData.value || updating.value || rollingBack.value) return
   if (demoMode.value) {
     toast.error('演示模式下禁止更新应用')
     return
@@ -231,70 +244,30 @@ async function startUpdate(extraEnvs?: Record<string, string>) {
   missingEnvs.value = []
 
   try {
-    const response = await fetch(`/api/v1/apps/${appData.value.app.id}/update?stream=true`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-      body: JSON.stringify({ env_values: extraEnvs, skip_setup: false, force_setup: false })
-    })
-
-    if (!response.ok) {
-      const errText = await response.text()
-      throw new Error(errText || `HTTP ${response.status}`)
-    }
-
-    const reader = response.body?.getReader()
-    if (!reader) throw new Error('浏览器不支持 ReadableStream')
-
-    const decoder = new TextDecoder()
-    let buffer = ''
-    // currentEvent 声明在分片循环外以跨 chunk 生效；按 SSE 规范在每次事件分发后重置为 message
-    let currentEvent = 'message'
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed) continue
-        if (trimmed.startsWith('event:')) {
-          currentEvent = trimmed.substring(6).trim()
-        } else if (trimmed.startsWith('data:')) {
-          const dataStr = line.substring(line.indexOf('data:') + 5).trim()
-          if (currentEvent === 'done') {
-            updateSuccess.value = true
-            toast.success('应用更新成功！')
-            await loadAppDetail(props.appId)
-            await loadUpdateInfo(props.appId)
-            emit('updated')
-          } else if (currentEvent === 'conflict') {
-            try {
-              const obj = JSON.parse(dataStr)
-              missingEnvs.value = obj.missing_envs || []
-              toast.warning(obj.error || '存在未提供值的必填环境变量，请补值后继续')
-            } catch {
-              updateError.value = dataStr
-            }
-          } else if (currentEvent === 'error') {
-            try {
-              const errObj = JSON.parse(dataStr)
-              updateError.value = errObj.error || '更新失败'
-            } catch {
-              updateError.value = dataStr
-            }
-            toast.error(updateError.value)
-          } else {
-            updateLog.value += dataStr + '\n'
-            scrollUpdateLog()
-          }
-          // SSE 规范：事件分发后事件类型重置，后续无 event: 前缀的 data 行一律按 message 处理
-          currentEvent = 'message'
+    await consumeSseStream(
+      `/api/v1/apps/${appData.value.app.id}/update?stream=true`,
+      { env_values: extraEnvs, skip_setup: false, force_setup: false },
+      {
+        onDone: async () => {
+          updateSuccess.value = true
+          toast.success('应用更新成功！')
+          await refreshAfterOperation()
+        },
+        onConflict: (obj) => {
+          pendingConflictOp.value = 'update'
+          missingEnvs.value = obj.missing_envs || []
+          toast.warning(obj.error || '存在未提供值的必填环境变量，请补值后继续')
+        },
+        onError: (msg) => {
+          updateError.value = msg
+          toast.error(msg)
+        },
+        onLog: (line) => {
+          updateLog.value += line + '\n'
+          scrollUpdateLog()
         }
       }
-    }
+    )
   } catch (err: any) {
     updateError.value = err.message || '更新失败'
     updateLog.value += `\n[ERROR] ${updateError.value}\n`
@@ -305,7 +278,56 @@ async function startUpdate(extraEnvs?: Record<string, string>) {
   }
 }
 
-// 提交补值并重放更新
+// 一键回滚到更新前快照（SSE 日志流）：409 安全阀同样可能拦截（用户更新后删除过变量值）
+async function startRollback(extraEnvs?: Record<string, string>) {
+  if (!appData.value || rollingBack.value || updating.value) return
+  if (demoMode.value) {
+    toast.error('演示模式下禁止回滚应用')
+    return
+  }
+
+  rollingBack.value = true
+  updateLog.value = '>> 正在建立实时日志连接...\n'
+  updateSuccess.value = false
+  updateError.value = ''
+  missingEnvs.value = []
+
+  try {
+    await consumeSseStream(
+      `/api/v1/apps/${appData.value.app.id}/rollback?stream=true`,
+      { env_values: extraEnvs, skip_setup: false, force_setup: false },
+      {
+        onDone: async () => {
+          updateSuccess.value = true
+          toast.success('应用已回滚到上一版本！')
+          await refreshAfterOperation()
+        },
+        onConflict: (obj) => {
+          pendingConflictOp.value = 'rollback'
+          missingEnvs.value = obj.missing_envs || []
+          toast.warning(obj.error || '存在未提供值的必填环境变量，请补值后继续')
+        },
+        onError: (msg) => {
+          updateError.value = msg
+          toast.error(msg)
+        },
+        onLog: (line) => {
+          updateLog.value += line + '\n'
+          scrollUpdateLog()
+        }
+      }
+    )
+  } catch (err: any) {
+    updateError.value = err.message || '回滚失败'
+    updateLog.value += `\n[ERROR] ${updateError.value}\n`
+    toast.error(updateError.value)
+  } finally {
+    rollingBack.value = false
+    scrollUpdateLog()
+  }
+}
+
+// 提交补值并重放被安全阀拦截的操作（更新或回滚）
 function submitMissingEnvs() {
   const envs: Record<string, string> = {}
   for (const item of missingEnvs.value) {
@@ -318,7 +340,11 @@ function submitMissingEnvs() {
     toast.error('请填写全部缺失的必填环境变量')
     return
   }
-  startUpdate(envs)
+  if (pendingConflictOp.value === 'rollback') {
+    startRollback(envs)
+  } else {
+    startUpdate(envs)
+  }
 }
 
 // 触发重新预编译自愈
@@ -620,7 +646,7 @@ async function handleUninstall() {
               <Button
                 size="sm"
                 class="shrink-0 text-xs h-7 px-3 font-semibold"
-                :disabled="updating || demoMode"
+                :disabled="updating || rollingBack || demoMode"
                 :title="demoMode ? '演示模式下禁止更新应用' : '按市场最新清单更新应用'"
                 @click="startUpdate()"
               >
@@ -630,15 +656,40 @@ async function handleUninstall() {
               </Button>
             </div>
 
-            <!-- 更新执行输出日志 -->
-            <div v-if="updating || updateLog" class="space-y-1.5">
+            <!-- 回滚到更新前快照（P2 单快照回滚） -->
+            <div
+              v-if="appData.app.previous && !missingEnvs.length"
+              class="flex items-center justify-between p-3.5 rounded-xl border border-violet-500/20 bg-violet-500/5 gap-3"
+            >
+              <p class="text-[11px] text-muted-foreground leading-relaxed min-w-0">
+                检测到更新前快照
+                <b class="text-foreground font-mono">v{{ appData.app.previous.version }}</b>
+                <span v-if="appData.app.previous.updated_at" class="font-mono">（{{ appData.app.previous.updated_at }} 覆盖前）</span>
+                ，回滚同样保留当前全部配置与定制项。
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                class="shrink-0 text-xs h-7 px-3 font-semibold border-violet-500/40 text-violet-600 dark:text-violet-400 hover:bg-violet-500/10"
+                :disabled="updating || rollingBack || demoMode"
+                :title="demoMode ? '演示模式下禁止回滚应用' : '用更新前快照重新部署上一版本'"
+                @click="startRollback()"
+              >
+                <Loader2 v-if="rollingBack" class="w-3 h-3 mr-1 animate-spin" />
+                <RotateCcw v-else class="w-3 h-3 mr-1" />
+                {{ rollingBack ? '回滚中...' : '回滚到此版本' }}
+              </Button>
+            </div>
+
+            <!-- 更新/回滚执行输出日志 -->
+            <div v-if="updating || rollingBack || updateLog" class="space-y-1.5">
               <div class="flex items-center justify-between text-xs font-mono font-bold">
                 <span class="flex items-center gap-1.5">
                   <Terminal class="w-3.5 h-3.5" />
-                  更新日志 (Update Output)
+                  {{ rollingBack && !updating ? '回滚日志 (Rollback Output)' : '更新日志 (Update Output)' }}
                 </span>
                 <span v-if="updateSuccess" class="text-emerald-500 flex items-center gap-1 font-sans text-[11px] font-semibold">
-                  <CheckCircle2 class="w-3.5 h-3.5" /> 更新就绪
+                  <CheckCircle2 class="w-3.5 h-3.5" /> 执行就绪
                 </span>
                 <span v-else-if="updateError" class="text-destructive flex items-center gap-1 font-sans text-[11px] font-semibold">
                   <AlertTriangle class="w-3.5 h-3.5" /> 执行失败
@@ -647,7 +698,7 @@ async function handleUninstall() {
               <pre
                 ref="updateLogRef"
                 class="bg-neutral-950 text-neutral-200 font-mono text-[11px] p-3 rounded-lg overflow-auto max-h-56 border border-neutral-800 leading-relaxed whitespace-pre-wrap break-all"
-              >{{ updateLog || '正在执行更新...' }}</pre>
+              >{{ updateLog || '正在执行操作...' }}</pre>
             </div>
           </TabsContent>
 

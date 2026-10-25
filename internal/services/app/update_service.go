@@ -171,14 +171,14 @@ func cacheURLManifest(rawURL string, m *AppManifest) {
 
 // AppUpdateInfo 单个已装应用的更新检测结果
 type AppUpdateInfo struct {
-	TaskID           string `json:"task_id"`           // 主应用任务 ID（前端路由键）
-	ManifestID       string `json:"manifest_id"`       // 清单 ID
+	TaskID           string `json:"task_id"`     // 主应用任务 ID（前端路由键）
+	ManifestID       string `json:"manifest_id"` // 清单 ID
 	AppName          string `json:"app_name"`
-	UpdateSource     string `json:"update_source"`     // marketplace | url | manual
+	UpdateSource     string `json:"update_source"` // marketplace | url | manual
 	InstalledVersion string `json:"installed_version"`
 	LatestVersion    string `json:"latest_version,omitempty"`
 	Updatable        bool   `json:"updatable"`
-	Reason           string `json:"reason,omitempty"`  // version_changed | manifest_changed | no_source | source_mismatch | fetch_failed
+	Reason           string `json:"reason,omitempty"` // version_changed | manifest_changed | no_source | source_mismatch | fetch_failed
 	LastCommit       string `json:"last_commit,omitempty"`
 }
 
@@ -484,16 +484,9 @@ func (s *AppService) UpdateApp(taskID string, opts AppUpdateOptions, out io.Writ
 	}
 
 	// 1. 加载主应用任务（兼容传入 manifestID 的场景）
-	var masterTask models.Task
-	if err := database.DB.Where("id = ? AND type = ?", taskID, constant.TaskTypeApp).First(&masterTask).Error; err != nil {
-		if err2 := database.DB.Where("source_id = ? AND type = ?", "app:"+taskID, constant.TaskTypeApp).First(&masterTask).Error; err2 != nil {
-			return nil, fmt.Errorf("未找到应用记录: %s", taskID)
-		}
-	}
-
-	appCfg := masterTask.GetAppConfig()
-	if appCfg == nil || appCfg.ID == "" {
-		return nil, fmt.Errorf("应用缺少清单配置，无法执行更新")
+	masterTask, appCfg, err := loadAppTask(taskID)
+	if err != nil {
+		return nil, err
 	}
 
 	// 2. 解析最新清单与原始 YAML
@@ -555,16 +548,142 @@ func (s *AppService) UpdateApp(taskID string, opts AppUpdateOptions, out io.Writ
 	}
 
 	// 5. 组装 ApplyOptions（全部取自已保存配置，等价于编辑弹窗的回显）
-	mergedEnvs := make(map[string]string, len(appCfg.EnvValues)+len(opts.EnvValues))
-	for k, v := range appCfg.EnvValues {
-		mergedEnvs[k] = v
-	}
-	for k, v := range opts.EnvValues {
-		if strings.TrimSpace(v) != "" {
-			mergedEnvs[k] = v
-		}
+	applyOpts := s.assembleUpdateApplyOptions(appCfg, masterTask, mergeEnvValues(appCfg.EnvValues, opts.EnvValues), opts, out)
+	// 更新前快照：记录上一个成功版本，随本次 Apply 落库，供一键回滚（design/app-update-proposal.md §8）
+	applyOpts.PreviousSnapshot = &models.AppPreviousSnapshot{
+		Version:     appCfg.Version,
+		ManifestRaw: appCfg.ManifestRaw,
+		UpdatedAt:   models.Now().Time().Format(models.TimeFormat),
 	}
 
+	if appCfg.BuildOpts != nil && appCfg.BuildOpts.SkipSync {
+		log("  ℹ 已按保存的构建选项跳过代码同步 (skip_sync=true)，仅刷新清单与任务编排")
+	}
+
+	// 6. 复用 Apply 五阶段流水线
+	res, err := DefaultApplier.Apply(newManifest, rawYAML, applyOpts)
+	if err != nil {
+		// 更新中断：收敛快照不变式。仅清理「指向当前已装版本」的退化快照（回滚无意义），
+		// 此前成功更新留下的有效快照保留，继续作为回滚目标
+		s.clearDegeneratePreviousSnapshot(masterTask.ID)
+		return nil, err
+	}
+
+	// 更新成功即闸门挂起原因消除（补值或更新后自动解除，design §6.2）
+	s.clearPendingGate(masterTask.ID)
+	// 解除检测节流：下一个调和周期立即重新评估上游漂移
+	rearmGateCheck(appCfg.ID)
+
+	log("  ✓ 更新完成: v%s（用户配置与定制项已保留）", res.Version)
+	return res, nil
+}
+
+// RollbackApp 一键回滚到上一成功版本（单快照方案，design/app-update-proposal.md §8）：
+// 用快照清单重跑 Apply 流水线（同样走配置保留与 409 安全阀），成功后清空快照；
+// 回滚失败保留快照（当前版本未成功退回，快照仍是唯一回滚目标，可修复后重试）
+func (s *AppService) RollbackApp(taskID string, opts AppUpdateOptions, out io.Writer) (*ApplyResult, error) {
+	if out == nil {
+		out = os.Stdout
+	}
+	log := func(format string, args ...interface{}) {
+		msg := fmt.Sprintf(format, args...)
+		if !strings.HasSuffix(msg, "\n") {
+			msg += "\n"
+		}
+		_, _ = out.Write([]byte(msg))
+	}
+
+	// 1. 加载主应用任务
+	masterTask, appCfg, err := loadAppTask(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if appCfg.Previous == nil || strings.TrimSpace(appCfg.Previous.ManifestRaw) == "" {
+		return nil, fmt.Errorf("暂无可回滚的版本快照（首次成功更新后自动生成）")
+	}
+
+	// 2. 解析快照清单并校验归属：防止配置被异常篡改后把别的应用覆盖进来
+	rollbackManifest, err := ParseManifestFromYAML([]byte(appCfg.Previous.ManifestRaw))
+	if err != nil {
+		return nil, fmt.Errorf("回滚快照清单解析失败: %w", err)
+	}
+	if appCfg.ID != "" && rollbackManifest.ID != "" && !strings.EqualFold(strings.TrimSpace(rollbackManifest.ID), strings.TrimSpace(appCfg.ID)) {
+		return nil, fmt.Errorf("回滚快照已不属于当前应用（快照 %s，已装 %s），已拒绝执行", rollbackManifest.ID, appCfg.ID)
+	}
+
+	log("==================================================================")
+	log("  白虎应用引擎: 开始回滚应用 [%s] (v%s → v%s)", appCfg.Name, appCfg.Version, appCfg.Previous.Version)
+	log("==================================================================")
+
+	// 3. per-app 互斥锁
+	lock, err := LockAppUpdate(masterTask.ID, 10*time.Minute)
+	if err != nil {
+		return nil, fmt.Errorf("应用回滚锁获取失败: %w", err)
+	}
+	defer ReleaseAppLock(lock)
+
+	// 4. 409 安全阀同样生效：用户在更新后删除过必填变量值时拦截，绝不静默回滚
+	if err := s.checkRequiredEnvs(rollbackManifest, appCfg, opts.EnvValues); err != nil {
+		var conflict *AppUpdateConflictError
+		if errors.As(err, &conflict) {
+			log("  ⛔ 安全阀拦截: %s", err.Error())
+			for _, m := range conflict.MissingEnvs {
+				log("    - %s (%s)", m.Key, m.Label)
+			}
+		}
+		return nil, err
+	}
+
+	// 5. 组装配置保留（与更新路径一致，定制识别基线取当前已装清单）
+	applyOpts := s.assembleUpdateApplyOptions(appCfg, masterTask, mergeEnvValues(appCfg.EnvValues, opts.EnvValues), opts, out)
+	// 回滚成功即「上一成功版本」成为当前版本，快照自指失去意义，显式清空
+	applyOpts.ClearPreviousSnapshot = true
+
+	// 6. 复用 Apply 五阶段流水线
+	res, err := DefaultApplier.Apply(rollbackManifest, []byte(appCfg.Previous.ManifestRaw), applyOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	// 回滚成功后应用停留旧版本，闸门挂起原因随之上一个更新循环消失
+	s.clearPendingGate(masterTask.ID)
+	rearmGateCheck(appCfg.ID)
+
+	log("  ✓ 回滚完成: v%s（用户配置与定制项已保留）", res.Version)
+	return res, nil
+}
+
+// loadAppTask 按 taskID（兼容 manifestID）加载应用主任务及其 AppTaskConfig
+func loadAppTask(taskID string) (*models.Task, *models.AppTaskConfig, error) {
+	var masterTask models.Task
+	if err := database.DB.Where("id = ? AND type = ?", taskID, constant.TaskTypeApp).First(&masterTask).Error; err != nil {
+		if err2 := database.DB.Where("source_id = ? AND type = ?", "app:"+taskID, constant.TaskTypeApp).First(&masterTask).Error; err2 != nil {
+			return nil, nil, fmt.Errorf("未找到应用记录: %s", taskID)
+		}
+	}
+	appCfg := masterTask.GetAppConfig()
+	if appCfg == nil || appCfg.ID == "" {
+		return nil, nil, fmt.Errorf("应用缺少清单配置，无法执行该操作")
+	}
+	return &masterTask, appCfg, nil
+}
+
+// mergeEnvValues 合并已保存环境变量值与补值（409 重放），补值优先且跳过空串
+func mergeEnvValues(saved map[string]string, extra map[string]string) map[string]string {
+	merged := make(map[string]string, len(saved)+len(extra))
+	for k, v := range saved {
+		merged[k] = v
+	}
+	for k, v := range extra {
+		if strings.TrimSpace(v) != "" {
+			merged[k] = v
+		}
+	}
+	return merged
+}
+
+// assembleUpdateApplyOptions 按已保存配置组装更新/回滚共用的 ApplyOptions（配置保留核心，三端一致由服务端组装保证）
+func (s *AppService) assembleUpdateApplyOptions(appCfg *models.AppTaskConfig, masterTask *models.Task, mergedEnvs map[string]string, opts AppUpdateOptions, out io.Writer) ApplyOptions {
 	var overwriteTask *bool
 	skipSetup := opts.SkipSetup
 	forceSetup := opts.ForceSetup
@@ -589,7 +708,7 @@ func (s *AppService) UpdateApp(taskID string, opts AppUpdateOptions, out io.Writ
 		appTag = appCfg.Template.Tag
 	}
 
-	applyOpts := ApplyOptions{
+	return ApplyOptions{
 		ManifestPath:    appCfg.ManifestPath,
 		ScenarioID:      appCfg.CurrentScenario,
 		Schedule:        masterTask.Schedule,
@@ -607,23 +726,31 @@ func (s *AppService) UpdateApp(taskID string, opts AppUpdateOptions, out io.Writ
 		SkipSync:        skipSync,
 		Tag:             appTag,
 		Languages:       templateLanguagesToMaps(appCfg.Template),
-		BaseManifestRaw: appCfg.ManifestRaw, // 定制识别基线：旧清单快照
+		BaseManifestRaw: appCfg.ManifestRaw, // 定制识别基线：更新/回滚前的已装清单
 		BaseScenarioID:  appCfg.CurrentScenario,
 		LogWriter:       out,
 	}
+}
 
-	if appCfg.BuildOpts != nil && appCfg.BuildOpts.SkipSync {
-		log("  ℹ 已按保存的构建选项跳过代码同步 (skip_sync=true)，仅刷新清单与任务编排")
+// clearDegeneratePreviousSnapshot 清理「指向当前已装版本」的退化快照（回滚无意义）。
+// Apply 阶段 3 落库先于依赖安装与任务编排，更新中断可能把本次快照留在库中，
+// 需收敛「Previous 永不指向当前版本」不变式；有效快照（上个成功更新留下）保持原样
+func (s *AppService) clearDegeneratePreviousSnapshot(taskID string) {
+	var task models.Task
+	if err := database.DB.Where("id = ? AND type = ?", taskID, constant.TaskTypeApp).First(&task).Error; err != nil {
+		return
 	}
-
-	// 6. 复用 Apply 五阶段流水线
-	res, err := DefaultApplier.Apply(newManifest, rawYAML, applyOpts)
-	if err != nil {
-		return nil, err
+	appCfg := task.GetAppConfig()
+	if appCfg == nil || appCfg.Previous == nil {
+		return
 	}
-
-	log("  ✓ 更新完成: v%s（用户配置与定制项已保留）", res.Version)
-	return res, nil
+	if appCfg.Previous.Version != appCfg.Version || appCfg.Previous.ManifestRaw != appCfg.ManifestRaw {
+		return
+	}
+	appCfg.Previous = nil
+	unified := task.GetUnifiedConfig()
+	unified.App = appCfg
+	database.DB.Model(&task).Update("unified_config", unified.ToJSON())
 }
 
 // marketHasApp 检查市场索引中是否存在指定应用（使用缓存）

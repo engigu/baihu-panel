@@ -400,6 +400,7 @@ func registerAppRoutes(g *gin.RouterGroup, c *Controllers) {
 		apps.GET("/:id", c.App.GetApp)
 		apps.POST("/apply", c.App.ApplyApp)
 		apps.POST("/:id/update", c.App.UpdateApp)
+		apps.POST("/:id/rollback", c.App.RollbackApp)
 		apps.POST("/:id/switch", c.App.SwitchScenario)
 		apps.POST("/:id/rebuild", c.App.RebuildApp)
 		apps.DELETE("/:id", c.App.RemoveApp)

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -17,15 +18,19 @@ func Run(args []string) {
 		fmt.Fprintf(os.Stderr, "  baihu app <子命令> [参数]\n\n")
 		fmt.Fprintf(os.Stderr, "可用子命令:\n")
 		fmt.Fprintf(os.Stderr, "  apply   解析并应用本地或远程 app.yaml 规范文件\n")
-		fmt.Fprintf(os.Stderr, "  list    查看当前已安装的应用清单\n")
+		fmt.Fprintf(os.Stderr, "  list    查看当前已安装的应用清单 (--updates 仅显示可更新项)\n")
 		fmt.Fprintf(os.Stderr, "  info    查看指定已安装应用的详细信息与任务列表\n")
 		fmt.Fprintf(os.Stderr, "  switch  一键切换指定应用的运行场景预设\n")
+		fmt.Fprintf(os.Stderr, "  update  一键更新指定应用至更新源最新版本\n")
 		fmt.Fprintf(os.Stderr, "  remove  卸载指定应用并清理关联任务\n\n")
 		fmt.Fprintf(os.Stderr, "示例:\n")
 		fmt.Fprintf(os.Stderr, "  baihu app apply ./apps/BiliBiliToolPro/app.yaml\n")
 		fmt.Fprintf(os.Stderr, "  baihu app apply https://raw.githubusercontent.com/xxx/app.yaml --scenario minimal\n")
 		fmt.Fprintf(os.Stderr, "  baihu app list\n")
+		fmt.Fprintf(os.Stderr, "  baihu app list --updates\n")
 		fmt.Fprintf(os.Stderr, "  baihu app switch bilibili-tool-pro --scenario hardcore\n")
+		fmt.Fprintf(os.Stderr, "  baihu app update bilibili-tool-pro\n")
+		fmt.Fprintf(os.Stderr, "  baihu app update bilibili-tool-pro --env API_KEY=xxx\n")
 		fmt.Fprintf(os.Stderr, "  baihu app remove bilibili-tool-pro --clean-data\n\n")
 	}
 
@@ -46,6 +51,8 @@ func Run(args []string) {
 		runInfo(subArgs)
 	case "switch":
 		runSwitch(subArgs)
+	case "update":
+		runUpdate(subArgs)
 	case "remove", "delete":
 		runRemove(subArgs)
 	default:
@@ -63,6 +70,8 @@ func runApply(args []string) {
 	var forceSetup bool
 	var overwriteTaskStr string
 	var overwriteEnv bool
+	var noLock bool
+	var sourcePath string
 
 	fs.StringVar(&scenario, "scenario", "", "指定激活的应用场景模板 ID")
 	fs.BoolVar(&skipSetup, "skip-setup", false, "跳过前置环境检测与依赖安装步骤")
@@ -70,6 +79,10 @@ func runApply(args []string) {
 	fs.BoolVar(&forceSetup, "force-setup", false, "强制重新执行依赖安装与编译（跳过 check 探活）")
 	fs.BoolVar(&overwriteEnv, "overwrite-env", false, "是否覆盖已有同名环境变量")
 	fs.StringVar(&overwriteTaskStr, "overwrite-task", "", "是否覆盖并同步更新受控任务 (true/false)")
+	// 内部选项：定时调和路径由调度器持有 per-app 锁，子进程不得重复加锁（否则父子互等自锁）
+	fs.BoolVar(&noLock, "no-lock", false, "跳过 per-app 互斥锁（仅供调度器调和路径内部使用）")
+	// 内部选项：调和落库时保留已保存更新源（URL/本地路径），避免临时清单快照路径覆盖 manifest_path
+	fs.StringVar(&sourcePath, "source-path", "", "落库保留的更新源路径（仅供调度器调和路径内部使用）")
 
 	normArgs := normalizeArgs(args)
 	if err := fs.Parse(normArgs); err != nil {
@@ -92,13 +105,15 @@ func runApply(args []string) {
 	}
 
 	opts := app.ApplyOptions{
-		ScenarioID:    scenario,
-		SkipSetup:     skipSetup,
-		SkipSync:      skipSync,
-		ForceSetup:    forceSetup,
-		OverwriteEnv:  overwriteEnv,
-		OverwriteTask: overwriteTaskPtr,
-		LogWriter:     os.Stdout,
+		ScenarioID:        scenario,
+		SkipSetup:         skipSetup,
+		SkipSync:          skipSync,
+		ForceSetup:        forceSetup,
+		OverwriteEnv:      overwriteEnv,
+		OverwriteTask:     overwriteTaskPtr,
+		SkipAppLock:       noLock,
+		SavedManifestPath: sourcePath,
+		LogWriter:         os.Stdout,
 	}
 
 	res, err := app.DefaultAppService.ApplyApp(targetPathOrURL, opts)
@@ -110,7 +125,16 @@ func runApply(args []string) {
 	fmt.Printf("\n[成功] 应用 '%s' 已就绪 (激活场景: %s)\n", res.AppName, res.ActiveScenario)
 }
 
+// runList 查看已安装应用清单；--updates 时检测更新源并仅显示可更新项
 func runList(args []string) {
+	fs := flag.NewFlagSet("app list", flag.ExitOnError)
+	var showUpdates bool
+	fs.BoolVar(&showUpdates, "updates", false, "检测更新源并仅显示可更新的应用")
+
+	if err := fs.Parse(normalizeArgs(args)); err != nil {
+		return
+	}
+
 	apps, err := app.DefaultAppService.ListApps()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "查询应用列表失败: %v\n", err)
@@ -123,12 +147,47 @@ func runList(args []string) {
 		return
 	}
 
+	updates := make(map[string]app.AppUpdateInfo)
+	if showUpdates {
+		infos, err := app.DefaultAppService.CheckUpdates()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "检测应用更新失败: %v\n", err)
+			os.Exit(1)
+		}
+		for _, info := range infos {
+			if info.Updatable {
+				updates[info.TaskID] = info
+			}
+		}
+		if len(updates) == 0 {
+			fmt.Println("所有已安装应用均为最新版本。")
+			return
+		}
+	}
+
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "应用标识 (ID)\t应用名称\t版本\t分类\t生效场景\t安装时间")
-	fmt.Fprintln(w, "-------------\t--------\t----\t----\t--------\t--------")
-	for _, a := range apps {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-			a.ID, a.Name, a.Version, a.Category, a.CurrentScenario, a.CreatedAt.Time().Format("2006-01-02 15:04"))
+	if showUpdates {
+		fmt.Fprintln(w, "应用标识 (ID)\t应用名称\t当前版本\t可更新至\t更新原因\t来源")
+		fmt.Fprintln(w, "-------------\t--------\t--------\t---------\t--------\t----")
+		for _, a := range apps {
+			info, ok := updates[a.ID]
+			if !ok {
+				continue
+			}
+			reason := "版本变更"
+			if info.Reason == "manifest_changed" {
+				reason = "定义变更"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				a.ID, a.Name, info.InstalledVersion, info.LatestVersion, reason, info.UpdateSource)
+		}
+	} else {
+		fmt.Fprintln(w, "应用标识 (ID)\t应用名称\t版本\t分类\t生效场景\t安装时间")
+		fmt.Fprintln(w, "-------------\t--------\t----\t----\t--------\t--------")
+		for _, a := range apps {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				a.ID, a.Name, a.Version, a.Category, a.CurrentScenario, a.CreatedAt.Time().Format("2006-01-02 15:04"))
+		}
 	}
 	w.Flush()
 }
@@ -157,10 +216,77 @@ func runInfo(args []string) {
 	if appEntity.Homepage != "" {
 		fmt.Printf("项目主页:       %s\n", appEntity.Homepage)
 	}
+	if appEntity.Previous != nil {
+		fmt.Printf("可回滚版本:     %s (更新前快照)\n", appEntity.Previous.Version)
+	}
 	fmt.Printf("应用简介:       %s\n", appEntity.Description)
 	fmt.Printf("来源文件:       %s\n", appEntity.ManifestPath)
 	fmt.Printf("安装时间:       %s\n", appEntity.CreatedAt.Time().Format("2006-01-02 15:04:05"))
 	fmt.Printf("更新时间:       %s\n", appEntity.UpdatedAt.Time().Format("2006-01-02 15:04:05"))
+}
+
+// repeatFlags 可重复出现的字符串 flag（如 --env KEY=VALUE --env OTHER=x）
+type repeatFlags []string
+
+func (r *repeatFlags) String() string { return strings.Join(*r, ",") }
+func (r *repeatFlags) Set(v string) error {
+	*r = append(*r, v)
+	return nil
+}
+
+// runUpdate 一键更新指定应用到更新源最新版本（复用服务端配置保留编排，与 Web/MCP 行为一致）
+func runUpdate(args []string) {
+	fs := flag.NewFlagSet("app update", flag.ExitOnError)
+	var skipSetup bool
+	var forceSetup bool
+	var envFlags repeatFlags
+	fs.BoolVar(&skipSetup, "skip-setup", false, "跳过环境与依赖安装（默认继承应用已保存构建选项）")
+	fs.BoolVar(&forceSetup, "force-setup", false, "强制重新执行依赖安装与编译")
+	fs.Var(&envFlags, "env", "409 安全阀补值，格式 KEY=VALUE，可重复传入")
+
+	if err := fs.Parse(normalizeArgs(args)); err != nil {
+		return
+	}
+
+	parsedArgs := fs.Args()
+	if len(parsedArgs) == 0 {
+		fmt.Fprintln(os.Stderr, "错误: 必须提供应用 ID")
+		fmt.Fprintln(os.Stderr, "用法: baihu app update <app-id> [--env KEY=VALUE] [--force-setup]")
+		os.Exit(1)
+	}
+
+	appID := parsedArgs[0]
+	envValues := make(map[string]string)
+	for _, pair := range envFlags {
+		k, v, found := strings.Cut(pair, "=")
+		k = strings.TrimSpace(k)
+		if !found || k == "" {
+			fmt.Fprintf(os.Stderr, "错误: --env 参数格式应为 KEY=VALUE（收到 %q）\n", pair)
+			os.Exit(1)
+		}
+		envValues[k] = v
+	}
+
+	res, err := app.DefaultAppService.UpdateApp(appID, app.AppUpdateOptions{
+		EnvValues:  envValues,
+		SkipSetup:  skipSetup,
+		ForceSetup: forceSetup,
+	}, os.Stdout)
+	if err != nil {
+		var conflict *app.AppUpdateConflictError
+		if errors.As(err, &conflict) {
+			fmt.Fprintf(os.Stderr, "\n[拦截] 更新被安全阀暂停，新版本存在缺失值的必填环境变量:\n")
+			for _, m := range conflict.MissingEnvs {
+				fmt.Fprintf(os.Stderr, "  - %s (%s)\n", m.Key, m.Label)
+			}
+			fmt.Fprintf(os.Stderr, "请补值后重放: baihu app update %s --env KEY=VALUE ...\n", appID)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "\n[失败] 更新应用失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\n[成功] 应用 '%s' 已更新至 v%s（用户配置与定制项已保留）\n", res.AppName, res.Version)
 }
 
 func runSwitch(args []string) {
@@ -225,8 +351,9 @@ func normalizeArgs(args []string) []string {
 		arg := args[i]
 		if len(arg) > 0 && arg[0] == '-' {
 			flags = append(flags, arg)
-			// 如果是非布尔选项 (如 --scenario val 或 --overwrite-task val)，连同下一个值一起存入 flags
-			if (arg == "--scenario" || arg == "-scenario" || arg == "--overwrite-task" || arg == "-overwrite-task") && !strings.Contains(arg, "=") && i+1 < len(args) && len(args[i+1]) > 0 && args[i+1][0] != '-' {
+			// 如果是非布尔选项 (如 --scenario val / --overwrite-task val / --env KEY=VALUE / --source-path val)，连同下一个值一起存入 flags
+			isValuedFlag := arg == "--scenario" || arg == "-scenario" || arg == "--overwrite-task" || arg == "-overwrite-task" || arg == "--env" || arg == "-env" || arg == "--source-path" || arg == "-source-path"
+			if isValuedFlag && !strings.Contains(arg, "=") && i+1 < len(args) && len(args[i+1]) > 0 && args[i+1][0] != '-' {
 				i++
 				flags = append(flags, args[i])
 			}

@@ -643,6 +643,13 @@ func (s *NotificationService) handleEvent(bindingType string) eventbus.Handler {
 		// 构建最终的通知标题和正文文本
 		title, text = s.buildMessage(e.Type, tmplTitleKey, tmplTextKey, title, text, prefix, payload)
 
+		// 失败通知启发式（design/app-update-proposal.md §7）：应用任务输出命中缺失变量特征时追加更新引导
+		if e.Type == constant.EventTaskFailed {
+			if taskID, ok := payload["task_id"].(string); ok {
+				text = s.appendAppEnvHint(taskID, rawOutput, text)
+			}
+		}
+
 		var cleanLog string
 		if rawOutput != "" {
 			// cleanLog = stripAnsi(rawOutput)
@@ -812,4 +819,64 @@ func (s *NotificationService) getChannelsInternal() []NotifyChannel {
 		})
 	}
 	return channels
+}
+
+// --------------------------------------------------------------------------
+// 失败通知启发式（design/app-update-proposal.md §7，P2）
+// 调和窗口期「代码新、清单旧」的运行时失败多源于上游新增必填环境变量：
+// 对应用主/子任务的失败通知扫描 stderr 常见缺失变量报错特征，命中则追加更新引导，
+// 把静默失败变为有引导的提示（依托任务日志原始输出，无需额外配置）
+// --------------------------------------------------------------------------
+
+// missingEnvHintPatterns 缺失环境变量的常见 stderr 报错特征（覆盖 Python / Shell / Node 常见形态）
+var missingEnvHintPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)\bkeyerror\b`),                                     // Python: KeyError: 'XXX'
+	regexp.MustCompile(`(?i)\benviron\[`),                                      // Python: os.environ['XXX']
+	regexp.MustCompile(`(?i): *parameter (?:null or )?not set`),                // sh: XXX: parameter not set
+	regexp.MustCompile(`(?i)\bunbound variable\b`),                             // bash: XXX: unbound variable
+	regexp.MustCompile(`(?i)environment variable\s+"?[A-Za-z_][A-Za-z0-9_]*"?\s+(?:is\s+)?(?:not set|missing|required|undefined)`), // Node/Go/通用英文描述
+	regexp.MustCompile(`(?i)\bmissing required (?:environment variable|env var|env)\b`),
+	regexp.MustCompile(`(?i)环境变量[^。\n]{0,30}(?:未设置|未配置|缺失|不能为空)`), // 中文自述脚本
+}
+
+// outputLooksLikeMissingEnv 判断任务输出是否命中缺失环境变量特征
+func outputLooksLikeMissingEnv(output string) bool {
+	if output == "" {
+		return false
+	}
+	clean := stripAnsi(output)
+	for _, re := range missingEnvHintPatterns {
+		if re.MatchString(clean) {
+			return true
+		}
+	}
+	return false
+}
+
+// appendAppEnvHint 应用任务失败通知的启发式追加；非应用任务或未命中特征时原样返回，避免噪声
+func (s *NotificationService) appendAppEnvHint(taskID, output, text string) string {
+	if taskID == "" || output == "" {
+		return text
+	}
+	// 仅应用主任务与其受控子任务生效
+	var task models.Task
+	if err := database.DB.Select("type", "source_id").Where("id = ?", taskID).First(&task).Error; err != nil {
+		return text
+	}
+	isAppRelated := false
+	switch task.Type {
+	case constant.TaskTypeApp:
+		isAppRelated = true
+	case constant.TaskTypeNormal:
+		if task.SourceID != "" {
+			var master models.Task
+			if err := database.DB.Select("id").Where("id = ? AND type = ?", task.SourceID, constant.TaskTypeApp).First(&master).Error; err == nil {
+				isAppRelated = true
+			}
+		}
+	}
+	if !isAppRelated || !outputLooksLikeMissingEnv(output) {
+		return text
+	}
+	return text + "\n💡 检测到输出中存在疑似缺少环境变量的报错：可能是上游新增了必填变量，请到调度实体「详情与更新」检查应用更新"
 }

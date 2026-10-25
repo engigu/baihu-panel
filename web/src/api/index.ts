@@ -636,6 +636,13 @@ export interface AppItem {
   task_count: number
   created_at: string
   updated_at: string
+  previous?: AppPreviousInfo
+}
+
+// 回滚快照展示信息（design/app-update-proposal.md §8，单快照回滚）
+export interface AppPreviousInfo {
+  version: string
+  updated_at?: string
 }
 
 export interface AppEnvItemSchema {

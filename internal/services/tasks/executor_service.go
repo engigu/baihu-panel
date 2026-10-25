@@ -514,6 +514,25 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 		}
 	}
 
+	// 调和漂移闸门（P2，design/app-update-proposal.md §6）：仅应用主任务定时调和路径，
+	// 代码同步前检测上游清单破坏性变更；新必填变量缺值时拦截本次调和，
+	// 代码停旧版本、旧契约继续生效，子任务零运行时失败（拦截说明写入本次执行日志）
+	if req.AppMaster && req.Type == executor.TaskTypeCron && task.Type == constant.TaskTypeApp {
+		if appCfg := task.GetAppConfig(); appCfg != nil {
+			if gate := app.DefaultAppService.EvaluateReconcileGate(task, appCfg); gate != nil && gate.Blocked {
+				fmt.Fprintf(stdout, "[漂移闸门] %s\n", gate.Message)
+				now := time.Now()
+				return &executor.Result{
+					Status:    constant.TaskStatusSuccess,
+					Duration:  0,
+					ExitCode:  0,
+					StartTime: now,
+					EndTime:   now,
+				}, nil
+			}
+		}
+	}
+
 	// 重新加载最新的环境变量，满足即时生效的需求
 	es.refreshExecutionRequestEnvs(req, task)
 
@@ -1455,6 +1474,13 @@ func BuildAppCommand(task *models.Task) (string, string, string) {
 		"app",
 		"apply",
 		tempYmlPath,
+		// 调和路径专用：调度器已持有 per-app 锁，CLI 子进程跳过加锁，避免父子进程对同一文件锁互等自锁
+		"--no-lock",
+	}
+	// 调和落库保留已保存更新源：临时快照是本地 yml，若不回传原始 manifest_path，
+	// URL 更新源会在首次调和后被临时路径覆盖丢失（更新检测退化为 no_source）
+	if appCfg.ManifestPath != "" {
+		args = append(args, "--source-path", appCfg.ManifestPath)
 	}
 
 	quotedArgs := make([]string, len(args))

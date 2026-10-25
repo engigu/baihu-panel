@@ -19,25 +19,32 @@ import (
 
 // AppDTO 已安装应用的综合数据传输实体（从 baihu_tasks 表中的 App 主任务记录及其 Config 动态反序列化）
 type AppDTO struct {
-	ID              string           `json:"id"`
-	ManifestID      string           `json:"manifest_id,omitempty"`
-	Name            string           `json:"name"`
-	Version         string           `json:"version,omitempty"`
-	Author          string           `json:"author,omitempty"`
-	Category        string           `json:"category,omitempty"`
-	LastCommit      string           `json:"last_commit,omitempty"`
-	Description     string           `json:"description,omitempty"`
-	Icon            string           `json:"icon,omitempty"`
-	Homepage        string           `json:"homepage,omitempty"`
-	CurrentScenario string           `json:"current_scenario,omitempty"`
-	Status          string           `json:"status,omitempty"`
-	ManifestPath    string                   `json:"manifest_path,omitempty"`
-	ManifestRaw     string                   `json:"manifest_raw,omitempty"`
+	ID              string                    `json:"id"`
+	ManifestID      string                    `json:"manifest_id,omitempty"`
+	Name            string                    `json:"name"`
+	Version         string                    `json:"version,omitempty"`
+	Author          string                    `json:"author,omitempty"`
+	Category        string                    `json:"category,omitempty"`
+	LastCommit      string                    `json:"last_commit,omitempty"`
+	Description     string                    `json:"description,omitempty"`
+	Icon            string                    `json:"icon,omitempty"`
+	Homepage        string                    `json:"homepage,omitempty"`
+	CurrentScenario string                    `json:"current_scenario,omitempty"`
+	Status          string                    `json:"status,omitempty"`
+	ManifestPath    string                    `json:"manifest_path,omitempty"`
+	ManifestRaw     string                    `json:"manifest_raw,omitempty"`
 	Template        *models.AppTemplateConfig `json:"template,omitempty"`
-	TasksCount      int                      `json:"tasks_count"`
-	ScenariosCount  int                      `json:"scenarios_count"`
-	CreatedAt       models.LocalTime         `json:"created_at"`
-	UpdatedAt       models.LocalTime         `json:"updated_at"`
+	Previous        *AppPreviousInfo          `json:"previous,omitempty"` // 回滚快照信息（指向当前版本时不返回）
+	TasksCount      int                       `json:"tasks_count"`
+	ScenariosCount  int                       `json:"scenarios_count"`
+	CreatedAt       models.LocalTime          `json:"created_at"`
+	UpdatedAt       models.LocalTime          `json:"updated_at"`
+}
+
+// AppPreviousInfo 回滚快照的对外展示信息（不含清单原文，避免列表/详情响应膨胀）
+type AppPreviousInfo struct {
+	Version   string `json:"version,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
 type AppService struct{}
@@ -71,13 +78,17 @@ func (s *AppService) ApplyApp(pathOrURL string, opts ApplyOptions) (*ApplyResult
 		}
 	}
 
-	// per-app 互斥:对已安装的同 ID 应用重放(再次部署/编辑重放)与 API 更新、调和执行互斥
-	if existingID := findInstalledMasterTaskID(manifest.ID); existingID != "" {
-		lock, lockErr := LockAppUpdate(existingID, 10*time.Minute)
-		if lockErr != nil {
-			return nil, fmt.Errorf("应用正在更新或执行中，部署请稍后再试")
+	// per-app 互斥:对已安装的同 ID 应用重放(再次部署/编辑重放)与 API 更新、调和执行互斥。
+	// SkipAppLock 仅供定时调和路径使用：调度器（ExecuteDispatcher）已持有应用锁，
+	// 而调和命令是本 CLI 的子进程，对同一文件锁重复加锁会父子互等造成自锁死锁
+	if !opts.SkipAppLock {
+		if existingID := findInstalledMasterTaskID(manifest.ID); existingID != "" {
+			lock, lockErr := LockAppUpdate(existingID, 10*time.Minute)
+			if lockErr != nil {
+				return nil, fmt.Errorf("应用正在更新或执行中，部署请稍后再试")
+			}
+			defer ReleaseAppLock(lock)
 		}
-		defer ReleaseAppLock(lock)
 	}
 
 	return DefaultApplier.Apply(manifest, rawData, opts)
@@ -158,6 +169,14 @@ func (s *AppService) buildAppDTOFromTask(task *models.Task, taskCount int) *AppD
 		}
 		if appCfg.Template != nil {
 			dto.Template = appCfg.Template
+		}
+		// 快照指向当前版本（版本与清单原文均一致）时回滚为无意义操作，不对外暴露
+		if appCfg.Previous != nil && appCfg.Previous.ManifestRaw != "" &&
+			(appCfg.Previous.Version != appCfg.Version || appCfg.Previous.ManifestRaw != appCfg.ManifestRaw) {
+			dto.Previous = &AppPreviousInfo{
+				Version:   appCfg.Previous.Version,
+				UpdatedAt: appCfg.Previous.UpdatedAt,
+			}
 		}
 	}
 
@@ -440,7 +459,6 @@ func (s *AppService) RemoveAppWithOptions(taskID string, opts AppRemoveOptions, 
 	return deletedTaskIDs, nil
 }
 
-
 // SwitchScenario 切换应用场景预设
 func (s *AppService) SwitchScenario(appID string, scenarioID string, out io.Writer) error {
 	appDTO, err := s.GetApp(appID)
@@ -619,4 +637,3 @@ func (s *AppService) ApplyMarketplaceApp(appID string, opts ApplyOptions) (*Appl
 	opts.ManifestPath = fmt.Sprintf("marketplace:%s", manifest.ID)
 	return DefaultApplier.Apply(manifest, rawYAMLBytes, opts)
 }
-

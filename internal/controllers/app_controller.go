@@ -564,6 +564,99 @@ func (ac *AppController) UpdateApp(c *gin.Context) {
 		return
 	}
 
+	// 更新可能调整受控子任务编排（新增任务/保留定制后的 Cron），同步调度器注册状态
+	ac.syncAppCronTasks(id)
+
+	utils.Success(c, gin.H{"result": res, "log": buf.String()})
+}
+
+// RollbackApp 一键回滚到上一成功版本（更新前快照重跑 Apply 流水线，支持 SSE 实时日志流）
+func (ac *AppController) RollbackApp(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		utils.BadRequest(c, "应用 ID 不能为空")
+		return
+	}
+
+	var req UpdateAppRequest
+	if c.Request.Body != nil && c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			utils.BadRequest(c, "参数解析失败: "+err.Error())
+			return
+		}
+	}
+
+	isStream := c.Query("stream") == "true" || strings.Contains(c.GetHeader("Accept"), "text/event-stream")
+
+	// 演示模式拦截
+	if constant.DemoMode {
+		if isStream {
+			c.Header("Content-Type", "text/event-stream; charset=utf-8")
+			c.Header("Cache-Control", "no-cache")
+			c.Header("Connection", "keep-alive")
+			c.Header("X-Accel-Buffering", "no")
+			c.Writer.Flush()
+			fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", "演示模式下禁止回滚应用")
+			c.Writer.Flush()
+			return
+		}
+		utils.BadRequest(c, "演示模式下禁止回滚应用")
+		return
+	}
+
+	var buf bytes.Buffer
+	var multiLogWriter io.Writer = &buf
+
+	if isStream {
+		c.Header("Content-Type", "text/event-stream; charset=utf-8")
+		c.Header("Cache-Control", "no-cache")
+		c.Header("Connection", "keep-alive")
+		c.Header("X-Accel-Buffering", "no")
+		c.Writer.Flush()
+
+		multiLogWriter = &streamLogWriter{
+			writer: c.Writer,
+			buf:    &buf,
+			isSSE:  true,
+		}
+	}
+
+	res, err := ac.appService.RollbackApp(id, app.AppUpdateOptions{
+		EnvValues:  req.EnvValues,
+		SkipSetup:  req.SkipSetup,
+		ForceSetup: req.ForceSetup,
+	}, multiLogWriter)
+
+	if isStream {
+		if err != nil {
+			var conflict *app.AppUpdateConflictError
+			if errors.As(err, &conflict) {
+				obj, _ := json.Marshal(gin.H{"error": err.Error(), "missing_envs": conflict.MissingEnvs})
+				fmt.Fprintf(c.Writer, "event: conflict\ndata: %s\n\n", string(obj))
+			} else {
+				errObj, _ := json.Marshal(gin.H{"error": err.Error()})
+				fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", string(errObj))
+			}
+		} else {
+			resObj, _ := json.Marshal(gin.H{"result": res})
+			fmt.Fprintf(c.Writer, "event: done\ndata: %s\n\n", string(resObj))
+		}
+		c.Writer.Flush()
+		return
+	}
+
+	if err != nil {
+		var conflict *app.AppUpdateConflictError
+		if errors.As(err, &conflict) {
+			utils.ErrorData(c, 409, err.Error(), gin.H{"missing_envs": conflict.MissingEnvs, "log": buf.String()})
+			return
+		}
+		utils.ErrorData(c, 400, "回滚应用失败: "+err.Error(), gin.H{"log": buf.String()})
+		return
+	}
+
+	ac.syncAppCronTasks(id)
+
 	utils.Success(c, gin.H{"result": res, "log": buf.String()})
 }
 

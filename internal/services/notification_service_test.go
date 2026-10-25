@@ -307,3 +307,31 @@ func TestExtractCustomVars_OverwriteAndPrecedence(t *testing.T) {
 	}
 }
 
+
+func TestOutputLooksLikeMissingEnv(t *testing.T) {
+	hits := []string{
+		"Traceback (most recent call last):\nKeyError: 'API_KEY'",
+		"config = os.environ['JWT_SECRET']",
+		"sh: 1: BARK_URL: parameter not set",
+		"bash: line 1: WS_KEY: unbound variable",
+		"Error: environment variable TG_TOKEN is not set",
+		"缺少配置：环境变量 XX_TOKEN 不能为空",
+	}
+	for _, out := range hits {
+		if !outputLooksLikeMissingEnv(out) {
+			t.Errorf("应命中缺失变量特征但未命中: %q", out)
+		}
+	}
+
+	misses := []string{
+		"",
+		"任务执行完成，共处理 100 条记录",
+		"Connected to database successfully",
+		"2026-10-24 12:00:00 INFO job done",
+	}
+	for _, out := range misses {
+		if outputLooksLikeMissingEnv(out) {
+			t.Errorf("不应命中缺失变量特征但命中: %q", out)
+		}
+	}
+}

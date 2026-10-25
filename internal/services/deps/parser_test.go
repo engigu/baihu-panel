@@ -2,6 +2,8 @@ package deps
 
 import (
 	"testing"
+
+	"github.com/engigu/baihu-panel/internal/models"
 )
 
 func TestParseRequirements(t *testing.T) {
@@ -70,18 +72,26 @@ func TestParsePackageJson(t *testing.T) {
 		{"typescript", "5.0.4", "devDependencies"},
 	}
 
-	for i, exp := range expected {
-		if deps[i].Name != exp.name {
-			t.Errorf("expected name %s, got %s", exp.name, deps[i].Name)
+	// ParsePackageJson 遍历 map 收集依赖，返回顺序不保证稳定，按名字查找断言
+	byName := make(map[string]models.Dependency, len(deps))
+	for _, d := range deps {
+		byName[d.Name] = d
+	}
+
+	for _, exp := range expected {
+		got, ok := byName[exp.name]
+		if !ok {
+			t.Errorf("expected dependency %q, got none", exp.name)
+			continue
 		}
-		if deps[i].Version != exp.version {
-			t.Errorf("expected version %s, got %s", exp.version, deps[i].Version)
+		if got.Version != exp.version {
+			t.Errorf("expected version %s for %s, got %s", exp.version, exp.name, got.Version)
 		}
-		if deps[i].Remark != exp.remark {
-			t.Errorf("expected remark %s, got %s", exp.remark, deps[i].Remark)
+		if got.Remark != exp.remark {
+			t.Errorf("expected remark %s for %s, got %s", exp.remark, exp.name, got.Remark)
 		}
-		if deps[i].Language != "node" {
-			t.Errorf("expected language node, got %s", deps[i].Language)
+		if got.Language != "node" {
+			t.Errorf("expected language node for %s, got %s", exp.name, got.Language)
 		}
 	}
 }

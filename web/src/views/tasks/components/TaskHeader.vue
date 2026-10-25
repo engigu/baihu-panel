@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Search, Tag, ChevronDown, RefreshCw, Plus, GitBranch, Terminal, Package,
-  Pin, X, Server, Loader2, Layers, FolderSync
+  Pin, X, Server, Loader2, Layers, FolderSync, ArrowUpCircle, Square
 } from 'lucide-vue-next'
 import { TASK_TYPE, TASK_TYPE_CONFIG } from '@/constants'
 import type { TaskView } from '../Tasks.vue'
@@ -28,6 +28,9 @@ const props = defineProps<{
   filterAgentName: string
   taskViews: TaskView[]
   loading: boolean
+  updatableCount?: number
+  updatingAll?: boolean
+  updateAllProgress?: { done: number; total: number } | null
 }>()
 
 const emit = defineEmits<{
@@ -45,6 +48,8 @@ const emit = defineEmits<{
   'toggleDefaultView': [index: number]
   'deleteView': [index: number]
   'saveView': [name: string]
+  'updateAll': []
+  'cancelUpdateAll': []
 }>()
 
 const router = useRouter()
@@ -173,6 +178,35 @@ function blurActive() {
           <span>{{ filterAgentName }}</span>
           <X class="h-3.5 w-3.5 cursor-pointer hover:text-destructive" @click="$emit('clearAgentFilter')" />
         </div>
+
+        <!-- 一键更新全部（P2 update-all：仅检测到可更新应用时显示，前端串行循环） -->
+        <Button
+          v-if="(updatableCount || 0) > 0"
+          variant="outline"
+          size="sm"
+          class="h-9 shrink-0 gap-1 border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+          :disabled="updatingAll || loading"
+          :title="`串行更新 ${updatableCount} 个可更新应用；被 409 安全阀拦截的应用将跳过`"
+          @click="$emit('updateAll')"
+        >
+          <Loader2 v-if="updatingAll" class="h-4 w-4 animate-spin" />
+          <ArrowUpCircle v-else class="h-4 w-4" />
+          <span class="hidden sm:inline">
+            {{ updatingAll && updateAllProgress ? `更新中 ${updateAllProgress.done}/${updateAllProgress.total}` : `全部更新 (${updatableCount})` }}
+          </span>
+        </Button>
+
+        <!-- 停止批量更新：剩余应用不再排队；当前应用的服务端更新会继续完成 -->
+        <Button
+          v-if="updatingAll"
+          variant="outline"
+          size="icon"
+          class="h-9 w-9 shrink-0 border-red-500/40 text-red-500 hover:bg-red-500/10"
+          title="停止批量更新（当前应用的更新会继续在后台完成）"
+          @click="$emit('cancelUpdateAll')"
+        >
+          <Square class="h-3.5 w-3.5" />
+        </Button>
 
         <!-- 刷新按钮 -->
         <Button variant="outline" size="icon" class="h-9 w-9 shrink-0" :disabled="loading" title="刷新" @click="$emit('refresh')">

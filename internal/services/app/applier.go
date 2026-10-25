@@ -23,28 +23,35 @@ type LogFunc func(format string, args ...interface{})
 
 // ApplyOptions 应用执行选项
 type ApplyOptions struct {
-	ManifestPath  string            // Manifest 来源路径或 URL
-	ScenarioID    string            // 指定激活的场景 ID（留空默认选择 default 场景）
-	EnvValues     map[string]string // 用户指定的环境变量覆盖值
-	SkipSetup     bool              // 是否跳过依赖安装
-	SkipSync      bool              // 是否跳过代码源拉取
-	ForceSetup    bool              // 强制执行依赖安装与编译（跳过 check 探活）
-	OverwriteEnv  bool              // 是否覆盖已有环境变量（默认 false 不覆盖）
-	OverwriteTask *bool             // 是否覆盖和插入任务（默认 true 覆盖）
-	Schedule      string            // 定时规则 Cron 表达式
-	RandomRange   int               // 随机延迟范围(秒)
-	Timeout       int               // 执行超时时间(分钟)
-	RetryCount    int               // 失败重试次数
-	RetryInterval int               // 失败重试间隔(秒)
-	CleanConfig   string            // 日志清理配置
-	UnifiedConfig string            // 统一配置 JSON
-	Tag           string            // 统一绑定的分类 Tag
-	UserID        string            // 当前安装用户的 UserID
+	ManifestPath  string              // Manifest 来源路径或 URL
+	ScenarioID    string              // 指定激活的场景 ID（留空默认选择 default 场景）
+	EnvValues     map[string]string   // 用户指定的环境变量覆盖值
+	SkipSetup     bool                // 是否跳过依赖安装
+	SkipSync      bool                // 是否跳过代码源拉取
+	ForceSetup    bool                // 强制执行依赖安装与编译（跳过 check 探活）
+	OverwriteEnv  bool                // 是否覆盖已有环境变量（默认 false 不覆盖）
+	OverwriteTask *bool               // 是否覆盖和插入任务（默认 true 覆盖）
+	Schedule      string              // 定时规则 Cron 表达式
+	RandomRange   int                 // 随机延迟范围(秒)
+	Timeout       int                 // 执行超时时间(分钟)
+	RetryCount    int                 // 失败重试次数
+	RetryInterval int                 // 失败重试间隔(秒)
+	CleanConfig   string              // 日志清理配置
+	UnifiedConfig string              // 统一配置 JSON
+	Tag           string              // 统一绑定的分类 Tag
+	UserID        string              // 当前安装用户的 UserID
 	Languages     []map[string]string // 关联绑定的运行语言环境列表
-	LogWriter     io.Writer         // 执行日志输出流
+	LogWriter     io.Writer           // 执行日志输出流
 
-	BaseManifestRaw string          // 旧清单快照（定制识别基线：对比子任务当前 Cron 判定用户定制）
-	BaseScenarioID  string          // 旧清单激活场景 ID（配合 BaseManifestRaw 计算基线 Cron）
+	BaseManifestRaw string // 旧清单快照（定制识别基线：对比子任务当前 Cron 判定用户定制）
+	BaseScenarioID  string // 旧清单激活场景 ID（配合 BaseManifestRaw 计算基线 Cron）
+
+	PreviousSnapshot      *models.AppPreviousSnapshot // 更新前快照：更新编排传入，随主任务配置一并落库
+	ClearPreviousSnapshot bool                        // 回滚成功后清空快照（显式清空，优先级高于继承）
+
+	SkipAppLock bool // 跳过 per-app 文件锁：仅供调和路径（调度器已持有应用锁）经 CLI --no-lock 传入，避免父子进程重复加锁自锁
+
+	SavedManifestPath string // 调和路径专用：CLI --source-path 传入已保存更新源（URL/本地路径），落库时覆盖临时清单快照路径，避免调和运行后 URL 更新源丢失
 
 	KeepEnvValues bool // 保留用户已填环境变量值：更新路径专用，连清单级 overwrite_env 声明也一并忽略
 }
@@ -957,6 +964,13 @@ func resolveTemplateConfig(opts *ApplyOptions, unified *models.UnifiedTaskConfig
 func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, appDir string, manifestPath string, targetScenarioID string, envValues map[string]string, opts ApplyOptions, log LogFunc) (*models.Task, string, error) {
 	activeScenarioID := resolveActiveScenarioID(manifest.Scenarios, targetScenarioID)
 
+	// 调和路径以已保存更新源为准落库：调和应用的是本地临时清单快照，
+	// 若把临时快照路径写回 manifest_path，URL 更新源会在首次调和后丢失（检测退化为 no_source）
+	persistManifestPath := manifestPath
+	if opts.SavedManifestPath != "" {
+		persistManifestPath = opts.SavedManifestPath
+	}
+
 	appCfg := models.AppTaskConfig{
 		ID:              manifest.ID,
 		Name:            manifest.Name,
@@ -967,7 +981,7 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 		Description:     manifest.Description,
 		Icon:            manifest.Icon,
 		Homepage:        manifest.Homepage,
-		ManifestPath:    sanitizeManifestPath(manifestPath, manifest),
+		ManifestPath:    sanitizeManifestPath(persistManifestPath, manifest),
 		ManifestRaw:     string(rawYAML),
 		CurrentScenario: activeScenarioID,
 		Status:          constant.AppStatusInstalled,
@@ -998,6 +1012,18 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 					appCfg.BuildOpts.OverwriteTask = unified.App.BuildOpts.OverwriteTask
 				}
 			}
+			// 更新前快照：回滚成功显式清空；更新编排经 ApplyOptions 传入；
+			// 其余写路径（部署重放/编辑保存/场景切换）继承已保存快照，避免回滚能力被静默丢失
+			if opts.ClearPreviousSnapshot {
+				appCfg.Previous = nil
+			} else {
+				appCfg.Previous = opts.PreviousSnapshot
+				if appCfg.Previous == nil {
+					appCfg.Previous = unified.App.Previous
+				}
+			}
+			// 闸门挂起标记：非更新写路径继承（更新/回滚成功后由更新编排显式清除）
+			appCfg.PendingGate = unified.App.PendingGate
 		}
 	}
 
@@ -1112,4 +1138,3 @@ func (a *AppApplier) saveMasterAppTask(manifest *AppManifest, rawYAML []byte, ap
 	relation.DataRelation.SaveTags(newTask.ID, constant.RelationTypeTaskTag, appCfg.Template.Tag)
 	return &newTask, activeScenarioID, nil
 }
-
