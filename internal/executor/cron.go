@@ -94,13 +94,19 @@ func (m *CronManager) AddTask(task CronTask) error {
 	useMise := task.UseMise()
 	secrets := task.GetSecrets()
 
-	schedule := strings.TrimSpace(task.GetSchedule())
-	if schedule == "" {
+	// 校验并规整调度表达式（允许应用主任务/手动触发任务为空）
+	validRes, err := ParseAndValidateSchedule(task.GetSchedule(), true)
+	if err != nil {
+		m.logger.Errorf("[CronManager] 任务 #%s 调度表达式非法: %v", taskID, err)
+		return err
+	}
+	if validRes.IsEmpty {
 		// 空调度（如应用主任务的调和入口、手动触发型任务）不注册 Cron；
 		// 旧调度已在上方移除，此处干净跳过而非报错
 		m.logger.Infof("[CronManager] 任务 %s (#%s) 无调度配置，跳过 Cron 注册", name, taskID)
 		return nil
 	}
+	schedule := validRes.Normalized
 	entryID, err := m.cron.AddFunc(schedule, func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -220,23 +226,67 @@ func (m *CronManager) triggerNextRunEvent(taskID string, req *ExecutionRequest) 
 	}
 }
 
-// ValidateCron 校验 Cron 表达式
-func (m *CronManager) ValidateCron(expression string) error {
-	expression = strings.TrimSpace(expression)
-	if expression == "" {
-		return fmt.Errorf("cron 表达式不能为空")
-	}
+// ScheduleValidationResult 调度表达式校验与归一化结果
+type ScheduleValidationResult struct {
+	Original   string // 原始输入字符串
+	Normalized string // 归一化后的标准 6 位 Cron 表达式（或 @ 宏指令）
+	IsEmpty    bool   // 是否为空调度
+	Fields     int    // 字段位数 (5, 6 或 0)
+}
 
-	// 如果不是以 @ 开头的描述符，检查位数
-	if !strings.HasPrefix(expression, "@") {
-		fields := strings.Fields(expression)
-		if len(fields) != 6 {
-			return fmt.Errorf("cron 表达式必须为 6 位 (秒 分 时 日 月 周)")
+// ParseAndValidateSchedule 专门用于任务调度表达式的校验、5/6 位自适应与归一化
+// allowEmpty: 是否允许空调度（应用主任务/手动任务传 true，定时脚本任务传 false）
+func ParseAndValidateSchedule(schedule string, allowEmpty bool) (*ScheduleValidationResult, error) {
+	raw := strings.TrimSpace(schedule)
+	if raw == "" {
+		if allowEmpty {
+			return &ScheduleValidationResult{Original: raw, IsEmpty: true}, nil
 		}
+		return nil, fmt.Errorf("定时调度表达式不能为空")
 	}
 
-	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
-	_, err := parser.Parse(expression)
+	result := &ScheduleValidationResult{
+		Original: raw,
+		IsEmpty:  false,
+	}
+
+	// 1. 处理 @ 宏指令（如 @every 1h, @daily, @hourly）
+	if strings.HasPrefix(raw, "@") {
+		parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+		if _, err := parser.Parse(raw); err != nil {
+			return nil, fmt.Errorf("无效的调度宏指令 [%s]: %w", raw, err)
+		}
+		result.Normalized = raw
+		return result, nil
+	}
+
+	// 2. 字段位数分析与自适应补齐
+	fields := strings.Fields(raw)
+	result.Fields = len(fields)
+
+	switch len(fields) {
+	case 5:
+		// 5 位标准 Linux Cron (分 时 日 月 周) 自动在秒位补 0，规整为底层支持的 6 位秒级 Cron
+		result.Normalized = "0 " + raw
+	case 6:
+		// 6 位标准秒级 Cron 原样保留
+		result.Normalized = raw
+	default:
+		return nil, fmt.Errorf("无效的 Cron 表达式 [%s]: 仅支持 5 位 (分 时 日 月 周) 或 6 位 (秒 分 时 日 月 周)，当前为 %d 位", raw, len(fields))
+	}
+
+	// 3. 底层标准秒级解析器深度语法校验
+	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	if _, err := parser.Parse(result.Normalized); err != nil {
+		return nil, fmt.Errorf("Cron 语法校验失败 [%s]: %w", raw, err)
+	}
+
+	return result, nil
+}
+
+// ValidateCron 校验 Cron 表达式（支持 5 位 Linux Cron 与 6 位秒级 Cron 自适应）
+func (m *CronManager) ValidateCron(expression string) error {
+	_, err := ParseAndValidateSchedule(expression, false)
 	return err
 }
 

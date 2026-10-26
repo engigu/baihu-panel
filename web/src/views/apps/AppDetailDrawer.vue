@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -94,10 +94,12 @@ const cleanAppEnvs = ref(true)
 
 // 环境变量表单状态
 const envForm = ref<Record<string, string>>({})
+const iconLoadError = ref(false)
 
 watch(
   () => [props.open, props.appId],
   async ([open, id]) => {
+    iconLoadError.value = false
     if (open && id) {
       await loadAppDetail(id as string)
       loadUpdateInfo(id as string)
@@ -419,20 +421,28 @@ async function handleUninstall() {
 
 <template>
   <Dialog :open="open" @update:open="$emit('update:open', $event)">
-    <DialogContent class="!w-[640px] !max-w-[640px] max-h-[85vh] p-0 gap-0 overflow-hidden bg-background border border-border/80 shadow-2xl rounded-2xl flex flex-col focus:outline-none" @openAutoFocus.prevent @pointerDownOutside.prevent @interactOutside.prevent>
+    <DialogContent class="w-full sm:max-w-2xl lg:max-w-3xl max-h-[85vh] p-0 gap-0 overflow-hidden bg-background border border-border/80 shadow-2xl rounded-2xl flex flex-col focus:outline-none" @pointerDownOutside.prevent @interactOutside.prevent>
+      <!-- 无障碍标题与描述（始终常驻 DOM，满足 Reka UI 对 DialogContent 标题与描述的约束） -->
+      <DialogTitle class="sr-only">
+        {{ appData?.app?.name || '应用详情与更新' }}
+      </DialogTitle>
+      <DialogDescription class="sr-only">
+        {{ appData?.app?.description || '声明式应用运行配置、受控任务编排与一键更新' }}
+      </DialogDescription>
+
       <!-- 头部 -->
       <div class="px-5 py-4 border-b border-border/60 bg-muted/20 flex items-center justify-between shrink-0">
         <div v-if="appData" class="flex items-center gap-3 min-w-0 pr-6">
           <div class="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 overflow-hidden shadow-xs">
-            <img v-if="appData.app.icon" :src="appData.app.icon" class="w-full h-full object-cover" :alt="appData.app.name" />
+            <img v-if="appData.app.icon && !iconLoadError" :src="appData.app.icon" class="w-full h-full object-cover" :alt="appData.app.name" @error="iconLoadError = true" />
             <Package v-else class="w-5 h-5 text-primary" />
           </div>
 
           <div class="space-y-0.5 min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
-              <DialogTitle class="text-base font-bold text-foreground truncate">
+              <span class="text-base font-bold text-foreground truncate">
                 {{ appData.app.name }}
-              </DialogTitle>
+              </span>
               <Badge variant="secondary" class="font-mono text-[10px] px-1.5 py-0 shrink-0">
                 v{{ appData.app.version }}
               </Badge>
@@ -463,9 +473,9 @@ async function handleUninstall() {
         </div>
 
         <!-- 顶部场景总控卡片 -->
-        <div class="p-3.5 rounded-xl border border-primary/20 bg-primary/5 flex flex-col gap-2.5">
+        <div class="p-3.5 rounded-xl border border-border/70 bg-muted/30 flex flex-col gap-2.5">
           <div class="flex items-center justify-between gap-3">
-            <div class="flex items-center gap-2.5 min-w-0">
+            <div class="flex items-center gap-2 min-w-0">
               <div class="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
                 <Sparkles class="w-3.5 h-3.5" />
               </div>
@@ -475,16 +485,16 @@ async function handleUninstall() {
             </div>
 
             <!-- 场景切换器 (若有多个场景) -->
-            <div v-if="appData.manifest?.scenarios && appData.manifest.scenarios.length > 1" class="w-48 shrink-0">
+            <div v-if="appData.manifest?.scenarios && appData.manifest.scenarios.length > 1" class="flex-1 min-w-[160px] max-w-[260px] shrink-0">
               <Select
                 :model-value="appData.app.current_scenario"
                 :disabled="switchingScenario || demoMode"
                 @update:model-value="handleSwitchScenario($event)"
               >
-                <SelectTrigger class="h-8 text-xs font-semibold bg-background border-primary/30 text-primary shadow-xs">
-                  <SelectValue placeholder="切换场景..." />
+                <SelectTrigger class="h-8 text-xs font-semibold bg-background/80 border-border/80 text-foreground shadow-xs w-full min-w-0 truncate">
+                  <SelectValue placeholder="切换场景..." class="truncate" />
                 </SelectTrigger>
-                <SelectContent align="end" class="w-64 text-xs">
+                <SelectContent align="end" class="w-72 max-w-sm text-xs">
                   <SelectItem
                     v-for="sc in appData.manifest.scenarios"
                     :key="sc.id"
@@ -502,7 +512,7 @@ async function handleUninstall() {
           </div>
 
           <!-- 场景说明 -->
-          <div class="text-xs bg-background/60 p-2.5 rounded-lg border border-primary/10 flex flex-col gap-0.5">
+          <div class="text-xs bg-background/60 p-2.5 rounded-lg border border-border/40 flex flex-col gap-0.5">
             <span class="font-bold text-primary text-xs truncate">
               {{ appData.manifest?.scenarios?.find(s => s.id === appData?.app.current_scenario)?.name || appData.app.current_scenario || '默认场景' }}
             </span>

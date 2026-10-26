@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"text/tabwriter"
 
+	"github.com/engigu/baihu-panel/cmd/clibase"
 	"github.com/engigu/baihu-panel/internal/services/app"
 )
 
@@ -225,10 +225,8 @@ func runList(args []string) {
 		}
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	if showUpdates {
-		fmt.Fprintln(w, "应用标识 (ID)\t应用名称\t当前版本\t可更新至\t更新原因\t来源")
-		fmt.Fprintln(w, "-------------\t--------\t--------\t---------\t--------\t----")
+		table := clibase.NewTable("应用标识 (ID)", "应用名称", "当前版本", "可更新至", "更新原因", "来源")
 		for _, a := range apps {
 			info, ok := updates[a.ID]
 			if !ok {
@@ -238,18 +236,16 @@ func runList(args []string) {
 			if info.Reason == "manifest_changed" {
 				reason = "定义变更"
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-				a.ID, a.Name, info.InstalledVersion, info.LatestVersion, reason, info.UpdateSource)
+			table.AddRow(a.ID, a.Name, info.InstalledVersion, info.LatestVersion, reason, info.UpdateSource)
 		}
+		table.Render()
 	} else {
-		fmt.Fprintln(w, "应用标识 (ID)\t应用名称\t版本\t分类\t生效场景\t安装时间")
-		fmt.Fprintln(w, "-------------\t--------\t----\t----\t--------\t--------")
+		table := clibase.NewTable("应用标识 (ID)", "应用名称", "版本", "分类", "生效场景", "安装时间")
 		for _, a := range apps {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-				a.ID, a.Name, a.Version, a.Category, a.CurrentScenario, a.CreatedAt.Time().Format("2006-01-02 15:04"))
+			table.AddRow(a.ID, a.Name, a.Version, a.Category, a.CurrentScenario, a.CreatedAt.Time().Format("2006-01-02 15:04"))
 		}
+		table.Render()
 	}
-	w.Flush()
 }
 
 func runInfo(args []string) {
@@ -367,9 +363,7 @@ func runCheckUpdates(args []string) {
 	}
 
 	updatable := 0
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "应用标识 (ID)\t应用名称\t当前版本\t最新版本\t状态\t来源")
-	fmt.Fprintln(w, "-------------\t--------\t--------\t---------\t----\t----")
+	table := clibase.NewTable("应用标识 (ID)", "应用名称", "当前版本", "最新版本", "状态", "来源")
 	for _, info := range infos {
 		status := "已是最新"
 		switch {
@@ -386,10 +380,9 @@ func runCheckUpdates(args []string) {
 		case info.Reason == "no_source":
 			status = "无更新源"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-			info.TaskID, info.AppName, info.InstalledVersion, info.LatestVersion, status, info.UpdateSource)
+		table.AddRow(info.TaskID, info.AppName, info.InstalledVersion, info.LatestVersion, status, info.UpdateSource)
 	}
-	w.Flush()
+	table.Render()
 
 	if updatable == 0 {
 		fmt.Println("\n所有已安装应用均为最新版本。")

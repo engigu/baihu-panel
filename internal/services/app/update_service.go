@@ -790,19 +790,17 @@ func (s *AppService) RollbackApp(taskID string, opts AppUpdateOptions, out io.Wr
 	return res, nil
 }
 
-// loadAppTask 按 taskID（兼容 manifestID）加载应用主任务及其 AppTaskConfig
+// loadAppTask 严格按主应用 TaskID 加载应用主任务及其 AppTaskConfig
 func loadAppTask(taskID string) (*models.Task, *models.AppTaskConfig, error) {
-	var masterTask models.Task
-	if err := database.DB.Where("id = ? AND type = ?", taskID, constant.TaskTypeApp).First(&masterTask).Error; err != nil {
-		if err2 := database.DB.Where("source_id = ? AND type = ?", "app:"+taskID, constant.TaskTypeApp).First(&masterTask).Error; err2 != nil {
-			return nil, nil, fmt.Errorf("未找到应用记录: %s", taskID)
-		}
+	masterTask, err := GetMasterTask(taskID)
+	if err != nil {
+		return nil, nil, err
 	}
 	appCfg := masterTask.GetAppConfig()
 	if appCfg == nil || appCfg.ID == "" {
 		return nil, nil, fmt.Errorf("应用缺少清单配置，无法执行该操作")
 	}
-	return &masterTask, appCfg, nil
+	return masterTask, appCfg, nil
 }
 
 // mergeEnvValues 合并已保存环境变量值与补值（409 重放），补值优先且跳过空串
@@ -914,12 +912,16 @@ func (s *AppService) checkRequiredEnvs(newManifest *AppManifest, appCfg *models.
 	// 与执行注入逻辑对齐：禁用变量在注入时会被跳过，不能算作有可用值，否则安全阀放行后任务仍拿不到值
 	existingEnvNames := make(map[string]bool)
 	var dbEnvs []models.EnvironmentVariable
-	database.DB.Select("name").
+	// 1. SQL 层标准粗筛（ANSI SQL 兼容，不依赖各数据库方言内置的 TRIM 特殊行为）
+	database.DB.Select("name", "value").
 		Where("enabled IS NULL OR enabled = ?", true).
-		Where("TRIM(COALESCE(value, '')) <> ''").
+		Where("value IS NOT NULL AND value <> ''").
 		Find(&dbEnvs)
+	// 2. Go 应用层严密清洗（统一消除 \t \n \r 空格全量字符集差异）
 	for _, e := range dbEnvs {
-		existingEnvNames[e.Name] = true
+		if strings.TrimSpace(string(e.Value)) != "" {
+			existingEnvNames[e.Name] = true
+		}
 	}
 
 	var missing []MissingEnvItem

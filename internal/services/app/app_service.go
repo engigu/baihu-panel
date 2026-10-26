@@ -95,34 +95,61 @@ func (s *AppService) ApplyApp(pathOrURL string, opts ApplyOptions) (*ApplyResult
 	return DefaultApplier.Apply(manifest, rawData, opts)
 }
 
-// findInstalledMasterTaskID 按 manifest ID 查找已安装应用的主任务 ID(未安装返回空串)
+// GetMasterTask 严格根据 TaskID 查询声明式应用主实体（严禁依赖 source_id 模糊反查）
+func GetMasterTask(taskID string) (*models.Task, error) {
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return nil, fmt.Errorf("应用 TaskID 不能为空")
+	}
+	var task models.Task
+	if err := database.DB.Where("id = ? AND type = ?", taskID, constant.TaskTypeApp).Limit(1).First(&task).Error; err != nil {
+		return nil, fmt.Errorf("未找到声明式应用实体 (#%s): %w", taskID, err)
+	}
+	return &task, nil
+}
+
+// GetAppChildTasks 严格按照主应用 ID 级联查询所有受控子任务
+func GetAppChildTasks(masterTaskID string) ([]models.Task, error) {
+	masterTaskID = strings.TrimSpace(masterTaskID)
+	if masterTaskID == "" {
+		return nil, fmt.Errorf("主应用 TaskID 不能为空")
+	}
+	var childTasks []models.Task
+	err := database.DB.Where("source_id = ? AND type = ?", masterTaskID, constant.TaskTypeNormal).
+		Order("created_at asc").
+		Find(&childTasks).Error
+	return childTasks, err
+}
+
+// findInstalledMasterTaskID 按 manifest ID 查找已安装应用的主任务 ID(未安装返回空串，统一通过 unified_config.app.id 匹配)
 func findInstalledMasterTaskID(manifestID string) string {
 	manifestID = strings.TrimSpace(manifestID)
 	if manifestID == "" {
 		return ""
 	}
-	var task models.Task
-	if err := database.DB.Where("source_id = ? AND type = ?", "app:"+manifestID, constant.TaskTypeApp).Limit(1).First(&task).Error; err != nil {
+	var appTasks []models.Task
+	if err := database.DB.Where("type = ?", constant.TaskTypeApp).Find(&appTasks).Error; err != nil {
 		return ""
 	}
-	return task.ID
+	for _, t := range appTasks {
+		if strings.EqualFold(t.GetManifestID(), manifestID) {
+			return t.ID
+		}
+	}
+	return ""
 }
 
-// GetApp 从 baihu_tasks 表中读取 type = 'app' 的主任务记录（id 兼容 TaskID 与 Manifest ID）
+// GetApp 从 baihu_tasks 表中读取 type = 'app' 的主任务记录（严格按主应用 TaskID 检索）
 func (s *AppService) GetApp(id string) (*AppDTO, error) {
-	var task models.Task
-	res := database.DB.Where("id = ? AND type = ?", id, constant.TaskTypeApp).Limit(1).Find(&task)
-	if res.Error != nil || res.RowsAffected == 0 {
-		res = database.DB.Where("source_id = ? AND type = ?", "app:"+id, constant.TaskTypeApp).Limit(1).Find(&task)
-		if res.Error != nil || res.RowsAffected == 0 {
-			return nil, fmt.Errorf("未找到应用: %s", id)
-		}
+	task, err := GetMasterTask(id)
+	if err != nil {
+		return nil, err
 	}
 
 	var childCount int64
 	database.DB.Model(&models.Task{}).Where("source_id = ? AND type = ?", task.ID, constant.TaskTypeNormal).Count(&childCount)
 
-	return s.buildAppDTOFromTask(&task, int(childCount)), nil
+	return s.buildAppDTOFromTask(task, int(childCount)), nil
 }
 
 // ListApps 直接从 baihu_tasks 表中查询 type = 'app' 的所有主应用任务记录
@@ -452,16 +479,14 @@ func (s *AppService) RemoveAppWithOptions(taskID string, opts AppRemoveOptions, 
 
 	log(">> 正在卸载应用 [%s]...", taskID)
 
-	// 1. 使用 taskID 查找主应用任务实体（同时兼容传入 manifestID 的 CLI 场景）
-	var masterTask models.Task
-	if err := database.DB.Where("id = ? AND type = ?", taskID, constant.TaskTypeApp).First(&masterTask).Error; err != nil {
-		if err2 := database.DB.Where("source_id = ? AND type = ?", "app:"+taskID, constant.TaskTypeApp).First(&masterTask).Error; err2 != nil {
-			return nil, fmt.Errorf("未找到应用记录: %s", taskID)
-		}
+	// 1. 严格使用 taskID 检索主应用任务实体
+	masterTask, err := GetMasterTask(taskID)
+	if err != nil {
+		return nil, err
 	}
 
 	// 2. 调用公共逻辑执行清理
-	deletedTaskIDs, err := CleanAppTaskAndData(&masterTask, opts, out)
+	deletedTaskIDs, err := CleanAppTaskAndData(masterTask, opts, out)
 	if err != nil {
 		return nil, err
 	}

@@ -8,9 +8,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/engigu/baihu-panel/internal/constant"
-	"github.com/engigu/baihu-panel/internal/database"
-	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/services/app"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -194,18 +191,14 @@ func handleGetInstalledApp(ctx context.Context, deps *Deps, req mcp.CallToolRequ
 	}
 
 	appDTO, err := deps.AppService.GetApp(appID)
-	if err != nil {
-		var masterTask models.Task
-		if dbErr := database.DB.Where("source_id = ? AND type = ?", "app:"+appID, constant.TaskTypeApp).First(&masterTask).Error; dbErr == nil {
-			appDTO, err = deps.AppService.GetApp(masterTask.ID)
-		}
-	}
 	if err != nil || appDTO == nil {
 		return mcp.NewToolResultError(fmt.Sprintf("未找到已安装应用: %s", appID)), nil
 	}
 
-	var childTasks []models.Task
-	database.DB.Where("source_id = ? AND type = ?", appDTO.ID, constant.TaskTypeNormal).Order("created_at asc").Find(&childTasks)
+	childTasks, err := app.GetAppChildTasks(appDTO.ID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("查询受控子任务失败: %v", err)), nil
+	}
 
 	resData := map[string]interface{}{
 		"app":         appDTO,
@@ -302,16 +295,14 @@ func handleSwitchAppScenario(ctx context.Context, deps *Deps, req mcp.CallToolRe
 		return mcp.NewToolResultError("app_id 和 scenario_id 均不能为空"), nil
 	}
 
-	targetTaskID := appID
-	var masterTask models.Task
-	if dbErr := database.DB.Where("id = ? AND type = ?", appID, constant.TaskTypeApp).First(&masterTask).Error; dbErr != nil {
-		if dbErr2 := database.DB.Where("source_id = ? AND type = ?", "app:"+appID, constant.TaskTypeApp).First(&masterTask).Error; dbErr2 == nil {
-			targetTaskID = masterTask.ID
-		}
+	masterTask, err := app.GetMasterTask(appID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("未找到声明式应用: %s", appID)), nil
 	}
+	targetTaskID := masterTask.ID
 
 	var buf bytes.Buffer
-	err := deps.AppService.SwitchScenario(targetTaskID, scenarioID, &buf)
+	err = deps.AppService.SwitchScenario(targetTaskID, scenarioID, &buf)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("切换场景失败: %v\n执行日志:\n%s", err, buf.String())), nil
 	}

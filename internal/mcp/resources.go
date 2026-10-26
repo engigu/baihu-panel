@@ -12,6 +12,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/models/vo"
+	"github.com/engigu/baihu-panel/internal/services/app"
 	"github.com/engigu/baihu-panel/internal/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -127,18 +128,14 @@ func registerResources(s *server.MCPServer, deps *Deps) {
 			return nil, fmt.Errorf("AppService 未初始化")
 		}
 		appDTO, err := deps.AppService.GetApp(appID)
-		if err != nil {
-			var masterTask models.Task
-			if dbErr := database.DB.Where("source_id = ? AND type = ?", "app:"+appID, constant.TaskTypeApp).First(&masterTask).Error; dbErr == nil {
-				appDTO, err = deps.AppService.GetApp(masterTask.ID)
-			}
-		}
 		if err != nil || appDTO == nil {
 			return nil, fmt.Errorf("未找到应用: %s", appID)
 		}
 
-		var childTasks []models.Task
-		database.DB.Where("source_id = ? AND type = ?", appDTO.ID, constant.TaskTypeNormal).Order("created_at asc").Find(&childTasks)
+		childTasks, err := app.GetAppChildTasks(appDTO.ID)
+		if err != nil {
+			return nil, fmt.Errorf("查询受控子任务失败: %w", err)
+		}
 
 		resData := map[string]interface{}{
 			"app":         appDTO,

@@ -492,7 +492,7 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 	req.WorkDir = es.ResolvePath(req.WorkDir)
 
 	task := es.taskService.GetTaskByID(taskID)
-	// 系统任务（无 taskID）直接本地执行
+	// 场景 A：系统底层任务（无 taskID）直接本地原生执行
 	if task == nil {
 		return executor.Execute(ctx, executor.Request{
 			Command:     req.Command,
@@ -505,45 +505,64 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 		}, stdout, stderr)
 	}
 
-	// per-app 互斥：应用主任务的调和/手动执行与 API 更新流程互斥，更新进行中则跳过本次执行
-	if req.AppMaster {
-		if lock, ok := app.TryLockAppRun(taskID); ok {
-			defer app.ReleaseAppLock(lock)
-		} else {
-			return nil, fmt.Errorf("应用正在更新或另一次执行中，本次执行已跳过 (task: %s)", taskID)
-		}
-	}
-
-	// 调和漂移闸门（P2，design/app-update-proposal.md §6）：仅应用主任务定时调和路径，
-	// 代码同步前检测上游清单破坏性变更；新必填变量缺值时拦截本次调和，
-	// 代码停旧版本、旧契约继续生效，子任务零运行时失败（拦截说明写入本次执行日志）
-	if req.AppMaster && req.Type == executor.TaskTypeCron && task.Type == constant.TaskTypeApp {
-		if appCfg := task.GetAppConfig(); appCfg != nil {
-			if gate := app.DefaultAppService.EvaluateReconcileGate(task, appCfg); gate != nil && gate.Blocked {
-				fmt.Fprintf(stdout, "[漂移闸门] %s\n", gate.Message)
-				now := time.Now()
-				return &executor.Result{
-					Status:    constant.TaskStatusSuccess,
-					Duration:  0,
-					ExitCode:  0,
-					StartTime: now,
-					EndTime:   now,
-				}, nil
-			}
-		}
-	}
-
 	// 重新加载最新的环境变量，满足即时生效的需求
 	es.refreshExecutionRequestEnvs(req, task)
 
 	// 在控制台打印最终执行的脱敏命令
 	logger.Infof("[Executor] 任务最终执行命令: %s", req.MaskedCommand)
 
-	// 组合指令逻辑已移至 executor.ExecuteWithHooks 中，此处不再处理
-	// 以避免指令被重复组合。
+	switch task.Type {
+	case constant.TaskTypeApp:
+		// 场景 B：声明式应用主任务（强制本地执行，严禁路由至远程 Agent）
+		if task.AgentID != nil && *task.AgentID != "" {
+			logger.Warnf("[Executor] 声明式应用主任务 #%s 错误关联了 AgentID %s，已强制忽略并走本机流水线", taskID, *task.AgentID)
+		}
 
-	// 特殊处理 Agent 同步任务
-	if task.Type == constant.TaskTypeAgentSyncScript {
+		// per-app 互斥：应用主任务的调和/手动执行与 API 更新流程互斥，更新进行中则跳过本次执行
+		lock, ok := app.TryLockAppRun(taskID)
+		if !ok {
+			return nil, fmt.Errorf("应用正在更新或另一次执行中，本次执行已跳过 (task: %s)", taskID)
+		}
+		defer app.ReleaseAppLock(lock)
+
+		// 调和漂移闸门：仅限 Cron 定时调和路径，检测上游破坏性变更
+		if req.Type == executor.TaskTypeCron {
+			if appCfg := task.GetAppConfig(); appCfg != nil {
+				if gate := app.DefaultAppService.EvaluateReconcileGate(task, appCfg); gate != nil && gate.Blocked {
+					fmt.Fprintf(stdout, "[漂移闸门] %s\n", gate.Message)
+					now := time.Now()
+					return &executor.Result{
+						Status:    constant.TaskStatusSuccess,
+						Duration:  0,
+						ExitCode:  0,
+						StartTime: now,
+						EndTime:   now,
+					}, nil
+				}
+			}
+		}
+
+		// 本地任务执行流水线
+		hooks := &LocalTaskHooks{es: es, logID: req.LogID}
+		res, execErr := executor.ExecuteWithHooks(ctx, executor.Request{
+			Command:     req.Command,
+			PreCommand:  req.PreCommand,
+			PostCommand: req.PostCommand,
+			WorkDir:     req.WorkDir,
+			Envs:        req.Envs,
+			Timeout:     req.Timeout,
+			Languages:   []map[string]string(task.Languages),
+			UseMise:     req.UseMise,
+		}, stdout, stderr, hooks)
+
+		// 执行成功后同步刷新受控子任务编排与 Cron 调度
+		if execErr == nil && res != nil && res.Status == constant.TaskStatusSuccess {
+			es.SyncAppTasks(taskID)
+		}
+		return res, execErr
+
+	case constant.TaskTypeAgentSyncScript:
+		// 场景 C：Agent 脚本同步任务
 		agentID := ""
 		if task.AgentID != nil && *task.AgentID != "" {
 			agentID = *task.AgentID
@@ -554,34 +573,28 @@ func (es *ExecutorService) ExecuteDispatcher(ctx context.Context, req *executor.
 			return nil, fmt.Errorf("AgentSync 任务缺少目标 Agent")
 		}
 		return es.agentWSManager.PushAgentSync(agentID, task, req.LogID)
+
+	default:
+		// 场景 D & E：常规任务（普通脚本任务、代码仓库同步任务等）
+		// 远程任务
+		if task.AgentID != nil && *task.AgentID != "" {
+			// 将请求中已包含的环境变量（已合并）传递给 Agent
+			return es.ExecuteRemoteForScheduler(ctx, task, req.LogID, executor.FormatEnvVars(req.Envs), req.Secrets)
+		}
+
+		// 本地任务
+		hooks := &LocalTaskHooks{es: es, logID: req.LogID}
+		return executor.ExecuteWithHooks(ctx, executor.Request{
+			Command:     req.Command,
+			PreCommand:  req.PreCommand,
+			PostCommand: req.PostCommand,
+			WorkDir:     req.WorkDir,
+			Envs:        req.Envs,
+			Timeout:     req.Timeout,
+			Languages:   []map[string]string(task.Languages),
+			UseMise:     req.UseMise, // 使用请求中的 UseMise 标志 (由调度器统一处理过)
+		}, stdout, stderr, hooks)
 	}
-
-	// 远程任务
-	if task.AgentID != nil && *task.AgentID != "" {
-		// 将请求中已包含的环境变量（已合并）传递给 Agent
-		return es.ExecuteRemoteForScheduler(ctx, task, req.LogID, executor.FormatEnvVars(req.Envs), req.Secrets)
-	}
-
-	// 本地任务
-	hooks := &LocalTaskHooks{es: es, logID: req.LogID}
-	res, execErr := executor.ExecuteWithHooks(ctx, executor.Request{
-		Command:     req.Command,
-		PreCommand:  req.PreCommand,
-		PostCommand: req.PostCommand,
-		WorkDir:     req.WorkDir,
-		Envs:        req.Envs,
-		Timeout:     req.Timeout,
-		Languages:   []map[string]string(task.Languages),
-		UseMise:     req.UseMise, // 使用请求中的 UseMise 标志 (由调度器统一处理过)
-	}, stdout, stderr, hooks)
-
-	// 应用主任务执行成功后的调度重注册（自动更新/调和可能新增或调整受控子任务编排，
-	// CLI 子进程只落库，面板进程负责把变更同步进 CronManager）
-	if execErr == nil && res != nil && res.Status == constant.TaskStatusSuccess && task.Type == constant.TaskTypeApp {
-		es.SyncAppTasks(taskID)
-	}
-
-	return res, execErr
 }
 
 // getIntSetting 从设置中获取整数值
