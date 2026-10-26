@@ -29,6 +29,8 @@ func initOpenAPIV1Routes(root *gin.RouterGroup, c *Controllers) {
 		registerOpenAPIExecutorRoutes(open, c)
 		// 文件树相关接口
 		registerOpenAPIFileRoutes(open, c)
+		// 声明式应用相关接口
+		registerOpenAPIAppRoutes(open, c)
 		// MCP (Model Context Protocol) 服务接口
 		registerOpenAPIMCPRoutes(open)
 	}
@@ -116,3 +118,22 @@ func registerOpenAPIFileRoutes(g *gin.RouterGroup, c *Controllers) {
 		files.GET("/content", c.File.GetFileContent)
 	}
 }
+
+// registerOpenAPIAppRoutes 注册 OpenAPI 声明式应用路由
+func registerOpenAPIAppRoutes(g *gin.RouterGroup, c *Controllers) {
+	apps := g.Group("/apps")
+	{
+		apps.GET("", c.App.GetApps)
+		apps.GET("/store", c.App.GetMarketplace)
+		apps.GET("/updates", c.App.GetAppUpdates)
+		apps.GET("/:id", c.App.GetApp)
+		apps.POST("/apply", c.App.ApplyApp)
+		apps.POST("/:id/update", c.App.UpdateApp)
+		apps.POST("/:id/rollback", c.App.RollbackApp)
+		apps.POST("/:id/auto-update", c.App.SetAppAutoUpdate)
+		apps.POST("/:id/switch", c.App.SwitchScenario)
+		apps.POST("/:id/rebuild", c.App.RebuildApp)
+		apps.DELETE("/:id", c.App.RemoveApp)
+	}
+}
+

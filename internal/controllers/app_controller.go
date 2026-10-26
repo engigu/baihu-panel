@@ -47,6 +47,13 @@ func (ac *AppController) syncAppCronTasks(masterTaskID string) {
 }
 
 // GetApps 获取已安装应用列表
+// @Summary 获取已安装应用列表
+// @Description 获取所有已安装的声明式应用实体信息列表
+// @Tags 应用管理
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.Response{data=[]app.AppDTO}
+// @Router /apps [get]
 func (ac *AppController) GetApps(c *gin.Context) {
 	apps, err := ac.appService.ListApps()
 	if err != nil {
@@ -58,6 +65,16 @@ func (ac *AppController) GetApps(c *gin.Context) {
 }
 
 // GetApp 获取指定应用详情（包含 Manifest、受控任务、环境配置）
+// @Summary 获取指定应用详情
+// @Description 获取指定应用的详细信息，包含 Manifest、受控任务列表及环境配置
+// @Tags 应用管理
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "应用 TaskID"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Failure 404 {object} utils.Response
+// @Router /apps/{id} [get]
 func (ac *AppController) GetApp(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -141,6 +158,17 @@ func (w *streamLogWriter) Write(p []byte) (int, error) {
 }
 
 // ApplyApp 部署应用（解析本地/远程/Raw YAML 并应用，支持 SSE 实时日志流推送）
+// @Summary 部署或安装应用
+// @Description 根据本地/远程路径或直接提交的原始 YAML 清单部署应用，支持流式日志推送
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param stream query boolean false "是否开启 SSE 流式日志推送"
+// @Param body body ApplyAppRequest true "应用部署参数"
+// @Success 200 {object} utils.Response{data=app.ApplyResult}
+// @Failure 400 {object} utils.Response
+// @Router /apps/apply [post]
 func (ac *AppController) ApplyApp(c *gin.Context) {
 	var req ApplyAppRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -279,6 +307,17 @@ func (ac *AppController) ApplyApp(c *gin.Context) {
 }
 
 // SwitchScenario 切换已安装应用的使用场景
+// @Summary 切换已安装应用的使用场景
+// @Description 切换指定应用的使用场景，联动更新受控子任务的启停与定时规则
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "应用 TaskID"
+// @Param body body object true "场景参数 (scenario_id: string)"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Router /apps/{id}/switch [post]
 func (ac *AppController) SwitchScenario(c *gin.Context) {
 	if constant.DemoMode {
 		utils.BadRequest(c, "演示模式下禁止切换应用场景")
@@ -317,6 +356,16 @@ func (ac *AppController) SwitchScenario(c *gin.Context) {
 }
 
 // RebuildApp 强制重新预编译/安装依赖（自愈修复）
+// @Summary 强制重新预编译/安装依赖
+// @Description 强制重新触发应用的 setup 依赖安装与编译流程
+// @Tags 应用管理
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "应用 TaskID"
+// @Success 200 {object} utils.Response{data=app.ApplyResult}
+// @Failure 400 {object} utils.Response
+// @Failure 404 {object} utils.Response
+// @Router /apps/{id}/rebuild [post]
 func (ac *AppController) RebuildApp(c *gin.Context) {
 	if constant.DemoMode {
 		utils.BadRequest(c, "演示模式下禁止重新构建应用")
@@ -380,6 +429,17 @@ func (ac *AppController) RebuildApp(c *gin.Context) {
 }
 
 // RemoveApp 卸载已安装应用
+// @Summary 卸载已安装应用
+// @Description 卸载指定应用及其受控子任务，支持可选清理数据与环境变量
+// @Tags 应用管理
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "应用 TaskID"
+// @Param clean_data query boolean false "是否清理应用工作目录 (默认 true)"
+// @Param clean_envs query boolean false "是否清理应用绑定的环境变量 (默认 true)"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Router /apps/{id} [delete]
 func (ac *AppController) RemoveApp(c *gin.Context) {
 	if constant.DemoMode {
 		utils.BadRequest(c, "演示模式下禁止卸载应用")
@@ -418,6 +478,13 @@ func (ac *AppController) RemoveApp(c *gin.Context) {
 }
 
 // GetMarketplace 获取应用市场列表
+// @Summary 获取应用市场列表
+// @Description 获取官方与镜像应用市场的应用清单索引
+// @Tags 应用管理
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.Response
+// @Router /apps/store [get]
 func (ac *AppController) GetMarketplace(c *gin.Context) {
 	market, err := ac.appService.FetchMarketplace()
 	if err != nil || market == nil || len(market.Apps) == 0 {
@@ -449,6 +516,14 @@ func (ac *AppController) GetMarketplace(c *gin.Context) {
 }
 
 // GetAppUpdates 检测已装应用与更新源（市场索引 / 远程 URL）的版本差异
+// @Summary 检测已装应用更新
+// @Description 检测已装应用与远端更新源的版本差异与可更新状态
+// @Tags 应用管理
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Router /apps/updates [get]
 func (ac *AppController) GetAppUpdates(c *gin.Context) {
 	infos, err := ac.appService.CheckUpdates()
 	if err != nil {
@@ -478,6 +553,19 @@ type UpdateAppRequest struct {
 }
 
 // UpdateApp 一键更新已装应用（解析最新清单并按已保存配置重放 Apply 流水线，支持 SSE 实时日志流）
+// @Summary 一键更新应用
+// @Description 一键更新已装应用至最新版本，支持环境变量安全阀拦截与流式日志推送
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "应用 TaskID"
+// @Param stream query boolean false "是否开启 SSE 流式日志推送"
+// @Param body body UpdateAppRequest false "更新参数"
+// @Success 200 {object} utils.Response{data=app.ApplyResult}
+// @Failure 400 {object} utils.Response
+// @Failure 409 {object} utils.Response "存在未填写的必填环境变量"
+// @Router /apps/{id}/update [post]
 func (ac *AppController) UpdateApp(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -571,6 +659,18 @@ func (ac *AppController) UpdateApp(c *gin.Context) {
 }
 
 // RollbackApp 一键回滚到上一成功版本（更新前快照重跑 Apply 流水线，支持 SSE 实时日志流）
+// @Summary 一键回滚应用
+// @Description 一键回滚应用至更新前的版本快照
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "应用 TaskID"
+// @Param stream query boolean false "是否开启 SSE 流式日志推送"
+// @Param body body UpdateAppRequest false "回滚参数"
+// @Success 200 {object} utils.Response{data=app.ApplyResult}
+// @Failure 400 {object} utils.Response
+// @Router /apps/{id}/rollback [post]
 func (ac *AppController) RollbackApp(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -666,6 +766,17 @@ type SetAppAutoUpdateRequest struct {
 }
 
 // SetAppAutoUpdate 开/关应用自动更新（P3，design/app-update-proposal.md §10）
+// @Summary 开/关应用自动更新
+// @Description 设置指定应用是否开启定时自动检查并静默更新
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "应用 TaskID"
+// @Param body body SetAppAutoUpdateRequest true "自动更新开关设置"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Router /apps/{id}/auto-update [post]
 func (ac *AppController) SetAppAutoUpdate(c *gin.Context) {
 	if constant.DemoMode {
 		utils.BadRequest(c, "演示模式下禁止修改应用自动更新设置")
