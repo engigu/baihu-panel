@@ -409,6 +409,11 @@ func (t *Task) GetAppAuthor() string {
 	return ""
 }
 
+// IsApp 判断当前任务是否为声明式应用主实体
+func (t *Task) IsApp() bool {
+	return t != nil && t.Type == constant.TaskTypeApp
+}
+
 // TaskLog 代表任务执行的日志记录
 type TaskLog struct {
 	ID        string     `json:"id" gorm:"primaryKey;size:20"`

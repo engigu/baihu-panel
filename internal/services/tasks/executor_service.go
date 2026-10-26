@@ -835,7 +835,6 @@ func (es *ExecutorService) CreateExecutionRequest(task *models.Task, triggerType
 		Timeout:       task.Timeout,
 		Languages:     []map[string]string(task.Languages),
 		UseMise:       useMise,
-		AppMaster:     task.Type == constant.TaskTypeApp,
 		Metadata: executor.ExecutionMetadata{
 			TempFilePath: tempFilePath,
 		},
