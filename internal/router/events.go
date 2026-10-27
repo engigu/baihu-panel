@@ -8,7 +8,6 @@ import (
 	"github.com/engigu/baihu-panel/internal/executor"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/services"
-	"github.com/engigu/baihu-panel/internal/services/app"
 )
 
 func setupEventHandlers(subscribers ...eventbus.Subscriber) {
@@ -29,10 +28,10 @@ func startAppLogCleanup(appLogSvc *services.AppLogService) {
 
 // startAppUpdateDailyCheck 系统级每日更新检测（P3，design/app-update-proposal.md §10/§13）：
 // 每日全量比对更新源，发现新可更新版本时落通知中心未读提示并推送通知渠道。
-// 状态去重（应用+版本）见 app.RunDailyUpdateCheck；CLI baihu app check-updates --notify 共用同一编排
+// 状态去重（应用+版本）见 services.RunDailyAppUpdateCheck；CLI baihu app check-updates --notify 共用同一编排
 func startAppUpdateDailyCheck() {
 	if _, err := executor.GetSysCron().AddJob("@every 24h", func() {
-		app.RunDailyUpdateCheck()
+		services.RunDailyAppUpdateCheck()
 	}); err != nil {
 		logger.Errorf("[System] 注册应用更新每日检测任务失败: %v", err)
 	} else {

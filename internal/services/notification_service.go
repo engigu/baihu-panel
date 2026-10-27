@@ -333,6 +333,34 @@ func (s *NotificationService) SendByChannelID(channelID string, msg *NotifyMessa
 	return s.SendToChannel(ch, msg)
 }
 
+// SendSystemNotice 向所有绑定并启用了系统通知事件的渠道直接发送通知（同步直发）
+func (s *NotificationService) SendSystemNotice(title, content string) {
+	bindings := s.GetBindingsByEvent(constant.BindingTypeSystem, constant.EventSystemNotice, "")
+	if len(bindings) == 0 {
+		return
+	}
+
+	prefix := s.settingsService.Get(constant.SectionNotify, constant.KeyNotifyPrefix)
+	if prefix != "" && title != "" {
+		title = fmt.Sprintf("%s %s", prefix, title)
+	}
+
+	channels := s.GetChannels()
+	channelMap := make(map[string]NotifyChannel, len(channels))
+	for _, ch := range channels {
+		channelMap[ch.ID] = ch
+	}
+
+	for _, b := range bindings {
+		ch, ok := channelMap[b.WayID]
+		if !ok || !ch.Enabled {
+			continue
+		}
+		s.SendToChannel(ch, &NotifyMessage{Title: title, Content: content})
+	}
+	logger.Infof("[Notify] 已直推系统通知「%s」到绑定渠道", title)
+}
+
 // SubscribeEvents 注册通知服务自身为事件流的订阅者
 func (s *NotificationService) SubscribeEvents(bus *eventbus.EventBus) {
 	// 系统事件

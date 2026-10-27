@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/engigu/baihu-panel/cmd/clibase"
+	"github.com/engigu/baihu-panel/internal/services"
 	"github.com/engigu/baihu-panel/internal/services/app"
 )
 
@@ -390,10 +391,14 @@ func runCheckUpdates(args []string) {
 	}
 
 	if notify {
-		app.RunDailyUpdateCheck()
-		fmt.Printf("\n检测到 %d 个应用可更新，已落通知中心并推送绑定渠道。\n", updatable)
+		notified := services.NotifyAppUpdateResults(infos, nil, nil, nil)
+		if notified > 0 {
+			fmt.Printf("\n检测到 %d 个应用有新版本，已落通知中心并推送绑定渠道。\n", notified)
+		} else {
+			fmt.Printf("\n检测到 %d 个应用可更新，但均已在近期提醒过，本次跳过重复推送。\n", updatable)
+		}
 	} else {
-		fmt.Printf("\n检测到 %d 个应用可更新（--notify 可同时通知）。", updatable)
+		fmt.Printf("\n检测到 %d 个应用可更新（--notify 可同时通知）。\n", updatable)
 	}
 }
 

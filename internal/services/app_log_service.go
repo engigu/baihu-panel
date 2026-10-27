@@ -43,6 +43,36 @@ func (s *AppLogService) Add(log *models.AppLog) error {
 	return err
 }
 
+// AddSystemNoticeUpsert 新增或刷新未读系统通知（同 refID 同标题未读提示存在时仅刷新内容，返回是否为新建）
+func (s *AppLogService) AddSystemNoticeUpsert(title, content, level, refID string) bool {
+	if level == "" {
+		level = constant.LogLevelInfo
+	}
+	query := database.DB.Where("category = ? AND title = ? AND status = ?",
+		constant.LogCategorySystemNotice, title, constant.LogStatusUnread)
+	if refID != "" {
+		query = query.Where("ref_id = ?", refID)
+	}
+	var existing models.AppLog
+	if err := query.Order("created_at desc").First(&existing).Error; err == nil {
+		database.DB.Model(&existing).Update("content", models.BigText(content))
+		return false
+	}
+	notice := &models.AppLog{
+		ID:       utils.GenerateID(),
+		Category: constant.LogCategorySystemNotice,
+		Title:    title,
+		Content:  models.BigText(content),
+		Level:    level,
+		Status:   constant.LogStatusUnread,
+		RefID:    refID,
+	}
+	if err := s.Add(notice); err == nil {
+		return true
+	}
+	return false
+}
+
 func (s *AppLogService) List(category string, status string, level string, page, pageSize int, keyword string) ([]models.AppLog, int64, error) {
 	var logs []models.AppLog
 	var total int64
