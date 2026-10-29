@@ -16,4 +16,5 @@ sync_mise_environment "/opt/mise-base"
 setup_runtime_env
 verify_runtimes
 setup_cli_and_completion
+init_builtin_packages
 start_baihu_server "$@"

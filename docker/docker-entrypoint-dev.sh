@@ -74,6 +74,7 @@ sync_mise_environment "/opt/mise-dev" "$DEV_UID:$DEV_GID"
 setup_runtime_env
 verify_runtimes
 setup_cli_and_completion "/home/$TARGET_USER/.bashrc"
+init_builtin_packages
 
 log_step "启动开发环境服务进程"
 log_info "执行身份用户 : ${TARGET_USER} (UID: $DEV_UID, GID: $DEV_GID)"

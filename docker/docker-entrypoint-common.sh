@@ -225,7 +225,59 @@ setup_cli_and_completion() {
 }
 
 # ============================================================
-# 7. 启动主服务
+# 7. 检查并初始化内建助手库 (Built-in SDK)
+# ============================================================
+init_builtin_packages() {
+  log_step "检查并初始化内建助手库"
+
+  _flag_file="/tmp/.baihu_builtin_installed"
+  _lock_file="/tmp/.baihu_builtin_installing"
+  _curr_ver="${PANEL_VER:-$(cat /build-info/version.txt 2>/dev/null || echo '')}"
+
+  if [ -f "$_flag_file" ]; then
+    _installed_ver=$(cat "$_flag_file" 2>/dev/null || echo "")
+    if [ -z "$_curr_ver" ] || [ "$_curr_ver" = "unknown" ] || [ "$_curr_ver" = "$_installed_ver" ]; then
+      log_success "内建助手库已就绪 -> 跳过安装 (命中临时标记)"
+      return 0
+    fi
+  fi
+
+  if [ -f "$_lock_file" ]; then
+    log_info "检测到内建助手库正在后台安装中，跳过重复触发"
+    return 0
+  fi
+
+  _builtin_dir=""
+  if [ -d "/www/builtin" ]; then
+    _builtin_dir="/www/builtin"
+  elif [ -d "/app/builtin" ]; then
+    _builtin_dir="/app/builtin"
+  fi
+
+  _baihu_bin=""
+  if [ -x "/app/baihu" ]; then
+    _baihu_bin="/app/baihu"
+  elif [ -x "/usr/local/bin/baihu" ]; then
+    _baihu_bin="/usr/local/bin/baihu"
+  fi
+
+  if [ -n "$_baihu_bin" ] && [ -n "$_builtin_dir" ]; then
+    log_info "派发后台异步安装内建助手库任务 (主服务无须等待启动)..."
+    touch "$_lock_file"
+    (
+      if "$_baihu_bin" builtininstall >/tmp/baihu_builtininstall.log 2>&1; then
+        echo "${_curr_ver:-installed}" > "$_flag_file"
+      fi
+      rm -f "$_lock_file"
+    ) &
+    log_success "内建助手库异步初始化已派发 (日志: /tmp/baihu_builtininstall.log)"
+  else
+    log_info "未检测到内建库目录或 CLI 工具，跳过自动安装"
+  fi
+}
+
+# ============================================================
+# 8. 启动主服务
 # ============================================================
 start_baihu_server() {
   log_step "启动白虎面板服务"
