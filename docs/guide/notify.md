@@ -220,11 +220,16 @@ tasks = baihu.get_tasks()
 ```javascript
 const baihu = require('baihu');
 
-// 基本消息通知
+// 基本消息通知 (可直接调用，也支持 await 获取执行回执)
 baihu.notify("任务标题", "通知正文内容");
 
-// 指定内容格式（text/markdown/html）
-baihu.notify("任务标题", "**加粗内容**", { format: "markdown" });
+// 推荐写法：通过 await 获取发送回执
+(async () => {
+    const res = await baihu.notify("任务标题", "**加粗内容**", { format: "markdown" });
+    if (!res.success) {
+        console.error("发送失败:", res.error);
+    }
+})();
 
 // 指定渠道
 baihu.notify("任务标题", "正文", { channel_id: "ch-xxx" });

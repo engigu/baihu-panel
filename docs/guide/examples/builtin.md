@@ -79,29 +79,31 @@ if __name__ == "__main__":
 ```javascript [Node.js]
 const baihu = require('baihu');
 
-console.log("正在尝试发送 Node.js 内建通知...");
+async function main() {
+    console.log("正在尝试发送 Node.js 内建通知...");
 
-try {
-    // 基本用法：仅指定标题和内容
+    // 基本用法：仅指定标题和内容 (可直接调用，也支持 await 获取执行回执)
     baihu.notify("任务标题", "通知正文内容");
 
     // 指定 Markdown 格式
-    baihu.notify("Node.js 任务提醒", "## 任务完成\n\n所有步骤已**成功**执行。", { format: "markdown" });
+    await baihu.notify("Node.js 任务提醒", "## 任务完成\n\n所有步骤已**成功**执行。", { format: "markdown" });
 
     // 指定 HTML 格式
-    baihu.notify("Node.js 任务提醒", "<h2>任务完成</h2><p>所有步骤已<b>成功</b>执行。</p>", { format: "html" });
+    await baihu.notify("Node.js 任务提醒", "<h2>任务完成</h2><p>所有步骤已<b>成功</b>执行。</p>", { format: "html" });
 
-    // 指定渠道
-    baihu.notify("Node.js 任务提醒", "发送到指定渠道的消息。", { channel_id: "ch-xxx" });
+    // 指定渠道并检查发送结果
+    const res = await baihu.notify("Node.js 任务提醒", "发送到指定渠道的消息。", { channel_id: "ch-xxx" });
+    if (res && !res.success) {
+        console.error(`通知发送失败: ${res.error}`);
+    }
 
     // 同时指定格式与渠道
-    baihu.notify("Node.js 任务提醒", "<b>粗体</b>", { format: "html", channel_id: "ch-xxx" });
+    await baihu.notify("Node.js 任务提醒", "<b>粗体</b>", { format: "html", channel_id: "ch-xxx" });
 
-    console.log("发送请求已提交。");
-
-} catch (e) {
-    console.error(`通知失败: ${e.message}`);
+    console.log("发送请求已处理完成。");
 }
+
+main();
 ```
 
 :::

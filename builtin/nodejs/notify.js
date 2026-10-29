@@ -38,22 +38,43 @@ function notify(title, content, options) {
     let channelId = optionsObj.channel_id;
     delete optionsObj.channel_id;
 
+    // 兼容旧版 text 入参
+    if ('text' in optionsObj && (content === undefined || content === null || content === '')) {
+        content = optionsObj.text;
+        delete optionsObj.text;
+    }
+
     // 补全默认渠道 (若未显式指定)
     if (!channelId && process.env.BHPKG_NOTIFY_CHANNEL) {
         channelId = process.env.BHPKG_NOTIFY_CHANNEL;
     }
 
     const token = process.env.BHPKG_NOTIFY_TOKEN;
-    if (!token || !channelId) return;
+    if (!token || !channelId) {
+        const missing = [];
+        if (!token) missing.push('BHPKG_NOTIFY_TOKEN');
+        if (!channelId) missing.push('BHPKG_NOTIFY_CHANNEL');
+        const err = `缺少必要的配置或环境变量以发送通知: ${missing.join(', ')}。请在白虎面板的任务设置中配置指定的 Key 或显式指定渠道。`;
+        console.error(`[baihu.notify] ${err}`);
+        return Promise.resolve({ success: false, error: err });
+    }
 
     const notifyUrl = process.env.BHPKG_NOTIFY_URL || 'http://localhost:8052/api/v1/notify/send';
-    const parsedUrl = new URL(notifyUrl);
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(notifyUrl);
+    } catch (e) {
+        const err = `无效的通知接口地址: ${notifyUrl} (${e.message})`;
+        console.error(`[baihu.notify] ${err}`);
+        return Promise.resolve({ success: false, error: err });
+    }
+
     const protocol = parsedUrl.protocol === 'https:' ? https : http;
     
     const data = JSON.stringify({
         channel_id: channelId,
         title: title || '系统通知',
-        content: content,
+        content: content !== undefined && content !== null ? String(content) : '',
         options: optionsObj
     });
 
@@ -69,10 +90,46 @@ function notify(title, content, options) {
         }
     };
 
-    const req = protocol.request(optionsHttp);
-    req.on('error', (e) => {});
-    req.write(data);
-    req.end();
+    return new Promise((resolve) => {
+        const req = protocol.request(optionsHttp, (res) => {
+            let body = '';
+            res.setEncoding('utf8');
+            res.on('data', (chunk) => body += chunk);
+            res.on('end', () => {
+                let parsed = null;
+                try {
+                    parsed = body ? JSON.parse(body) : null;
+                } catch (_) {}
+
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    if (parsed && typeof parsed === 'object' && parsed.code !== undefined && parsed.code !== 200) {
+                        const errMsg = parsed.msg || parsed.message || '未知业务错误';
+                        console.error(`[baihu.notify] 面板业务错误 [${parsed.code}]: ${errMsg}`);
+                        resolve({ success: false, status: res.statusCode, code: parsed.code, error: errMsg, data: parsed });
+                    } else if (parsed && typeof parsed === 'object' && parsed.data && parsed.data.success === false) {
+                        const errMsg = parsed.data.error || '渠道投递失败';
+                        console.error(`[baihu.notify] 渠道发送失败: ${errMsg}`);
+                        resolve({ success: false, status: res.statusCode, code: parsed.code, error: errMsg, data: parsed });
+                    } else {
+                        resolve({ success: true, status: res.statusCode, data: parsed || body });
+                    }
+                } else {
+                    const errMsg = (parsed && (parsed.msg || parsed.message)) || body || `HTTP ${res.statusCode}`;
+                    console.error(`[baihu.notify] 面板返回错误 [${res.statusCode}]: ${errMsg}`);
+                    resolve({ success: false, status: res.statusCode, error: errMsg, data: parsed });
+                }
+            });
+        });
+
+        req.on('error', (e) => {
+            const errMsg = `发送失败: ${e.code || e.message} (url=${notifyUrl})`;
+            console.error(`[baihu.notify] ${errMsg}`);
+            resolve({ success: false, error: errMsg, code: e.code });
+        });
+
+        req.write(data);
+        req.end();
+    });
 }
 
 /** 场景 A: 格式字符串构建 */
