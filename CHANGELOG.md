@@ -1,22 +1,19 @@
-# 更新日志 (v1.5.8)
+# 更新日志 (v1.5.9)
 
-### 2026.10.27 - 语言安装下载镜像加速与 Mise 运行时镜像源配置、已装应用更新检测与无损升级中枢、OpenAPI 文件管理能力开放与全站安全加固
+### 2026.10.30 - Docker 容器异步初始化内建助手库、Node.js 内建通知健壮性加固与返回值支持、变量机密编辑框最后编辑时间展示
 
 🎉 **新增功能与体验升级**
-* **语言安装下载镜像加速与 Mise 运行时镜像源配置 (Languages & Mise & Perf)**：
-  - **新增语言下载镜像加速**：在新增语言弹窗中集成 GitHub 镜像选择功能，内置 `gh-proxy.com (推荐)`、`ghfast.top`、`ghproxy.net`、`github.moeyy.xyz` 及自定义代理前缀选项，彻底解决境内服务器通过 GitHub Releases 安装 Python/Node/Go 等运行时下载超时失败的痛点（[#200](https://github.com/engigu/baihu-panel/issues/200)）；
-  - **全局默认加速源持久化与多系统命令注入**：支持将所选镜像持久化写入 Mise 全局配置（`MISE_URL_REPLACEMENTS`），后续自动化或终端安装全量生效；同时安装终端根据底层操作系统（Linux/Windows）自适应注入环境变量加速执行；
-  - **加速选项卡双区分类管理**：将“加速”页面划分为“运行时下载加速 (Mise Runtime)”与“包管理器依赖源 (Package Registry)”两大区域，支持一键配置 Mise GitHub 加速、Node.js 运行时镜像（`MISE_NODE_MIRROR_URL`）、Go 官方国内镜像（`MISE_GO_DOWNLOAD_MIRROR`）及 Python 编译源码镜像（`PYTHON_BUILD_MIRROR_URL`）；
-  - **系统环境变量无损提取优化**：修复优化 `mise_service` 中环境变量解析逻辑，支持带有空格与 JSON 结构的变量值完整无损还原。
-* **已装应用更新检测与一键无损升级中枢 (Apps & Scheduler & Feature)**：
-  - **系统级更新检测与手动检测**：支持已安装应用的版本更新自检，内置系统级每日定时巡检与手动立即检测，发现新版本时联动系统通知中心发送更新提醒（[#201](https://github.com/engigu/baihu-panel/pull/201)）；
-  - **版本漂移检测与无损升级闭环**：支持实时校验当前运行版本与应用清单最新定义的版本差异，提供一键无损升级能力，自动原子重构调度实体、系统环境变量、关联任务与依赖环境，保障升级过程平滑无缝。
-* **OpenAPI 文件管理接口开放与 404 兜底修复 (OpenAPI & Web & Fix)**：
-  - **开放文件写入与保存接口**：OpenAPI 正式开放文件保存与写入端点，支持第三方工具及 CI/CD 自动化流水线远程下发管理文件（[#202](https://github.com/engigu/baihu-panel/pull/202)）；
-  - **静态资源与 SPA 路由 404 兜底机制完善**：修复优化前端路由与静态资源兜底响应行为。
-* **全站核心依赖安全加固与 Dependabot 漏洞清零 (Security & Dependencies)**：
-  - **核心工具链安全升级**：升级 `vite` 至 `^7.3.7`（Web 端）与 `^6.4.5`（Docs 端），彻底消除 `launch-editor` 命令注入与路径校验绕过漏洞；
-  - **全链路依赖漏洞修复**：同步升级与覆盖 `dompurify` (`^3.4.17`)、`zod` (`^4.6.7`)、`undici` (`^7.30.1`)、`fast-uri` (`^4.2.3`)、`serialize-javascript` (`^7.1.4`)，实现主系统与文档站点全量 `npm audit` 0 漏洞，GitHub Dependabot 安全告警全部闭环清零。
+* **Docker 容器异步初始化内建助手库 (Docker & Core & Perf)**：
+  - **非阻塞异步派发初始化**：在容器公共启动入口脚本中抽象并统一 `init_builtin_packages`，将 `baihu builtininstall` 派发至后台异步执行，主服务进程无需同步等待内置包编译安装即可极速启动对外提供服务；
+  - **临时状态标记与锁文件防护**：通过 `/tmp/.baihu_builtin_installed` 标记与防并发锁文件记录已就绪版本，避免容器重启或多实例重复触发安装。
+* **Node.js 内建助手库 `baihu.notify` 健壮性加固与返回值支持 (Builtin & Notify & Fix)**：
+  - **支持 Promise / Await 获取发送回执**：重构 Node.js 内建 `notify` 模块，全面支持返回 Promise，用户可通过 `const res = await baihu.notify(...)` 结构化获取投递状态、HTTP 状态码及错误详情（[#203](https://github.com/engigu/baihu-panel/pull/203)）；
+  - **异常拦截与错误透出**：彻底修复旧版本静默吞掉异常的缺陷，针对缺少配置环境变量（`BHPKG_NOTIFY_TOKEN` / `BHPKG_NOTIFY_CHANNEL`）、非法接口 URL 及网络请求超时错误进行前置校验与标准控制台报错输出；
+  - **文档与示例同步更新**：同步更新官方指南文档与 Node.js 示例脚本中的推荐调用姿势。
+* **环境变量与安全机密最后编辑时间展示 (Environments & Web & Feature)**：
+  - **对齐紧凑 DevOps 排版规范**：在环境变量与安全机密编辑弹窗（`EditEnvDialog.vue`）左下角新增“最后编辑于”时间提示，鼠标悬浮展示完整时间戳，与任务编辑弹窗、代码仓库弹窗等既有设计规范保持完全一致（[#204](https://github.com/engigu/baihu-panel/pull/204)）。
+* **应用任务行菜单文案优化 (Apps & Tasks & Web)**：
+  - **语义精准化**：优化声明式应用受控任务列表项的更多操作菜单文案为“更新详情”，消除歧义并与实际跳转行为保持一致。
 
 ---
 
@@ -71,7 +68,7 @@ chmod +x baihu-linux-amd64
 
 * **方式一：使用 GUI 安装包安装（推荐）**
 
-  直接运行附件中的安装程序 `BaihuPanel-Setup-v1.5.8-windows-amd64.exe` 完成安装，程序将自动完成桌面快捷方式创建、开机自启配置与 `127.0.0.1 baihu.local` 域名绑定。安装完成后通过桌面图标或任务栏右下角托盘图标即可直接打开 `http://baihu.local:38052`。
+  直接运行附件中的安装程序 `BaihuPanel-Setup-v1.5.9-windows-amd64.exe` 完成安装，程序将自动完成桌面快捷方式创建、开机自启配置与 `127.0.0.1 baihu.local` 域名绑定。安装完成后通过桌面图标或任务栏右下角托盘图标即可直接打开 `http://baihu.local:38052`。
 
 * **方式二：二进制单文件运行（免安装/便携版）**
 

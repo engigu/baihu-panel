@@ -6,6 +6,20 @@ outline: 2
 
 本页面记录了baihu-panel的主要版本更新历史。
 
+## 2026.10.30 (v1.5.9)
+### Docker 容器异步初始化内建助手库、Node.js 内建通知健壮性加固与返回值支持、变量机密编辑框最后编辑时间展示
+- **Docker 容器异步初始化内建助手库 (Docker & Core & Perf)**：
+  - **非阻塞异步派发初始化**：在容器公共启动入口脚本中抽象并统一 `init_builtin_packages`，将 `baihu builtininstall` 派发至后台异步执行，主服务进程无需同步等待内置包编译安装即可极速启动对外提供服务；
+  - **临时状态标记与锁文件防护**：通过 `/tmp/.baihu_builtin_installed` 标记与防并发锁文件记录已就绪版本，避免容器重启或多实例重复触发安装。
+- **Node.js 内建助手库 `baihu.notify` 健壮性加固与返回值支持 (Builtin & Notify & Fix)**：
+  - **支持 Promise / Await 获取发送回执**：重构 Node.js 内建 `notify` 模块，全面支持返回 Promise，用户可通过 `const res = await baihu.notify(...)` 结构化获取投递状态、HTTP 状态码及错误详情（[#203](https://github.com/engigu/baihu-panel/pull/203)）；
+  - **异常拦截与错误透出**：彻底修复旧版本静默吞掉异常的缺陷，针对缺少配置环境变量（`BHPKG_NOTIFY_TOKEN` / `BHPKG_NOTIFY_CHANNEL`）、非法接口 URL 及网络请求超时错误进行前置校验与标准控制台报错输出；
+  - **文档与示例同步更新**：同步更新官方指南文档与 Node.js 示例脚本中的推荐调用姿势。
+- **环境变量与安全机密最后编辑时间展示 (Environments & Web & Feature)**：
+  - **对齐紧凑 DevOps 排版规范**：在环境变量与安全机密编辑弹窗（`EditEnvDialog.vue`）左下角新增“最后编辑于”时间提示，鼠标悬浮展示完整时间戳，与任务编辑弹窗、代码仓库弹窗等既有设计规范保持完全一致（[#204](https://github.com/engigu/baihu-panel/pull/204)）。
+- **应用任务行菜单文案优化 (Apps & Tasks & Web)**：
+  - **语义精准化**：优化声明式应用受控任务列表项的更多操作菜单文案为“更新详情”，消除歧义并与实际跳转行为保持一致。
+
 ## 2026.10.27 (v1.5.8)
 ### 语言安装下载镜像加速与 Mise 运行时镜像源配置、已装应用更新检测与无损升级中枢、OpenAPI 文件管理能力开放与全站安全加固
 - **语言安装下载镜像加速与 Mise 运行时镜像源配置 (Languages & Mise & Perf)**：
