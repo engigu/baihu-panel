@@ -12,6 +12,7 @@ import { toast } from 'vue-sonner'
 import { ENV_TYPE } from '@/constants'
 import LineNumberTextarea from '@/components/LineNumberTextarea.vue'
 import EnvTagsConfig from './EnvTagsConfig.vue'
+import { formatDateTime } from '@/utils/date'
 
 const emit = defineEmits<{
   (e: 'saved'): void
@@ -85,14 +86,14 @@ defineExpose({
             {{ editingEnv.type === ENV_TYPE.SECRET ? '机密内容' : '变量值' }}
             <span v-if="editingEnv.type === ENV_TYPE.SECRET && isEdit" class="text-muted-foreground ml-1 font-normal text-xs">(输入新值即可覆盖)</span>
           </Label>
-          
-          <LineNumberTextarea 
-            ref="textareaRef"
-            v-model="editingEnv.value"
-            :placeholder="editingEnv.type === ENV_TYPE.SECRET && isEdit ? '' : (editingEnv.type === ENV_TYPE.SECRET ? '输入机密内容...' : '输入变量内容...')"
-            :rows="5"
-            minHeightClass="min-h-16"
-            maxHeightClass="max-h-40"
+
+          <LineNumberTextarea
+              ref="textareaRef"
+              v-model="editingEnv.value"
+              :placeholder="editingEnv.type === ENV_TYPE.SECRET && isEdit ? '' : (editingEnv.type === ENV_TYPE.SECRET ? '输入机密内容...' : '输入变量内容...')"
+              :rows="5"
+              minHeightClass="min-h-16"
+              maxHeightClass="max-h-40"
           />
 
         </div>
@@ -110,10 +111,16 @@ defineExpose({
           <Switch v-model="editingEnv.enabled" />
         </div>
       </div>
-      <DialogFooter>
-        <Button variant="outline" @click="isOpen = false">取消</Button>
-        <Button @click="saveEnv">保存</Button>
-      </DialogFooter>
+      <div class="flex items-center justify-between shrink-0 backdrop-blur-sm">
+        <div class="text-[10px] text-muted-foreground/40 italic flex flex-col leading-tight select-none pointer-events-none">
+          <span>最后编辑于:</span>
+          <span :title="editingEnv.updated_at || ''">{{ isEdit ? (editingEnv.updated_at ? formatDateTime(editingEnv.updated_at) : '刚才') : '现在' }}</span>
+        </div>
+        <div class="flex gap-2">
+          <Button variant="outline" @click="isOpen = false">取消</Button>
+          <Button @click="saveEnv">保存</Button>
+        </div>
+      </div>
     </DialogContent>
   </Dialog>
 </template>
