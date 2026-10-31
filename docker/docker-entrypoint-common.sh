@@ -267,6 +267,8 @@ init_builtin_packages() {
     (
       if "$_baihu_bin" builtininstall >/tmp/baihu_builtininstall.log 2>&1; then
         echo "${_curr_ver:-installed}" > "$_flag_file"
+        # 安装完成后主动回收瞬时装包产生的活跃缓存
+        find "$_builtin_dir" -type f -exec posix_fadvise {} 2>/dev/null \; 2>/dev/null || true
       fi
       rm -f "$_lock_file"
     ) &
