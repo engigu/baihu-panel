@@ -30,6 +30,7 @@ import {
 } from 'lucide-vue-next'
 import { useRegisterSettingSection, useFieldDiff } from './composables/useSettingsTracker'
 import ModifiedBadge from './components/ModifiedBadge.vue'
+import { withDemoGuard } from '@/utils/demo'
 
 interface SchedulerSettings {
   worker_count: string
@@ -70,6 +71,17 @@ function resetForm() {
   toast.info('已还原调度引擎参数')
 }
 
+const confirmSave = withDemoGuard(() => {
+  showConfirm.value = true
+}, '演示模式下禁止修改调度参数')
+
+const applyPreset = withDemoGuard((name: string, workers: string, queue: string, rate: string) => {
+  form.value.worker_count = workers
+  form.value.queue_size = queue
+  form.value.rate_interval = rate
+  toast.info(`已快速填入「${name}」参数预设，点击保存即可生效`)
+}, '演示模式下禁止修改调度参数')
+
 // 注册至全局设置变动追踪器
 useRegisterSettingSection({
   id: 'scheduler',
@@ -81,25 +93,6 @@ useRegisterSettingSection({
   save: confirmSave,
   reset: resetForm
 })
-
-function confirmSave() {
-  if (isDemoMode.value) {
-    toast.error('演示模式下禁止修改调度参数')
-    return
-  }
-  showConfirm.value = true
-}
-
-function applyPreset(name: string, workers: string, queue: string, rate: string) {
-  if (isDemoMode.value) {
-    toast.error('演示模式下禁止修改调度参数')
-    return
-  }
-  form.value.worker_count = workers
-  form.value.queue_size = queue
-  form.value.rate_interval = rate
-  toast.info(`已快速填入「${name}」参数预设，点击保存即可生效`)
-}
 
 async function saveSettings() {
   showConfirm.value = false

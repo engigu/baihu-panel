@@ -27,6 +27,7 @@ import {
 } from 'lucide-vue-next'
 import { useSiteSettings } from '@/composables/useSiteSettings'
 import { formatDateTime } from '@/utils/date'
+import { withDemoGuard } from '@/utils/demo'
 
 const { siteSettings, loadSettings } = useSiteSettings()
 const isDemoMode = computed(() => siteSettings.value.demo_mode === 'true' || (siteSettings.value as any).demo_mode === true)
@@ -54,11 +55,7 @@ async function checkBackupStatus() {
   } catch {}
 }
 
-async function createBackup() {
-  if (isDemoMode.value) {
-    toast.error('演示模式下禁止创建备份')
-    return
-  }
+const createBackup = withDemoGuard(async () => {
   backupLoading.value = true
   try {
     await api.settings.createBackup()
@@ -69,24 +66,16 @@ async function createBackup() {
   } finally {
     backupLoading.value = false
   }
-}
+}, '演示模式下禁止创建备份')
 
-function downloadBackup() {
-  if (isDemoMode.value) {
-    toast.error('演示模式下禁止下载备份')
-    return
-  }
+const downloadBackup = withDemoGuard(() => {
   window.open(api.settings.downloadBackup(), '_blank')
   setTimeout(checkBackupStatus, 6000)
-}
+}, '演示模式下禁止下载备份')
 
-function showRestoreConfirm() {
-  if (isDemoMode.value) {
-    toast.error('演示模式下禁止恢复备份数据')
-    return
-  }
+const showRestoreConfirm = withDemoGuard(() => {
   showConfirm.value = true
-}
+}, '演示模式下禁止恢复备份数据')
 
 function confirmRestore() {
   showConfirm.value = false

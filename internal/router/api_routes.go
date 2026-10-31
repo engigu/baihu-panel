@@ -29,17 +29,17 @@ func initPublicAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 	// OIDC 单点登录（浏览器重定向流程，不参与 API/MCP 认证）
 	authOidc := api.Group("/auth/oidc")
 	{
-		authOidc.GET("/login", c.Auth.OidcLogin)
-		authOidc.GET("/callback", c.Auth.OidcCallback)
-		authOidc.POST("/test", c.Auth.OidcTest)
+		authOidc.GET("/login", middleware.DemoGuard("演示模式下禁止使用单点登录"), c.Auth.OidcLogin)
+		authOidc.GET("/callback", middleware.DemoGuard("演示模式下禁止使用单点登录"), c.Auth.OidcCallback)
+		authOidc.POST("/test", middleware.DemoGuard("演示模式下禁止测试"), c.Auth.OidcTest)
 	}
 
 	// 通用 OAuth 2.0 单点登录（浏览器重定向流程，支持多身份源并行）
 	authOAuth2 := api.Group("/auth/oauth2")
 	{
-		authOAuth2.GET("/login", c.Auth.OAuth2Login)
-		authOAuth2.GET("/callback", c.Auth.OAuth2Callback)
-		authOAuth2.POST("/test", c.Auth.OAuth2Test)
+		authOAuth2.GET("/login", middleware.DemoGuard("演示模式下禁止使用单点登录"), c.Auth.OAuth2Login)
+		authOAuth2.GET("/callback", middleware.DemoGuard("演示模式下禁止使用单点登录"), c.Auth.OAuth2Callback)
+		authOAuth2.POST("/test", middleware.DemoGuard("演示模式下禁止测试"), c.Auth.OAuth2Test)
 	}
 
 	// 公开的站点元数据与 SSO 状态（无需认证，Public 控制器统一托管）
@@ -72,9 +72,9 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 		otp := authorized.Group("/auth/otp")
 		{
 			otp.GET("/status", c.Auth.GetOTPStatus)
-			otp.POST("/generate", c.Auth.GenerateOTP)
-			otp.POST("/enable", c.Auth.EnableOTP)
-			otp.POST("/disable", c.Auth.DisableOTP)
+			otp.POST("/generate", middleware.DemoGuard("演示模式下无法操作两步验证"), c.Auth.GenerateOTP)
+			otp.POST("/enable", middleware.DemoGuard("演示模式下无法操作两步验证"), c.Auth.EnableOTP)
+			otp.POST("/disable", middleware.DemoGuard("演示模式下无法操作两步验证"), c.Auth.DisableOTP)
 		}
 
 		// 以下管理接口需要管理员权限
@@ -204,7 +204,7 @@ func registerLogRoutes(g *gin.RouterGroup, c *Controllers) {
 }
 
 func registerTerminalRoutes(g *gin.RouterGroup, c *Controllers) {
-	g.GET("/terminal/ws", c.Terminal.HandleWebSocket)
+	g.GET("/terminal/ws", middleware.DemoGuard("终端功能已禁用"), c.Terminal.HandleWebSocket)
 	// g.POST("/terminal/exec", c.Terminal.ExecuteShellCommand) // 暂未使用，已注释
 	g.GET("/terminal/cmds", c.Terminal.GetCommands)
 }
@@ -212,26 +212,26 @@ func registerTerminalRoutes(g *gin.RouterGroup, c *Controllers) {
 func registerSettingsRoutes(g *gin.RouterGroup, c *Controllers) {
 	settings := g.Group("/settings")
 	{
-		settings.POST("/password", c.Settings.ChangePassword)
+		settings.POST("/password", middleware.DemoGuard("演示模式下不能修改账号或密码"), c.Settings.ChangePassword)
 		settings.GET("/site", c.Settings.GetSiteSettings)
 		settings.PUT("/site", c.Settings.UpdateSiteSettings)
-		settings.POST("/site/openapi-token/generate", c.Settings.GenerateOpenapiToken)
-		settings.POST("/site/trim-cache", c.Settings.TrimCache)
+		settings.POST("/site/openapi-token/generate", middleware.DemoGuard("演示模式下禁止生成 OpenAPI Token"), c.Settings.GenerateOpenapiToken)
+		settings.POST("/site/trim-cache", middleware.DemoGuard("演示模式下禁止清理缓存"), c.Settings.TrimCache)
 		settings.GET("/paths", c.Settings.GetPaths)
 		settings.GET("/scheduler", c.Settings.GetSchedulerSettings)
-		settings.PUT("/scheduler", c.Settings.UpdateSchedulerSettings)
+		settings.PUT("/scheduler", middleware.DemoGuard("演示模式下禁止修改调度参数"), c.Settings.UpdateSchedulerSettings)
 		settings.GET("/about", c.Settings.GetAbout)
 		settings.GET("/changelog", c.Settings.GetChangelog)
 		settings.GET("/loginlogs", c.Settings.GetLoginLogs)
-		settings.POST("/backup", c.Settings.CreateBackup)
+		settings.POST("/backup", middleware.DemoGuard("演示模式下禁止创建备份"), c.Settings.CreateBackup)
 		settings.GET("/backup/status", c.Settings.GetBackupStatus)
-		settings.GET("/backup/download", c.Settings.DownloadBackup)
-		settings.POST("/restore", c.Settings.RestoreBackup)
+		settings.GET("/backup/download", middleware.DemoGuard("演示模式下禁止下载备份"), c.Settings.DownloadBackup)
+		settings.POST("/restore", middleware.DemoGuard("演示模式下禁止恢复备份数据"), c.Settings.RestoreBackup)
 		// 通用设置接口
 		settings.GET("/:section", c.Settings.GetSectionSettings)
-		settings.PUT("/:section", c.Settings.UpdateSectionSettings)
+		settings.PUT("/:section", middleware.DemoGuard("演示模式下禁止修改配置"), c.Settings.UpdateSectionSettings)
 		settings.GET("/:section/:key", c.Settings.GetSetting)
-		settings.POST("/:section/:key/generate", c.Settings.GenerateSettingToken)
+		settings.POST("/:section/:key/generate", middleware.DemoGuard("演示模式下禁止生成 Token"), c.Settings.GenerateSettingToken)
 	}
 }
 
@@ -398,13 +398,13 @@ func registerAppRoutes(g *gin.RouterGroup, c *Controllers) {
 		apps.GET("/store", c.App.GetMarketplace)
 		apps.GET("/updates", c.App.GetAppUpdates)
 		apps.GET("/:id", c.App.GetApp)
-		apps.POST("/apply", c.App.ApplyApp)
-		apps.POST("/:id/update", c.App.UpdateApp)
-		apps.POST("/:id/rollback", c.App.RollbackApp)
-		apps.POST("/:id/auto-update", c.App.SetAppAutoUpdate)
-		apps.POST("/:id/switch", c.App.SwitchScenario)
-		apps.POST("/:id/rebuild", c.App.RebuildApp)
-		apps.DELETE("/:id", c.App.RemoveApp)
+		apps.POST("/apply", middleware.DemoGuard("演示模式下禁止安装或部署应用"), c.App.ApplyApp)
+		apps.POST("/:id/update", middleware.DemoGuard("演示模式下禁止更新应用"), c.App.UpdateApp)
+		apps.POST("/:id/rollback", middleware.DemoGuard("演示模式下禁止回滚应用"), c.App.RollbackApp)
+		apps.POST("/:id/auto-update", middleware.DemoGuard("演示模式下禁止修改应用自动更新设置"), c.App.SetAppAutoUpdate)
+		apps.POST("/:id/switch", middleware.DemoGuard("演示模式下禁止切换应用场景"), c.App.SwitchScenario)
+		apps.POST("/:id/rebuild", middleware.DemoGuard("演示模式下禁止重新构建应用"), c.App.RebuildApp)
+		apps.DELETE("/:id", middleware.DemoGuard("演示模式下禁止卸载应用"), c.App.RemoveApp)
 	}
 }
 

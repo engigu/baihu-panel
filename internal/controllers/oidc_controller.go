@@ -57,10 +57,6 @@ func (ac *AuthController) getOAuth2Config(c *gin.Context) *oidc.Config {
 
 // startSSOLogin 发起单点登录跳转流程（统一支持 OIDC 与通用 OAuth 2.0）
 func (ac *AuthController) startSSOLogin(c *gin.Context, cfg *oidc.Config) {
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下禁止使用单点登录")
-		return
-	}
 	if cfg == nil {
 		utils.BadRequest(c, "该单点登录通道未启用或配置不完整")
 		return
@@ -90,11 +86,6 @@ func (ac *AuthController) startSSOLogin(c *gin.Context, cfg *oidc.Config) {
 
 // handleSSOCallback 处理单点登录授权回调（统一支持 OIDC 与通用 OAuth 2.0）
 func (ac *AuthController) handleSSOCallback(c *gin.Context, defaultCfg *oidc.Config) {
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下禁止使用单点登录")
-		return
-	}
-
 	stateCookie, err := c.Cookie(oidcStateCookie)
 	if err != nil || stateCookie == "" {
 		utils.Unauthorized(c, "单点登录会话已失效，请重新登录")

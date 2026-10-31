@@ -77,12 +77,6 @@ func (tc *TerminalController) HandleWebSocket(c *gin.Context) {
 	}
 	defer conn.Close()
 
-	// 演示模式下禁用终端
-	if constant.DemoMode {
-		conn.WriteMessage(websocket.TextMessage, []byte("\r\n\033[1;33m[演示模式] 终端功能已禁用\033[0m\r\n"))
-		return
-	}
-
 	// Windows 下支持 ConPTY API (Win10 1809+) 时开启原生伪终端，老旧系统优雅降级至 Pipe 模式
 	userID := c.GetString("userID")
 	if userID == "" {
@@ -510,12 +504,6 @@ func (tc *TerminalController) handlePipeMode(conn *websocket.Conn, userID string
 
 // ExecuteShellCommand 执行单个命令并返回结果
 func (tc *TerminalController) ExecuteShellCommand(c *gin.Context) {
-	// 演示模式下禁止执行命令
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下不能执行命令")
-		return
-	}
-
 	var req struct {
 		Command string `json:"command" binding:"required"`
 	}

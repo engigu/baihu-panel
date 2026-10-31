@@ -48,12 +48,6 @@ func NewSettingsController(userService *services.UserService, loginLogService *s
 
 // ChangePassword 修改密码及账号信息
 func (sc *SettingsController) ChangePassword(c *gin.Context) {
-	// 演示模式下禁止修改
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下不能修改账号或密码")
-		return
-	}
-
 	var req struct {
 		OldUsername string `json:"old_username"`
 		Username    string `json:"username"`
@@ -339,10 +333,6 @@ func (sc *SettingsController) UpdateSiteSettings(c *gin.Context) {
 
 // GenerateOpenapiToken 随机生成OpenAPI Token
 func (sc *SettingsController) GenerateOpenapiToken(c *gin.Context) {
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下禁止生成 OpenAPI Token")
-		return
-	}
 	utils.Success(c, gin.H{
 		"token": strings.ToLower(utils.RandomString(32)),
 	})
@@ -350,11 +340,6 @@ func (sc *SettingsController) GenerateOpenapiToken(c *gin.Context) {
 
 // TrimCache 手动触发容器 PageCache 与运行时内存自适应回收
 func (sc *SettingsController) TrimCache(c *gin.Context) {
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下禁止清理缓存")
-		return
-	}
-
 	_ = memopt.TryReclaimCgroupMemory(0)
 	trimmedFiles := memopt.TrimContainerCache()
 	memopt.Free()
@@ -376,11 +361,6 @@ func (sc *SettingsController) GetSchedulerSettings(c *gin.Context) {
 
 // UpdateSchedulerSettings 更新调度设置
 func (sc *SettingsController) UpdateSchedulerSettings(c *gin.Context) {
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下禁止修改调度参数")
-		return
-	}
-
 	var req struct {
 		WorkerCount  string `json:"worker_count"`
 		QueueSize    string `json:"queue_size"`
@@ -552,11 +532,6 @@ func (sc *SettingsController) GetLoginLogs(c *gin.Context) {
 
 // CreateBackup 创建备份
 func (sc *SettingsController) CreateBackup(c *gin.Context) {
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下禁止创建备份")
-		return
-	}
-
 	_, err := sc.backupService.CreateBackup()
 	if err != nil {
 		utils.ServerError(c, "创建备份失败: "+err.Error())
@@ -590,11 +565,6 @@ func (sc *SettingsController) GetBackupStatus(c *gin.Context) {
 
 // DownloadBackup 下载备份文件
 func (sc *SettingsController) DownloadBackup(c *gin.Context) {
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下禁止下载备份")
-		return
-	}
-
 	filePath := sc.backupService.GetBackupFile()
 	if filePath == "" {
 		utils.NotFound(c, "没有可下载的备份")
@@ -622,11 +592,6 @@ func (sc *SettingsController) DownloadBackup(c *gin.Context) {
 
 // RestoreBackup 恢复备份
 func (sc *SettingsController) RestoreBackup(c *gin.Context) {
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下禁止恢复备份数据")
-		return
-	}
-
 	file, err := c.FormFile("file")
 	if err != nil {
 		utils.BadRequest(c, "请上传备份文件")
@@ -663,11 +628,6 @@ func (sc *SettingsController) GetSectionSettings(c *gin.Context) {
 
 // UpdateSectionSettings 批量更新指定 section 的设置
 func (sc *SettingsController) UpdateSectionSettings(c *gin.Context) {
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下禁止修改配置")
-		return
-	}
-
 	section := c.Param("section")
 	if section == "" {
 		utils.BadRequest(c, "参数错误")
@@ -716,11 +676,6 @@ func (sc *SettingsController) GetSetting(c *gin.Context) {
 
 // GenerateSettingToken 为指定设置生成随机token
 func (sc *SettingsController) GenerateSettingToken(c *gin.Context) {
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下禁止生成 Token")
-		return
-	}
-
 	section := c.Param("section")
 	key := c.Param("key")
 

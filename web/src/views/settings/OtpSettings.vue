@@ -27,6 +27,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
+import { withDemoGuard } from '@/utils/demo'
+
 const otpEnabled = ref(false)
 const loading = ref(false)
 const demoMode = ref(false)
@@ -66,11 +68,7 @@ async function loadData() {
 }
 
 // 开始启用绑定流程，生成密钥和二维码
-async function startBind() {
-  if (demoMode.value) {
-    toast.error('演示模式下无法操作两步验证')
-    return
-  }
+const startBind = withDemoGuard(async () => {
   loading.value = true
   try {
     const res = await api.auth.generateOtp()
@@ -83,7 +81,7 @@ async function startBind() {
   } finally {
     loading.value = false
   }
-}
+}, '演示模式下无法操作两步验证')
 
 // 取消绑定流程
 function cancelBind() {
@@ -113,14 +111,10 @@ async function handleBind() {
 }
 
 // 点击解绑按钮
-function triggerDisable() {
-  if (demoMode.value) {
-    toast.error('演示模式下无法操作两步验证')
-    return
-  }
+const triggerDisable = withDemoGuard(() => {
   disableCode.value = ''
   showDisableDialog.value = true
-}
+}, '演示模式下无法操作两步验证')
 
 // 确认解绑
 async function handleDisable() {

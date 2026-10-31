@@ -25,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { withDemoGuard } from '@/utils/demo'
 
 const initialUsername = ref('')
 const username = ref('')
@@ -55,12 +56,7 @@ async function loadData() {
 }
 
 // 点击保存，先进行前置校验
-function prepareUpdate() {
-  if (demoMode.value) {
-    toast.error('演示模式下禁止修改凭据')
-    return
-  }
-
+const prepareUpdate = withDemoGuard(() => {
   // 1. 基础合法性校验
   if (!username.value.trim()) {
     toast.error('账户名不能为空')
@@ -92,7 +88,7 @@ function prepareUpdate() {
   verifyOldUsername.value = ''
   verifyOldPassword.value = ''
   showVerifyDialog.value = true
-}
+}, '演示模式下禁止修改凭据')
 
 // 弹窗确认，执行真正的修改流程
 async function handleFinalUpdate() {

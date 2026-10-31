@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useRegisterSettingSection, useFieldDiff } from './composables/useSettingsTracker'
 import ModifiedBadge from './components/ModifiedBadge.vue'
+import { withDemoGuard } from '@/utils/demo'
 
 const { refreshSettings, siteSettings } = useSiteSettings()
 
@@ -168,11 +169,7 @@ async function saveSettings() {
   }
 }
 
-async function generateOpenapiToken() {
-  if (isDemoMode.value) {
-    toast.error('演示模式下禁止生成 OpenAPI Token')
-    return
-  }
+const generateOpenapiToken = withDemoGuard(async () => {
   try {
     const res = await api.settings.generateOpenapiToken()
     form.value.openapi_token = res.token
@@ -185,13 +182,9 @@ async function generateOpenapiToken() {
   } catch {
     toast.error('生成 Token 失败')
   }
-}
+}, '演示模式下禁止生成 OpenAPI Token')
 
-async function copyOpenapiToken() {
-  if (isDemoMode.value) {
-    toast.error('演示模式下禁止操作 OpenAPI Token')
-    return
-  }
+const copyOpenapiToken = withDemoGuard(async () => {
   if (!form.value.openapi_token) return
   const success = await copyTextToClipboard(form.value.openapi_token)
   if (success) {
@@ -199,7 +192,7 @@ async function copyOpenapiToken() {
   } else {
     toast.error('复制失败，请手动复制')
   }
-}
+}, '演示模式下禁止操作 OpenAPI Token')
 
 function openSwaggerDocs() {
   window.open('https://engigu.github.io/baihu-panel/guide/api.html', '_blank')
@@ -240,11 +233,7 @@ const mcpConfigJson = computed(() => {
   }, null, 2)
 })
 
-async function copyMcpUrl() {
-  if (isDemoMode.value) {
-    toast.error('演示模式下禁止使用 MCP 能力')
-    return
-  }
+const copyMcpUrl = withDemoGuard(async () => {
   if (!form.value.openapi_token) {
     toast.error('请先生成并保存 OpenAPI Token')
     return
@@ -256,13 +245,9 @@ async function copyMcpUrl() {
   } else {
     toast.error('复制失败，请手动复制')
   }
-}
+}, '演示模式下禁止使用 MCP 能力')
 
-async function copyMcpConfigJson() {
-  if (isDemoMode.value) {
-    toast.error('演示模式下禁止使用 MCP 能力')
-    return
-  }
+const copyMcpConfigJson = withDemoGuard(async () => {
   if (!form.value.openapi_token) {
     toast.error('请先生成并保存 OpenAPI Token')
     return
@@ -273,13 +258,9 @@ async function copyMcpConfigJson() {
   } else {
     toast.error('复制失败，请手动复制')
   }
-}
+}, '演示模式下禁止使用 MCP 能力')
 
-async function handleTrimCache() {
-  if (isDemoMode.value) {
-    toast.error('演示模式下禁止清理缓存')
-    return
-  }
+const handleTrimCache = withDemoGuard(async () => {
   trimming.value = true
   try {
     const res = await api.settings.trimCache()
@@ -289,7 +270,7 @@ async function handleTrimCache() {
   } finally {
     trimming.value = false
   }
-}
+}, '演示模式下禁止清理缓存')
 
 onMounted(loadSettings)
 </script>
@@ -464,9 +445,12 @@ onMounted(loadSettings)
                 <div class="flex items-center space-x-2">
                   <Input
                     v-model="form.openapi_token"
-                    placeholder="点击右侧按钮生成 32 位 Token"
-                    class="text-xs sm:text-sm h-9 font-mono flex-1 min-w-0"
-                    :class="diffClass('openapi_token')"
+                    :placeholder="isDemoMode ? '演示模式下已锁定访问凭据' : '点击右侧按钮生成 32 位 Token'"
+                    class="text-xs sm:text-sm h-9 flex-1 min-w-0"
+                    :class="[
+                      diffClass('openapi_token'),
+                      form.openapi_token ? 'font-mono' : 'demo-placeholder-text placeholder:text-muted-foreground/70'
+                    ]"
                     :disabled="isDemoMode || !form.openapi_enabled"
                   />
                   <Button
@@ -607,9 +591,15 @@ onMounted(loadSettings)
                   <div class="flex items-center gap-1.5">
                     <Input
                       :model-value="isDemoMode ? '演示模式下已禁用 MCP 协议与远程连接' : currentMcpUrl"
+                      :placeholder="isDemoMode ? '演示模式下已禁用 MCP 协议与远程连接' : currentMcpUrl"
                       readonly
-                      :disabled="isDemoMode"
-                      class="text-xs h-8.5 font-mono bg-muted/40 select-all flex-1 min-w-0"
+                      :tabindex="isDemoMode ? -1 : 0"
+                      :class="[
+                        'text-xs h-8.5 flex-1 min-w-0 transition-colors',
+                        isDemoMode
+                          ? 'demo-placeholder-text text-muted-foreground/75 dark:text-muted-foreground/70 bg-muted/20 border-border/60 cursor-not-allowed select-none caret-transparent'
+                          : 'font-mono text-foreground bg-muted/40 select-all'
+                      ]"
                     />
                     <Button
                       type="button"
@@ -1030,5 +1020,16 @@ onMounted(loadSettings)
 :deep(input[type='number']) {
   -moz-appearance: textfield !important;
   appearance: textfield !important;
+}
+
+:deep(.demo-placeholder-text),
+:deep(.demo-placeholder-text::placeholder) {
+  font-family: var(--font-main) !important;
+  font-size: 11.5px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.015em !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
 }
 </style>

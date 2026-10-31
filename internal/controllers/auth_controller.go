@@ -299,11 +299,6 @@ func (ac *AuthController) GetOTPStatus(c *gin.Context) {
 }
 
 func (ac *AuthController) GenerateOTP(c *gin.Context) {
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下禁止配置两步验证")
-		return
-	}
-
 	userID := c.GetString("userID")
 	user, err := ac.userService.GetUserByID(userID)
 	if err != nil {
@@ -336,11 +331,6 @@ func (ac *AuthController) GenerateOTP(c *gin.Context) {
 }
 
 func (ac *AuthController) EnableOTP(c *gin.Context) {
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下禁止开启两步验证")
-		return
-	}
-
 	userID := c.GetString("userID")
 	var req struct {
 		Secret string `json:"secret" binding:"required"`
@@ -367,11 +357,6 @@ func (ac *AuthController) EnableOTP(c *gin.Context) {
 }
 
 func (ac *AuthController) DisableOTP(c *gin.Context) {
-	if constant.DemoMode {
-		utils.BadRequest(c, "演示模式下禁止关闭两步验证")
-		return
-	}
-
 	userID := c.GetString("userID")
 	var req struct {
 		Code string `json:"code" binding:"required"`
