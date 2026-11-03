@@ -43,24 +43,15 @@ function getTheme() {
   }
 }
 
-// 适配并重新计算列宽，若列宽变化或要求强制重排，则以新尺寸重新渲染以消除错误折行
-function fitAndRefresh(forceRefresh = false) {
+function fit() {
   if (!terminal || !fitAddon || !terminalRef.value) return
   try {
-    const oldCols = terminal.cols
     fitAddon.fit()
-    if ((terminal.cols !== oldCols || forceRefresh) && props.content) {
-      const formattedContent = props.content.replace(/\r?\n/g, '\r\n')
-      terminal.clear()
-      terminal.write(formattedContent)
-      lastContentLength = props.content.length
-      lastContent = props.content
-    }
   } catch (e) {}
 }
 
 function initTerminal() {
-  if (!terminalRef.value) return
+  if (!terminalRef.value || terminal) return
 
   terminal = new Terminal({
     cursorBlink: false,
@@ -125,25 +116,15 @@ function initTerminal() {
     return true
   })
 
-  // 尝试立即计算尺寸
-  try {
-    fitAddon.fit()
-  } catch (e) {}
+  fit()
 
   if (props.content) {
     writeContent(props.content)
   }
 
-  // 多阶段延迟适配：确保在侧边栏 CSS 弹性盒或动画稳定展开后，按真实的列数重新展开平铺
   requestAnimationFrame(() => {
-    fitAndRefresh(true)
+    fit()
   })
-  setTimeout(() => {
-    fitAndRefresh(true)
-  }, 50)
-  setTimeout(() => {
-    fitAndRefresh(true)
-  }, 150)
 }
 
 function writeContent(content: string) {
@@ -157,7 +138,7 @@ function writeContent(content: string) {
   } else {
     // 全量更新
     const formattedContent = content.replace(/\r?\n/g, '\r\n')
-    terminal.clear()
+    terminal.reset()
     terminal.write(formattedContent)
   }
   
@@ -172,24 +153,34 @@ watch(resolvedTheme, () => {
 })
 
 watch(() => props.content, (newContent) => {
-  if (newContent) {
-    nextTick(() => {
-      writeContent(newContent)
-    })
+  if (newContent && newContent.trim()) {
+    if (!terminal) {
+      nextTick(() => {
+        initTerminal()
+      })
+    } else {
+      nextTick(() => {
+        writeContent(newContent)
+      })
+    }
   } else {
-    terminal?.clear()
+    terminal?.reset()
     lastContentLength = 0
     lastContent = ''
   }
 })
 
-// 监听容器大小变化以适配 xterm
 onMounted(() => {
   if (terminalRef.value) {
     resizeObserver = new ResizeObserver(() => {
-      fitAndRefresh(false)
+      fit()
     })
     resizeObserver.observe(terminalRef.value)
+  }
+  if (props.content && props.content.trim()) {
+    nextTick(() => {
+      initTerminal()
+    })
   }
 })
 
@@ -201,53 +192,36 @@ onUnmounted(() => {
   terminal = null
   fitAddon = null
 })
-
-// 当不显示 loading 且有 content 时，初始化 terminal
-watch(
-  () => (!props.loading && props.content && props.content.trim()), 
-  (shouldShow) => {
-    if (shouldShow) {
-      if (!terminal) {
-        nextTick(() => {
-          initTerminal()
-        })
-      } else {
-        nextTick(() => {
-          fitAndRefresh(false)
-        })
-      }
-    }
-  },
-  { immediate: true }
-)
 </script>
 
 <template>
   <div class="flex-1 flex flex-col h-full w-full relative min-h-0 lg:min-h-full min-w-0">
-    <!-- 加载状态 -->
-    <template v-if="loading">
-      <div class="flex-1 flex flex-col items-center justify-center p-4 select-none text-center">
-        <Loader2 class="h-10 w-10 animate-spin text-primary/30 mb-4" />
-        <span class="text-sm text-muted-foreground font-medium animate-pulse">{{ loadingText }}</span>
-      </div>
-    </template>
+    <!-- 加载状态遮罩 -->
+    <div
+      v-if="loading"
+      class="absolute inset-0 z-10 flex flex-col items-center justify-center p-4 select-none text-center bg-card/80 backdrop-blur-xs"
+    >
+      <Loader2 class="h-10 w-10 animate-spin text-primary/30 mb-4" />
+      <span class="text-sm text-muted-foreground font-medium animate-pulse">{{ loadingText }}</span>
+    </div>
 
     <!-- 空状态 -->
-    <template v-else-if="!content || !content.trim()">
-      <div class="flex-1 flex flex-col items-center justify-center py-10 lg:py-0 select-none text-center min-h-[160px]">
-        <div class="w-14 h-14 rounded-3xl bg-muted/20 flex items-center justify-center mb-4 border border-muted-foreground/10 mx-auto">
-          <AlertCircle class="h-7 w-8 text-muted-foreground/20" />
-        </div>
-        <span class="text-sm text-muted-foreground font-medium">{{ emptyTitle }}</span>
-        <p class="text-[11px] text-muted-foreground/40 mt-1.5 max-w-[280px] leading-relaxed mx-auto">
-          {{ emptyDescription }}
-        </p>
+    <div
+      v-else-if="!content || !content.trim()"
+      class="flex-1 flex flex-col items-center justify-center py-10 lg:py-0 select-none text-center min-h-[160px]"
+    >
+      <div class="w-14 h-14 rounded-3xl bg-muted/20 flex items-center justify-center mb-4 border border-muted-foreground/10 mx-auto">
+        <AlertCircle class="h-7 w-8 text-muted-foreground/20" />
       </div>
-    </template>
+      <span class="text-sm text-muted-foreground font-medium">{{ emptyTitle }}</span>
+      <p class="text-[11px] text-muted-foreground/40 mt-1.5 max-w-[280px] leading-relaxed mx-auto">
+        {{ emptyDescription }}
+      </p>
+    </div>
 
     <!-- 正常内容 -->
     <div 
-      v-show="!loading && content && content.trim()" 
+      v-show="content && content.trim()" 
       class="flex-1 w-full min-w-0 p-2 overflow-hidden h-[200px] lg:h-full lg:min-h-0"
     >
       <div ref="terminalRef" class="w-full h-full min-w-0 log-terminal"></div>

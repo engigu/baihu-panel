@@ -176,6 +176,10 @@ function handlePageSizeChange(newSize: number) {
 }
 
 async function selectLog(log: TaskLog) {
+  // 幂等防重：若已展示该日志，忽略重复点击
+  if (selectedLog.value?.id === log.id && (wsContent.value || isWsLoading.value)) {
+    return
+  }
   cleanupLogSocket()
 
   // 清理旧定时器
