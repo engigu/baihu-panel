@@ -913,12 +913,16 @@ func (es *ExecutorService) SyncAppTasks(masterTaskID string) {
 	}
 }
 
-// StopTaskExecution stops a running task execution by LogID
-func (es *ExecutorService) StopTaskExecution(logID string) error {
+// StopTaskExecution stops a running task execution by LogID or TaskID
+func (es *ExecutorService) StopTaskExecution(id string) error {
 	var taskLog models.TaskLog
-	res := database.DB.Where("id = ?", logID).Limit(1).Find(&taskLog)
+	res := database.DB.Where("id = ?", id).Limit(1).Find(&taskLog)
 	if res.Error != nil || res.RowsAffected == 0 {
-		return fmt.Errorf("停止失败：找不到指定的执行记录 (LogID: %s)", logID)
+		// Fallback: 尝试作为 TaskID 查找当前正在运行中的执行记录
+		res = database.DB.Where("task_id = ? AND status = ?", id, constant.TaskStatusRunning).Order("id DESC").Limit(1).Find(&taskLog)
+		if res.Error != nil || res.RowsAffected == 0 {
+			return fmt.Errorf("停止失败：找不到指定的执行记录或该任务当前未在运行中 (ID: %s)", id)
+		}
 	}
 
 	// 1. 状态预校验
@@ -949,9 +953,9 @@ func (es *ExecutorService) StopTaskExecution(logID string) error {
 			return fmt.Errorf("停止失败：目标 Agent (%s) 当前离线，无法下发指令", *task.AgentID)
 		}
 
-		logger.Infof("[Executor] 请求停止远程任务 #%s (Agent #%s, LogID: %s)", task.ID, *task.AgentID, logID)
+		logger.Infof("[Executor] 请求停止远程任务 #%s (Agent #%s, LogID: %s)", task.ID, *task.AgentID, taskLog.ID)
 		err := es.agentWSManager.SendToAgent(*task.AgentID, constant.WSTypeStop, map[string]interface{}{
-			"log_id": logID,
+			"log_id": taskLog.ID,
 		})
 		if err != nil {
 			return fmt.Errorf("下发停止指令失败: %v", err)
@@ -960,8 +964,8 @@ func (es *ExecutorService) StopTaskExecution(logID string) error {
 	}
 
 	// 3. 本地任务逻辑
-	logger.Infof("[Executor] 请求停止本地任务 #%s (LogID: %s)", task.ID, logID)
-	if es.scheduler.StopLog(logID) {
+	logger.Infof("[Executor] 请求停止本地任务 #%s (LogID: %s)", task.ID, taskLog.ID)
+	if es.scheduler.StopLog(taskLog.ID) {
 		return nil
 	}
 

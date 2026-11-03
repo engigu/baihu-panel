@@ -257,7 +257,7 @@ type Task struct {
 	Config         BigText       `json:"config"`                                     // 旧配置 JSON（保留不删）
 	UnifiedConfig  BigText       `json:"unified_config"`                             // 升级后的统一 JSON 配置 {'common':{}, 'repo':{}, 'app':{}}
 	Schedule       string        `json:"schedule" gorm:"size:100"`                   // cron 表达式
-	Timeout        int           `json:"timeout" gorm:"default:30"`                  // 超时时间（分钟），默认30分钟
+	Timeout        int           `json:"timeout"`                                  // 超时时间（分钟），0 表示不限制
 	WorkDir        string        `json:"work_dir" gorm:"size:255;default:''"`        // 工作目录，为空则使用 scripts 目录
 	CleanConfig    string        `json:"clean_config" gorm:"size:255;default:''"`    // 清理配置 JSON
 	Envs           BigText       `json:"envs" gorm:"-"`                              // 环境变量ID列表，逗号分隔

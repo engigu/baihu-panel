@@ -113,9 +113,11 @@ export function parseBaihuCommand(command: string): ParsedRepoResult | null {
       case '--extensions':
         repoConfig.extensions = value
         break
-      case '--task-timeout':
-        task.timeout = parseInt(value) || 30
+      case '--task-timeout': {
+        const pt = parseInt(value)
+        task.timeout = isNaN(pt) ? 30 : pt
         break
+      }
       case '--task-langs':
         try {
           const langs = JSON.parse(value)

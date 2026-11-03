@@ -684,6 +684,21 @@ const currentQueryFilter = computed(() => ({
   agent_id: filterAgentId.value || undefined
 }))
 
+const stoppingTaskId = ref<string | null>(null)
+
+async function handleStopTaskById(id: string) {
+  if (stoppingTaskId.value) return
+  stoppingTaskId.value = id
+  try {
+    await api.tasks.stop(id)
+    toast.success('已发送停止指令')
+  } catch (error: any) {
+    toast.error(error.message || '停止失败')
+  } finally {
+    stoppingTaskId.value = null
+  }
+}
+
 async function runTask(id: string) {
   if (executingTaskId.value) return
   executingTaskId.value = id
@@ -1106,6 +1121,7 @@ watch(() => route.query.type, (newVal: any) => {
       :sort-by="sortBy"
       :order="order"
       :executing-task-id="executingTaskId"
+      :stopping-task-id="stoppingTaskId"
       :agent-map="agentMap"
       :selected-ids="selectedIds"
       :is-all-selected="isAllSelected"
@@ -1113,6 +1129,7 @@ watch(() => route.query.type, (newVal: any) => {
       :update-map="updateMap"
       @toggle-sort="toggleSort"
       @run-task="runTask"
+      @stop-task="handleStopTaskById"
       @view-logs="viewLogs"
       @open-edit-task="openEdit"
       @open-edit-app="openEditApp"

@@ -17,6 +17,7 @@ const props = withDefaults(defineProps<{
   sortBy: string
   order: string
   executingTaskId?: string | null
+  stoppingTaskId?: string | null
   agentMap: Record<string, Agent>
   selectedIds?: string[]
   isAllSelected?: boolean
@@ -34,6 +35,7 @@ const hasSelection = computed(() => (props.selectedIds?.length || 0) > 0)
 const emit = defineEmits<{
   'toggleSort': [field: string]
   'runTask': [id: string]
+  'stopTask': [id: string]
   'viewLogs': [id: string]
   'openEditTask': [task: Task]
   'openEditApp': [task: Task]
@@ -160,11 +162,13 @@ const emit = defineEmits<{
           :current-page="currentPage"
           :page-size="pageSize"
           :executing-task-id="executingTaskId"
+          :stopping-task-id="stoppingTaskId"
           :agent-map="agentMap"
           :selected="selectedIds.includes(task.id)"
           :has-selection="hasSelection"
           :update-info="updateMap[task.id] || null"
           @run="$emit('runTask', $event)"
+          @stop="$emit('stopTask', $event)"
           @view-logs="$emit('viewLogs', $event)"
           @filter-by-app="$emit('filterByApp', $event)"
           @edit-app="$emit('openEditApp', $event)"
@@ -184,10 +188,12 @@ const emit = defineEmits<{
           :current-page="currentPage"
           :page-size="pageSize"
           :executing-task-id="executingTaskId"
+          :stopping-task-id="stoppingTaskId"
           :agent-map="agentMap"
           :selected="selectedIds.includes(task.id)"
           :has-selection="hasSelection"
           @run="$emit('runTask', $event)"
+          @stop="$emit('stopTask', $event)"
           @view-logs="$emit('viewLogs', $event)"
           @edit="$emit('openEditTask', $event)"
           @toggle-task="(t, en) => $emit('toggleTask', t, en)"
@@ -207,10 +213,12 @@ const emit = defineEmits<{
           :current-page="currentPage"
           :page-size="pageSize"
           :executing-task-id="executingTaskId"
+          :stopping-task-id="stoppingTaskId"
           :agent-map="agentMap"
           :selected="selectedIds.includes(task.id)"
           :has-selection="hasSelection"
           @run="$emit('runTask', $event)"
+          @stop="$emit('stopTask', $event)"
           @view-logs="$emit('viewLogs', $event)"
           @edit="$emit('openEditTask', $event)"
           @toggle-task="(t, en) => $emit('toggleTask', t, en)"

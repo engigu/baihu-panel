@@ -294,7 +294,7 @@ async function save() {
           version: l.version
         }))
       }
-      if (form.value.timeout) update_fields.timeout = Number(form.value.timeout)
+      if (form.value.timeout !== undefined) update_fields.timeout = Number(form.value.timeout)
       if (form.value.tags !== undefined) update_fields.tags = form.value.tags
       if (form.value.pre_command !== undefined) update_fields.pre_command = form.value.pre_command
       if (form.value.post_command !== undefined) update_fields.post_command = form.value.post_command

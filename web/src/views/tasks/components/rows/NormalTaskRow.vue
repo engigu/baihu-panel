@@ -9,7 +9,8 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import {
-  Play, Pencil, Trash2, ScrollText, Terminal, Monitor, Loader2, Wifi, WifiOff,
+  Play,
+  Square, Pencil, Trash2, ScrollText, Terminal, Monitor, Loader2, Wifi, WifiOff,
   Zap, ZapOff, Copy, Pin, PinOff, MoreHorizontal, Wrench, Package, FolderSync
 } from 'lucide-vue-next'
 import StatusDot from '@/components/StatusDot.vue'
@@ -25,6 +26,7 @@ const props = defineProps<{
   currentPage: number
   pageSize: number
   executingTaskId?: string | null
+  stoppingTaskId?: string | null
   agentMap: Record<string, Agent>
   selected?: boolean
   hasSelection?: boolean
@@ -32,6 +34,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'run': [id: string]
+  'stop': [id: string]
   'viewLogs': [id: string]
   'edit': [task: Task]
   'toggleTask': [task: Task, enabled: boolean]
@@ -79,6 +82,20 @@ function getLangBadgeClass(name: string) {
     dotnet: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20'
   }
   return colors[n] || 'bg-slate-500/10 text-slate-500 border-slate-500/20 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20'
+}
+
+function isConcurrencyLimited(task: Task): boolean {
+  if (task.type === TASK_TYPE.REPO) return true
+  if (!task.unified_config) return true
+  try {
+    const parsed = JSON.parse(task.unified_config)
+    if (parsed && typeof parsed === 'object' && parsed.common) {
+      return parsed.common.task_concurrency !== 1
+    }
+  } catch {
+    return true
+  }
+  return true
 }
 
 function getShortLangName(name: string): string {
@@ -201,7 +218,27 @@ function getShortLangName(name: string): string {
       </span>
 
       <span class="w-24 shrink-0 flex justify-center">
-        <Button variant="ghost" size="icon" class="h-6 w-6" @click="$emit('run', task.id)" :disabled="executingTaskId === task.id">
+        <Button
+          v-if="isConcurrencyLimited(task) && task.running_status === 'running'"
+          variant="ghost"
+          size="icon"
+          class="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
+          title="停止运行"
+          @click="$emit('stop', task.id)"
+          :disabled="stoppingTaskId === task.id"
+        >
+          <Loader2 v-if="stoppingTaskId === task.id" class="h-3 w-3 animate-spin" />
+          <Square v-else class="h-3 w-3 fill-current" />
+        </Button>
+        <Button
+          v-else
+          variant="ghost"
+          size="icon"
+          class="h-6 w-6"
+          title="执行任务"
+          @click="$emit('run', task.id)"
+          :disabled="executingTaskId === task.id"
+        >
           <Loader2 v-if="executingTaskId === task.id" class="h-3 w-3 animate-spin" />
           <Play v-else class="h-3 w-3" />
         </Button>
@@ -310,7 +347,25 @@ function getShortLangName(name: string): string {
 
       <div class="flex items-center justify-between pt-1.5 border-t border-border/40 text-xs" @click.stop>
         <div class="flex items-center gap-1.5">
-          <Button variant="ghost" size="sm" class="h-7 text-xs px-2" @click="$emit('run', task.id)" :disabled="executingTaskId === task.id">
+          <Button
+            v-if="isConcurrencyLimited(task) && task.running_status === 'running'"
+            variant="ghost"
+            size="sm"
+            class="h-7 text-xs px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+            @click="$emit('stop', task.id)"
+            :disabled="stoppingTaskId === task.id"
+          >
+            <Loader2 v-if="stoppingTaskId === task.id" class="h-3 w-3 mr-1 animate-spin" />
+            <Square v-else class="h-3 w-3 mr-1 fill-current" /> 停止
+          </Button>
+          <Button
+            v-else
+            variant="ghost"
+            size="sm"
+            class="h-7 text-xs px-2"
+            @click="$emit('run', task.id)"
+            :disabled="executingTaskId === task.id"
+          >
             <Play class="h-3 w-3 mr-1" /> 执行
           </Button>
           <Button variant="ghost" size="sm" class="h-7 text-xs px-2" @click="$emit('viewLogs', task.id)">

@@ -149,7 +149,7 @@ function submitBaihuImport() {
   // 应用解析结果
   repoConfig.value = { ...repoConfig.value, ...result.repoConfig }
   if (result.task.name) form.value.name = result.task.name
-  if (result.task.timeout) form.value.timeout = result.task.timeout
+  if (result.task.timeout !== undefined) form.value.timeout = result.task.timeout
   if (result.task.pre_command) form.value.pre_command = result.task.pre_command
   if (result.task.post_command) form.value.post_command = result.task.post_command
   
@@ -356,7 +356,7 @@ async function save() {
           version: l.version
         }))
       }
-      if (form.value.timeout) update_fields.timeout = Number(form.value.timeout)
+      if (form.value.timeout !== undefined) update_fields.timeout = Number(form.value.timeout)
       if (form.value.tags !== undefined) update_fields.tags = form.value.tags
       if (form.value.pre_command !== undefined) update_fields.pre_command = form.value.pre_command
       if (form.value.post_command !== undefined) update_fields.post_command = form.value.post_command

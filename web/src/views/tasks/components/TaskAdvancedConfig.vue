@@ -126,7 +126,7 @@ watch(() => form.value.id, () => {
             <span class="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">超限终止</span>
           </div>
           <p class="text-[11px] text-muted-foreground">
-            单次运行最长耗时，超时将被系统强制结束
+            单次运行最长耗时，超时将被系统强制结束 (0 为不限制)
           </p>
         </div>
         <div class="flex items-center gap-2 self-start sm:self-auto shrink-0">
@@ -134,7 +134,7 @@ watch(() => form.value.id, () => {
             :model-value="form.timeout"
             @update:model-value="(v: string | number) => form.timeout = Number(v || 0)"
             type="number"
-            :min="1"
+            :min="0"
             class="w-24 h-8 text-xs font-semibold text-center bg-background"
           />
           <span class="text-xs text-muted-foreground font-medium shrink-0">分钟超时</span>
