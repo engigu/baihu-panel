@@ -122,11 +122,21 @@ export default defineConfig({
       '/api': {
         target: process.env.VITE_PROXY_TARGET || 'http://localhost:8052',
         changeOrigin: true,
-        ws: true
+        ws: true,
+        xfwd: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            if (req.headers.host) {
+              proxyReq.setHeader('x-forwarded-host', req.headers.host)
+              proxyReq.setHeader('x-forwarded-proto', 'http')
+            }
+          })
+        }
       },
       '/openapi': {
         target: process.env.VITE_PROXY_TARGET || 'http://localhost:8052',
-        changeOrigin: true
+        changeOrigin: true,
+        xfwd: true
       }
     }
   },

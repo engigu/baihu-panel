@@ -2,6 +2,7 @@ package oidc
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	coreos_oidc "github.com/coreos/go-oidc/v3/oidc"
@@ -89,8 +90,6 @@ type Config struct {
 	ClientSecret string   `json:"client_secret"`
 	RedirectURL  string   `json:"redirect_url"`
 	Scopes       []string `json:"scopes"`
-	AutoCreate   bool     `json:"auto_create"`
-	DefaultRole  string   `json:"default_role"`
 
 	// 通用 OAuth 2.0 专用字段
 	AuthURL     string `json:"auth_url"`
@@ -141,13 +140,6 @@ func (r SecurityReader) Secret(keys ...string) string {
 	return utils.DecryptSecret(raw)
 }
 
-func (r SecurityReader) Role(keys ...string) string {
-	if r.Get(keys...) == constant.AdminRole {
-		return constant.AdminRole
-	}
-	return constant.DefaultRole
-}
-
 func (r SecurityReader) Scopes(raw string, defaultScopes ...string) []string {
 	seen := make(map[string]bool)
 	var list []string
@@ -182,6 +174,24 @@ func ResolveRedirectURL(custom string, defaultPath string, c *gin.Context) strin
 			scheme = "https"
 		}
 		host := c.GetHeader("X-Forwarded-Host")
+		if host == "" {
+			// 自动适配前端开发调试模式 (如 Vite dev server 5173 转发) 或未设置头部的代理环境
+			if ref := c.GetHeader("Referer"); ref != "" {
+				if u, err := url.Parse(ref); err == nil && u.Host != "" {
+					host = u.Host
+					if u.Scheme != "" {
+						scheme = u.Scheme
+					}
+				}
+			} else if origin := c.GetHeader("Origin"); origin != "" {
+				if u, err := url.Parse(origin); err == nil && u.Host != "" {
+					host = u.Host
+					if u.Scheme != "" {
+						scheme = u.Scheme
+					}
+				}
+			}
+		}
 		if host == "" {
 			host = c.Request.Host
 		}
@@ -267,8 +277,6 @@ func LoadOidcConfig(ss *services.SettingsService, redirectURL string) *Config {
 		ClientSecret: r.Secret(constant.KeyOidcClientSecret),
 		RedirectURL:  redirectURL,
 		Scopes:       r.Scopes(r.Get(constant.KeyOidcScopes), coreos_oidc.ScopeOpenID, "profile", "email"),
-		AutoCreate:   r.Bool(constant.KeyOidcAutoCreate),
-		DefaultRole:  r.Role(constant.KeyOidcDefaultRole),
 	}
 }
 
@@ -295,8 +303,6 @@ func LoadOAuth2Config(ss *services.SettingsService, redirectURL string) *Config 
 		ClientSecret: r.Secret(constant.KeyOauth2ClientSecret, constant.KeyOidcClientSecret),
 		RedirectURL:  redirectURL,
 		Scopes:       r.Scopes(r.Get(constant.KeyOauth2Scopes, constant.KeyOidcScopes)),
-		AutoCreate:   r.Bool(constant.KeyOauth2AutoCreate, constant.KeyOidcAutoCreate),
-		DefaultRole:  r.Role(constant.KeyOauth2DefaultRole, constant.KeyOidcDefaultRole),
 		AuthURL:      authURL,
 		TokenURL:     tokenURL,
 		UserinfoURL:  userinfoURL,

@@ -66,12 +66,12 @@ func findCookie(w *httptest.ResponseRecorder, name string) string {
 	return ""
 }
 
-// 未开启自动创建时，陌生身份应被拒绝且不落库
+// 移除自动建号后，未绑定的陌生身份应被拒绝并跳回登录页带 error 提示，绝不创建新账号
 func TestOidcLoginUnknownIdentityRejected(t *testing.T) {
 	idp := newFakeIdP(t, "baihu-panel", "sub-unknown", "nobody@example.com", "nobody")
 	w, _ := fullFlow(t, idp, false)
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("期望 403，实际 %d (%s)", w.Code, w.Body.String())
+	if w.Code != http.StatusFound || !strings.Contains(w.Header().Get("Location"), "/login?error=") {
+		t.Fatalf("期望 302 跳回 /login?error=，实际 %d, Location: %s", w.Code, w.Header().Get("Location"))
 	}
 	var n int64
 	database.DB.Model(&models.User{}).Where("oidc_subject = ?", "sub-unknown").Count(&n)
@@ -80,23 +80,49 @@ func TestOidcLoginUnknownIdentityRejected(t *testing.T) {
 	}
 }
 
-// 开启自动创建时，首次登录应建号并签发本系统 JWT cookie
-func TestOidcLoginAutoCreateIssuesJwt(t *testing.T) {
-	idp := newFakeIdP(t, "baihu-panel", "sub-new", "new@example.com", "newuser")
-	w, _ := fullFlow(t, idp, true)
-	if w.Code != http.StatusFound {
-		t.Fatalf("期望 302，实际 %d (%s)", w.Code, w.Body.String())
+// 已在绑定表中关联本地账号的身份，登录成功并签发本系统 JWT cookie
+func TestOidcLoginBoundUserIssuesJwt(t *testing.T) {
+	idp := newFakeIdP(t, "baihu-panel", "sub-bound", "bound@example.com", "bounduser")
+	ac := setupOidcTest(t, idp, false)
+
+	userSvc := services.NewUserService()
+	existingUser := userSvc.CreateUser("bounduser", "pass1234", "bound@example.com", constant.DefaultRole)
+
+	// 预置绑定关系
+	database.DB.Create(&models.UserSSOBinding{
+		ID:           utils.GenerateID(),
+		UserID:       existingUser.ID,
+		Username:     existingUser.Username,
+		ChannelType:  constant.SSOTypeOIDC,
+		Subject:      "sub-bound",
+		IdentityName: "bounduser",
+		Email:        "bound@example.com",
+		BindType:     "oauth",
+		CreatedAt:    models.Now(),
+		UpdatedAt:    models.Now(),
+	})
+
+	router := gin.New()
+	router.GET(constant.PathAuthOidcLogin, ac.OidcLogin)
+	router.GET(constant.PathAuthOidcCallback, ac.OidcCallback)
+
+	loginReq := httptest.NewRequest(http.MethodGet, constant.PathAuthOidcLogin, nil)
+	lw := httptest.NewRecorder()
+	router.ServeHTTP(lw, loginReq)
+	state := extractQuery(t, lw.Header().Get("Location"), "state")
+
+	cbReq := httptest.NewRequest(http.MethodGet, constant.PathAuthOidcCallback+"?code=test-code&state="+state, nil)
+	for _, c := range lw.Result().Cookies() {
+		cbReq.AddCookie(c)
+	}
+	cbW := httptest.NewRecorder()
+	router.ServeHTTP(cbW, cbReq)
+
+	if cbW.Code != http.StatusFound {
+		t.Fatalf("期望 302，实际 %d (%s)", cbW.Code, cbW.Body.String())
 	}
 
-	var user models.User
-	if err := database.DB.Where("oidc_subject = ?", "sub-new").First(&user).Error; err != nil {
-		t.Fatalf("未创建 OIDC 用户: %v", err)
-	}
-	if user.Username != "newuser" || user.Role != constant.DefaultRole {
-		t.Fatalf("自动创建用户属性不符: %+v", user)
-	}
-
-	token := findCookie(w, constant.CookieName)
+	token := findCookie(cbW, constant.CookieName)
 	if token == "" {
 		t.Fatal("回调未下发认证 Cookie")
 	}
@@ -104,47 +130,78 @@ func TestOidcLoginAutoCreateIssuesJwt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("签发的 token 无法解析: %v", err)
 	}
-	if userID != user.ID || username != user.Username || version != user.TokenVersion {
+	if userID != existingUser.ID || username != existingUser.Username || version != existingUser.TokenVersion {
 		t.Fatalf("token 内容与用户不符: %s/%s/%d", userID, username, version)
 	}
 }
 
-// 第二次登录同一 subject 应命中已有账号，不重复建号
+// 多次登录同一已绑定身份，应直接命中已有账号
 func TestOidcLoginBindsExistingSubject(t *testing.T) {
 	idp := newFakeIdP(t, "baihu-panel", "sub-re", "re@example.com", "reuser")
-	w, ac := fullFlow(t, idp, true)
-	if w.Code != http.StatusFound {
-		t.Fatalf("首次登录失败: %d", w.Code)
-	}
+	ac := setupOidcTest(t, idp, false)
+
+	userSvc := services.NewUserService()
+	existingUser := userSvc.CreateUser("reuser", "pass1234", "re@example.com", constant.DefaultRole)
+	database.DB.Create(&models.UserSSOBinding{
+		ID:           utils.GenerateID(),
+		UserID:       existingUser.ID,
+		Username:     existingUser.Username,
+		ChannelType:  constant.SSOTypeOIDC,
+		Subject:      "sub-re",
+		IdentityName: "reuser",
+		Email:        "re@example.com",
+		BindType:     "oauth",
+		CreatedAt:    models.Now(),
+		UpdatedAt:    models.Now(),
+	})
 
 	router := gin.New()
 	router.GET(constant.PathAuthOidcLogin, ac.OidcLogin)
 	router.GET(constant.PathAuthOidcCallback, ac.OidcCallback)
+
+	// 第一次登录
 	loginReq := httptest.NewRequest(http.MethodGet, constant.PathAuthOidcLogin, nil)
 	lw := httptest.NewRecorder()
 	router.ServeHTTP(lw, loginReq)
 	state := extractQuery(t, lw.Header().Get("Location"), "state")
-	cbReq := httptest.NewRequest(http.MethodGet, constant.PathAuthOidcCallback+"?code=c2&state="+state, nil)
+
+	cbReq := httptest.NewRequest(http.MethodGet, constant.PathAuthOidcCallback+"?code=c1&state="+state, nil)
 	for _, c := range lw.Result().Cookies() {
 		cbReq.AddCookie(c)
 	}
 	cbW := httptest.NewRecorder()
 	router.ServeHTTP(cbW, cbReq)
 	if cbW.Code != http.StatusFound {
-		t.Fatalf("二次登录失败: %d (%s)", cbW.Code, cbW.Body.String())
+		t.Fatalf("首次登录失败: %d", cbW.Code)
+	}
+
+	// 第二次登录
+	loginReq2 := httptest.NewRequest(http.MethodGet, constant.PathAuthOidcLogin, nil)
+	lw2 := httptest.NewRecorder()
+	router.ServeHTTP(lw2, loginReq2)
+	state2 := extractQuery(t, lw2.Header().Get("Location"), "state")
+
+	cbReq2 := httptest.NewRequest(http.MethodGet, constant.PathAuthOidcCallback+"?code=c2&state="+state2, nil)
+	for _, c := range lw2.Result().Cookies() {
+		cbReq2.AddCookie(c)
+	}
+	cbW2 := httptest.NewRecorder()
+	router.ServeHTTP(cbW2, cbReq2)
+	if cbW2.Code != http.StatusFound {
+		t.Fatalf("二次登录失败: %d (%s)", cbW2.Code, cbW2.Body.String())
 	}
 
 	var total int64
-	database.DB.Model(&models.User{}).Where("oidc_subject = ?", "sub-re").Count(&total)
+	database.DB.Model(&models.User{}).Where("username = ?", "reuser").Count(&total)
 	if total != 1 {
-		t.Fatalf("同一 subject 应只有一个账号，实际 %d", total)
+		t.Fatalf("同一用户应只有一个账号，实际 %d", total)
 	}
 }
 
 // 伪造/篡改的 state 必须被拒（CSRF 防护）
 func TestOidcCallbackRejectsBadState(t *testing.T) {
 	idp := newFakeIdP(t, "baihu-panel", "sub-x", "x@example.com", "xuser")
-	ac := setupOidcTest(t, idp, true)
+	ac := setupOidcTest(t, idp, false)
 	router := gin.New()
 	router.GET(constant.PathAuthOidcLogin, ac.OidcLogin)
 	router.GET(constant.PathAuthOidcCallback, ac.OidcCallback)
@@ -159,16 +216,31 @@ func TestOidcCallbackRejectsBadState(t *testing.T) {
 	}
 	cbW := httptest.NewRecorder()
 	router.ServeHTTP(cbW, cbReq)
-	if cbW.Code != http.StatusUnauthorized {
-		t.Fatalf("伪造 state 应返回 401，实际 %d (%s)", cbW.Code, cbW.Body.String())
+	if cbW.Code != http.StatusFound || !strings.Contains(cbW.Header().Get("Location"), "/login?error=") {
+		t.Fatalf("伪造 state 应重定向回登录页带 error，实际 %d (%s)", cbW.Code, cbW.Header().Get("Location"))
 	}
 }
 
-// 带 ?redirect= 登录时，IdP 回显的 state 必须与 Cookie 中的基础 state 一致（不含回跳路径），
-// 否则回调会把回显值拿去比对基础值，直接登录被误判为「单点登录 state 校验失败」
+// 带 ?redirect= 登录时，IdP 回显的 state 必须与 Cookie 中的基础 state 一致（不含回跳路径）
 func TestOidcLoginWithRedirectKeepsIdpStateOpaque(t *testing.T) {
 	idp := newFakeIdP(t, "baihu-panel", "sub-redir", "redir@example.com", "rediruser")
-	ac := setupOidcTest(t, idp, true)
+	ac := setupOidcTest(t, idp, false)
+
+	userSvc := services.NewUserService()
+	existingUser := userSvc.CreateUser("rediruser", "pass1234", "redir@example.com", constant.DefaultRole)
+	database.DB.Create(&models.UserSSOBinding{
+		ID:           utils.GenerateID(),
+		UserID:       existingUser.ID,
+		Username:     existingUser.Username,
+		ChannelType:  constant.SSOTypeOIDC,
+		Subject:      "sub-redir",
+		IdentityName: "rediruser",
+		Email:        "redir@example.com",
+		BindType:     "oauth",
+		CreatedAt:    models.Now(),
+		UpdatedAt:    models.Now(),
+	})
+
 	router := gin.New()
 	router.GET(constant.PathAuthOidcLogin, ac.OidcLogin)
 	router.GET(constant.PathAuthOidcCallback, ac.OidcCallback)
@@ -232,14 +304,14 @@ func TestParseOAuth2Userinfo(t *testing.T) {
 }
 
 // 模拟纯 OAuth 2.0 服务端（无 OIDC / 无 id_token），验证端到端单点登录全流程
-func TestOAuth2LoginFlowAutoCreate(t *testing.T) {
+func TestOAuth2LoginFlowBoundUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("开启内存库失败: %v", err)
 	}
 	database.DB = db
-	_ = db.AutoMigrate(&models.Setting{}, &models.User{})
+	_ = db.AutoMigrate(&models.Setting{}, &models.User{}, &models.UserSSOBinding{})
 
 	// 1. 搭建一个模拟的纯 OAuth 2.0 授权服务器
 	mux := http.NewServeMux()
@@ -269,22 +341,35 @@ func TestOAuth2LoginFlowAutoCreate(t *testing.T) {
 	// 2. 配置通用 OAuth 2.0 参数
 	settings := services.NewSettingsService()
 	for k, v := range map[string]string{
-		constant.KeyOidcEnabled:      "true",
-		constant.KeyOidcType:         constant.SSOTypeOAuth2,
-		constant.KeyOidcClientID:     "mock-client-id",
-		constant.KeyOidcClientSecret: "mock-client-secret",
-		constant.KeyOidcRedirectURL:  "http://panel.local" + constant.PathAuthOidcCallback,
-		constant.KeyOidcAutoCreate:   "true",
-		constant.KeyOidcDefaultRole:  constant.DefaultRole,
-		constant.KeyOauth2AuthURL:    oauthServer.URL + "/oauth/authorize",
-		constant.KeyOauth2TokenURL:   oauthServer.URL + "/oauth/token",
+		constant.KeyOidcEnabled:       "true",
+		constant.KeyOidcType:          constant.SSOTypeOAuth2,
+		constant.KeyOidcClientID:      "mock-client-id",
+		constant.KeyOidcClientSecret:  "mock-client-secret",
+		constant.KeyOidcRedirectURL:   "http://panel.local" + constant.PathAuthOidcCallback,
+		constant.KeyOauth2AuthURL:     oauthServer.URL + "/oauth/authorize",
+		constant.KeyOauth2TokenURL:    oauthServer.URL + "/oauth/token",
 		constant.KeyOauth2UserinfoURL: oauthServer.URL + "/api/user",
-		constant.KeyOauth2Name:       "GitHub",
+		constant.KeyOauth2Name:        "GitHub",
 	} {
 		_ = settings.Set(constant.SectionSecurity, k, v)
 	}
 
-	ac := NewAuthController(services.NewUserService(), settings, services.NewLoginLogService())
+	userSvc := services.NewUserService()
+	existingUser := userSvc.CreateUser("github_coder", "pass1234", "coder@example.com", constant.DefaultRole)
+	database.DB.Create(&models.UserSSOBinding{
+		ID:           utils.GenerateID(),
+		UserID:       existingUser.ID,
+		Username:     existingUser.Username,
+		ChannelType:  constant.SSOTypeOAuth2,
+		Subject:      "1001",
+		IdentityName: "github_coder",
+		Email:        "coder@example.com",
+		BindType:     "oauth",
+		CreatedAt:    models.Now(),
+		UpdatedAt:    models.Now(),
+	})
+
+	ac := NewAuthController(userSvc, settings, services.NewLoginLogService())
 	pc := NewPublicController(settings)
 
 	router := gin.New()
@@ -321,16 +406,7 @@ func TestOAuth2LoginFlowAutoCreate(t *testing.T) {
 		t.Fatalf("OAuth2 callback 期望 302 成功跳回，实际 %d (%s)", cbW.Code, cbW.Body.String())
 	}
 
-	// 6. 验证数据库中用户是否被正确建号
-	var user models.User
-	if err := database.DB.Where("oidc_subject = ?", "1001").First(&user).Error; err != nil {
-		t.Fatalf("未成功通过 OAuth2 创建用户: %v", err)
-	}
-	if user.Username != "github_coder" || user.Email != "coder@example.com" {
-		t.Errorf("创建的用户属性不符合预期: %+v", user)
-	}
-
-	// 7. 验证是否成功下发 JWT 会话 Cookie
+	// 6. 验证是否成功下发 JWT 会话 Cookie
 	token := findCookie(cbW, constant.CookieName)
 	if token == "" {
 		t.Fatal("OAuth2 登录成功后未下发认证 Cookie")
@@ -348,10 +424,10 @@ func TestPublicSiteSettingsSSOFallback(t *testing.T) {
 
 	settings := services.NewSettingsService()
 	for k, v := range map[string]string{
-		constant.KeyOidcEnabled:  "true",
-		constant.KeyOidcType:     "oidc",
-		constant.KeyOidcIssuer:   "https://id.example.com",
-		constant.KeyOidcClientID: "my-client",
+		constant.KeyOidcEnabled:     "true",
+		constant.KeyOidcType:        "oidc",
+		constant.KeyOidcIssuer:      "https://id.example.com",
+		constant.KeyOidcClientID:    "my-client",
 		constant.KeyOidcRedirectURL: "",
 	} {
 		_ = settings.Set(constant.SectionSecurity, k, v)
@@ -404,4 +480,3 @@ func TestOidcTestEndpoint(t *testing.T) {
 		t.Fatalf("期望返回清晰的连接提供方失败信息，实际: %s", w2.Body.String())
 	}
 }
-

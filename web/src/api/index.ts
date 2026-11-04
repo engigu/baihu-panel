@@ -225,7 +225,11 @@ export const api = {
     enableOtp: (data: { secret: string; code: string }) =>
       request<void>('/auth/otp/enable', { method: 'POST', body: JSON.stringify(data) }),
     disableOtp: (data: { code: string }) =>
-      request<void>('/auth/otp/disable', { method: 'POST', body: JSON.stringify(data) })
+      request<void>('/auth/otp/disable', { method: 'POST', body: JSON.stringify(data) }),
+    getSSOBindings: () => request<UserSSOBinding[]>('/auth/sso/bindings'),
+    deleteSSOBinding: (id: string) =>
+      request<void>(`/auth/sso/bindings/${id}`, { method: 'DELETE' }),
+    getSSOBindUrl: (channelType: 'oidc' | 'oauth2' = 'oidc') => `${API_BASE_URL}/auth/sso/bind?type=${channelType}`,
   },
   tasks: {
     list: (params?: { page?: number; page_size?: number; name?: string; agent_id?: string; tags?: string; type?: string; source_id?: string; enabled?: boolean | string; sort_by?: string; order?: string }) => {
@@ -1221,3 +1225,17 @@ export interface SelectItemProps {
   value: string
   label: string
 }
+
+export interface UserSSOBinding {
+  id: string
+  user_id: string
+  username: string
+  channel_type: 'oidc' | 'oauth2'
+  subject: string
+  identity_name?: string
+  email?: string
+  bind_type: 'manual' | 'oauth'
+  created_at: string
+  updated_at: string
+}
+

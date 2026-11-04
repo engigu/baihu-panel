@@ -32,6 +32,7 @@ var allModels = []interface{}{
 	&models.DataRelation{},
 	&models.DataStorage{},
 	&models.InterconnectNode{},
+	&models.UserSSOBinding{},
 }
 
 func Migrate() error {
@@ -146,7 +147,44 @@ func postMigrations() error {
 	migrateUnifiedTaskConfig()
 	// 自动修复历史两步验证破损状态（已开启但缺少密钥）
 	repairCorruptedOtpUsers()
+	// 自动将用户存量 oidc_subject 迁移至专属绑定表
+	migrateExistingUserSSOBindings()
 	return nil
+}
+
+// migrateExistingUserSSOBindings 将历史 users 表中的 oidc_subject 迁移至独立的 sso_bindings 表
+func migrateExistingUserSSOBindings() {
+	if !DB.Migrator().HasTable(&models.User{}) || !DB.Migrator().HasTable(&models.UserSSOBinding{}) {
+		return
+	}
+	var users []models.User
+	DB.Where("oidc_subject IS NOT NULL AND oidc_subject != ?", "").Find(&users)
+	for _, u := range users {
+		var count int64
+		DB.Model(&models.UserSSOBinding{}).Where("user_id = ?", u.ID).Count(&count)
+		if count == 0 {
+			chType := "oidc"
+			sub := u.OidcSubject
+			if strings.HasPrefix(sub, "oauth2:") {
+				chType = "oauth2"
+				sub = strings.TrimPrefix(sub, "oauth2:")
+			} else if strings.HasPrefix(sub, "oidc:") {
+				sub = strings.TrimPrefix(sub, "oidc:")
+			}
+			DB.Create(&models.UserSSOBinding{
+				ID:           xid.New().String(),
+				UserID:       u.ID,
+				Username:     u.Username,
+				ChannelType:  chType,
+				Subject:      sub,
+				IdentityName: u.Username,
+				Email:        u.Email,
+				BindType:     "oauth",
+				CreatedAt:    models.Now(),
+				UpdatedAt:    models.Now(),
+			})
+		}
+	}
 }
 
 // migrateTaskEnvs 迁移旧的任务绑定环境变量到通用数据关联表

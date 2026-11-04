@@ -16,8 +16,8 @@ import (
 	"github.com/engigu/baihu-panel/internal/utils"
 )
 
-// ErrUserNotLinked 提示第三方账号未关联且系统未开启自动开通
-var ErrUserNotLinked = errors.New("当前第三方身份未绑定任何系统账号，请联系管理员")
+// ErrUserNotLinked 提示第三方身份未绑定任何系统账号
+var ErrUserNotLinked = errors.New("当前第三方身份未绑定任何系统账号，请先使用系统账号登录并在设置中授权绑定")
 
 // Claims OIDC / OAuth 2.0 统一身份声明模型
 type Claims struct {
@@ -28,7 +28,7 @@ type Claims struct {
 	Groups            []string `json:"groups"`
 }
 
-// ResolveUser 按 subject 精确匹配（多源隔离） → 邮箱绑定 → 按配置自动创建
+// ResolveUser 按 绑定映射表 → subject 精确匹配 → 邮箱绑定 查找本地系统账号（不自动创建新账号）
 func ResolveUser(cfg *Config, claims *Claims, userSvc *services.UserService) (*models.User, bool, error) {
 	if claims == nil || claims.Sub == "" {
 		return nil, false, fmt.Errorf("身份标识 (sub) 不能为空")
@@ -37,55 +37,63 @@ func ResolveUser(cfg *Config, claims *Claims, userSvc *services.UserService) (*m
 	qualifiedSub := fmt.Sprintf("%s:%s", cfg.Type, claims.Sub)
 
 	var user models.User
-	// 1. 优先匹配 subject（兼容纯 sub 或带命名空间前缀的记录）
-	res := database.DB.Where("oidc_subject = ? OR oidc_subject = ?", claims.Sub, qualifiedSub).Limit(1).Find(&user)
-	if res.Error == nil && res.RowsAffected > 0 {
-		return &user, false, nil
-	}
 
-	// 2. 兼容已存在账号：邮箱相同且尚未绑定过任何第三方 subject，则自动关联
-	if claims.Email != "" {
-		res := database.DB.Where("email = ? AND (oidc_subject = '' OR oidc_subject IS NULL)", claims.Email).Limit(1).Find(&user)
-		if res.Error == nil && res.RowsAffected > 0 {
-			database.DB.Model(&user).Update("oidc_subject", claims.Sub)
+	// 1. 优先从专属绑定映射表中匹配 (支持按 channel_type:sub 或纯 sub 匹配)
+	var binding models.UserSSOBinding
+	bindRes := database.DB.Where("(channel_type = ? AND subject = ?) OR subject = ? OR subject = ?", cfg.Type, claims.Sub, claims.Sub, qualifiedSub).
+		Order("created_at desc").Limit(1).Find(&binding)
+	if bindRes.Error == nil && bindRes.RowsAffected > 0 {
+		if err := database.DB.Where("id = ?", binding.UserID).First(&user).Error; err == nil {
 			return &user, false, nil
 		}
 	}
 
-	if !cfg.AutoCreate {
-		return nil, false, ErrUserNotLinked
-	}
-
-	username := claims.PreferredUsername
-	if username == "" {
-		username = claims.Email
-	}
-	if username == "" {
-		username = "sso_" + claims.Sub
-	}
-
-	if userSvc == nil {
-		userSvc = services.NewUserService()
-	}
-	created := userSvc.CreateOidcUser(UniqueUsername(username), claims.Email, cfg.DefaultRole, claims.Sub)
-	if created == nil {
-		return nil, false, fmt.Errorf("自动开通本地账号失败")
-	}
-	return created, true, nil
-}
-
-// UniqueUsername 确保生成的系统唯一用户名不会与存量账号冲突
-func UniqueUsername(base string) string {
-	candidate := base
-	for i := 0; i < 20; i++ {
+	// 2. 兼容历史主表的 oidc_subject（兼容纯 sub 或带命名空间前缀的记录）
+	res := database.DB.Where("oidc_subject = ? OR oidc_subject = ?", claims.Sub, qualifiedSub).Limit(1).Find(&user)
+	if res.Error == nil && res.RowsAffected > 0 {
+		// 自动补齐绑定映射记录
 		var count int64
-		database.DB.Model(&models.User{}).Where("username = ?", candidate).Count(&count)
+		database.DB.Model(&models.UserSSOBinding{}).Where("user_id = ? AND subject = ?", user.ID, claims.Sub).Count(&count)
 		if count == 0 {
-			return candidate
+			database.DB.Create(&models.UserSSOBinding{
+				ID:           utils.GenerateID(),
+				UserID:       user.ID,
+				Username:     user.Username,
+				ChannelType:  cfg.Type,
+				Subject:      claims.Sub,
+				IdentityName: claims.PreferredUsername,
+				Email:        claims.Email,
+				BindType:     "oauth",
+				CreatedAt:    models.Now(),
+				UpdatedAt:    models.Now(),
+			})
 		}
-		candidate = base + "_" + utils.RandomString(4)
+		return &user, false, nil
 	}
-	return base + "_" + utils.RandomString(8)
+
+	// 3. 兼容已存在账号：邮箱相同且尚未绑定过任何第三方 subject，则自动关联
+	if claims.Email != "" {
+		res := database.DB.Where("email = ? AND (oidc_subject = '' OR oidc_subject IS NULL)", claims.Email).Limit(1).Find(&user)
+		if res.Error == nil && res.RowsAffected > 0 {
+			database.DB.Model(&user).Update("oidc_subject", claims.Sub)
+			database.DB.Create(&models.UserSSOBinding{
+				ID:           utils.GenerateID(),
+				UserID:       user.ID,
+				Username:     user.Username,
+				ChannelType:  cfg.Type,
+				Subject:      claims.Sub,
+				IdentityName: claims.PreferredUsername,
+				Email:        claims.Email,
+				BindType:     "oauth",
+				CreatedAt:    models.Now(),
+				UpdatedAt:    models.Now(),
+			})
+			return &user, false, nil
+		}
+	}
+
+	// 未匹配到已绑定的本地账号，直接拒绝登录（不自动建号）
+	return nil, false, ErrUserNotLinked
 }
 
 // FetchOAuth2Userinfo 通过 Access Token 调用第三方 Userinfo 端点获取用户信息

@@ -87,7 +87,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func setupOidcTest(t *testing.T, idp *fakeIdP, autoCreate bool) *AuthController {
+func setupOidcTest(t *testing.T, idp *fakeIdP, _ bool) *AuthController {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	time.Local = systime.CST
@@ -97,7 +97,7 @@ func setupOidcTest(t *testing.T, idp *fakeIdP, autoCreate bool) *AuthController 
 		t.Fatalf("开启内存库失败: %v", err)
 	}
 	database.DB = db
-	if err := db.AutoMigrate(&models.Setting{}, &models.User{}); err != nil {
+	if err := db.AutoMigrate(&models.Setting{}, &models.User{}, &models.UserSSOBinding{}); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
 
@@ -108,8 +108,6 @@ func setupOidcTest(t *testing.T, idp *fakeIdP, autoCreate bool) *AuthController 
 		constant.KeyOidcClientID:     idp.clientID,
 		constant.KeyOidcClientSecret: "test-secret",
 		constant.KeyOidcRedirectURL:  "http://panel.local" + constant.PathAuthOidcCallback,
-		constant.KeyOidcAutoCreate:   map[bool]string{true: "true", false: "false"}[autoCreate],
-		constant.KeyOidcDefaultRole:  constant.DefaultRole,
 	} {
 		if err := settings.Set(constant.SectionSecurity, k, v); err != nil {
 			t.Fatalf("写入设置 %s 失败: %v", k, err)

@@ -15,7 +15,6 @@ import {
   Globe,
   KeyRound,
   ShieldCheck,
-  User,
   Copy,
   Check,
   Eye,
@@ -27,10 +26,12 @@ import {
   Lock,
   Zap,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Link2
 } from 'lucide-vue-next'
 import { useRegisterSettingSection, useFieldDiff } from './composables/useSettingsTracker'
 import ModifiedBadge from './components/ModifiedBadge.vue'
+import SSOBindingsCard from './SSOBindingsCard.vue'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -42,9 +43,37 @@ const showSecretOAuth2 = ref(false)
 const copiedOidc = ref(false)
 const copiedOAuth2 = ref(false)
 const showGuide = ref(false)
-const configExpanded = ref(false)
 
-// 当前激活的配置选项卡 ('oidc' | 'oauth2')
+// 内部主模式选项卡 ('bindings' 绑定列表 | 'config' 通道配置)
+const mainTab = ref<'bindings' | 'config'>('bindings')
+
+// 绑定记录数与引用
+const bindingsCount = ref(0)
+const bindingsCardRef = ref<any>(null)
+
+function onBindingsCountUpdate(count: number) {
+  bindingsCount.value = count
+}
+
+// 展开折叠状态（优先检查回调参数展开，其次读取本地偏好）
+const CONFIG_EXPANDED_KEY = 'baihu_sso_expanded'
+const hasBindCallback = typeof window !== 'undefined' && (
+  window.location.search.includes('sso_bind_success') ||
+  window.location.search.includes('sso_bind_error')
+)
+const configExpanded = ref(
+  hasBindCallback ||
+  localStorage.getItem(CONFIG_EXPANDED_KEY) === 'true'
+)
+
+function toggleExpanded() {
+  configExpanded.value = !configExpanded.value
+  try {
+    localStorage.setItem(CONFIG_EXPANDED_KEY, configExpanded.value ? 'true' : 'false')
+  } catch {}
+}
+
+// 当前激活的通道配置选项卡 ('oidc' | 'oauth2')
 const activeTab = ref<'oidc' | 'oauth2'>('oidc')
 
 // 数据库实际保存的已启用状态
@@ -61,8 +90,6 @@ const form = ref({
   oidc_client_id: '',
   oidc_client_secret: '',
   oidc_scopes: '',
-  oidc_auto_create: false,
-  oidc_default_role: 'user',
 
   // 2. 通用 OAuth 2.0 通道独立配置
   oauth2_enabled: false,
@@ -74,8 +101,6 @@ const form = ref({
   oauth2_client_id: '',
   oauth2_client_secret: '',
   oauth2_scopes: '',
-  oauth2_auto_create: false,
-  oauth2_default_role: 'user',
 })
 
 // 推导标准回调地址
@@ -222,8 +247,6 @@ async function loadSection() {
       oidc_client_id: res.oidc_client_id || '',
       oidc_client_secret: res.oidc_client_secret || '',
       oidc_scopes: res.oidc_scopes || '',
-      oidc_auto_create: res.oidc_auto_create === 'true',
-      oidc_default_role: res.oidc_default_role === 'admin' ? 'admin' : 'user',
 
       // OAuth 2.0
       oauth2_enabled: isOAuth2,
@@ -235,12 +258,15 @@ async function loadSection() {
       oauth2_client_id: res.oauth2_client_id || '',
       oauth2_client_secret: res.oauth2_client_secret || '',
       oauth2_scopes: res.oauth2_scopes || '',
-      oauth2_auto_create: (res.oauth2_auto_create || res.oidc_auto_create) === 'true',
-      oauth2_default_role: (res.oauth2_default_role || res.oidc_default_role) === 'admin' ? 'admin' : 'user',
     }
 
     // 记录初始快照以供变动追踪
     initialForm.value = JSON.parse(JSON.stringify(form.value))
+
+    // 若系统从未配置过任何 SSO 通道且无绑定记录，默认切至配置页引导接入
+    if (!hasBindCallback && !isOidc && !isOAuth2 && bindingsCount.value === 0) {
+      mainTab.value = 'config'
+    }
   } catch (e: any) {
     toast.error(e.message || '读取单点登录配置失败')
   } finally {
@@ -261,8 +287,6 @@ const hasOidcDiff = computed(() => {
     'oidc_client_id',
     'oidc_client_secret',
     'oidc_scopes',
-    'oidc_auto_create',
-    'oidc_default_role'
   ].some(k => isDiff(k))
 })
 
@@ -277,8 +301,6 @@ const hasOAuth2Diff = computed(() => {
     'oauth2_client_id',
     'oauth2_client_secret',
     'oauth2_scopes',
-    'oauth2_auto_create',
-    'oauth2_default_role'
   ].some(k => isDiff(k))
 })
 
@@ -312,11 +334,13 @@ async function save() {
   if (form.value.oidc_enabled) {
     if (!form.value.oidc_issuer.trim()) {
       toast.error('已开启标准 OIDC，必须填写 Issuer（提供方根地址）')
+      mainTab.value = 'config'
       activeTab.value = 'oidc'
       return
     }
     if (!form.value.oidc_client_id.trim()) {
       toast.error('已开启标准 OIDC，必须填写 Client ID（客户端标识）')
+      mainTab.value = 'config'
       activeTab.value = 'oidc'
       return
     }
@@ -326,11 +350,13 @@ async function save() {
   if (form.value.oauth2_enabled) {
     if (!form.value.oauth2_auth_url.trim() || !form.value.oauth2_token_url.trim() || !form.value.oauth2_userinfo_url.trim()) {
       toast.error('已开启通用 OAuth 2.0，必须完整填写授权、令牌与用户信息端点')
+      mainTab.value = 'config'
       activeTab.value = 'oauth2'
       return
     }
     if (!form.value.oauth2_client_id.trim()) {
       toast.error('已开启通用 OAuth 2.0，必须填写 Client ID（客户端标识）')
+      mainTab.value = 'config'
       activeTab.value = 'oauth2'
       return
     }
@@ -345,8 +371,6 @@ async function save() {
       oidc_client_id: form.value.oidc_client_id.trim(),
       oidc_client_secret: form.value.oidc_client_secret,
       oidc_scopes: form.value.oidc_scopes.trim(),
-      oidc_auto_create: form.value.oidc_auto_create ? 'true' : 'false',
-      oidc_default_role: form.value.oidc_default_role,
 
       // OAuth 2.0 独立参数
       oauth2_enabled: form.value.oauth2_enabled ? 'true' : 'false',
@@ -358,11 +382,10 @@ async function save() {
       oauth2_client_id: form.value.oauth2_client_id.trim(),
       oauth2_client_secret: form.value.oauth2_client_secret,
       oauth2_scopes: form.value.oauth2_scopes.trim(),
-      oauth2_auto_create: form.value.oauth2_auto_create ? 'true' : 'false',
-      oauth2_default_role: form.value.oauth2_default_role,
     })
     toast.success('单点登录配置已保存，多身份源通道已生效')
     await loadSection()
+    bindingsCardRef.value?.loadData?.()
   } catch (e: any) {
     toast.error(e.message || '保存失败')
   } finally {
@@ -489,6 +512,15 @@ onMounted(() => {
             >
               未启用
             </Badge>
+
+            <!-- 绑定记录数指示 -->
+            <Badge
+              v-if="bindingsCount > 0"
+              variant="outline"
+              class="text-[10px] px-1.5 py-0 font-normal shrink-0 border-border/80 text-muted-foreground"
+            >
+              {{ bindingsCount }} 条绑定
+            </Badge>
           </div>
           <CardDescription class="text-xs leading-relaxed pt-0.5">
             支持标准 OIDC 身份中心与通用 OAuth 2.0 多身份源并行启用，登录页将自动呈现各自快捷登录入口。
@@ -511,9 +543,9 @@ onMounted(() => {
             variant="outline"
             size="sm"
             class="text-xs h-8 sm:h-7.5 px-3 sm:px-2.5 gap-1.5 shadow-xs bg-background hover:bg-muted/70 transition-all justify-center w-full sm:w-auto shrink-0"
-            @click="configExpanded = !configExpanded"
+            @click="toggleExpanded"
           >
-            <span class="whitespace-nowrap">{{ configExpanded ? '收起配置' : '展开配置' }}</span>
+            <span class="whitespace-nowrap">{{ configExpanded ? '收起' : '展开' }}</span>
             <ChevronUp v-if="configExpanded" class="h-3.5 w-3.5" />
             <ChevronDown v-else class="h-3.5 w-3.5" />
           </Button>
@@ -521,8 +553,73 @@ onMounted(() => {
       </div>
     </CardHeader>
 
-    <CardContent v-if="configExpanded" class="flex-1 flex flex-col justify-between px-4 sm:px-5 pb-0 pt-0 space-y-4">
-      <div class="space-y-3.5">
+    <!-- 卡片主体内容（受展开/收起统一控制） -->
+    <CardContent v-if="configExpanded" class="flex-1 flex flex-col justify-between px-4 sm:px-5 pb-0 pt-0 space-y-3.5 sm:space-y-4">
+      <!-- ==================== 顶部模式 Tab 切换栏 (全屏/小屏均铺满整行) ==================== -->
+      <div class="p-1 sm:p-1.5 rounded-xl border border-border/70 bg-muted/30 grid grid-cols-2 gap-1.5 text-xs shadow-xs w-full">
+        <!-- Tab 1: 已绑定账号列表 -->
+        <button
+          type="button"
+          @click="mainTab = 'bindings'"
+          class="py-2 px-2 sm:px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 text-xs select-none whitespace-nowrap min-w-0"
+          :class="mainTab === 'bindings' ? 'bg-background text-foreground font-semibold shadow-xs border border-border/60' : 'text-muted-foreground hover:text-foreground hover:bg-background/40'"
+        >
+          <Link2 class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-500 shrink-0" />
+          <span class="truncate">
+            <span class="sm:hidden">绑定列表</span>
+            <span class="hidden sm:inline">已绑定账号列表</span>
+          </span>
+          <Badge
+            variant="secondary"
+            class="text-[10px] px-1.5 py-0 h-4 min-w-4 justify-center shrink-0"
+            :class="mainTab === 'bindings' ? 'bg-muted text-foreground' : 'bg-muted/60 text-muted-foreground'"
+          >
+            {{ bindingsCount }}
+          </Badge>
+        </button>
+
+        <!-- Tab 2: 通道接入与参数配置 -->
+        <button
+          type="button"
+          @click="mainTab = 'config'"
+          class="py-2 px-2 sm:px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 text-xs select-none whitespace-nowrap min-w-0"
+          :class="mainTab === 'config' ? 'bg-background text-foreground font-semibold shadow-xs border border-border/60' : 'text-muted-foreground hover:text-foreground hover:bg-background/40'"
+        >
+          <KeyRound class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-500 shrink-0" />
+          <span class="truncate">
+            <span class="sm:hidden">通道配置</span>
+            <span class="hidden sm:inline">通道接入与参数配置</span>
+          </span>
+          <span
+            v-if="isDirty"
+            class="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-medium bg-amber-500/10 px-1 py-0.2 rounded shrink-0"
+            title="配置存在未保存变动"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+            <span class="hidden sm:inline">待保存</span>
+          </span>
+          <span
+            v-else-if="savedOidcEnabled || savedOAuth2Enabled"
+            class="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-normal shrink-0"
+            title="通道服务在线"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span class="hidden sm:inline">在线</span>
+          </span>
+        </button>
+      </div>
+
+      <!-- ==================== 1. 已绑定账号列表视图 (Tab 1) ==================== -->
+      <div v-show="mainTab === 'bindings'" class="space-y-3 sm:space-y-4 animate-in fade-in duration-150">
+        <SSOBindingsCard
+          ref="bindingsCardRef"
+          :default-channel="savedOAuth2Enabled && !savedOidcEnabled ? 'oauth2' : 'oidc'"
+          @update:count="onBindingsCountUpdate"
+        />
+      </div>
+
+      <!-- ==================== 2. 通道参数配置视图 (Tab 2) ==================== -->
+      <div v-show="mainTab === 'config'" class="space-y-3.5 animate-in fade-in duration-150">
         <!-- 演示模式警示条 -->
         <div
           v-if="demoMode"
@@ -836,59 +933,6 @@ onMounted(() => {
               :disabled="demoMode || loading"
             />
           </div>
-
-          <!-- OIDC 自动建号与默认角色 -->
-          <div class="p-2.5 px-3.5 rounded-xl border border-border/70 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div class="flex items-center gap-2.5">
-              <Switch
-                v-model="form.oidc_auto_create"
-                id="oidc-auto-create"
-                :disabled="demoMode || loading"
-              />
-              <div>
-                <div class="flex items-center gap-1.5">
-                  <Label for="oidc-auto-create" class="text-xs font-medium cursor-pointer select-none">首次登录自动建号</Label>
-                  <ModifiedBadge
-                    v-if="isDiff('oidc_auto_create')"
-                    :original-value="getOriginal('oidc_auto_create')"
-                    @reset="resetField('oidc_auto_create')"
-                  />
-                </div>
-                <p class="text-[10px] text-muted-foreground">未关联本地账号的 OIDC 身份首次登录时自动开通</p>
-              </div>
-            </div>
-
-            <div v-if="form.oidc_auto_create" class="flex items-center justify-between sm:justify-start gap-2 pt-1 sm:pt-0 border-t border-border/40 sm:border-0">
-              <span class="text-[11px] text-muted-foreground shrink-0">分配角色:</span>
-              <ModifiedBadge
-                v-if="isDiff('oidc_default_role')"
-                :original-value="getOriginal('oidc_default_role')"
-                @reset="resetField('oidc_default_role')"
-              />
-              <div class="inline-flex rounded-lg border bg-background p-0.5 text-xs shadow-xs">
-                <button
-                  type="button"
-                  @click="!demoMode && (form.oidc_default_role = 'user')"
-                  class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1 text-xs select-none"
-                  :class="form.oidc_default_role === 'user' ? 'bg-primary text-primary-foreground font-medium shadow-xs' : 'text-muted-foreground hover:text-foreground'"
-                >
-                  <User class="w-3.5 h-3.5" />
-                  <span>普通用户</span>
-                </button>
-                <button
-                  type="button"
-                  @click="!demoMode && (form.oidc_default_role = 'admin')"
-                  class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1 text-xs select-none"
-                  :class="form.oidc_default_role === 'admin' ? 'bg-amber-500 text-white font-medium shadow-xs' : 'text-muted-foreground hover:text-foreground'"
-                >
-                  <ShieldCheck class="w-3.5 h-3.5" />
-                  <span>管理员</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-
         </div>
 
         <!-- ==================== 2. 通用 OAuth 2.0 通道专属面板 ==================== -->
@@ -1193,59 +1237,6 @@ onMounted(() => {
               :disabled="demoMode || loading"
             />
           </div>
-
-          <!-- OAuth 2.0 自动建号与默认角色 -->
-          <div class="p-2.5 px-3.5 rounded-xl border border-border/70 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div class="flex items-center gap-2.5">
-              <Switch
-                v-model="form.oauth2_auto_create"
-                id="oauth2-auto-create"
-                :disabled="demoMode || loading"
-              />
-              <div>
-                <div class="flex items-center gap-1.5">
-                  <Label for="oauth2-auto-create" class="text-xs font-medium cursor-pointer select-none">首次登录自动建号</Label>
-                  <ModifiedBadge
-                    v-if="isDiff('oauth2_auto_create')"
-                    :original-value="getOriginal('oauth2_auto_create')"
-                    @reset="resetField('oauth2_auto_create')"
-                  />
-                </div>
-                <p class="text-[10px] text-muted-foreground">未关联本地账号的第三方身份首次登录时自动开通</p>
-              </div>
-            </div>
-
-            <div v-if="form.oauth2_auto_create" class="flex items-center justify-between sm:justify-start gap-2 pt-1 sm:pt-0 border-t border-border/40 sm:border-0">
-              <span class="text-[11px] text-muted-foreground shrink-0">分配角色:</span>
-              <ModifiedBadge
-                v-if="isDiff('oauth2_default_role')"
-                :original-value="getOriginal('oauth2_default_role')"
-                @reset="resetField('oauth2_default_role')"
-              />
-              <div class="inline-flex rounded-lg border bg-background p-0.5 text-xs shadow-xs">
-                <button
-                  type="button"
-                  @click="!demoMode && (form.oauth2_default_role = 'user')"
-                  class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1 text-xs select-none"
-                  :class="form.oauth2_default_role === 'user' ? 'bg-primary text-primary-foreground font-medium shadow-xs' : 'text-muted-foreground hover:text-foreground'"
-                >
-                  <User class="w-3.5 h-3.5" />
-                  <span>普通用户</span>
-                </button>
-                <button
-                  type="button"
-                  @click="!demoMode && (form.oauth2_default_role = 'admin')"
-                  class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1 text-xs select-none"
-                  :class="form.oauth2_default_role === 'admin' ? 'bg-amber-500 text-white font-medium shadow-xs' : 'text-muted-foreground hover:text-foreground'"
-                >
-                  <ShieldCheck class="w-3.5 h-3.5" />
-                  <span>管理员</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-
         </div>
 
         <!-- 底部提示文字 -->

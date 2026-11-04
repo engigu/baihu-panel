@@ -167,8 +167,21 @@ function handleBack() {
   otpCode.value = ''
 }
 
+// 处理第三方单点登录回调失败时的 URL 错误提示，提示后清理地址栏
+function checkUrlAuthError() {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  const err = url.searchParams.get('error')
+  if (err) {
+    toast.error(decodeURIComponent(err))
+    url.searchParams.delete('error')
+    window.history.replaceState({}, '', url.pathname + (url.search || ''))
+  }
+}
+
 onMounted(() => {
   loadSiteSettings()
+  checkUrlAuthError()
 })
 
 function handleSSOLogin(provider: SSOProvider) {

@@ -77,6 +77,14 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 			otp.POST("/disable", middleware.DemoGuard("演示模式下无法操作两步验证"), c.Auth.DisableOTP)
 		}
 
+		// SSO 身份绑定管理 (查看列表、解绑、发起授权绑定)
+		sso := authorized.Group("/auth/sso")
+		{
+			sso.GET("/bindings", c.Auth.GetSSOBindings)
+			sso.DELETE("/bindings/:id", middleware.DemoGuard("演示模式下禁止解除绑定"), c.Auth.DeleteSSOBinding)
+			sso.GET("/bind", middleware.DemoGuard("演示模式下禁止发起授权绑定"), c.Auth.StartSSOBind)
+		}
+
 		// 以下管理接口需要管理员权限
 		adminOnly := authorized.Group("")
 		adminOnly.Use(middleware.AdminRequired())
@@ -407,4 +415,3 @@ func registerAppRoutes(g *gin.RouterGroup, c *Controllers) {
 		apps.DELETE("/:id", middleware.DemoGuard("演示模式下禁止卸载应用"), c.App.RemoveApp)
 	}
 }
-

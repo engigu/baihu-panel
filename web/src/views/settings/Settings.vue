@@ -33,7 +33,7 @@ provideSettingsTracker(activeTab)
         <TabsTrigger value="about" class="text-xs sm:text-sm px-1 sm:px-3 py-1.5 whitespace-nowrap">关于</TabsTrigger>
       </TabsList>
 
-      <!-- 安全设置：双列卡片并排 -->
+      <!-- 安全设置：多卡片并排与流式呈现 -->
       <TabsContent value="security" class="mt-6">
         <div class="space-y-6">
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
