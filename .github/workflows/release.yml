@@ -54,7 +54,7 @@ jobs:
           ./build/build-go.sh release-artifacts .
 
       - name: Upload Windows Binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-binaries
           path: |
@@ -63,7 +63,7 @@ jobs:
           retention-days: 1
 
       - name: Upload Release Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-artifacts
           path: |
@@ -77,7 +77,7 @@ jobs:
           retention-days: 1
 
       - name: Upload Docker Build Context
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docker-artifacts
           path: |
@@ -106,7 +106,7 @@ jobs:
         run: iscc /DMyAppVersion=${{ github.ref_name }} build/windows/installer.iss
 
       - name: Upload Setup Installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-setup-exe
           path: bin/BaihuPanel-Setup-*.exe
@@ -244,7 +244,7 @@ jobs:
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: digests-linux-${{ matrix.arch }}-${{ matrix.base_type }}
           path: /tmp/digests/*
