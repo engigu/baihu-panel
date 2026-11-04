@@ -3,6 +3,7 @@ package migrate_scripts
 import (
 	"testing"
 
+	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -38,6 +39,15 @@ func TestHasMigratedAndMarkMigrated(t *testing.T) {
 		t.Errorf("期望标记后 HasMigrated 返回 true")
 	}
 
+	// 验证落库的 section 为 constant.SectionMigrate ("migrate")
+	var saved models.Setting
+	if err := db.Where("key = ?", testKey).First(&saved).Error; err != nil {
+		t.Fatalf("未找到迁移记录: %v", err)
+	}
+	if saved.Section != constant.SectionMigrate {
+		t.Errorf("期望 Section 为 %s，实际为: %s", constant.SectionMigrate, saved.Section)
+	}
+
 	// 5. 重复标记迁移（幂等性验证）
 	MarkMigrated(db, testKey)
 	if !HasMigrated(db, testKey) {
@@ -45,9 +55,20 @@ func TestHasMigratedAndMarkMigrated(t *testing.T) {
 	}
 
 	var count int64
-	db.Model(&models.Setting{}).Where("key = ?", testKey).Count(&count)
+	db.Model(&models.Setting{}).Where("section = ? AND key = ?", constant.SectionMigrate, testKey).Count(&count)
 	if count != 1 {
 		t.Errorf("期望记录数唯一为 1，实际为: %d", count)
 	}
-}
 
+	// 6. 向下兼容验证：旧版本 Section 为 system 的记录
+	legacyKey := "legacy_system_migrated_key"
+	db.Create(&models.Setting{
+		ID:      "legacy_001",
+		Section: constant.SectionSystem,
+		Key:     legacyKey,
+		Value:   models.BigText("true"),
+	})
+	if !HasMigrated(db, legacyKey) {
+		t.Errorf("期望对 Section 为 system 的旧迁移记录保持兼容并返回 true")
+	}
+}

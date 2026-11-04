@@ -1,6 +1,9 @@
 package constant
 
 const (
+	// SectionMigrate 数据库迁移标记的统一配置 Section
+	SectionMigrate = "migrate"
+
 	// IDSchemaSignature 数据库表结构指纹的固定 ID
 	IDSchemaSignature = "sys_schema_sig"
 

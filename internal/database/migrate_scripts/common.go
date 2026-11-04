@@ -13,8 +13,16 @@ func HasMigrated(db *gorm.DB, key string) bool {
 		return false
 	}
 	var setting models.Setting
-	res := db.Where(&models.Setting{Section: constant.SectionSystem, Key: key}).Limit(1).Find(&setting)
-	return res.RowsAffected > 0 && string(setting.Value) == "true"
+	// 优先匹配 SectionMigrate ("migrate")
+	res := db.Where(&models.Setting{Section: constant.SectionMigrate, Key: key}).Limit(1).Find(&setting)
+	if res.RowsAffected > 0 && string(setting.Value) == "true" {
+		return true
+	}
+
+	// 向下兼容历史系统旧记录 (SectionSystem)
+	var legacy models.Setting
+	resLegacy := db.Where(&models.Setting{Section: constant.SectionSystem, Key: key}).Limit(1).Find(&legacy)
+	return resLegacy.RowsAffected > 0 && string(legacy.Value) == "true"
 }
 
 // MarkMigrated 将指定的迁移标记设置为已执行
@@ -23,16 +31,15 @@ func MarkMigrated(db *gorm.DB, key string) {
 		return
 	}
 	var setting models.Setting
-	res := db.Where(&models.Setting{Section: constant.SectionSystem, Key: key}).Limit(1).Find(&setting)
+	res := db.Where(&models.Setting{Section: constant.SectionMigrate, Key: key}).Limit(1).Find(&setting)
 	if res.RowsAffected > 0 {
 		db.Model(&setting).Update("value", models.BigText("true"))
 	} else {
 		db.Create(&models.Setting{
 			ID:      xid.New().String(),
-			Section: constant.SectionSystem,
+			Section: constant.SectionMigrate,
 			Key:     key,
 			Value:   models.BigText("true"),
 		})
 	}
 }
-
