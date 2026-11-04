@@ -18,7 +18,6 @@
         "postcss": "^8.5.18"
     },
     "overrides": {
-        "@ai-sdk/provider-utils": "^4.0.33",
         "undici": "^7.30.1",
         "esbuild": "^0.25.0",
         "vite": "^6.4.5",
