@@ -211,3 +211,4 @@ func transferUserReferences(db *gorm.DB, allModels []interface{}, oldUserID, new
 		}
 	}
 }
+

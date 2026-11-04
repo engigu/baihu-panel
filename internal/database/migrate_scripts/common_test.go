@@ -59,16 +59,5 @@ func TestHasMigratedAndMarkMigrated(t *testing.T) {
 	if count != 1 {
 		t.Errorf("期望记录数唯一为 1，实际为: %d", count)
 	}
-
-	// 6. 向下兼容验证：旧版本 Section 为 system 的记录
-	legacyKey := "legacy_system_migrated_key"
-	db.Create(&models.Setting{
-		ID:      "legacy_001",
-		Section: constant.SectionSystem,
-		Key:     legacyKey,
-		Value:   models.BigText("true"),
-	})
-	if !HasMigrated(db, legacyKey) {
-		t.Errorf("期望对 Section 为 system 的旧迁移记录保持兼容并返回 true")
-	}
 }
+

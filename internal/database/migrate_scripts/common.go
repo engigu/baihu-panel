@@ -13,16 +13,8 @@ func HasMigrated(db *gorm.DB, key string) bool {
 		return false
 	}
 	var setting models.Setting
-	// 优先匹配 SectionMigrate ("migrate")
 	res := db.Where(&models.Setting{Section: constant.SectionMigrate, Key: key}).Limit(1).Find(&setting)
-	if res.RowsAffected > 0 && string(setting.Value) == "true" {
-		return true
-	}
-
-	// 向下兼容历史系统旧记录 (SectionSystem)
-	var legacy models.Setting
-	resLegacy := db.Where(&models.Setting{Section: constant.SectionSystem, Key: key}).Limit(1).Find(&legacy)
-	return resLegacy.RowsAffected > 0 && string(legacy.Value) == "true"
+	return res.RowsAffected > 0 && string(setting.Value) == "true"
 }
 
 // MarkMigrated 将指定的迁移标记设置为已执行
@@ -43,3 +35,4 @@ func MarkMigrated(db *gorm.DB, key string) {
 		})
 	}
 }
+
