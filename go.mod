@@ -19,7 +19,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/yamux v0.1.2
 	github.com/klauspost/compress v1.19.0
-	github.com/mark3labs/mcp-go v1.1.1
+	github.com/mark3labs/mcp-go v1.5.0
 	github.com/mattn/go-runewidth v0.0.24
 	github.com/pquerna/otp v1.5.0
 	github.com/robfig/cron/v3 v3.0.1
