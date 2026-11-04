@@ -59,14 +59,14 @@ func (s *TagService) GetTagsWithPagination(page, pageSize int, name string, relT
 	return results, total, nil
 }
 
-// CreateTag 手动创建标签
+// CreateTag 手动创建标签（同类型内查重，不同类型允许同名）
 func (s *TagService) CreateTag(name string, relType string) (*models.DataStorage, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, errors.New("标签名称不能为空")
 	}
 	var count int64
-	err := database.DB.Model(&models.DataStorage{}).Where("name = ?", name).Count(&count).Error
+	err := database.DB.Model(&models.DataStorage{}).Where("name = ? AND type = ?", name, relType).Count(&count).Error
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (s *TagService) CreateTag(name string, relType string) (*models.DataStorage
 	return &storage, nil
 }
 
-// RenameTag 重命名标签
+// RenameTag 重命名标签（在自身所属分类范围内查重）
 func (s *TagService) RenameTag(id string, newName string) error {
 	newName = strings.TrimSpace(newName)
 	if newName == "" {
@@ -99,7 +99,7 @@ func (s *TagService) RenameTag(id string, newName string) error {
 	}
 
 	var count int64
-	err := database.DB.Model(&models.DataStorage{}).Where("name = ? AND id != ?", newName, id).Count(&count).Error
+	err := database.DB.Model(&models.DataStorage{}).Where("name = ? AND type = ? AND id != ?", newName, storage.Type, id).Count(&count).Error
 	if err != nil {
 		return err
 	}
