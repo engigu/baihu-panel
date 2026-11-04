@@ -10,7 +10,7 @@
         "vitepress": "^1.6.4"
     },
     "dependencies": {
-        "@scalar/api-reference": "^1.48.2",
+        "@scalar/api-reference": "^1.76.4",
         "dompurify": "^3.4.17",
         "fast-uri": "^4.2.3",
         "highlight.js": "^11.12.0",
