@@ -6,6 +6,20 @@ outline: 2
 
 本页面记录了baihu-panel的主要版本更新历史。
 
+## 2026.11.04 (v1.6.1)
+### 旧备份两步验证死锁自愈修复、分页空数据白屏异常修复、依赖安全漏洞加固与运行时组件升级
+- **旧备份两步验证破损自愈与数据清洗 (Auth & 2FA & Fix)**：
+  - **登录自动自愈**：优化两步验证触发判断，仅在明确开启且密钥有效时要求输入动态验证码；针对旧版本（如 v1.1.25）备份导出缺失密钥造成的破损脏状态，自动自愈重置两步验证状态并允许密码登录，解决输入验证码提示“未开启两步验证”并卡死的死锁缺陷（[#231](https://github.com/engigu/baihu-panel/issues/231)）；
+  - **备份恢复清洗**：恢复用户数据时若检测到密钥为空，自动清洗重置两步验证状态，杜绝历史备份还原污染数据库；
+  - **启动自检迁移与 CLI 救砖**：新增系统启动自动纠偏迁移，修复存量脏数据；增强 `baihu resetpwd` 命令行工具，在重置密码时同步解除两步验证绑定。
+- **分页空数据返回统一处理与页面白屏修复 (Web & Components & Fix)**：
+  - **列表空数据健壮性加固**：针对后端空列表返回 `data: null` 导致的页面 `data.records` 解构报错白屏问题，在 `usePaginatedList` 中统一加入兜底与空列表兼容（[#206](https://github.com/engigu/baihu-panel/issues/206)）；
+  - **全站关键页面重构接入**：对标签管理（`Tags.vue`）、环境变量（`Environments.vue`）、执行历史（`History.vue`）以及 4 个日志 Tab（登录日志、调度日志、通知日志、过滤日志）全面接入统一分页组件，彻底根治白屏缺陷并精简样板代码。
+- **安全漏洞加固与依赖版本升级 (Deps & Security)**：
+  - **后端 Go JOSE DoS 漏洞修复**：升级 `github.com/go-jose/go-jose/v4` 至 `v4.1.8`，修复解析恶意 RSA JWK 时的拒绝服务漏洞（[#118](https://github.com/engigu/baihu-panel/security/dependabot/118) / CVE-2026-116587）；
+  - **前端依赖安全漏洞修复**：通过 package.json 依赖覆盖修复 `minimatch` DoS 漏洞（[#121](https://github.com/engigu/baihu-panel/security/dependabot/121) / CVE-2026-118764）与 `deepmerge` 原型污染漏洞（[#119](https://github.com/engigu/baihu-panel/security/dependabot/119) / CVE-2026-93753），并同步升级 `glob` 至安全版本；
+  - **核心依赖升级**：同步升级 `silenceper/wechat/v2` (2.1.14)、`golang.org/x/net` (0.62.0)、`gofrs/flock` (0.13.1)、`klauspost/compress` (1.20.3)、`gorm.io/driver/postgres` (1.6.3)、`vue` (3.5.44) 等。
+
 ## 2026.11.03 (v1.6.0)
 ### 任务超时支持0不限制、限制并发任务运行中快捷停止、执行历史日志防重渲染、演示模式切面重构与容器控存调优
 - **任务超时控制与 0（不限制）支持 (Tasks & Backend & Fix)**：
