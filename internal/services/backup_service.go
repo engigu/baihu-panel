@@ -324,7 +324,7 @@ func (s *BackupService) restoreFromZipFile(tx *gorm.DB, f *zip.File, filename st
 
 	switch filename {
 	case "users.json":
-		return restoreStreamBatch[models.User](tx, decoder)
+		return s.restoreUsers(tx, decoder)
 	case "tasks.json":
 		return s.restoreTasks(tx, decoder)
 	case "task_logs.json":
@@ -357,6 +357,36 @@ func (s *BackupService) restoreFromZipFile(tx *gorm.DB, f *zip.File, filename st
 	default:
 		return nil
 	}
+}
+
+func (s *BackupService) restoreUsers(tx *gorm.DB, decoder *json.Decoder) error {
+	batchSize := 1000
+	var batch []*models.User
+
+	for decoder.More() {
+		var m models.User
+		if err := decoder.Decode(&m); err != nil {
+			return err
+		}
+		// 兼容旧版备份包：如果 otp_secret 为空但标记了开启两步验证，自动重置为关闭防止死锁
+		if m.OtpSecret == "" && m.OtpEnabled {
+			m.OtpEnabled = false
+		}
+		batch = append(batch, &m)
+
+		if len(batch) >= batchSize {
+			if err := tx.Select("*").CreateInBatches(batch, batchSize).Error; err != nil {
+				return err
+			}
+			batch = nil
+		}
+	}
+
+	if len(batch) > 0 {
+		return tx.Select("*").CreateInBatches(batch, len(batch)).Error
+	}
+
+	return nil
 }
 
 func (s *BackupService) restoreTasks(tx *gorm.DB, decoder *json.Decoder) error {

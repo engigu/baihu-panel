@@ -144,6 +144,8 @@ func postMigrations() error {
 	migrateTaskEnvs()
 	// 自动将旧的 config 升级转移到统一的 unified_config 字段中
 	migrateUnifiedTaskConfig()
+	// 自动修复历史两步验证破损状态（已开启但缺少密钥）
+	repairCorruptedOtpUsers()
 	return nil
 }
 
@@ -386,6 +388,21 @@ func migrateUnifiedTaskConfig() {
 
 	logger.Infof("[Database] 成功将 %d 个任务的 Config 迁移升级至 unified_config 字段", count)
 	markUnifiedTaskConfigMigrated()
+}
+
+// repairCorruptedOtpUsers 自动修复由于历史备份还原或异常导致的 otp_secret 为空但 otp_enabled 为 true 的脏数据
+func repairCorruptedOtpUsers() {
+	if !DB.Migrator().HasTable(&models.User{}) {
+		return
+	}
+	res := DB.Model(&models.User{}).
+		Where("otp_enabled = ? AND (otp_secret IS NULL OR otp_secret = ?)", true, "").
+		Update("otp_enabled", false)
+	if res.Error != nil {
+		logger.Debugf("[Database] 修复破损两步验证状态失败: %v", res.Error)
+	} else if res.RowsAffected > 0 {
+		logger.Infof("[Database] 已自动修复 %d 位用户的异常两步验证状态", res.RowsAffected)
+	}
 }
 
 func markUnifiedTaskConfigMigrated() {

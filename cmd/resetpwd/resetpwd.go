@@ -74,9 +74,18 @@ func Run(args []string) {
 		return
 	}
 
+	// 密码重置时，同步重置两步验证，防止用户因 2FA 损坏或手机丢失无法登录
+	hadOtp := user.OtpEnabled || user.OtpSecret != ""
+	if hadOtp {
+		_ = userService.UpdateOTP(user.ID, "", false)
+	}
+
 	fmt.Println("--------------------------------------------------")
 	fmt.Printf("用户 [%s] 密码已重置成功:\n", username)
 	fmt.Printf("新密码: %s\n", newPassword)
+	if hadOtp {
+		fmt.Println("提示: 已同步重置并关闭该用户的两步验证 (2FA)。")
+	}
 	fmt.Println("请妥善保管您的新密码，并登录后及时修改。")
 	fmt.Println("--------------------------------------------------")
 }

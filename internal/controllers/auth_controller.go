@@ -120,17 +120,22 @@ func (ac *AuthController) Login(c *gin.Context) {
 
 	// 检查是否开启了两步验证
 	if user.OtpEnabled {
-		// 生成临时待验证 OTP 的 token，有效期 5 分钟
-		pendingToken, err := utils.GenerateOtpPendingToken(user.ID, constant.Secret)
-		if err != nil {
-			utils.ServerError(c, "生成临时凭证失败")
+		if user.OtpSecret != "" {
+			// 生成临时待验证 OTP 的 token，有效期 5 分钟
+			pendingToken, err := utils.GenerateOtpPendingToken(user.ID, constant.Secret)
+			if err != nil {
+				utils.ServerError(c, "生成临时凭证失败")
+				return
+			}
+			utils.Success(c, gin.H{
+				"require_otp":       true,
+				"otp_pending_token": pendingToken,
+			})
 			return
 		}
-		utils.Success(c, gin.H{
-			"require_otp":       true,
-			"otp_pending_token": pendingToken,
-		})
-		return
+		// 容错自愈：两步验证标记开启但密钥为空，属于破损脏状态，自动修复为关闭并允许常规登录
+		_ = ac.userService.UpdateOTP(user.ID, "", false)
+		user.OtpEnabled = false
 	}
 
 	expireDays := 7
