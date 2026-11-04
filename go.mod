@@ -4,9 +4,9 @@ go 1.26.0
 
 require (
 	github.com/ActiveState/termtest/conpty v0.5.0
-	github.com/alibabacloud-go/darabonba-openapi/v2 v2.2.1
+	github.com/alibabacloud-go/darabonba-openapi/v2 v2.2.4
 	github.com/alibabacloud-go/dysmsapi-20170525/v4 v4.1.3
-	github.com/alibabacloud-go/tea v1.5.0
+	github.com/alibabacloud-go/tea v1.5.2
 	github.com/coreos/go-oidc/v3 v3.13.0
 	github.com/creack/pty v1.1.24
 	github.com/fsnotify/fsnotify v1.10.1
