@@ -10,6 +10,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/logger"
 	"github.com/engigu/baihu-panel/internal/models"
+	"github.com/engigu/baihu-panel/internal/database/migrate_scripts"
 	"github.com/rs/xid"
 )
 
@@ -149,6 +150,8 @@ func postMigrations() error {
 	repairCorruptedOtpUsers()
 	// 自动将用户存量 oidc_subject 迁移至专属绑定表
 	migrateExistingUserSSOBindings()
+	// 自动清理历史 SSO 多余创建的账号并合并至本地账号
+	migrate_scripts.CleanLegacySSOUsers(DB, allModels)
 	return nil
 }
 
@@ -189,17 +192,12 @@ func migrateExistingUserSSOBindings() {
 
 // migrateTaskEnvs 迁移旧的任务绑定环境变量到通用数据关联表
 func migrateTaskEnvs() {
-	// 检查 settings 表中是否已经记录了迁移状态
-	if DB.Migrator().HasTable(&models.Setting{}) {
-		var setting models.Setting
-		res := DB.Where(&models.Setting{Section: constant.SectionSystem, Key: constant.KeyTaskEnvsMigrated}).Limit(1).Find(&setting)
-		if res.RowsAffected > 0 && string(setting.Value) == "true" {
-			return
-		}
+	if migrate_scripts.HasMigrated(DB, constant.KeyTaskEnvsMigrated) {
+		return
 	}
 
 	if !DB.Migrator().HasColumn(&models.Task{}, "envs") {
-		markTaskEnvsMigrated()
+		migrate_scripts.MarkMigrated(DB, constant.KeyTaskEnvsMigrated)
 		return
 	}
 	logger.Infof("[Database] 正在迁移旧任务环境变量绑定...")
@@ -234,46 +232,18 @@ func migrateTaskEnvs() {
 		}
 	}
 
-	// if err := DB.Migrator().DropColumn(&models.Task{}, "envs"); err != nil {
-	// 	logger.Debugf("[Database] 移除 bh_tasks.envs 字段失败: %v", err)
-	// } else {
-	// 	logger.Infof("[Database] 成功迁移 %d 个环境变量绑定的任务，并删除了旧 envs 字段", len(tasks))
-	// }
 	logger.Infof("[Database] 成功迁移 %d 个环境变量绑定的任务", len(tasks))
-	markTaskEnvsMigrated()
-}
-
-func markTaskEnvsMigrated() {
-	if !DB.Migrator().HasTable(&models.Setting{}) {
-		return
-	}
-	var setting models.Setting
-	res := DB.Where(&models.Setting{Section: constant.SectionSystem, Key: constant.KeyTaskEnvsMigrated}).Limit(1).Find(&setting)
-	if res.RowsAffected > 0 {
-		DB.Model(&setting).Update("value", models.BigText("true"))
-	} else {
-		DB.Create(&models.Setting{
-			ID:      xid.New().String(),
-			Section: constant.SectionSystem,
-			Key:     constant.KeyTaskEnvsMigrated,
-			Value:   models.BigText("true"),
-		})
-	}
+	migrate_scripts.MarkMigrated(DB, constant.KeyTaskEnvsMigrated)
 }
 
 // migrateTaskTags 迁移旧的任务标签到通用数据关联表
 func migrateTaskTags() {
-	// 检查 settings 表中是否已经记录了迁移状态
-	if DB.Migrator().HasTable(&models.Setting{}) {
-		var setting models.Setting
-		res := DB.Where(&models.Setting{Section: constant.SectionSystem, Key: constant.KeyTaskTagsMigrated}).Limit(1).Find(&setting)
-		if res.RowsAffected > 0 && string(setting.Value) == "true" {
-			return
-		}
+	if migrate_scripts.HasMigrated(DB, constant.KeyTaskTagsMigrated) {
+		return
 	}
 
 	if !DB.Migrator().HasColumn(&models.Task{}, "tags") {
-		markTaskTagsMigrated()
+		migrate_scripts.MarkMigrated(DB, constant.KeyTaskTagsMigrated)
 		return
 	}
 	logger.Infof("[Database] 正在迁移旧任务标签...")
@@ -320,41 +290,14 @@ func migrateTaskTags() {
 		}
 	}
 
-	// if err := DB.Migrator().DropColumn(&models.Task{}, "tags"); err != nil {
-	// 	logger.Debugf("[Database] 移除 bh_tasks.tags 字段失败: %v", err)
-	// } else {
-	// 	logger.Infof("[Database] 成功迁移 %d 个带有标签的任务，并删除了旧 tags 字段", len(tasks))
-	// }
 	logger.Infof("[Database] 成功迁移 %d 个带有标签的任务", len(tasks))
-	markTaskTagsMigrated()
-}
-
-func markTaskTagsMigrated() {
-	if !DB.Migrator().HasTable(&models.Setting{}) {
-		return
-	}
-	var setting models.Setting
-	res := DB.Where(&models.Setting{Section: constant.SectionSystem, Key: constant.KeyTaskTagsMigrated}).Limit(1).Find(&setting)
-	if res.RowsAffected > 0 {
-		DB.Model(&setting).Update("value", models.BigText("true"))
-	} else {
-		DB.Create(&models.Setting{
-			ID:      xid.New().String(),
-			Section: constant.SectionSystem,
-			Key:     constant.KeyTaskTagsMigrated,
-			Value:   models.BigText("true"),
-		})
-	}
+	migrate_scripts.MarkMigrated(DB, constant.KeyTaskTagsMigrated)
 }
 
 // migrateUnifiedTaskConfig 自动从旧的 config 升级转化为新的 unified_config 模型结构
 func migrateUnifiedTaskConfig() {
-	if DB.Migrator().HasTable(&models.Setting{}) {
-		var setting models.Setting
-		res := DB.Where(&models.Setting{Section: constant.SectionSystem, Key: constant.KeyUnifiedTaskConfigMigrated}).Limit(1).Find(&setting)
-		if res.RowsAffected > 0 && string(setting.Value) == "true" {
-			return
-		}
+	if migrate_scripts.HasMigrated(DB, constant.KeyUnifiedTaskConfigMigrated) {
+		return
 	}
 
 	logger.Infof("[Database] 正在自动升级 TaskConfig 为 unified_config 数据格式...")
@@ -425,7 +368,7 @@ func migrateUnifiedTaskConfig() {
 	}
 
 	logger.Infof("[Database] 成功将 %d 个任务的 Config 迁移升级至 unified_config 字段", count)
-	markUnifiedTaskConfigMigrated()
+	migrate_scripts.MarkMigrated(DB, constant.KeyUnifiedTaskConfigMigrated)
 }
 
 // repairCorruptedOtpUsers 自动修复由于历史备份还原或异常导致的 otp_secret 为空但 otp_enabled 为 true 的脏数据
@@ -440,23 +383,5 @@ func repairCorruptedOtpUsers() {
 		logger.Debugf("[Database] 修复破损两步验证状态失败: %v", res.Error)
 	} else if res.RowsAffected > 0 {
 		logger.Infof("[Database] 已自动修复 %d 位用户的异常两步验证状态", res.RowsAffected)
-	}
-}
-
-func markUnifiedTaskConfigMigrated() {
-	if !DB.Migrator().HasTable(&models.Setting{}) {
-		return
-	}
-	var setting models.Setting
-	res := DB.Where(&models.Setting{Section: constant.SectionSystem, Key: constant.KeyUnifiedTaskConfigMigrated}).Limit(1).Find(&setting)
-	if res.RowsAffected > 0 {
-		DB.Model(&setting).Update("value", models.BigText("true"))
-	} else {
-		DB.Create(&models.Setting{
-			ID:      xid.New().String(),
-			Section: constant.SectionSystem,
-			Key:     constant.KeyUnifiedTaskConfigMigrated,
-			Value:   models.BigText("true"),
-		})
 	}
 }

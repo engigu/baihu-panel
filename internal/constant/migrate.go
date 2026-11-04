@@ -13,6 +13,9 @@ const (
 	// KeyTaskTagsMigrated 任务标签迁移标记 (v2版本强制重跑过)
 	KeyTaskTagsMigrated = "task_tags_migrated_v2"
 
+	// KeyCleanLegacySSOUsersMigrated 清理历史 SSO 多余账号并合并至本地主账号的标记
+	KeyCleanLegacySSOUsersMigrated = "clean_legacy_sso_users_migrated"
+
 	// 以下是旧表或字段名，用于前置结构迁移时重命名或删除
 	TableMigrateQlTokens        = "ql_tokens"
 	ColumnMigrateQlTokenCode    = "code"
