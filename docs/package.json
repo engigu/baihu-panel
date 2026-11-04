@@ -14,7 +14,7 @@
         "dompurify": "^3.4.17",
         "fast-uri": "^4.2.3",
         "highlight.js": "^11.12.0",
-        "marked": "^18.0.14",
+        "marked": "^18.1.2",
         "postcss": "^8.5.18"
     },
     "overrides": {
