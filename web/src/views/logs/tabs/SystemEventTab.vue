@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { api, type AppLog, LOG_CATEGORY, LOG_LEVEL } from '@/api'
 import { Button } from '@/components/ui/button'
 import {
@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import Pagination from '@/components/Pagination.vue'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
 import { toast } from 'vue-sonner'
-import { usePageSize } from '@/composables/usePageSize'
+import { usePaginatedList } from '@/composables/usePaginatedList'
 import { useEventBus } from '@/composables/useEventBus'
 import { LOG_EVENTS } from '@/constants'
 import { formatDateTime } from '@/utils/date'
@@ -21,14 +21,8 @@ const props = defineProps<{
     }
 }>()
 
-const { pageSize, handlePageSizeChange: persistPageSize } = usePageSize('bhp_system_event_logs_page_size', 10)
-
-const logs = ref<AppLog[]>([])
 const selectedLogId = ref<string | null>(null)
-const total = ref(0)
-const loading = ref(false)
 const showClearConfirm = ref(false)
-const currentPage = ref(1)
 
 const detailDialogProps = ref({
     open: false,
@@ -37,35 +31,33 @@ const detailDialogProps = ref({
     error: ''
 })
 
-async function fetchLogs() {
-    loading.value = true
-    try {
-        const res = await api.appLogs.list({
-            category: LOG_CATEGORY.SYSTEM_NOTICE,
-            level: props.filters.level === 'all' ? undefined : props.filters.level,
-            keyword: props.filters.keyword || undefined,
-            page: currentPage.value,
-            page_size: pageSize.value
-        })
-        logs.value = res.data || []
-        total.value = res.total || 0
-    } catch (e: any) {
-        toast.error(e.message || '获取系统事件失败')
-    } finally {
-        loading.value = false
-    }
-}
+const {
+    list: logs,
+    total,
+    page: currentPage,
+    pageSize,
+    loading,
+    loadData: fetchLogs,
+    handlePageChange,
+    handlePageSizeChange,
+    resetPage
+} = usePaginatedList<AppLog>({
+    pageSizeKey: 'bhp_system_event_logs_page_size',
+    defaultPageSize: 10,
+    fetchApi: (params) => api.appLogs.list({
+        category: LOG_CATEGORY.SYSTEM_NOTICE,
+        level: props.filters.level === 'all' ? undefined : props.filters.level,
+        keyword: props.filters.keyword || undefined,
+        page: params.page,
+        page_size: params.page_size
+    }),
+    errorMessage: '获取系统事件失败'
+})
 
-function handlePageChange(index: number) {
-    currentPage.value = index
+watch(() => props.filters, () => {
+    resetPage()
     fetchLogs()
-}
-
-function handlePageSizeChange(newSize: number) {
-    persistPageSize(newSize)
-    currentPage.value = 1
-    fetchLogs()
-}
+}, { deep: true })
 
 function showDetail(log: AppLog) {
     selectedLogId.value = log.id
@@ -81,7 +73,7 @@ async function handleClear() {
     try {
         await api.appLogs.clear(LOG_CATEGORY.SYSTEM_NOTICE)
         toast.success('清空成功')
-        currentPage.value = 1
+        resetPage()
         fetchLogs()
     } catch (e: any) {
         toast.error('清空失败: ' + (e.message || ''))
@@ -172,7 +164,7 @@ function onDialogClose(open: boolean) {
 
             <!-- 列表内容 -->
             <div class="divide-y">
-                <div v-if="logs.length === 0 && !loading" class="text-sm text-muted-foreground text-center py-8">
+                <div v-if="!logs || (logs.length === 0 && !loading)" class="text-sm text-muted-foreground text-center py-8">
                     暂无系统事件
                 </div>
 

@@ -7,21 +7,45 @@ import Pagination from '@/components/Pagination.vue'
 import { Plus, Pencil, Trash2, Search, Tag, X, RefreshCw, Layers, Terminal, Variable, GitBranch, ExternalLink } from 'lucide-vue-next'
 import { api, type TagItem, type TagResourceItem } from '@/api'
 import { toast } from 'vue-sonner'
-import { usePageSize } from '@/composables/usePageSize'
+import { usePaginatedList } from '@/composables/usePaginatedList'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { formatDateTime } from '@/utils/date'
 
-const { pageSize, handlePageSizeChange: persistPageSize } = usePageSize('bhp_tags_page_size', 10)
-
-const tags = ref<TagItem[]>([])
-const loading = ref(false)
 const filterName = ref('')
-const currentPage = ref(1)
-const total = ref(0)
 const activeTab = ref<string>('all')
 
-let searchTimer: ReturnType<typeof setTimeout> | null = null
+const {
+  list: tags,
+  total,
+  page: currentPage,
+  pageSize,
+  loading,
+  loadData: loadTags,
+  handlePageChange,
+  handlePageSizeChange,
+  debouncedSearch,
+  resetPage
+} = usePaginatedList<TagItem>({
+  pageSizeKey: 'bhp_tags_page_size',
+  defaultPageSize: 10,
+  fetchApi: (params) => api.tags.list({
+    page: params.page,
+    page_size: params.page_size,
+    name: filterName.value || undefined,
+    type: activeTab.value === 'all' ? undefined : activeTab.value
+  }),
+  errorMessage: '加载标签失败'
+})
+
+function handleSearch() {
+  debouncedSearch(() => loadTags())
+}
+
+watch(activeTab, () => {
+  resetPage()
+  loadTags()
+})
 
 // Dialog state
 const showEditDialog = ref(false)
@@ -31,48 +55,6 @@ const tagForm = ref({
   name: '',
   type: 'task_tag' as 'task_tag' | 'env_tag'
 })
-
-async function loadTags() {
-  loading.value = true
-  try {
-    const res = await api.tags.list({
-      page: currentPage.value,
-      page_size: pageSize.value,
-      name: filterName.value || undefined,
-      type: activeTab.value === 'all' ? undefined : activeTab.value
-    })
-    tags.value = res.data
-    total.value = res.total
-  } catch (err: any) {
-    toast.error('加载标签失败: ' + err.message)
-  } finally {
-    loading.value = false
-  }
-}
-
-function handleSearch() {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    currentPage.value = 1
-    loadTags()
-  }, 300)
-}
-
-watch(activeTab, () => {
-  currentPage.value = 1
-  loadTags()
-})
-
-function handlePageChange(page: number) {
-  currentPage.value = page
-  loadTags()
-}
-
-function handlePageSizeChange(newSize: number) {
-  persistPageSize(newSize)
-  currentPage.value = 1
-  loadTags()
-}
 
 // Dialog actions
 function openCreateDialog() {
@@ -225,7 +207,7 @@ onMounted(() => {
         </div>
 
         <div class="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
-          <Button variant="outline" size="icon" class="h-9 w-9 shrink-0" @click="loadTags" :disabled="loading" title="刷新">
+          <Button variant="outline" size="icon" class="h-9 w-9 shrink-0" @click="loadTags()" :disabled="loading" title="刷新">
             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loading }" />
           </Button>
 
@@ -270,7 +252,7 @@ onMounted(() => {
             <RefreshCw class="h-4 w-4 animate-spin text-primary" />
             <span>加载中...</span>
           </div>
-          <div v-else-if="tags.length === 0" class="p-8 text-center text-muted-foreground">
+          <div v-else-if="!tags || tags.length === 0" class="p-8 text-center text-muted-foreground">
             没有找到匹配的标签
           </div>
           <div
@@ -353,7 +335,7 @@ onMounted(() => {
           <RefreshCw class="h-4 w-4 animate-spin text-primary" />
           <span>加载中...</span>
         </div>
-        <div v-else-if="tags.length === 0" class="p-8 text-center text-muted-foreground">
+        <div v-else-if="!tags || tags.length === 0" class="p-8 text-center text-muted-foreground">
           暂无标签
         </div>
         <div v-else v-for="(tag, idx) in tags" :key="`small-${tag.id}`" class="p-3.5 hover:bg-muted/50 transition-colors">

@@ -134,6 +134,13 @@ export async function request<T>(url: string, options?: RequestInit): Promise<T>
     throw err
   }
 
+  // 针对分页响应结构，统一兜底 data: null -> data: []
+  if (json.data && typeof json.data === 'object' && 'total' in json.data && 'data' in json.data) {
+    if ((json.data as any).data == null) {
+      (json.data as any).data = []
+    }
+  }
+
   return json.data
 }
 

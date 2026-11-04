@@ -9,7 +9,7 @@ import TextOverflow from '@/components/TextOverflow.vue'
 import TagInput from '@/components/TagInput.vue'
 import { api, type EnvVar } from '@/api'
 import { toast } from 'vue-sonner'
-import { usePageSize } from '@/composables/usePageSize'
+import { usePaginatedList } from '@/composables/usePaginatedList'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ENV_TYPE } from '@/constants'
 import { Badge } from '@/components/ui/badge'
@@ -21,16 +21,12 @@ import SecretAuthDialog from './components/SecretAuthDialog.vue'
 import { formatDateTime } from '@/utils/date'
 
 const route = useRoute()
-const { pageSize, handlePageSizeChange: persistPageSize } = usePageSize('bhp_envs_page_size', 10)
 
-const envVars = ref<EnvVar[]>([])
 const showValues = ref<Record<string, boolean>>({})
 const decryptedSecrets = ref<Record<string, string>>({})
 
 const filterName = ref('')
 const filterTags = ref('')
-const currentPage = ref(1)
-const total = ref(0)
 const activeTab = ref<string>(ENV_TYPE.NORMAL)
 const isSecretSet = ref(true)
 const showSecretTip = ref(localStorage.getItem('bhp_hide_secret_tip') !== 'true')
@@ -39,7 +35,6 @@ function closeSecretTip() {
   showSecretTip.value = false
   localStorage.setItem('bhp_hide_secret_tip', 'true')
 }
-let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const editDialogRef = ref<InstanceType<typeof EditEnvDialog> | null>(null)
 const deleteDialogRef = ref<InstanceType<typeof DeleteEnvDialog> | null>(null)
@@ -57,50 +52,45 @@ async function checkSecretStatus() {
   }
 }
 
-async function loadEnvVars() {
-  try {
-    const res = await api.env.list({ 
-      page: currentPage.value, 
-      page_size: pageSize.value, 
-      name: filterName.value || undefined, 
-      type: activeTab.value,
-      tags: filterTags.value || undefined
-    })
-    envVars.value = res.data
-    total.value = res.total
-    // 初始化显示状态，根据数据库的 hidden 状态同步显示
-    res.data.forEach(env => {
+const {
+  list: envVars,
+  total,
+  page: currentPage,
+  pageSize,
+  loadData: loadEnvVars,
+  handlePageChange,
+  handlePageSizeChange,
+  debouncedSearch,
+  resetPage
+} = usePaginatedList<EnvVar>({
+  pageSizeKey: 'bhp_envs_page_size',
+  defaultPageSize: 10,
+  fetchApi: (params) => api.env.list({
+    page: params.page,
+    page_size: params.page_size,
+    name: filterName.value || undefined,
+    type: activeTab.value,
+    tags: filterTags.value || undefined
+  }),
+  onSuccess: (data) => {
+    data.forEach(env => {
       showValues.value[env.id] = !env.hidden
     })
-  } catch { toast.error('加载环境变量失败') }
-}
+  },
+  errorMessage: '加载环境变量失败'
+})
 
 function handleSearch() {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    currentPage.value = 1
-    loadEnvVars()
-  }, 300)
+  debouncedSearch(() => loadEnvVars())
 }
 
 watch(activeTab, (val) => {
-  currentPage.value = 1
+  resetPage()
   if (val === ENV_TYPE.SECRET) {
     checkSecretStatus()
   }
   loadEnvVars()
 })
-
-function handlePageChange(page: number) {
-  currentPage.value = page
-  loadEnvVars()
-}
-
-function handlePageSizeChange(newSize: number) {
-  persistPageSize(newSize)
-  currentPage.value = 1
-  loadEnvVars()
-}
 
 function openCreate() {
   editDialogRef.value?.openCreate(activeTab.value)
@@ -266,7 +256,7 @@ onMounted(() => {
         </div>
         <!-- 列表 -->
         <div class="divide-y text-sm">
-          <div v-if="envVars.length === 0" class="text-sm text-muted-foreground text-center py-12">
+          <div v-if="!envVars || envVars.length === 0" class="text-sm text-muted-foreground text-center py-12">
             {{ activeTab === ENV_TYPE.SECRET ? '暂无机密' : '暂无环境变量' }}
           </div>
           <div v-for="(env, index) in envVars" :key="`large-${env.id}`"
@@ -387,7 +377,7 @@ onMounted(() => {
 
       <!-- ========== 3. 小屏布局 (Small < 640px) ========== -->
       <div class="divide-y sm:hidden">
-        <div v-if="envVars.length === 0" class="text-sm text-muted-foreground text-center py-12">
+        <div v-if="!envVars || envVars.length === 0" class="text-sm text-muted-foreground text-center py-12">
           {{ activeTab === ENV_TYPE.SECRET ? '暂无机密' : '暂无环境变量' }}
         </div>
         <div v-for="(env, index) in envVars" :key="`small-${env.id}`" class="p-3 hover:bg-muted/50 transition-colors">

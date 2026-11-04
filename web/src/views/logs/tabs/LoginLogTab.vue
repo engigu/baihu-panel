@@ -5,7 +5,7 @@ import { Loader2, Copy, MapPin } from 'lucide-vue-next'
 import TextOverflow from '@/components/TextOverflow.vue'
 import { api, LOG_CATEGORY } from '@/api'
 import { toast } from 'vue-sonner'
-import { usePageSize } from '@/composables/usePageSize'
+import { usePaginatedList } from '@/composables/usePaginatedList'
 import { useEventBus } from '@/composables/useEventBus'
 import { LOG_EVENTS } from '@/constants'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
@@ -15,8 +15,6 @@ import { copyToClipboard } from '@/utils/clipboard'
 const props = defineProps<{
     username: string
 }>()
-
-const { pageSize, handlePageSizeChange: persistPageSize } = usePageSize('bhp_login_logs_page_size', 10)
 
 interface LoginLog {
     id: string
@@ -43,10 +41,24 @@ interface IpGeoInfo {
     offset: number
 }
 
-const logs = ref<LoginLog[]>([])
-const currentPage = ref(1)
-const total = ref(0)
-const loading = ref(false)
+const {
+    list: logs,
+    total,
+    page: currentPage,
+    pageSize,
+    loadData: loadLogs,
+    handlePageChange,
+    handlePageSizeChange
+} = usePaginatedList<LoginLog>({
+    pageSizeKey: 'bhp_login_logs_page_size',
+    defaultPageSize: 10,
+    fetchApi: (params) => api.settings.getLoginLogs({
+        page: params.page,
+        page_size: params.page_size,
+        username: props.username || undefined
+    }),
+    errorMessage: '加载登录日志失败'
+})
 
 // IP 地理位置弹窗
 const ipDialogOpen = ref(false)
@@ -94,34 +106,6 @@ async function copyText(text: string, successMsg: string) {
     }
 }
 
-async function loadLogs() {
-    loading.value = true
-    try {
-        const res = await api.settings.getLoginLogs({
-            page: currentPage.value,
-            page_size: pageSize.value,
-            username: props.username || undefined
-        })
-        logs.value = res.data
-        total.value = res.total
-    } catch {
-        toast.error('加载登录日志失败')
-    } finally {
-        loading.value = false
-    }
-}
-
-function handlePageChange(page: number) {
-    currentPage.value = page
-    loadLogs()
-}
-
-function handlePageSizeChange(newSize: number) {
-    persistPageSize(newSize)
-    currentPage.value = 1
-    loadLogs()
-}
-
 onMounted(loadLogs)
 
 // 实时更新：当有新登录产生且用户在第一页时刷新
@@ -161,7 +145,7 @@ defineExpose({
 
             <!-- 列表内容 -->
             <div class="divide-y text-sm">
-                <div v-if="logs.length === 0" class="text-sm text-muted-foreground text-center py-8">
+                <div v-if="!logs || logs.length === 0" class="text-sm text-muted-foreground text-center py-8">
                     暂无登录日志
                 </div>
 

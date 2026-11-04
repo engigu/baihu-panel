@@ -46,7 +46,7 @@ func (s *TagService) GetTagsWithPagination(page, pageSize int, name string, relT
 		return nil, 0, err
 	}
 
-	var results []TagWithCount
+	results := make([]TagWithCount, 0, len(storages))
 	for _, storage := range storages {
 		var count int64
 		database.DB.Model(&models.DataRelation{}).Where("relate_id = ? AND type = ?", storage.ID, storage.Type).Count(&count)

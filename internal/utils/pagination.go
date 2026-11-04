@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"reflect"
 	"strconv"
 
 	"github.com/engigu/baihu-panel/internal/cache"
@@ -68,10 +69,22 @@ type PaginationData struct {
 	PageSize int         `json:"page_size"`
 }
 
+// ensureNonNilSlice 将 nil 切片统一归一化为空切片，避免 json.Marshal 序列化为 null
+func ensureNonNilSlice(data interface{}) interface{} {
+	if data == nil {
+		return []interface{}{}
+	}
+	val := reflect.ValueOf(data)
+	if val.Kind() == reflect.Slice && val.IsNil() {
+		return []interface{}{}
+	}
+	return data
+}
+
 // PaginatedResponse 分页响应
 func PaginatedResponse(c *gin.Context, data interface{}, total int64, p Pagination) {
 	Success(c, PaginationData{
-		Data:     data,
+		Data:     ensureNonNilSlice(data),
 		Total:    total,
 		Page:     p.Page,
 		PageSize: p.PageSize,

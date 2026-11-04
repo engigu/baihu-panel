@@ -14,28 +14,72 @@ import { api, type TaskLog } from '@/api'
 import LogDetailCard from '@/components/LogDetailCard.vue'
 import BaihuDialog from '@/components/ui/BaihuDialog.vue'
 import { toast } from 'vue-sonner'
-import { usePageSize } from '@/composables/usePageSize'
+import { usePaginatedList } from '@/composables/usePaginatedList'
 import TextOverflow from '@/components/TextOverflow.vue'
 import StatusDot from '@/components/StatusDot.vue'
 import { useEventBus } from '@/composables/useEventBus'
 import { formatDateTime, formatDuration } from '@/utils/date'
+import { decompressFromBase64 } from '@/utils/decompress'
 
 const route = useRoute()
-const { pageSize, handlePageSizeChange: persistPageSize } = usePageSize('bhp_history_page_size', 10)
 
-const logs = ref<TaskLog[]>([])
 const selectedLog = ref<TaskLog | null>(null)
 const filterKeyword = ref('')
 const filterTaskId = ref<string | undefined>(undefined)
 const filterStatus = ref<string | undefined>(undefined)
 const filterDate = ref<string | undefined>(undefined)
-const currentPage = ref(1)
-const total = ref(0)
 
-let searchTimer: ReturnType<typeof setTimeout> | null = null
 let durationTimer: ReturnType<typeof setInterval> | null = null
 
-const isRefreshing = ref(false)
+const {
+  list: logs,
+  total,
+  page: currentPage,
+  pageSize,
+  loading: isRefreshing,
+  loadData: loadLogs,
+  handlePageChange,
+  handlePageSizeChange,
+  debouncedSearch,
+  resetPage
+} = usePaginatedList<TaskLog>({
+  pageSizeKey: 'bhp_history_page_size',
+  defaultPageSize: 10,
+  fetchApi: (params) => {
+    const apiParams: { page: number; page_size: number; task_id?: string; task_name?: string; status?: string; date?: string } = {
+      page: params.page,
+      page_size: params.page_size
+    }
+    if (filterTaskId.value) {
+      apiParams.task_id = filterTaskId.value
+    }
+    if (filterKeyword.value.trim()) {
+      apiParams.task_name = filterKeyword.value.trim()
+    }
+    if (filterStatus.value && filterStatus.value !== 'all') {
+      apiParams.status = filterStatus.value
+    }
+    if (filterDate.value && filterDate.value !== 'all') {
+      apiParams.date = filterDate.value
+    }
+    return api.logs.list(apiParams)
+  },
+  errorMessage: '加载日志失败'
+})
+
+function handleSearch() {
+  debouncedSearch(() => loadLogs())
+}
+
+function handleStatusChange() {
+  resetPage()
+  loadLogs()
+}
+
+function handleDateChange() {
+  resetPage()
+  loadLogs()
+}
 
 // 监听实时任务事件
 useEventBus(Object.values(TASK_EVENTS), (payload, type) => {
@@ -108,72 +152,11 @@ function cleanupLogSocket() {
   logBuffer = []
 }
 
-
-import { decompressFromBase64 } from '@/utils/decompress'
-
 const decompressedOutput = computed(() => {
   if (!wsContent.value) return ''
   const decoded = decompressFromBase64(wsContent.value)
   return decoded
 })
-
-async function loadLogs() {
-  isRefreshing.value = true
-  try {
-    const params: { page: number; page_size: number; task_id?: string; task_name?: string; status?: string; date?: string } = {
-      page: currentPage.value,
-      page_size: pageSize.value
-    }
-    if (filterTaskId.value) {
-      params.task_id = filterTaskId.value
-    }
-    if (filterKeyword.value.trim()) {
-      params.task_name = filterKeyword.value.trim()
-    }
-    if (filterStatus.value && filterStatus.value !== 'all') {
-      params.status = filterStatus.value
-    }
-    if (filterDate.value && filterDate.value !== 'all') {
-      params.date = filterDate.value
-    }
-    const response = await api.logs.list(params)
-    logs.value = response.data
-    total.value = response.total
-  } catch {
-    toast.error('加载日志失败')
-  } finally {
-    isRefreshing.value = false
-  }
-}
-
-function handleSearch() {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    currentPage.value = 1
-    loadLogs()
-  }, 300)
-}
-
-function handleStatusChange() {
-  currentPage.value = 1
-  loadLogs()
-}
-
-function handleDateChange() {
-  currentPage.value = 1
-  loadLogs()
-}
-
-function handlePageChange(page: number) {
-  currentPage.value = page
-  loadLogs()
-}
-
-function handlePageSizeChange(newSize: number) {
-  persistPageSize(newSize)
-  currentPage.value = 1
-  loadLogs()
-}
 
 async function selectLog(log: TaskLog) {
   // 幂等防重：若已展示该日志，忽略重复点击
@@ -374,8 +357,6 @@ async function stopTask() {
   }
 }
 
-
-
 async function handleClearLogs() {
   try {
     await api.logs.clear(filterTaskId.value)
@@ -411,8 +392,6 @@ async function handleDeleteLog() {
   }
 }
 
-
-
 function getTaskTypeTitle(type: string) {
   if (type === TASK_TYPE.APP || type?.startsWith('app:')) return '已装应用'
   if (type === TASK_TYPE.REPO) return '仓库同步'
@@ -441,7 +420,7 @@ watch(() => route.query, (newQuery) => {
   filterTaskId.value = newQuery.task_id ? String(newQuery.task_id) : undefined
   filterStatus.value = newQuery.status ? String(newQuery.status) : undefined
   filterDate.value = newQuery.date ? String(newQuery.date) : undefined
-  currentPage.value = 1
+  resetPage()
   loadLogs()
 }, { deep: true })
 </script>
@@ -524,7 +503,7 @@ watch(() => route.query, (newQuery) => {
         </div>
         <!-- 列表 -->
         <div class="divide-y text-sm">
-          <div v-if="logs.length === 0" class="text-sm text-muted-foreground text-center py-8">
+          <div v-if="!logs || logs.length === 0" class="text-sm text-muted-foreground text-center py-8">
             暂无日志
           </div>
           <div v-for="(log, index) in logs" :key="log.id" :class="[
@@ -636,4 +615,3 @@ watch(() => route.query, (newQuery) => {
     </BaihuDialog>
   </div>
 </template>
-
