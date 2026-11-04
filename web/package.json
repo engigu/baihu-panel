@@ -20,7 +20,7 @@
     "@xterm/xterm": "^5.5.0",
     "ansi-to-html": "^0.7.2",
     "ansi-to-vue3": "^0.1.2",
-    "apexcharts": "^5.3.6",
+    "apexcharts": "^8.7.0",
     "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
