@@ -112,8 +112,23 @@ fi
 VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")}"
 BUILD_TIME="${BUILD_TIME:-$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date '+%Y-%m-%d %H:%M:%S')}"
 
-LDFLAGS="-s -w -X 'github.com/engigu/baihu-panel/internal/constant.Version=${VERSION}' -X 'github.com/engigu/baihu-panel/internal/constant.BuildTime=${BUILD_TIME}'"
-AGENT_LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'"
+# 全局禁用 CGO（纯静态编译）
+export CGO_ENABLED="${CGO_ENABLED:-0}"
+
+# 基础编译命令（统一剥离路径、禁用 git 嗅探、依赖只读）
+GO_BUILD_BASE=(go build -trimpath -buildvcs=false -mod=readonly)
+
+# 常量包路径与 LDFLAGS 分层收拢
+PKG_CONST="github.com/engigu/baihu-panel/internal/constant"
+BASE_LDFLAGS="-s -w"
+COMMON_VERSION_FLAGS="-X '${PKG_CONST}.Version=${VERSION}' -X '${PKG_CONST}.BuildTime=${BUILD_TIME}'"
+
+SERVER_LDFLAGS="${BASE_LDFLAGS} ${COMMON_VERSION_FLAGS}"
+TRAY_LDFLAGS="${BASE_LDFLAGS} -H=windowsgui ${COMMON_VERSION_FLAGS}"
+AGENT_LDFLAGS="${BASE_LDFLAGS} -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'"
+
+# 兼容现有外部引用的变量名
+LDFLAGS="${SERVER_LDFLAGS}"
 
 # ============================================================
 # 1. 编译主服务端二进制 (baihu)
@@ -136,22 +151,19 @@ build_server() {
     log_info "检查依赖模块缓存 (go mod download)..."
     go mod download
 
-    local build_cmd=(go build)
+    local build_cmd=("${GO_BUILD_BASE[@]}")
     if [ -n "${tags}" ]; then
         build_cmd+=(-tags "${tags}")
     fi
-    if [ "${target_os}" = "android" ]; then
-        build_cmd+=(-trimpath)
-    fi
-    build_cmd+=(-ldflags="${LDFLAGS}" -o "${output_path}" .)
+    build_cmd+=(-ldflags="${SERVER_LDFLAGS}" -o "${output_path}" .)
 
     local start_time
     start_time=$(get_timestamp_ms)
 
     if [ -n "${arm_version}" ]; then
-        CGO_ENABLED=0 GOOS="${target_os}" GOARCH="${target_arch}" GOARM="${arm_version}" "${build_cmd[@]}"
+        GOOS="${target_os}" GOARCH="${target_arch}" GOARM="${arm_version}" "${build_cmd[@]}"
     else
-        CGO_ENABLED=0 GOOS="${target_os}" GOARCH="${target_arch}" "${build_cmd[@]}"
+        GOOS="${target_os}" GOARCH="${target_arch}" "${build_cmd[@]}"
     fi
 
     local duration
@@ -180,8 +192,8 @@ build_tray() {
     local start_time
     start_time=$(get_timestamp_ms)
 
-    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
-        go build -ldflags="-s -w -H=windowsgui" -o "${output_path}" ./cmd/tray
+    GOOS=windows GOARCH=amd64 \
+        "${GO_BUILD_BASE[@]}" -ldflags="${TRAY_LDFLAGS}" -o "${output_path}" ./cmd/tray
 
     local duration
     duration=$(format_duration "${start_time}")
@@ -220,17 +232,12 @@ build_agents() {
         mkdir -p "${tmpdir}"
         cp config.example.ini "${tmpdir}/"
 
-        local flags=()
-        if [ "${os}" = "android" ]; then
-            flags+=(-trimpath)
-        fi
-
         local start_time
         start_time=$(get_timestamp_ms)
 
         log_info "正在编译 Agent [${os}/${arch}]..."
-        CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" \
-            go build "${flags[@]}" -ldflags="${AGENT_LDFLAGS}" -o "${tmpdir}/baihu-agent${suffix}" .
+        GOOS="${os}" GOARCH="${arch}" \
+            "${GO_BUILD_BASE[@]}" -ldflags="${AGENT_LDFLAGS}" -o "${tmpdir}/baihu-agent${suffix}" .
 
         local target_archive
         if [ "${is_zip}" = "true" ]; then
@@ -333,16 +340,12 @@ build_release_artifacts() {
         local start_time
         start_time=$(get_timestamp_ms)
 
-        local build_cmd=(go build -tags web)
-        if [ "${os}" = "android" ] || [ -n "${arm_val}" ]; then
-            build_cmd+=(-trimpath)
-        fi
-        build_cmd+=(-ldflags="${LDFLAGS}" -o "${bin_name}" main.go)
+        local build_cmd=("${GO_BUILD_BASE[@]}" -tags web -ldflags="${SERVER_LDFLAGS}" -o "${bin_name}" main.go)
 
         if [ -n "${arm_val}" ]; then
-            CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" GOARM="${arm_val}" "${build_cmd[@]}"
+            GOOS="${os}" GOARCH="${arch}" GOARM="${arm_val}" "${build_cmd[@]}"
         else
-            CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" "${build_cmd[@]}"
+            GOOS="${os}" GOARCH="${arch}" "${build_cmd[@]}"
         fi
 
         local archive_path
@@ -374,8 +377,8 @@ build_release_artifacts() {
     mkdir -p "${base_output}/bin"
     local win_start_time
     win_start_time=$(get_timestamp_ms)
-    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
-        go build -tags web -ldflags="${LDFLAGS}" -o "${base_output}/bin/baihu.exe" main.go
+    GOOS=windows GOARCH=amd64 \
+        "${GO_BUILD_BASE[@]}" -tags web -ldflags="${SERVER_LDFLAGS}" -o "${base_output}/bin/baihu.exe" main.go
 
     build_tray "${base_output}/bin/baihu-tray.exe"
 

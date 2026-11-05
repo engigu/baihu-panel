@@ -1,12 +1,19 @@
 # Variables
 BINARY=bin/baihu
-GOBUILD=go build
+export CGO_ENABLED ?= 0
+GOBUILD=go build -trimpath -buildvcs=false -mod=readonly
 GOCLEAN=go clean
 GOGET=go get
 GOMOD=go mod
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME=$(shell date '+%Y/%m/%d %H:%M:%S')
-LDFLAGS=-ldflags="-s -w -X 'github.com/engigu/baihu-panel/internal/constant.Version=$(VERSION)' -X 'github.com/engigu/baihu-panel/internal/constant.BuildTime=$(BUILD_TIME)'"
+PKG_CONST=github.com/engigu/baihu-panel/internal/constant
+BASE_LDFLAGS=-s -w
+COMMON_VERSION_FLAGS=-X '$(PKG_CONST).Version=$(VERSION)' -X '$(PKG_CONST).BuildTime=$(BUILD_TIME)'
+
+LDFLAGS=-ldflags="$(BASE_LDFLAGS) $(COMMON_VERSION_FLAGS)"
+TRAY_LDFLAGS=-ldflags="$(BASE_LDFLAGS) -H=windowsgui $(COMMON_VERSION_FLAGS)"
+AGENT_LDFLAGS=-ldflags="$(BASE_LDFLAGS) -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'"
 
 TAGS_WEB=-tags web
 
@@ -50,7 +57,7 @@ pack-webui:
 # Build the application (requires frontend to be built first)
 build:
 	@mkdir -p bin
-	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BINARY) main.go
+	$(GOBUILD) $(LDFLAGS) -o $(BINARY) main.go
 
 # Build release version (Frontend + Backend with embedded assets)
 release:
@@ -58,7 +65,7 @@ release:
 	@mkdir -p bin
 	rm -rf internal/static/dist
 	cp -r web/dist internal/static/dist
-	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) $(TAGS_WEB) -o $(BINARY) main.go
+	$(GOBUILD) $(LDFLAGS) $(TAGS_WEB) -o $(BINARY) main.go
 
 # Build release version for Android Termux
 release-android:
@@ -66,7 +73,7 @@ release-android:
 	@mkdir -p bin
 	rm -rf internal/static/dist
 	cp -r web/dist internal/static/dist
-	CGO_ENABLED=0 GOOS=android GOARCH=arm64 $(GOBUILD) -trimpath $(LDFLAGS) $(TAGS_WEB) -o bin/baihu-android-arm64 main.go
+	GOOS=android GOARCH=arm64 $(GOBUILD) $(LDFLAGS) $(TAGS_WEB) -o bin/baihu-android-arm64 main.go
 
 # Build release version for Windows
 release-windows:
@@ -74,7 +81,7 @@ release-windows:
 	@mkdir -p bin
 	rm -rf internal/static/dist
 	cp -r web/dist internal/static/dist
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) $(TAGS_WEB) -o bin/baihu.exe main.go
+	GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) $(TAGS_WEB) -o bin/baihu.exe main.go
 
 # Build release version (Frontend + Backend with embedded assets)
 release-binary:
@@ -82,7 +89,7 @@ release-binary:
 	@mkdir -p bin
 	rm -rf internal/static/dist
 	cp -r web/dist internal/static/dist
-	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) $(TAGS_WEB) -o $(BINARY) main.go
+	$(GOBUILD) $(LDFLAGS) $(TAGS_WEB) -o $(BINARY) main.go
 
 # Alias for backward compatibility
 build-all: release
@@ -92,42 +99,42 @@ build-agent: build-agent-linux-amd64 build-agent-linux-arm64 build-agent-android
 	@echo "All agent packages built in data/agent/"
 	@ls -lh data/agent/baihu-agent-*
 
-AGENT_LDFLAGS=-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'
+
 
 build-agent-linux-amd64:
 	@mkdir -p data/agent
 	@echo "$(VERSION)" > data/agent/version.txt
-	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(AGENT_LDFLAGS)" -o ../data/agent/baihu-agent-linux-amd64 .
+	cd agent && GOOS=linux GOARCH=amd64 $(GOBUILD) $(AGENT_LDFLAGS) -o ../data/agent/baihu-agent-linux-amd64 .
 
 build-agent-linux-arm64:
 	@mkdir -p data/agent
 	@echo "$(VERSION)" > data/agent/version.txt
-	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="$(AGENT_LDFLAGS)" -o ../data/agent/baihu-agent-linux-arm64 .
+	cd agent && GOOS=linux GOARCH=arm64 $(GOBUILD) $(AGENT_LDFLAGS) -o ../data/agent/baihu-agent-linux-arm64 .
 
 build-agent-android-arm64:
 	@mkdir -p data/agent
 	@echo "$(VERSION)" > data/agent/version.txt
-	cd agent && CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -ldflags="$(AGENT_LDFLAGS)" -o ../data/agent/baihu-agent-android-arm64 .
+	cd agent && GOOS=android GOARCH=arm64 $(GOBUILD) $(AGENT_LDFLAGS) -o ../data/agent/baihu-agent-android-arm64 .
 
 build-agent-windows-amd64:
 	@mkdir -p data/agent
 	@echo "$(VERSION)" > data/agent/version.txt
-	cd agent && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(AGENT_LDFLAGS)" -o ../data/agent/baihu-agent-windows-amd64.exe .
+	cd agent && GOOS=windows GOARCH=amd64 $(GOBUILD) $(AGENT_LDFLAGS) -o ../data/agent/baihu-agent-windows-amd64.exe .
 
 build-agent-darwin-amd64:
 	@mkdir -p data/agent
 	@echo "$(VERSION)" > data/agent/version.txt
-	cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="$(AGENT_LDFLAGS)" -o ../data/agent/baihu-agent-darwin-amd64 .
+	cd agent && GOOS=darwin GOARCH=amd64 $(GOBUILD) $(AGENT_LDFLAGS) -o ../data/agent/baihu-agent-darwin-amd64 .
 
 build-agent-darwin-arm64:
 	@mkdir -p data/agent
 	@echo "$(VERSION)" > data/agent/version.txt
-	cd agent && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(AGENT_LDFLAGS)" -o ../data/agent/baihu-agent-darwin-arm64 .
+	cd agent && GOOS=darwin GOARCH=arm64 $(GOBUILD) $(AGENT_LDFLAGS) -o ../data/agent/baihu-agent-darwin-arm64 .
 
 # Build Windows Tray GUI App
 release-windows-tray:
 	@mkdir -p bin
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -H=windowsgui -X 'github.com/engigu/baihu-panel/internal/constant.Version=$(VERSION)' -X 'github.com/engigu/baihu-panel/internal/constant.BuildTime=$(BUILD_TIME)'" -o bin/baihu-tray.exe ./cmd/tray
+	GOOS=windows GOARCH=amd64 $(GOBUILD) $(TRAY_LDFLAGS) -o bin/baihu-tray.exe ./cmd/tray
 
 # Pack Windows GUI Installer using ISCC (Inno Setup)
 pack-windows-installer: release-windows release-windows-tray
