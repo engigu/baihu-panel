@@ -6,7 +6,8 @@ const {
     addEnv,
     updateEnv,
     deleteEnvs,
-    deleteEnv
+    deleteEnv,
+    upsertSecret
 } = require('./env');
 const {
     getTasks,
@@ -27,6 +28,7 @@ module.exports = {
     updateEnv,
     deleteEnvs,
     deleteEnv,
+    upsertSecret,
     getTasks,
     getTask,
     updateTask,

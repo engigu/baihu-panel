@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/constant"
@@ -13,6 +14,13 @@ import (
 )
 
 type EnvService struct{}
+
+var (
+	ErrEmptySecretValue    = errors.New("机密值不能为空")
+	ErrInvalidSecretName   = errors.New("新机密变量名只能包含字母、数字和下划线，且必须以字母或下划线开头")
+	ErrDuplicateSecretName = errors.New("存在多个同名机密变量，请先清理重复项")
+	ErrSecretTypeConflict  = errors.New("同名变量已存在且不是机密")
+)
 
 func NewEnvService() *EnvService {
 	return &EnvService{}
@@ -78,12 +86,12 @@ func (es *EnvService) GetEnvVarsWithPagination(userID string, name string, envTy
 		if len(validTags) > 0 {
 			var storageIDs []string
 			database.DB.Model(&models.DataStorage{}).Where("type = ? AND name IN ?", constant.RelationTypeEnvTag, validTags).Pluck("id", &storageIDs)
-			
+
 			var envIDs []string
 			if len(storageIDs) > 0 {
 				database.DB.Model(&models.DataRelation{}).Where("type = ? AND relate_id IN ?", constant.RelationTypeEnvTag, storageIDs).Pluck("data_id", &envIDs)
 			}
-			
+
 			if len(envIDs) > 0 {
 				query = query.Where("id IN ?", envIDs)
 			} else {
@@ -438,5 +446,71 @@ func (es *EnvService) SetOrUpdateEnvVar(name, value, remark, envType string, hid
 	return created, true // true 表示是新建
 }
 
+func (es *EnvService) UpsertSecretByName(userID, name, value, remark, tags string, enabled bool) (*models.EnvironmentVariable, bool, error) {
+	if value == "" {
+		return nil, false, ErrEmptySecretValue
+	}
 
+	var existingEnvs []models.EnvironmentVariable
+	if err := database.DB.Where("user_id = ? AND name = ?", userID, name).Find(&existingEnvs).Error; err != nil {
+		return nil, false, err
+	}
+	if len(existingEnvs) > 1 {
+		return nil, false, ErrDuplicateSecretName
+	}
 
+	if len(existingEnvs) == 1 {
+		existing := &existingEnvs[0]
+		if existing.Type != constant.EnvTypeSecret {
+			return nil, false, ErrSecretTypeConflict
+		}
+		updated := es.UpdateEnvVarWithTags(
+			existing.ID,
+			name,
+			value,
+			remark,
+			constant.EnvTypeSecret,
+			utils.DerefBool(existing.Hidden, true),
+			enabled,
+			tags,
+		)
+		if updated == nil {
+			return nil, false, errors.New("机密变量更新失败")
+		}
+		return updated, false, nil
+	}
+
+	if !isValidSecretEnvName(name) {
+		return nil, false, ErrInvalidSecretName
+	}
+
+	created := es.CreateEnvVarWithTags(
+		name,
+		value,
+		remark,
+		constant.EnvTypeSecret,
+		true,
+		enabled,
+		userID,
+		tags,
+	)
+	if created == nil {
+		return nil, false, errors.New("机密变量创建失败")
+	}
+	return created, true, nil
+}
+
+func isValidSecretEnvName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for index, char := range name {
+		switch {
+		case char >= 'A' && char <= 'Z', char >= 'a' && char <= 'z', char == '_':
+		case char >= '0' && char <= '9' && index > 0:
+		default:
+			return false
+		}
+	}
+	return true
+}

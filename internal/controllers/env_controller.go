@@ -1,6 +1,9 @@
 package controllers
 
 import (
+	"errors"
+	"strings"
+
 	"github.com/engigu/baihu-panel/internal/constant"
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
@@ -14,7 +17,7 @@ import (
 )
 
 type EnvController struct {
-	envService *services.EnvService
+	envService  *services.EnvService
 	userService *services.UserService
 }
 
@@ -81,7 +84,7 @@ func (ec *EnvController) CreateEnvVar(c *gin.Context) {
 		relation.DataRelation.SaveTags(envVar.ID, constant.RelationTypeEnvTag, req.Tags)
 		envVar.Tags = req.Tags
 	}
-	
+
 	// Broadcast tasks to all agents because global envs changed
 	services.GetAgentWSManager().BroadcastTasksToAll()
 
@@ -110,6 +113,76 @@ func (ec *EnvController) GetEnvVars(c *gin.Context) {
 	tags := c.DefaultQuery("tags", "")
 	envVars, total := ec.envService.GetEnvVarsWithPagination(userID, name, envType, tags, p.Page, p.PageSize)
 	utils.PaginatedResponse(c, vo.ToEnvVOListFromModels(envVars), total, p)
+}
+
+// UpsertSecretByName 按名称创建或更新机密变量
+// @Summary 按名称创建或更新机密变量
+// @Description 按名称创建或更新 secret 类型环境变量，成功响应不返回机密值
+// @Tags 环境变量
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param name path string true "环境变量名称"
+// @Param body body object true "机密变量信息"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Failure 401 {object} utils.Response
+// @Failure 409 {object} utils.Response
+// @Router /env/secret/{name} [put]
+func (ec *EnvController) UpsertSecretByName(c *gin.Context) {
+	if c.Query("token") != "" {
+		utils.Unauthorized(c, "机密更新接口仅支持 Authorization Bearer 鉴权")
+		return
+	}
+	if authHeader := c.GetHeader("Authorization"); authHeader != "" && !strings.HasPrefix(authHeader, "Bearer ") {
+		utils.Unauthorized(c, "机密更新接口仅支持 Authorization Bearer 鉴权")
+		return
+	}
+
+	name := c.Param("name")
+	var req struct {
+		Value   string  `json:"value" binding:"required"`
+		Remark  string  `json:"remark"`
+		Enabled *bool   `json:"enabled"`
+		Tags    string  `json:"tags"`
+		Type    *string `json:"type"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	if req.Type != nil {
+		utils.BadRequest(c, "机密更新接口不允许传递 type")
+		return
+	}
+
+	envVar, _, err := ec.envService.UpsertSecretByName(
+		c.GetString("userID"),
+		name,
+		req.Value,
+		req.Remark,
+		req.Tags,
+		utils.DerefBool(req.Enabled, true),
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrDuplicateSecretName), errors.Is(err, services.ErrSecretTypeConflict):
+			utils.Error(c, 409, err.Error())
+		case errors.Is(err, services.ErrEmptySecretValue), errors.Is(err, services.ErrInvalidSecretName):
+			utils.BadRequest(c, err.Error())
+		default:
+			utils.ServerError(c, "机密变量更新失败")
+		}
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"id":         envVar.ID,
+		"name":       envVar.Name,
+		"type":       envVar.Type,
+		"enabled":    utils.DerefBool(envVar.Enabled, true),
+		"updated_at": envVar.UpdatedAt,
+	})
 }
 
 // GetAllEnvVars 获取所有环境变量
@@ -358,7 +431,7 @@ func (ec *EnvController) BulkSaveEnv(c *gin.Context) {
 			existingEnv.Hidden = &hidden
 			existingEnv.Enabled = &enabled
 			database.DB.Save(existingEnv)
-			
+
 			if req.ID != "" && existingEnv.ID != req.ID {
 				database.DB.Model(existingEnv).Update("id", req.ID)
 			}
@@ -396,9 +469,9 @@ func (ec *EnvController) DecryptSecret(c *gin.Context) {
 	}
 
 	var req struct {
-		OtpCode      string    `json:"otp_code"`
-		Password     string    `json:"password"`
-		PublicKey    string    `json:"public_key"`
+		OtpCode   string `json:"otp_code"`
+		Password  string `json:"password"`
+		PublicKey string `json:"public_key"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {

@@ -176,6 +176,21 @@ async function deleteEnv(id) {
     return true;
 }
 
+/**
+ * 按变量名创建或更新机密变量
+ */
+async function upsertSecret(name, value, remark = "", enabled = true, tags = "") {
+    if (!name) {
+        throw new Error("变量名不能为空");
+    }
+    if (!value) {
+        throw new Error("机密值不能为空");
+    }
+    const url = `${getEnvsUrl()}/secret/${encodeURIComponent(name)}`;
+    const res = await request(url, "PUT", { value, remark, enabled, tags });
+    return res.data;
+}
+
 module.exports = {
     getEnvs,
     getEnv,
@@ -183,5 +198,6 @@ module.exports = {
     addEnv,
     updateEnv,
     deleteEnvs,
-    deleteEnv
+    deleteEnv,
+    upsertSecret
 };

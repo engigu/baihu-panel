@@ -7,7 +7,8 @@ from .env import (
     add_env,
     update_env,
     delete_envs,
-    delete_env
+    delete_env,
+    upsert_secret
 )
 from .task import (
     get_tasks,
@@ -46,6 +47,7 @@ __all__ = [
     'update_env',
     'delete_envs',
     'delete_env',
+    'upsert_secret',
     'get_tasks',
     'get_task',
     'update_task',

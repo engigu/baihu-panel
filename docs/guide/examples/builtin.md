@@ -122,12 +122,18 @@ main();
   - `add_env(name, value, remark)`: 添加新的环境变量。
   - `update_env(id, name, value, remark)`: 更新指定 ID 的环境变量值。
   - `delete_env(id)`: 根据 ID 删除环境变量。
+  - `upsert_secret(name, value, remark="", enabled=True, tags="")`: 按名称创建或更新机密变量。
 * **Node.js**:
   - `getEnvs()`: 获取所有环境变量列表。
   - `getEnv(name)`: 根据变量名称获取详情。
   - `addEnv(name, value, remark)`: 添加新的环境变量。
   - `updateEnv(id, name, value, remark)`: 更新指定 ID 的环境变量值。
   - `deleteEnv(id)`: 根据 ID 删除环境变量。
+  - `upsertSecret(name, value, remark, enabled, tags)`: 按名称创建或更新机密变量。
+
+`upsert_secret` / `upsertSecret` 会调用 `PUT /open2api/v1/env/secret/:name`。变量不存在时创建 `secret` 类型变量；存在时保留原 `id` 并覆盖加密后的值。接口只接受 `Authorization: Bearer`，响应不会返回机密值。更新后的值会在下一次任务启动时注入。
+
+新机密变量名必须以字母或下划线开头，后续只能使用字母、数字和下划线；推荐使用大写形式。已存在的存量机密会按原名称兼容更新，不会被命名规则强制重命名。
 
 ### 代码示例
 
@@ -174,7 +180,16 @@ def main():
             print(f"正在删除临时环境变量: ID={checked_env.get('id')}...")
             baihu.delete_env(checked_env.get("id"))
             print("删除成功！")
-            
+
+            # 6. 按名称创建或更新机密变量
+            # 新机密变量名必须以字母或下划线开头，后续只能使用字母、数字和下划线；建议使用大写形式
+            baihu.upsert_secret(
+                "BHPKG_TEST_SECRET",
+                "new-secret-value",
+                remark="脚本运行时更新",
+                tags="builtin-sdk"
+            )
+
     except Exception as e:
         print(f"环境变量操作失败: {e}")
         print("提示: 请确保在面板任务设置中正确注入了 OpenAPI Token。")
@@ -224,6 +239,16 @@ async function main() {
             console.log(`正在删除临时环境变量: ID={checkedEnv.id}...`);
             await baihu.deleteEnv(checkedEnv.id);
             console.log("删除成功！");
+
+            // 6. 按名称创建或更新机密变量
+            await baihu.upsertSecret(
+                "BHPKG_TEST_SECRET_JS",
+                "new-secret-value",
+                "脚本运行时更新",
+                true,
+                "builtin-sdk"
+            );
+            console.log("机密变量更新成功！下次任务启动时生效。");
         }
 
     } catch (e) {

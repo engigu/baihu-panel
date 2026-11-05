@@ -72,6 +72,7 @@ func registerOpenAPIEnvRoutes(g *gin.RouterGroup, c *Controllers) {
 		env.POST("", c.Env.CreateEnvVar)
 		env.GET("", c.Env.GetEnvVars)
 		env.GET("/all", c.Env.GetAllEnvVars)
+		env.PUT("/secret/:name", c.Env.UpsertSecretByName)
 		env.GET("/:id", c.Env.GetEnvVar)
 		env.GET("/:id/tasks", c.Env.GetAssociatedTasks)
 		env.PUT("/:id", c.Env.UpdateEnvVar)
@@ -139,4 +140,3 @@ func registerOpenAPIAppRoutes(g *gin.RouterGroup, c *Controllers) {
 		apps.DELETE("/:id", c.App.RemoveApp)
 	}
 }
-
