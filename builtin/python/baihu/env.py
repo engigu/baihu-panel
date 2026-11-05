@@ -1,5 +1,6 @@
 import os
 import json
+import urllib.parse
 import urllib.request
 import urllib.error
 
@@ -131,3 +132,23 @@ def delete_env(id):
     url = f"{_get_envs_url()}/{id}"
     _request(url, "DELETE")
     return True
+
+
+def upsert_secret(name, value, remark="", enabled=True, tags=""):
+    """
+    按变量名创建或更新机密变量。
+    """
+    if not name:
+        raise ValueError("变量名不能为空")
+    if not value:
+        raise ValueError("机密值不能为空")
+
+    url = f"{_get_envs_url()}/secret/{urllib.parse.quote(name, safe='')}"
+    payload = {
+        "value": value,
+        "remark": remark,
+        "enabled": enabled,
+        "tags": tags,
+    }
+    res = _request(url, "PUT", payload)
+    return res.get("data")
