@@ -41,7 +41,15 @@ func (c *WebUIController) UploadWebUI(ctx *gin.Context) {
 	// 临时保存上传的文件到挂载目录，避免 /tmp 跨分区移动或权限问题
 	tmpDir := filepath.Join(constant.DataDir, "tmp")
 	os.MkdirAll(tmpDir, 0755)
-	tmpFile := filepath.Join(tmpDir, file.Filename)
+	safeFilename := utils.SanitizeFilename(file.Filename)
+	if safeFilename == "" {
+		safeFilename = "webui_upload.zip"
+	}
+	tmpFile, safe := utils.SafeJoin(tmpDir, safeFilename)
+	if !safe {
+		utils.BadRequest(ctx, "非法文件名")
+		return
+	}
 	
 	if err := ctx.SaveUploadedFile(file, tmpFile); err != nil {
 		utils.ServerError(ctx, "保存临时文件失败")

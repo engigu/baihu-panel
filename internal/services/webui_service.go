@@ -113,13 +113,11 @@ func (s *WebUIService) ExtractWebUI(zipPath string) (string, error) {
 		return "", fmt.Errorf("invalid uimanifest.json format")
 	}
 
-	webuiName := webuiManifest.Name
+	// 确保WebUI名称安全，防止目录穿越
+	webuiName := utils.SanitizeFilename(webuiManifest.Name)
 	if webuiName == "" || webuiName == "default" {
 		return "", fmt.Errorf("invalid webui name in uimanifest.json")
 	}
-
-	// 确保WebUI名称安全，防止目录穿越
-	webuiName = filepath.Base(filepath.Clean(webuiName))
 	
 	// 4. 确保压缩包中包含 index.html 入口文件
 	if _, err := os.Stat(filepath.Join(tmpDir, "index.html")); os.IsNotExist(err) {
@@ -147,11 +145,11 @@ func (s *WebUIService) ExtractWebUI(zipPath string) (string, error) {
 
 // DeleteWebUI 删除自定义WebUI
 func (s *WebUIService) DeleteWebUI(name string) error {
+	name = utils.SanitizeFilename(name)
 	if name == "" || name == "default" {
 		return fmt.Errorf("cannot delete default webui")
 	}
 
-	name = filepath.Base(filepath.Clean(name))
 	targetDir := filepath.Join(constant.DataDir, "webuis", name)
 	
 	activeWebUI := s.settingsService.Get(constant.SectionSite, constant.KeyActiveWebUI)
@@ -170,7 +168,10 @@ func (s *WebUIService) DeleteWebUI(name string) error {
 // SetActiveWebUI 设置当前的活动WebUI
 func (s *WebUIService) SetActiveWebUI(name string) error {
 	if name != "default" {
-		name = filepath.Base(filepath.Clean(name))
+		name = utils.SanitizeFilename(name)
+		if name == "" {
+			return fmt.Errorf("invalid webui name")
+		}
 		targetDir := filepath.Join(constant.DataDir, "webuis", name)
 		if _, err := os.Stat(filepath.Join(targetDir, "uimanifest.json")); os.IsNotExist(err) {
 			return fmt.Errorf("webui %s not found", name)

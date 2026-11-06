@@ -116,11 +116,14 @@ func ExtractZip(src, dest string) error {
 	defer r.Close()
 
 	for _, f := range r.File {
-		fpath := filepath.Join(dest, f.Name)
-
 		// 安全检查：防止路径遍历 (ZipSlip)
-		rel, err := filepath.Rel(dest, fpath)
-		if err != nil || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." {
+		fpath, safe := SafeJoin(dest, f.Name)
+		if !safe {
+			continue
+		}
+
+		// 忽略符号链接条目，防止符号链接劫持
+		if f.Mode()&os.ModeSymlink != 0 {
 			continue
 		}
 
@@ -131,6 +134,11 @@ func ExtractZip(src, dest string) error {
 
 		if err := os.MkdirAll(filepath.Dir(fpath), 0755); err != nil {
 			return err
+		}
+
+		// 防止写入既有符号链接导致向外逃逸覆盖
+		if fi, err := os.Lstat(fpath); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+			_ = os.Remove(fpath)
 		}
 
 		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
@@ -191,11 +199,9 @@ func extractTarReader(tr *tar.Reader, dest string) error {
 			return err
 		}
 
-		fpath := filepath.Join(dest, header.Name)
-
 		// 安全检查：防止路径遍历
-		rel, err := filepath.Rel(dest, fpath)
-		if err != nil || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." {
+		fpath, safe := SafeJoin(dest, header.Name)
+		if !safe {
 			continue
 		}
 
@@ -205,6 +211,11 @@ func extractTarReader(tr *tar.Reader, dest string) error {
 		case tar.TypeReg:
 			if err := os.MkdirAll(filepath.Dir(fpath), 0755); err != nil {
 				return err
+			}
+
+			// 防止写入既有符号链接导致向外逃逸覆盖
+			if fi, err := os.Lstat(fpath); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+				_ = os.Remove(fpath)
 			}
 
 			outFile, err := os.Create(fpath)

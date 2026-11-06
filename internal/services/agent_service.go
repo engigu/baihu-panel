@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -535,6 +534,17 @@ func (s *AgentService) GetAvailablePlatforms() []map[string]string {
 
 // GetAgentBinary 获取 Agent 压缩包
 func (s *AgentService) GetAgentBinary(osType, arch string) ([]byte, string, error) {
+	osType = strings.TrimSpace(strings.ToLower(osType))
+	arch = strings.TrimSpace(strings.ToLower(arch))
+	if osType == "" || arch == "" {
+		return nil, "", &ServiceError{Message: "平台与架构参数不能为空"}
+	}
+
+	// 严格字符校验，防止路径穿越
+	if strings.ContainsAny(osType, "/\\.") || strings.ContainsAny(arch, "/\\.") {
+		return nil, "", &ServiceError{Message: "非法平台或架构参数"}
+	}
+
 	// 尝试 .zip 与 .tar.gz 两种可能的后缀
 	suffixes := []string{".zip", ".tar.gz"}
 	if osType != "windows" {
@@ -545,7 +555,10 @@ func (s *AgentService) GetAgentBinary(osType, arch string) ([]byte, string, erro
 	for _, dir := range dirs {
 		for _, ext := range suffixes {
 			filename := fmt.Sprintf("baihu-agent-%s-%s%s", osType, arch, ext)
-			filePath := filepath.Join(dir, filename)
+			filePath, safe := utils.SafeJoin(dir, filename)
+			if !safe {
+				continue
+			}
 			if data, err := os.ReadFile(filePath); err == nil {
 				return data, filename, nil
 			}

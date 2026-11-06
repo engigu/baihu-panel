@@ -671,28 +671,17 @@ func (tc *TaskController) deleteRepoPhysicalFiles(task *models.Task) {
 		return
 	}
 
-	// 确定绝对路径
-	scriptsDir, _ := filepath.Abs(constant.ScriptsWorkDir)
-	fullPath := targetPath
-	if strings.HasPrefix(targetPath, constant.ScriptsDirPlaceholder) {
-		fullPath = filepath.Join(scriptsDir, strings.TrimPrefix(targetPath, constant.ScriptsDirPlaceholder))
-	} else if !filepath.IsAbs(targetPath) {
-		fullPath = filepath.Join(scriptsDir, targetPath)
+	// 确定绝对路径并进行安全校验
+	scriptsDir := constant.ScriptsWorkDir
+	subPath := targetPath
+	if strings.HasPrefix(subPath, constant.ScriptsDirPlaceholder) {
+		subPath = strings.TrimPrefix(subPath, constant.ScriptsDirPlaceholder)
 	}
 
-	absTargetPath, _ := filepath.Abs(fullPath)
-	logger.Infof("[Controller] 最终计算的绝对路径: %s, Scripts目录: %s", absTargetPath, scriptsDir)
-	scriptsDir, _ = filepath.Abs(constant.ScriptsWorkDir)
+	absTargetPath, safe := utils.SafeJoin(scriptsDir, subPath)
+	absScriptsDir, _ := filepath.Abs(scriptsDir)
 
-	// 安全检查：使用 Rel 判断路径关系
-	rel, err := filepath.Rel(scriptsDir, absTargetPath)
-	if err != nil {
-		logger.Errorf("[Controller] 计算相对路径失败: %v", err)
-		return
-	}
-
-	// 必须是在 scripts 目录下（不以 .. 开头）且不能是 scripts 目录本身 (.)
-	if rel != "." && !strings.HasPrefix(rel, "..") {
+	if safe && absTargetPath != absScriptsDir {
 		err := os.RemoveAll(absTargetPath)
 		if err != nil {
 			logger.Errorf("[Controller] 物理删除文件夹失败: %s, 路径: %s, 错误: %v", task.Name, absTargetPath, err)

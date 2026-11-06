@@ -55,19 +55,13 @@ type FileContentVO struct {
 // checkPath 校验路径是否在工作目录内且安全。
 // 它返回完整的绝对路径以及一个表示路径是否安全的布尔值。
 func (fc *FileController) checkPath(path string, allowRoot bool) (string, bool) {
-	fullPath := filepath.Join(fc.workDir, filepath.Clean(path))
-	rel, err := filepath.Rel(fc.workDir, fullPath)
-	if err != nil {
-		return "", false
-	}
-
-	// 基础的目录穿越检查
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	fullPath, safe := utils.SafeJoin(fc.workDir, path)
+	if !safe {
 		return "", false
 	}
 
 	// 根目录检查
-	if !allowRoot && rel == "." {
+	if !allowRoot && fullPath == fc.workDir {
 		return "", false
 	}
 
@@ -621,8 +615,16 @@ func (fc *FileController) UploadArchive(c *gin.Context) {
 	os.MkdirAll(extractDir, 0755)
 
 	// 保存临时文件
-	// 安全修复：使用 filepath.Base 提取纯文件名，防止路径穿越攻击
-	tempFile := filepath.Join(os.TempDir(), filepath.Base(file.Filename))
+	// 安全修复：提取纯文件名并校验安全路径，防止路径穿越攻击
+	safeFilename := utils.SanitizeFilename(file.Filename)
+	if safeFilename == "" {
+		safeFilename = "temp_archive" + ext
+	}
+	tempFile, safe := utils.SafeJoin(os.TempDir(), safeFilename)
+	if !safe {
+		utils.BadRequest(c, "非法文件名")
+		return
+	}
 	if err := c.SaveUploadedFile(file, tempFile); err != nil {
 		utils.ServerError(c, "保存文件失败")
 		return
@@ -677,7 +679,10 @@ func (fc *FileController) UploadFiles(c *gin.Context) {
 	for i, file := range files {
 		// 获取相对路径（如果有）
 		// 安全修复：清理文件名
-		relPath := filepath.Base(file.Filename)
+		relPath := utils.SanitizeFilename(file.Filename)
+		if relPath == "" {
+			relPath = "uploaded_file"
+		}
 		if i < len(paths) && paths[i] != "" {
 			relPath = paths[i]
 		}

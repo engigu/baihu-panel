@@ -599,7 +599,15 @@ func (sc *SettingsController) RestoreBackup(c *gin.Context) {
 	}
 
 	// 保存上传的文件
-	tempPath := filepath.Join(os.TempDir(), file.Filename)
+	safeFilename := utils.SanitizeFilename(file.Filename)
+	if safeFilename == "" {
+		safeFilename = "backup_upload.zip"
+	}
+	tempPath, safe := utils.SafeJoin(os.TempDir(), safeFilename)
+	if !safe {
+		utils.BadRequest(c, "非法文件名")
+		return
+	}
 	if err := c.SaveUploadedFile(file, tempPath); err != nil {
 		utils.ServerError(c, "保存文件失败")
 		return

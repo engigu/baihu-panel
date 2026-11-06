@@ -244,7 +244,10 @@ func (a *AppApplier) execRepoSync(idx int, total int, src AppSource, appDir stri
 	if targetSubPath == "" {
 		targetSubPath = src.ID
 	}
-	targetAbsDir := filepath.Join(appDir, targetSubPath)
+	targetAbsDir, safe := utils.SafeJoin(appDir, targetSubPath)
+	if !safe {
+		return fmt.Errorf("代码源 target_path 越界非法: %s", targetSubPath)
+	}
 	gitDir := filepath.Join(targetAbsDir, ".git")
 	if fi, err := os.Stat(targetAbsDir); err == nil && fi.IsDir() {
 		if _, gitErr := os.Stat(gitDir); os.IsNotExist(gitErr) {

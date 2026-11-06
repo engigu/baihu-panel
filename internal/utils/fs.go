@@ -135,3 +135,36 @@ func GetBaihuExecutable() string {
 	return "baihu"
 }
 
+// SafeJoin 安全拼接基础目录与相对子路径，防止路径遍历逃逸 (Zip-Slip / Directory Traversal)
+// 返回解析后的完整绝对路径与是否在 baseDir 范围内的安全布尔值 (true: 安全且在 baseDir 范围内; false: 发生逃逸或路径非法)
+func SafeJoin(baseDir string, subPaths ...string) (string, bool) {
+	absBase, err := filepath.Abs(baseDir)
+	if err != nil {
+		absBase = filepath.Clean(baseDir)
+	}
+
+	parts := append([]string{absBase}, subPaths...)
+	fullPath := filepath.Clean(filepath.Join(parts...))
+
+	rel, err := filepath.Rel(absBase, fullPath)
+	if err != nil {
+		return "", false
+	}
+
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+
+	return fullPath, true
+}
+
+// SanitizeFilename 清洗上传的文件名，提取纯文件名，防止包含任何相对或绝对路径穿越字符
+func SanitizeFilename(filename string) string {
+	clean := filepath.Base(filepath.Clean(filename))
+	if clean == "." || clean == ".." || clean == string(filepath.Separator) || clean == "/" || clean == "\\" {
+		return ""
+	}
+	return clean
+}
+
+

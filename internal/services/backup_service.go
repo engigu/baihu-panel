@@ -17,6 +17,7 @@ import (
 	"github.com/engigu/baihu-panel/internal/eventbus"
 	"github.com/engigu/baihu-panel/internal/models"
 	"github.com/engigu/baihu-panel/internal/systime"
+	"github.com/engigu/baihu-panel/internal/utils"
 	"github.com/rs/xid"
 	"gorm.io/gorm"
 )
@@ -497,12 +498,23 @@ func (s *BackupService) restoreScriptsDir(r *zip.ReadCloser) {
 			if relPath == "" {
 				continue
 			}
-			fpath := filepath.Join(scriptsDir, relPath)
+			fpath, safe := utils.SafeJoin(scriptsDir, relPath)
+			if !safe {
+				continue
+			}
+			// 忽略符号链接条目，防止符号链接劫持
+			if f.Mode()&os.ModeSymlink != 0 {
+				continue
+			}
 			if f.FileInfo().IsDir() {
 				os.MkdirAll(fpath, 0755)
 				continue
 			}
 			os.MkdirAll(filepath.Dir(fpath), 0755)
+			// 防止写入既有符号链接导致向外逃逸覆盖
+			if fi, err := os.Lstat(fpath); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+				_ = os.Remove(fpath)
+			}
 			if outFile, err := os.Create(fpath); err == nil {
 				if rc, err := f.Open(); err == nil {
 					io.Copy(outFile, rc)

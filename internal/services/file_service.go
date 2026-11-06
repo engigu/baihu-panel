@@ -42,19 +42,13 @@ func NewFileService(workDir string) *FileService {
 
 // CheckPath 校验路径是否在安全工作目录内，返回绝对路径与合法性
 func (s *FileService) CheckPath(reqPath string, allowRoot bool) (string, bool) {
-	fullPath := filepath.Join(s.workDir, filepath.Clean(reqPath))
-	rel, err := filepath.Rel(s.workDir, fullPath)
-	if err != nil {
-		return "", false
-	}
-
-	// 目录穿越检查
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	fullPath, safe := utils.SafeJoin(s.workDir, reqPath)
+	if !safe {
 		return "", false
 	}
 
 	// 根目录检查
-	if !allowRoot && rel == "." {
+	if !allowRoot && fullPath == s.workDir {
 		return "", false
 	}
 
