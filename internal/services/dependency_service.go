@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/engigu/baihu-panel/internal/database"
 	"github.com/engigu/baihu-panel/internal/models"
@@ -31,16 +32,22 @@ func (s *DependencyService) List(language, langVersion string) ([]models.Depende
 
 // Create 创建依赖记录
 func (s *DependencyService) Create(dep *models.Dependency) error {
-	// 检查是否已存在（名称、版本、语言及版本必须完全匹配）
 	var existing models.Dependency
-	res := database.DB.Where("name = ? AND version = ? AND language = ? AND lang_version = ?", dep.Name, dep.Version, dep.Language, dep.LangVersion).Limit(1).Find(&existing)
-	if res.Error == nil && res.RowsAffected > 0 {
-		// 如果已存在，更新 ID 并执行更新
-		dep.ID = existing.ID
-		return database.DB.Model(&existing).Updates(dep).Error
+	if dep.ID != "" {
+		res := database.DB.Where("id = ?", dep.ID).Limit(1).Find(&existing)
+		if res.Error == nil && res.RowsAffected > 0 {
+			dep.CreatedAt = existing.CreatedAt
+			return database.DB.Save(dep).Error
+		}
 	}
 
-	// 不存在则新建
+	res := database.DB.Where("name = ? AND language = ? AND lang_version = ?", dep.Name, dep.Language, dep.LangVersion).Limit(1).Find(&existing)
+	if res.Error == nil && res.RowsAffected > 0 {
+		dep.ID = existing.ID
+		dep.CreatedAt = existing.CreatedAt
+		return database.DB.Save(dep).Error
+	}
+
 	if dep.ID == "" {
 		dep.ID = utils.GenerateID()
 	}
@@ -58,7 +65,46 @@ func (s *DependencyService) Install(dep *models.Dependency) error {
 	if m == nil {
 		return errors.New("不支持的依赖类型: " + dep.Language)
 	}
-	return m.Install(dep)
+	if err := m.Install(dep); err != nil {
+		return err
+	}
+	if dep.Version == "" {
+		if ver, err := m.GetInstalledVersion(dep.Name, dep.LangVersion); err == nil && ver != "" {
+			dep.Version = ver
+		} else if pkgs, err := m.GetInstalledPackages(dep.Language, dep.LangVersion); err == nil {
+			targetName := strings.ToLower(dep.Name)
+			for _, pkg := range pkgs {
+				if strings.ToLower(pkg.Name) == targetName && pkg.Version != "" {
+					dep.Version = pkg.Version
+					break
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// GetInstalledVersion 获取已安装单个包的版本
+func (s *DependencyService) GetInstalledVersion(language, name, langVersion string) (string, error) {
+	m := deps.GetManager(language)
+	if m == nil {
+		return "", errors.New("不支持的依赖类型: " + language)
+	}
+	ver, err := m.GetInstalledVersion(name, langVersion)
+	if err == nil && ver != "" {
+		return ver, nil
+	}
+	pkgs, err := m.GetInstalledPackages(language, langVersion)
+	if err != nil {
+		return "", err
+	}
+	targetName := strings.ToLower(name)
+	for _, pkg := range pkgs {
+		if strings.ToLower(pkg.Name) == targetName && pkg.Version != "" {
+			return pkg.Version, nil
+		}
+	}
+	return "", nil
 }
 
 // Uninstall 卸载依赖

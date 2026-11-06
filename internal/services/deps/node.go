@@ -1,6 +1,7 @@
 package deps
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/engigu/baihu-panel/internal/logger"
@@ -9,6 +10,30 @@ import (
 
 type NodeManager struct {
 	BaseManager
+}
+
+type npmListJSON struct {
+	Dependencies map[string]struct {
+		Version string `json:"version"`
+	} `json:"dependencies"`
+}
+
+func parseNpmListOutput(output []byte, language string) []models.Dependency {
+	var res npmListJSON
+	if err := json.Unmarshal(output, &res); err != nil {
+		return nil
+	}
+	var packages []models.Dependency
+	for name, item := range res.Dependencies {
+		if name != "" {
+			packages = append(packages, models.Dependency{
+				Name:     name,
+				Version:  item.Version,
+				Language: language,
+			})
+		}
+	}
+	return packages
 }
 
 func NewNodeManager(language string) *NodeManager {
@@ -30,7 +55,11 @@ func (m *NodeManager) GetInstalledPackages(language, langVersion string) ([]mode
 		logger.Warnf("GetInstalledPackages for %s failed: %v", language, err)
 	}
 
-	var packages []models.Dependency
+	packages := parseNpmListOutput(output, language)
+	if len(packages) > 0 {
+		return packages, nil
+	}
+
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -45,4 +74,17 @@ func (m *NodeManager) GetInstalledPackages(language, langVersion string) ([]mode
 		}
 	}
 	return packages, nil
+}
+
+func (m *NodeManager) GetInstalledVersion(name, langVersion string) (string, error) {
+	output, err := m.runMiseCommand(langVersion, []string{"npm", "list", "-g", name, "--depth=0", "--json"})
+	if err == nil {
+		var res npmListJSON
+		if jsonErr := json.Unmarshal(output, &res); jsonErr == nil {
+			if item, ok := res.Dependencies[name]; ok && item.Version != "" {
+				return item.Version, nil
+			}
+		}
+	}
+	return "", nil
 }

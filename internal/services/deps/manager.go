@@ -15,6 +15,7 @@ type Manager interface {
 	Install(dep *models.Dependency) error
 	Uninstall(dep *models.Dependency) error
 	GetInstalledPackages(language, langVersion string) ([]models.Dependency, error)
+	GetInstalledVersion(name, langVersion string) (string, error)
 	GetInstallCommand(dep *models.Dependency) (string, error)
 	GetBatchInstallCommand(deps []models.Dependency) (string, error)
 	GetReinstallAllCommand(deps []models.Dependency) (string, error)
@@ -148,6 +149,10 @@ func (m *BaseManager) Uninstall(dep *models.Dependency) error {
 		return errors.New("卸载失败: " + string(output))
 	}
 	return nil
+}
+
+func (m *BaseManager) GetInstalledVersion(name, langVersion string) (string, error) {
+	return "", nil
 }
 
 // GetManager 根据语言获取对应的管理器
