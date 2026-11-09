@@ -7,7 +7,7 @@ import { ApiReference } from '@scalar/api-reference'
 import '@scalar/api-reference/style.css'
 </script>
 
-<div class="scalar-container">
+<div class="scalar-container vp-raw">
   <ClientOnly>
     <ApiReference 
       :configuration="{ 
@@ -39,6 +39,10 @@ import '@scalar/api-reference/style.css'
   margin: 0;
   padding: 0;
   height: 100%;
+}
+
+html {
+  scroll-behavior: auto !important;
 }
 
 .scalar-container {
