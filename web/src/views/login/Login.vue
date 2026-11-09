@@ -131,6 +131,12 @@ async function loadSiteSettings() {
   }
 }
 
+function fillDemoAccount() {
+  username.value = 'admin'
+  password.value = '123456'
+  toast.success('已自动填入演示账号')
+}
+
 async function handleLogin() {
   loading.value = true
   try {
@@ -236,6 +242,27 @@ function handleSSOLogin(provider: SSOProvider) {
 
           <!-- 登录表单 -->
           <form @submit.prevent="handleLogin" class="space-y-6">
+            <!-- 演示环境提示卡片 -->
+            <div
+              v-if="demoMode && !requireOtp"
+              class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-100/90 dark:bg-slate-900/50 border border-slate-200/90 dark:border-slate-800 shadow-sm transition-all"
+            >
+              <div class="flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-foreground shrink-0 ml-1" />
+                <div class="text-left">
+                  <div class="text-sm font-bold text-foreground leading-tight">演示环境</div>
+                  <div class="text-xs text-muted-foreground mt-0.5 font-medium">账号 admin · 密码 123456</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                @click="fillDemoAccount"
+                class="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-background border border-border/80 text-foreground hover:bg-muted/80 shadow-sm transition-all active:scale-95 shrink-0"
+              >
+                自动填入
+              </button>
+            </div>
+
             <div class="space-y-4">
               <div v-if="!requireOtp" class="space-y-4">
                 <div class="space-y-2">
@@ -298,10 +325,6 @@ function handleSSOLogin(provider: SSOProvider) {
               </Button>
             </div>
           </div>
-
-          <p v-if="demoMode" class="mt-8 text-center text-xs text-muted-foreground/60">
-            演示模式：已为您自动填充测试账号
-          </p>
         </div>
       </div>
     </div>
