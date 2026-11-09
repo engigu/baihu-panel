@@ -16,7 +16,6 @@ import '@scalar/api-reference/style.css'
         },
         theme: 'alternate',
         showSidebar: true,
-        defaultOpenAllTags: true,
         withDefaultFonts: false,
         servers: [
           { 
