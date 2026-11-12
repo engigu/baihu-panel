@@ -12,6 +12,7 @@ import (
 	"github.com/engigu/baihu-panel/cmd/resetpwd"
 	"github.com/engigu/baihu-panel/cmd/restore"
 	"github.com/engigu/baihu-panel/cmd/task"
+	"github.com/engigu/baihu-panel/cmd/tui"
 	"github.com/engigu/baihu-panel/cmd/version"
 	"github.com/engigu/baihu-panel/cmd/webui"
 	"github.com/engigu/baihu-panel/internal/bootstrap"
@@ -36,6 +37,9 @@ func InitHandlers() {
 	RegisterHandler("restore", restore.Run)
 	RegisterHandler("task", task.Run)
 	RegisterHandler("webui", webui.Run)
+
+	// 注册交互式终端管理控制台 (TUI)
+	RegisterHandlerWithConfig("tui", tui.Run, false)
 
 	// 注册 MCP 协议服务 (RequireContext 设为 false，由内部自行重定向日志至 stderr 并完成环境引导，防止 stdout 污染)
 	RegisterHandlerWithConfig("mcp", mcp.Run, false)
