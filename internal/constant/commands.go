@@ -24,12 +24,6 @@ type CommandInfo = CommandSpec
 // 包含 CLI 帮助、API 端点、终端面板以及 Shell Tab 自动补全均从此一份数据读取
 var Commands = []CommandSpec{
 	{
-		Name:          "server",
-		Description:   "启动面板后台服务进程",
-		Confirm:       true,
-		ConfirmPrompt: "启动 server 命令将常驻占用终端并开始监听服务端口，按 Ctrl+C 可停止。是否确认启动?",
-	},
-	{
 		Name:        "task",
 		Description: "系统级任务的列表查询、触发运行、启停控制及状态查看",
 		SubCommands: map[string]string{
@@ -77,6 +71,39 @@ var Commands = []CommandSpec{
 		Flags: []string{"--scenario", "--skip-setup", "--skip-sync", "--clean-data"},
 	},
 	{
+		Name:        "reposync",
+		Description: "同步远程 Git 仓库或文件到本地目录",
+		ArgPrompt:   "reposync 选项参数 (直接回车执行默认向导/全量同步):",
+		Flags: []string{
+			"--source-type", "--source-url", "--target-path", "--branch",
+			"--path", "--single-file", "--proxy", "--proxy-url",
+			"--auth-token", "--http-proxy", "--whitelist-paths",
+			"--blacklist", "--dependence", "--extensions", "--commenttotask",
+			"--pre-command", "--post-command", "--repo-name",
+			"--task-id", "--task-timeout", "--task-langs",
+		},
+	},
+	{
+		Name:        "depinstall",
+		Description: "一键补全指定任务日志中的缺失依赖包",
+		ArgPrompt:   "报错的任务日志ID (Log ID):",
+		ArgHelp:     "输入任务运行流水产生的 Log ID，系统将自动分析缺失依赖并安装",
+	},
+	{
+		Name:        "agentsync",
+		Description: "同步本地脚本与目录至远程 Agent 节点",
+		ArgPrompt:   "agentsync 选项参数 (例如: --agent default，直接回车执行默认):",
+		Flags: []string{
+			"--task-id", "--agent", "--mapping", "--mappings", "--clean-target", "--ignore", "--timeout",
+		},
+	},
+	{
+		Name:          "server",
+		Description:   "启动面板后台服务进程",
+		Confirm:       true,
+		ConfirmPrompt: "启动 server 命令将常驻占用终端并开始监听服务端口，按 Ctrl+C 可停止。是否确认启动?",
+	},
+	{
 		Name:        "webui",
 		Description: "白虎面板前端 WebUI 资源包的管理、激活与回退",
 		SubCommands: map[string]string{
@@ -91,37 +118,10 @@ var Commands = []CommandSpec{
 		},
 	},
 	{
-		Name:        "reposync",
-		Description: "同步远程 Git 仓库或文件到本地目录",
-		ArgPrompt:   "reposync 选项参数 (直接回车执行默认向导/全量同步):",
-		Flags: []string{
-			"--source-type", "--source-url", "--target-path", "--branch",
-			"--path", "--single-file", "--proxy", "--proxy-url",
-			"--auth-token", "--http-proxy", "--whitelist-paths",
-			"--blacklist", "--dependence", "--extensions", "--commenttotask",
-			"--pre-command", "--post-command", "--repo-name",
-			"--task-id", "--task-timeout", "--task-langs",
-		},
-	},
-	{
-		Name:        "agentsync",
-		Description: "同步本地脚本与目录至远程 Agent 节点",
-		ArgPrompt:   "agentsync 选项参数 (例如: --agent default，直接回车执行默认):",
-		Flags: []string{
-			"--task-id", "--agent", "--mapping", "--mappings", "--clean-target", "--ignore", "--timeout",
-		},
-	},
-	{
-		Name:        "depinstall",
-		Description: "一键补全指定任务日志中的缺失依赖包",
-		ArgPrompt:   "报错的任务日志ID (Log ID):",
-		ArgHelp:     "输入任务运行流水产生的 Log ID，系统将自动分析缺失依赖并安装",
-	},
-	{
-		Name:          "builtininstall",
-		Description:   "为所有 mise 管理的 Node.js 和 Python 环境安装内建助手库",
+		Name:          "mcp",
+		Description:   "启动白虎面板 Model Context Protocol (MCP) 标准输入输出服务",
 		Confirm:       true,
-		ConfirmPrompt: "此操作将为 mise 管理的所有 Node.js 和 Python 环境安装内建助手库，是否继续?",
+		ConfirmPrompt: "MCP 服务通过标准 Stdio 通道进行 JSON-RPC 通信，通常供 AI 客户端调用。是否确认启动?",
 	},
 	{
 		Name:        "dropcache",
@@ -129,6 +129,12 @@ var Commands = []CommandSpec{
 		ArgPrompt:   "要释放 PageCache 的目录或文件路径:",
 		ArgDefault:  ".",
 		ArgHelp:     "默认路径为当前目录 .，回车执行清理",
+	},
+	{
+		Name:          "builtininstall",
+		Description:   "为所有 mise 管理的 Node.js 和 Python 环境安装内建助手库",
+		Confirm:       true,
+		ConfirmPrompt: "此操作将为 mise 管理的所有 Node.js 和 Python 环境安装内建助手库，是否继续?",
 	},
 	{
 		Name:        "resetpwd",
@@ -144,16 +150,6 @@ var Commands = []CommandSpec{
 		ArgHelp:     "请输入存在的备份 zip 压缩包路径，回车执行",
 	},
 	{
-		Name:          "mcp",
-		Description:   "启动白虎面板 Model Context Protocol (MCP) 标准输入输出服务",
-		Confirm:       true,
-		ConfirmPrompt: "MCP 服务通过标准 Stdio 通道进行 JSON-RPC 通信，通常供 AI 客户端调用。是否确认启动?",
-	},
-	{
-		Name:        "version",
-		Description: "查看当前系统版本号 (同 -v, -V)",
-	},
-	{
 		Name:        "completion",
 		Description: "生成当前 Shell (PowerShell/Bash/Zsh) 的 Tab 自动补全脚本",
 		Args:        []string{"powershell", "pwsh", "bash", "zsh"},
@@ -161,5 +157,9 @@ var Commands = []CommandSpec{
 	{
 		Name:        "tui",
 		Description: "启动白虎面板交互式终端管理控制台 (TUI)",
+	},
+	{
+		Name:        "version",
+		Description: "查看当前系统版本号 (同 -v, -V)",
 	},
 }
