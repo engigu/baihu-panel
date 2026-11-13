@@ -47,15 +47,16 @@ func (ac *AuthController) getSSOConfig(c *gin.Context, preferredType ...string) 
 	return oidc.ResolveActiveConfig(ac.settingsService, pref, c)
 }
 
-// getOidcConfig 加载标准 OIDC 配置（未启用时自动回退至通用 OAuth 2.0）
+// getOidcConfig 与 getOAuth2Config 暂无调用（已被 getSSOConfig 直接内联取代），注释保留备用
+/*
 func (ac *AuthController) getOidcConfig(c *gin.Context) *oidc.Config {
 	return ac.getSSOConfig(c, constant.SSOTypeOIDC)
 }
 
-// getOAuth2Config 加载通用 OAuth 2.0 配置（未启用时自动回退至标准 OIDC）
 func (ac *AuthController) getOAuth2Config(c *gin.Context) *oidc.Config {
 	return ac.getSSOConfig(c, constant.SSOTypeOAuth2)
 }
+*/
 
 // startSSOLogin 发起单点登录跳转流程（统一支持 OIDC 与通用 OAuth 2.0）
 func (ac *AuthController) startSSOLogin(c *gin.Context, cfg *oidc.Config) {

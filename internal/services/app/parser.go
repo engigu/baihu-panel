@@ -258,7 +258,8 @@ func getMapSliceChildValue(slice yaml.MapSlice, parentKey string, childKey strin
 	return nil, false
 }
 
-// updateScenarioItemDefault 统一更新单项场景定义 (支持 yaml.MapSlice 或 map) 的 default 默认选中标记
+// updateScenarioItemDefault 暂无调用（原调用逻辑已注释），注释保留备用
+/*
 func updateScenarioItemDefault(scRaw interface{}, targetScenario string) interface{} {
 	switch sc := scRaw.(type) {
 	case yaml.MapSlice:
@@ -276,6 +277,7 @@ func updateScenarioItemDefault(scRaw interface{}, targetScenario string) interfa
 		return scRaw
 	}
 }
+*/
 
 // extractTemplateMapSlice 从 template 节点中提取平铺合并后的 MapSlice
 func extractTemplateMapSlice(rawVal interface{}) yaml.MapSlice {

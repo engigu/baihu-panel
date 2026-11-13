@@ -106,7 +106,8 @@ func Decrypt(ciphertext string) (string, error) {
 	return string(plaintext), nil
 }
 
-// EncryptIfSecret 如果变量类型为机密 (secret)，则对其执行加密处理
+// EncryptIfSecret 与 DecryptIfSecret 暂无调用（业务直接调用 Encrypt/Decrypt），注释保留备用
+/*
 func EncryptIfSecret(envType string, value string) (string, error) {
 	if envType == "secret" {
 		return Encrypt(value)
@@ -114,13 +115,13 @@ func EncryptIfSecret(envType string, value string) (string, error) {
 	return value, nil
 }
 
-// DecryptIfSecret 如果变量类型为机密 (secret)，则对其执行解密处理
 func DecryptIfSecret(envType string, value string) (string, error) {
 	if envType == "secret" {
 		return Decrypt(value)
 	}
 	return value, nil
 }
+*/
 
 // IsSecretEncrypted 判断给定的字符串是否看起来像是已加密的密文
 func IsSecretEncrypted(value string) bool {

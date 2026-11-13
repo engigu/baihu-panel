@@ -1691,10 +1691,15 @@ func buildRepoCommandEnvPrefix() string {
 	return utils.BuildShellEnvPrefix(utils.BuildRuntimeProcessEnv())
 }
 
-func resolveAbsScriptsDir() string {
+// resolveAbsScriptsDir 暂无调用，注释保留备用
+// func resolveAbsScriptsDir() string {
+// 	return utils.ResolveAbsScriptsDir()
+// }
+/*
 	return utils.ResolveAbsScriptsDir()
 }
 
+*/
 // SystemStatsOverview 系统运行统计概览数据
 type SystemStatsOverview struct {
 	Tasks      int64 `json:"tasks"`

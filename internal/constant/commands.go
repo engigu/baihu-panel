@@ -17,9 +17,6 @@ type CommandSpec struct {
 	ConfirmPrompt string              `json:"confirm_prompt,omitempty"`
 }
 
-// CommandInfo 别名保持兼容
-type CommandInfo = CommandSpec
-
 // Commands 是全系统唯一单源的可用业务命令元数据与参数清单 (Single Source of Truth)
 // 包含 CLI 帮助、API 端点、终端面板以及 Shell Tab 自动补全均从此一份数据读取
 var Commands = []CommandSpec{

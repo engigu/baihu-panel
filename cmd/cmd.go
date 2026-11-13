@@ -8,14 +8,9 @@ import (
 	"github.com/engigu/baihu-panel/internal/constant"
 )
 
-// CommandSpec 兼容引用 constant.CommandSpec
-type CommandSpec = constant.CommandSpec
-
-// CommandInfo 兼容引用 constant.CommandInfo
-type CommandInfo = constant.CommandInfo
-
-// Commands 兼容引用 constant.Commands
-var Commands = constant.Commands
+// 兼容引用（已统一直接使用 constant 包，注释保留备用）
+// type CommandSpec = constant.CommandSpec
+// var Commands = constant.Commands
 
 // CommandHandler 定义命令执行函数
 type CommandHandler func(args []string)

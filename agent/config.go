@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"strconv"
 
 	"gopkg.in/ini.v1"
@@ -44,6 +42,8 @@ func loadConfigFile(path string, config *Config) error {
 	return nil
 }
 
+// saveConfigFile 暂无调用，已注释保留备用
+/*
 func saveConfigFile(path string, config *Config) error {
 	dir := filepath.Dir(path)
 	if dir != "" && dir != "." {
@@ -64,3 +64,4 @@ func saveConfigFile(path string, config *Config) error {
 
 	return cfg.SaveTo(path)
 }
+*/

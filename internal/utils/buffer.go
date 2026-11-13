@@ -2,10 +2,10 @@ package utils
 
 import (
 	"fmt"
-	"sync"
 )
 
-// TailBuffer 是一个只保留最后 N 字节数据的缓冲区
+// TailBuffer 暂无调用（实时日志已采用 TinyLog/TrimLog 体系），注释保留备用
+/*
 type TailBuffer struct {
 	mu    sync.Mutex
 	limit int
@@ -68,6 +68,7 @@ func (b *TailBuffer) Len() int {
 	defer b.mu.Unlock()
 	return len(b.data)
 }
+*/
 
 // TrimLog 裁剪日志，保留末尾指定大小
 func TrimLog(content string, limit int) string {
