@@ -84,7 +84,7 @@ func NewModel() *Model {
 		viewport:   vp,
 	}
 
-	m.AppendLog(LogSystem, fmt.Sprintf("白虎终端控制台已启动 (v%s - %s/%s)", constant.Version, runtime.GOOS, runtime.GOARCH))
+	m.AppendLog(LogSystem, fmt.Sprintf("白虎终端控制台已启动 (%s - %s/%s)", constant.Version, runtime.GOOS, runtime.GOARCH))
 	m.AppendLog(LogSystem, fmt.Sprintf("动态加载 %d 个系统命令，按 Tab 切换面板焦点", len(m.commands)))
 
 	return m
