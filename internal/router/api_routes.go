@@ -22,7 +22,6 @@ func initPublicAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 	{
 		auth.POST("/login", c.Auth.Login)
 		auth.POST("/login/otp", c.Auth.VerifyOTP)
-		auth.POST("/logout", c.Auth.Logout)
 		// auth.POST("/register", c.Auth.Register)
 	}
 
@@ -67,6 +66,7 @@ func initAuthorizedAPIRoutes(api *gin.RouterGroup, c *Controllers) {
 	{
 		// 获取当前用户 (普通用户即可访问)
 		authorized.GET("/auth/me", c.Auth.GetCurrentUser)
+		authorized.POST("/auth/logout", c.Auth.Logout)
 
 		// OTP 两步验证管理 (普通用户即可访问，非 adminOnly)
 		otp := authorized.Group("/auth/otp")
