@@ -183,8 +183,9 @@ func (ac *AuthController) Login(c *gin.Context) {
 }
 
 func (ac *AuthController) Logout(c *gin.Context) {
-	if userID, exists := c.Get("userID"); exists {
-		ac.userService.InvalidateUserTokens(userID.(string))
+	if err := ac.userService.InvalidateUserTokens(c.GetString("userID")); err != nil {
+		utils.ServerError(c, "退出失败，请重试")
+		return
 	}
 	middleware.ClearAuthCookie(c)
 	utils.SuccessMsg(c, "退出成功")
