@@ -68,6 +68,21 @@ func TestEnvService_FormatEnvVars_Equivalence(t *testing.T) {
 			expectedNonSec: []string{"MULTI=first&second"},
 		},
 		{
+			name: "同名变量聚合时跳过空值",
+			envs: []models.EnvironmentVariable{
+				{Name: "MY_JSON_SECRET", Value: "", Type: constant.EnvTypeSecret, Enabled: boolPtr(true)},
+				{Name: "MY_JSON_SECRET", Value: `[{"account":"user"}]`, Type: constant.EnvTypeNormal, Enabled: boolPtr(true)},
+				{Name: "MULTI", Value: "first", Type: constant.EnvTypeNormal, Enabled: boolPtr(true)},
+				{Name: "MULTI", Value: "", Type: constant.EnvTypeNormal, Enabled: boolPtr(true)},
+				{Name: "MULTI", Value: "second", Type: constant.EnvTypeNormal, Enabled: boolPtr(true)},
+				{Name: "EMPTY", Value: "", Type: constant.EnvTypeNormal, Enabled: boolPtr(true)},
+				{Name: "EMPTY", Value: "", Type: constant.EnvTypeNormal, Enabled: boolPtr(true)},
+			},
+			expectedVars:   []string{`MY_JSON_SECRET=[{"account":"user"}]`, "MULTI=first&second", "EMPTY="},
+			expectedSecs:   nil,
+			expectedNonSec: []string{`MY_JSON_SECRET=[{"account":"user"}]`, "MULTI=first&second", "EMPTY="},
+		},
+		{
 			name: "包含 Secret 变量",
 			envs: []models.EnvironmentVariable{
 				{Name: "NORMAL", Value: "hello", Type: constant.EnvTypeNormal, Enabled: boolPtr(true)},
