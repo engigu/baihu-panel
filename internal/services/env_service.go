@@ -304,8 +304,14 @@ func (es *EnvService) formatEnvVarsInternal(envs []models.EnvironmentVariable, i
 
 	var result []string
 	for _, item := range mergedList {
-		// 多个值使用 & 拼接
-		val := strings.Join(item.values, "&")
+		// 多个值使用 & 拼接，空值不参与拼接，避免值的开头、结尾或中间出现多余的 &
+		values := make([]string, 0, len(item.values))
+		for _, v := range item.values {
+			if v != "" {
+				values = append(values, v)
+			}
+		}
+		val := strings.Join(values, "&")
 		result = append(result, item.name+"="+val)
 	}
 	return result, secrets
