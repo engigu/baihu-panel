@@ -54,7 +54,7 @@ async function loadLanguages() {
             ...item,
             source: typeof item.source === 'object' ? (item.source.path || item.source.type || '-') : (item.source || '-'),
             isGlobal: !!item.is_global
-        }))
+        })).sort((o1, o2) => (o1.installed_at || "").localeCompare(o2.installed_at || ""))
     } catch (e) {
         toast.error('获取语言列表失败')
         errorMsg.value = String(e)
